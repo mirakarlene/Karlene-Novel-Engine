@@ -12,7 +12,7 @@ internal sealed record WorkerMessage(string Type, long Id = 0, string? Text = nu
 
 internal static class LuaWorker
 {
-    public static async Task<int> RunAsync(string projectPath)
+    public static async Task<int> RunAsync(string projectPath, string? scenePath = null)
     {
         using var input = new StreamReader(Console.OpenStandardInput(), Encoding.UTF8);
         using var output = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true };
@@ -27,6 +27,13 @@ internal static class LuaWorker
         try
         {
             var project = await ProjectLoader.LoadProjectAsync(projectPath).ConfigureAwait(false);
+            if (scenePath != null)
+            {
+                // The UI may preview a scene without changing the project's persisted entry point.
+                _ = PathSafety.ResolveRelative(project.Path, scenePath);
+                project.Configuration.EntryPoints ??= new EntryPoints();
+                project.Configuration.EntryPoints.MainScene = scenePath;
+            }
             await using var runtime = new LuaRuntime(project, line => Send(new("log", Text: line)),
                 TimeSpan.FromHours(1), interactive: true);
             var queue = Channel.CreateBounded<WorkerRequest>(1);

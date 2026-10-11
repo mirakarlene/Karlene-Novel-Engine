@@ -1,0 +1,143 @@
+using System.IO;
+using System.Text;
+
+namespace KNE;
+
+/// <summary>A project-confined code or visual document with atomic saves and conflict detection.</summary>
+public sealed class ScriptDocument
+{
+    private string savedContent;
+    private readonly string root;
+
+    /// <summary>Absolute path of the source inside the owning project.</summary>
+    public string FilePath { get; }
+
+    /// <summary>The editable visual model, or null for a manually authored script.</summary>
+    public VisualScript? Graph { get; set; }
+
+    /// <summary>Editable source text for manual documents.</summary>
+    public string Code { get; set; }
+
+    /// <summary>Whether this document contains a graph.</summary>
+    public bool IsVisual => Graph != null;
+
+    /// <summary>Whether model or source text differ from the last successful save.</summary>
+    public bool IsDirty => Content != savedContent;
+
+    private string Content => Graph?.Serialize() ?? Code;
+
+    private ScriptDocument(string root, string path, string content)
+    {
+        this.root = root;
+        FilePath = path;
+        savedContent = content;
+        Code = content;
+        if (IsVisualPath(path))
+        {
+            Graph = VisualScript.Parse(content);
+            savedContent = Graph.Serialize();
+        }
+
+        diskContent = content;
+    }
+
+    private string diskContent;
+
+    /// <summary>Recognizes the visual source extension without accessing the filesystem.</summary>
+    /// <param name="path">A filename or path.</param>
+    /// <returns>True for .knegraph, ignoring case.</returns>
+    public static bool IsVisualPath(string path) =>
+        Path.GetExtension(path).Equals(".knegraph", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Recognizes manually editable scenario source extensions.</summary>
+    /// <param name="path">A filename or path.</param>
+    /// <returns>True for .lua or .krl, ignoring case.</returns>
+    public static bool IsCodePath(string path) => Path.GetExtension(path).ToLowerInvariant() is ".lua" or ".krl";
+
+    /// <summary>Opens a Lua/KRL or KNE graph file within the specified project.</summary>
+    /// <param name="root">Project root directory.</param>
+    /// <param name="path">Absolute source path inside the project.</param>
+    /// <param name="cancellationToken">Cancellation for file reads.</param>
+    /// <returns>The loaded document and its saved baseline.</returns>
+    public static async Task<ScriptDocument> OpenAsync(string root, string path,
+        CancellationToken cancellationToken = default)
+    {
+        path = PathSafety.EnsureInside(root, path);
+        if (!IsVisualPath(path) && !IsCodePath(path))
+            throw new ArgumentException("Редактор поддерживает .lua, .krl и .knegraph.");
+        if (new FileInfo(path).Length > 8 * 1024 * 1024) throw new InvalidDataException("Сценарий больше 8 МБ.");
+        string content = await File.ReadAllTextAsync(path, cancellationToken);
+        return new ScriptDocument(root, path, content);
+    }
+
+    /// <summary>Creates a runnable visual scene without replacing an existing file.</summary>
+    /// <param name="root">Project root directory.</param>
+    /// <param name="path">Absolute destination with the .knegraph extension.</param>
+    /// <param name="cancellationToken">Cancellation for the staging write.</param>
+    /// <returns>A saved document ready to edit.</returns>
+    public static async Task<ScriptDocument> CreateVisualAsync(string root, string path,
+        CancellationToken cancellationToken = default)
+    {
+        path = PathSafety.EnsureInside(root, path);
+        if (!IsVisualPath(path)) throw new ArgumentException("Выберите расширение .knegraph.");
+        string content = VisualScript.Create().Serialize();
+        await WriteNewAsync(root, path, content, cancellationToken);
+        return new ScriptDocument(root, path, content);
+    }
+
+    /// <summary>Saves a draft atomically. External changes and deleted sources require reopening.</summary>
+    /// <param name="cancellationToken">Cancellation before replacing the source.</param>
+    /// <returns>A task that completes once the saved baseline has been updated.</returns>
+    public async Task SaveAsync(CancellationToken cancellationToken = default)
+    {
+        string content = Content;
+        if (Encoding.UTF8.GetByteCount(content) > 8 * 1024 * 1024)
+            throw new InvalidDataException("Сценарий больше 8 МБ.");
+        string target = PathSafety.EnsureInside(root, FilePath);
+        string staging = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            await File.WriteAllTextAsync(staging, content, cancellationToken);
+            PathSafety.EnsureInside(root, target);
+            if (!File.Exists(target) || await File.ReadAllTextAsync(target, cancellationToken) != diskContent)
+                throw new IOException(
+                    "Файл изменён или удалён вне редактора. Сохраните копию либо откройте файл заново.");
+            File.Move(staging, target, overwrite: true);
+            savedContent = diskContent = content;
+        }
+        finally
+        {
+            if (File.Exists(staging)) File.Delete(staging);
+        }
+    }
+
+    /// <summary>Exports generated Lua into a new KRL file, leaving the graph editable.</summary>
+    /// <param name="path">Absolute .krl destination inside the project.</param>
+    /// <param name="cancellationToken">Cancellation before creating the destination.</param>
+    /// <returns>A task that completes after the new code file is created.</returns>
+    public Task ExportAsync(string path, CancellationToken cancellationToken = default)
+    {
+        if (Graph == null) throw new InvalidOperationException("Экспорт доступен для блок-схем.");
+        if (!Path.GetExtension(path).Equals(".krl", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Выберите расширение .krl.");
+        return WriteNewAsync(root, path, Graph.Compile(), cancellationToken);
+    }
+
+    private static async Task WriteNewAsync(string root, string path, string content,
+        CancellationToken cancellationToken)
+    {
+        string target = PathSafety.EnsureInside(root, path);
+        PathSafety.ValidateFileName(Path.GetFileName(target));
+        string staging = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            await File.WriteAllTextAsync(staging, content, cancellationToken);
+            PathSafety.EnsureInside(root, target);
+            File.Move(staging, target, overwrite: false);
+        }
+        finally
+        {
+            if (File.Exists(staging)) File.Delete(staging);
+        }
+    }
+}

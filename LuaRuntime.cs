@@ -119,7 +119,9 @@ public sealed class LuaRuntime : IGameSession
         // .NET reads paths containing Unicode independently of the native Lua filesystem.
         lua.DoString(File.ReadAllText(initPath), "@" + initPath);
         lua["main"] = null;
-        lua.DoString(File.ReadAllText(scenePath), "@" + scenePath);
+        string sceneCode = File.ReadAllText(scenePath);
+        if (ScriptDocument.IsVisualPath(scenePath)) sceneCode = VisualScript.Parse(sceneCode).Compile();
+        lua.DoString(sceneCode, "@" + scenePath);
         using var main = lua["main"] as LuaFunction ?? throw new InvalidDataException("Главная сцена должна объявлять функцию main().");
         if (interactive)
         {
@@ -243,7 +245,9 @@ public sealed class LuaRuntime : IGameSession
     private string ComputeFingerprint()
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        foreach (var file in project.Files.Where(f => Path.GetExtension(f.FilePath).ToLowerInvariant() is ".lua" or ".krl" || f.FileName == "project.json").OrderBy(f => f.FilePath, StringComparer.OrdinalIgnoreCase))
+        // Include the resolved scene identity: previewing another scene must not accept its sibling's saves.
+        hash.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(project.Path, project.MainScenePath)));
+        foreach (var file in project.Files.Where(f => Path.GetExtension(f.FilePath).ToLowerInvariant() is ".lua" or ".krl" or ".knegraph" || f.FileName == "project.json").OrderBy(f => f.FilePath, StringComparer.OrdinalIgnoreCase))
         {
             string path = PathSafety.EnsureInside(project.Path, file.FilePath);
             hash.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(project.Path, path)));
