@@ -1,0 +1,306 @@
+{
+  "version": 4,
+  "targets": {
+    "net9.0-windows": {
+      "KeraLua/1.4.4": {
+        "type": "package",
+        "compile": {
+          "lib/net8.0/KeraLua.dll": {
+            "related": ".pdb;.xml"
+          }
+        },
+        "runtime": {
+          "lib/net8.0/KeraLua.dll": {
+            "related": ".pdb;.xml"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/android-arm/native/liblua54.so": {
+            "assetType": "native",
+            "rid": "android-arm"
+          },
+          "runtimes/android-arm64/native/liblua54.so": {
+            "assetType": "native",
+            "rid": "android-arm64"
+          },
+          "runtimes/android-x64/native/liblua54.so": {
+            "assetType": "native",
+            "rid": "android-x64"
+          },
+          "runtimes/android-x86/native/liblua54.so": {
+            "assetType": "native",
+            "rid": "android-x86"
+          },
+          "runtimes/ios/native/liblua54.framework/Info.plist": {
+            "assetType": "native",
+            "rid": "ios"
+          },
+          "runtimes/ios/native/liblua54.framework/liblua54": {
+            "assetType": "native",
+            "rid": "ios"
+          },
+          "runtimes/linux-arm64/native/liblua54.so": {
+            "assetType": "native",
+            "rid": "linux-arm64"
+          },
+          "runtimes/linux-x64/native/liblua54.so": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/maccatalyst/native/liblua54.framework/Info.plist": {
+            "assetType": "native",
+            "rid": "maccatalyst"
+          },
+          "runtimes/maccatalyst/native/liblua54.framework/liblua54": {
+            "assetType": "native",
+            "rid": "maccatalyst"
+          },
+          "runtimes/osx/native/liblua54.dylib": {
+            "assetType": "native",
+            "rid": "osx"
+          },
+          "runtimes/tvos/native/liblua54.framework/Info.plist": {
+            "assetType": "native",
+            "rid": "tvos"
+          },
+          "runtimes/tvos/native/liblua54.framework/liblua54": {
+            "assetType": "native",
+            "rid": "tvos"
+          },
+          "runtimes/win-arm/native/lua54.dll": {
+            "assetType": "native",
+            "rid": "win-arm"
+          },
+          "runtimes/win-arm64/native/lua54.dll": {
+            "assetType": "native",
+            "rid": "win-arm64"
+          },
+          "runtimes/win-x64/native/lua54.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x86/native/lua54.dll": {
+            "assetType": "native",
+            "rid": "win-x86"
+          }
+        }
+      },
+      "NLua/1.7.5": {
+        "type": "package",
+        "dependencies": {
+          "KeraLua": "1.4.4"
+        },
+        "compile": {
+          "lib/net8.0/NLua.dll": {
+            "related": ".pdb"
+          }
+        },
+        "runtime": {
+          "lib/net8.0/NLua.dll": {
+            "related": ".pdb"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "KeraLua/1.4.4": {
+      "sha512": "JsTqvTtHP9DzBK0EigywkQ/EwOHBGgBrk+vtgIqSKHWFGKkR1uIXmt8woDOG8cnprg/8uhS5YRmdCjjlyd15WQ==",
+      "type": "package",
+      "path": "keralua/1.4.4",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE",
+        "build/net46/KeraLua.targets",
+        "keralua.1.4.4.nupkg.sha512",
+        "keralua.nuspec",
+        "lib/MonoAndroid/KeraLua.dll",
+        "lib/MonoAndroid/KeraLua.pdb",
+        "lib/MonoAndroid/KeraLua.xml",
+        "lib/net46/KeraLua.dll",
+        "lib/net46/KeraLua.pdb",
+        "lib/net46/KeraLua.xml",
+        "lib/net8.0-android28/KeraLua.dll",
+        "lib/net8.0-android28/KeraLua.pdb",
+        "lib/net8.0-android28/KeraLua.xml",
+        "lib/net8.0-ios11.0/KeraLua.dll",
+        "lib/net8.0-ios11.0/KeraLua.pdb",
+        "lib/net8.0-ios11.0/KeraLua.xml",
+        "lib/net8.0-maccatalyst13.0/KeraLua.dll",
+        "lib/net8.0-maccatalyst13.0/KeraLua.pdb",
+        "lib/net8.0-maccatalyst13.0/KeraLua.xml",
+        "lib/net8.0-macos10.13/KeraLua.dll",
+        "lib/net8.0-macos10.13/KeraLua.pdb",
+        "lib/net8.0-macos10.13/KeraLua.xml",
+        "lib/net8.0-tvos11.0/KeraLua.dll",
+        "lib/net8.0-tvos11.0/KeraLua.pdb",
+        "lib/net8.0-tvos11.0/KeraLua.xml",
+        "lib/net8.0/KeraLua.dll",
+        "lib/net8.0/KeraLua.pdb",
+        "lib/net8.0/KeraLua.xml",
+        "lib/netstandard2.0/KeraLua.dll",
+        "lib/netstandard2.0/KeraLua.pdb",
+        "lib/netstandard2.0/KeraLua.xml",
+        "lib/uap10.0/KeraLua.dll",
+        "lib/uap10.0/KeraLua.pdb",
+        "lib/uap10.0/KeraLua.pri",
+        "lib/uap10.0/KeraLua.xml",
+        "lib/xamarinios/KeraLua.dll",
+        "lib/xamarinios/KeraLua.pdb",
+        "lib/xamarinios/KeraLua.xml",
+        "lib/xamarinmac/KeraLua.dll",
+        "lib/xamarinmac/KeraLua.pdb",
+        "lib/xamarinmac/KeraLua.xml",
+        "lib/xamarintvos/KeraLua.dll",
+        "lib/xamarintvos/KeraLua.pdb",
+        "lib/xamarintvos/KeraLua.xml",
+        "runtimes/android-arm/native/liblua54.so",
+        "runtimes/android-arm64/native/liblua54.so",
+        "runtimes/android-x64/native/liblua54.so",
+        "runtimes/android-x86/native/liblua54.so",
+        "runtimes/ios/native/liblua54.framework/Info.plist",
+        "runtimes/ios/native/liblua54.framework/liblua54",
+        "runtimes/linux-arm64/native/liblua54.so",
+        "runtimes/linux-x64/native/liblua54.so",
+        "runtimes/maccatalyst/native/liblua54.framework/Info.plist",
+        "runtimes/maccatalyst/native/liblua54.framework/liblua54",
+        "runtimes/osx/native/liblua54.dylib",
+        "runtimes/tvos/native/liblua54.framework/Info.plist",
+        "runtimes/tvos/native/liblua54.framework/liblua54",
+        "runtimes/win-arm/native/lua54.dll",
+        "runtimes/win-arm64/native/lua54.dll",
+        "runtimes/win-x64/native/lua54.dll",
+        "runtimes/win-x86/native/lua54.dll",
+        "runtimes/win10-arm/nativeassets/uap10.0/lua54.dll",
+        "runtimes/win10-arm64/nativeassets/uap10.0/lua54.dll",
+        "runtimes/win10-x64/nativeassets/uap10.0/lua54.dll",
+        "runtimes/win10-x86/nativeassets/uap10.0/lua54.dll"
+      ]
+    },
+    "NLua/1.7.5": {
+      "sha512": "ACDMZiuJxQWw3rMeP7nPIIOid5fv2Bp66XKr7q1+vJdfcr9AZ8NRqoKOAf0ZsZGBUODEZhEbwliuwgo0T0s2XA==",
+      "type": "package",
+      "path": "nlua/1.7.5",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE",
+        "lib/MonoAndroid/NLua.dll",
+        "lib/MonoAndroid/NLua.pdb",
+        "lib/net46/NLua.dll",
+        "lib/net46/NLua.pdb",
+        "lib/net8.0-android28/NLua.dll",
+        "lib/net8.0-android28/NLua.pdb",
+        "lib/net8.0-ios11.0/NLua.dll",
+        "lib/net8.0-ios11.0/NLua.pdb",
+        "lib/net8.0-maccatalyst13.0/NLua.dll",
+        "lib/net8.0-maccatalyst13.0/NLua.pdb",
+        "lib/net8.0-macos10.13/NLua.dll",
+        "lib/net8.0-macos10.13/NLua.pdb",
+        "lib/net8.0-tvos11.0/NLua.dll",
+        "lib/net8.0-tvos11.0/NLua.pdb",
+        "lib/net8.0/NLua.dll",
+        "lib/net8.0/NLua.pdb",
+        "lib/netstandard2.0/NLua.dll",
+        "lib/netstandard2.0/NLua.pdb",
+        "lib/uap10.0/NLua.dll",
+        "lib/uap10.0/NLua.pdb",
+        "lib/uap10.0/NLua.pri",
+        "lib/xamarinios/NLua.dll",
+        "lib/xamarinios/NLua.pdb",
+        "lib/xamarinmac/NLua.dll",
+        "lib/xamarinmac/NLua.pdb",
+        "lib/xamarintvos/NLua.dll",
+        "lib/xamarintvos/NLua.pdb",
+        "nlua.1.7.5.nupkg.sha512",
+        "nlua.nuspec"
+      ]
+    }
+  },
+  "projectFileDependencyGroups": {
+    "net9.0-windows": [
+      "NLua >= 1.7.5"
+    ]
+  },
+  "packageFolders": {
+    "C:\\Users\\User\\.nuget\\packages\\": {},
+    "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectUniqueName": "C:\\Users\\User\\Downloads\\KNE_f\\KNE_f\\KNE.csproj",
+      "projectName": "KNE",
+      "projectPath": "C:\\Users\\User\\Downloads\\KNE_f\\KNE_f\\KNE.csproj",
+      "packagesPath": "C:\\Users\\User\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\User\\Downloads\\KNE_f\\KNE_f\\obj\\",
+      "projectStyle": "PackageReference",
+      "fallbackFolders": [
+        "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+      ],
+      "configFilePaths": [
+        "C:\\Users\\User\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+      ],
+      "originalTargetFrameworks": [
+        "net9.0-windows"
+      ],
+      "sources": {
+        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net9.0-windows": {
+          "framework": "net9.0-windows7.0",
+          "targetAlias": "net9.0-windows",
+          "projectReferences": {}
+        }
+      },
+      "warningProperties": {
+        "warnAsError": [
+          "NU1605"
+        ]
+      },
+      "restoreAuditProperties": {
+        "enableAudit": "true",
+        "auditLevel": "low",
+        "auditMode": "direct"
+      },
+      "SdkAnalysisLevel": "10.0.400"
+    },
+    "frameworks": {
+      "net9.0-windows": {
+        "framework": "net9.0-windows7.0",
+        "targetAlias": "net9.0-windows",
+        "dependencies": {
+          "NLua": {
+            "target": "Package",
+            "version": "[1.7.5, )"
+          }
+        },
+        "imports": [
+          "net461",
+          "net462",
+          "net47",
+          "net471",
+          "net472",
+          "net48",
+          "net481"
+        ],
+        "assetTargetFallback": true,
+        "warn": true,
+        "frameworkReferences": {
+          "Microsoft.NETCore.App": {
+            "privateAssets": "all"
+          },
+          "Microsoft.WindowsDesktop.App.WPF": {
+            "privateAssets": "none"
+          }
+        },
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.400/PortableRuntimeIdentifierGraph.json"
+      }
+    }
+  }
+}

@@ -1,0 +1,93 @@
+<Window x:Class="KNE.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Karlene Novel Engine" Height="700" Width="1000" MinHeight="480" MinWidth="720"
+        Loaded="Window_Loaded" Closed="Window_Closed">
+    <DockPanel Margin="20">
+        <TextBlock x:Name="OperationStatus" DockPanel.Dock="Bottom" Margin="0,12,0,0" TextWrapping="Wrap"/>
+        <Grid>
+            <StackPanel x:Name="WelcomePanel" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="Добро пожаловать в KNE" FontSize="28" FontWeight="Bold" TextAlignment="Center"/>
+                <TextBlock Text="Karlene Novel Engine — создание визуальных новелл" FontSize="16"
+                           TextWrapping="Wrap" TextAlignment="Center" Margin="0,12,0,24"/>
+                <WrapPanel HorizontalAlignment="Center">
+                    <Button Content="Создать проект" Padding="14,10" Margin="5" Click="BtnCreateProject_Click"/>
+                    <Button Content="Открыть проект" Padding="14,10" Margin="5" Click="BtnSelectProject_Click"/>
+                    <Button Content="Настройки" Padding="14,10" Margin="5" Click="BtnSettings_Click"/>
+                    <Button Content="Помощь" Padding="14,10" Margin="5" Click="BtnHelp_Click"/>
+                </WrapPanel>
+                <TextBlock Text="Последние проекты" FontSize="16" FontWeight="Bold" Margin="5,20,0,8"/>
+                <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="RecentProjectsList">
+                        <ItemsControl.ItemTemplate><DataTemplate>
+                            <Button Content="{Binding}" Tag="{Binding}" HorizontalContentAlignment="Left" Padding="10,6" Margin="5,2" Click="OpenRecentProject_Click"/>
+                        </DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
+
+            <Grid x:Name="ProjectPanel" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock x:Name="ProjectTitleTextBlock" FontSize="24" FontWeight="Bold" Margin="0,0,0,16"/>
+                <Grid Grid.Row="1">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <TextBox x:Name="FileSearch" Grid.ColumnSpan="3" Padding="8" Margin="0,0,0,10" ToolTip="Поиск по имени и относительному пути" TextChanged="FileSearch_TextChanged"/>
+                    <TreeView x:Name="ProjectFilesTree" Grid.Row="1" SelectedItemChanged="ProjectFilesTree_SelectedItemChanged">
+                        <TreeView.ItemTemplate><HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                            <TextBlock Text="{Binding Name}" ToolTip="{Binding RelativePath}"/>
+                        </HierarchicalDataTemplate></TreeView.ItemTemplate>
+                    </TreeView>
+                    <GridSplitter Grid.Row="1" Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
+                <DataGrid x:Name="FilesDataGrid" Grid.Row="1" Grid.Column="2" AutoGenerateColumns="False"
+                          IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False"
+                          SelectionMode="Single" EnableRowVirtualization="True" EnableColumnVirtualization="True">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Имя файла" Binding="{Binding FileName, Mode=OneWay}" Width="*"/>
+                        <DataGridTextColumn Header="Путь" Binding="{Binding FilePath, Mode=OneWay}" Width="2*"/>
+                        <DataGridTextColumn Header="Тип" Binding="{Binding FileType, Mode=OneWay}" Width="*"/>
+                        <DataGridTemplateColumn Header="Действия" Width="150">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <ComboBox Width="140" SelectionChanged="FileActionsComboBox_SelectionChanged" Tag="{Binding}"
+                                              ToolTip="Выберите действие">
+                                        <ComboBoxItem Content="Посмотреть"/>
+                                        <ComboBoxItem Content="Редактировать"/>
+                                        <ComboBoxItem Content="Переименовать"/>
+                                        <ComboBoxItem Content="Дублировать"/>
+                                        <ComboBoxItem Content="Удалить"/>
+                                    </ComboBox>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+                </Grid>
+                <WrapPanel Grid.Row="2" Margin="0,16,0,0">
+                    <Button Content="Назад" Padding="14,10" Margin="0,0,10,0" Click="BtnBack_Click"/>
+                    <Button Content="Создать файл" Padding="14,10" Margin="0,0,10,0" Click="BtnCreateFile_Click"/>
+                    <Button Content="Обновить" Padding="14,10" Margin="0,0,10,0" Click="BtnRefresh_Click"/>
+                    <Button Content="Запустить проект" Padding="14,10" Click="BtnRunProject_Click"/>
+                </WrapPanel>
+            </Grid>
+
+            <StackPanel x:Name="SettingsPanel" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="Настройки" FontSize="28" FontWeight="Bold" Margin="0,0,0,20"/>
+                <TextBlock Text="Путь к текстовому редактору" FontSize="16" Margin="0,0,0,8"/>
+                <DockPanel>
+                    <Button Content="Выбрать…" DockPanel.Dock="Right" Padding="12,6" Margin="10,0,0,0" Click="BtnSelectEditor_Click"/>
+                    <TextBox x:Name="TxtEditorPath" Width="380" Padding="6" VerticalContentAlignment="Center"/>
+                </DockPanel>
+                <TextBlock Text="Укажите .exe. Пустое поле — стандартный Блокнот." Foreground="Gray" Margin="0,8,0,20"/>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Сохранить" Padding="14,10" Margin="0,0,10,0" Click="BtnSaveSettings_Click"/>
+                    <Button Content="Назад" Padding="14,10" Click="BtnSettingsBack_Click"/>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </DockPanel>
+</Window>
