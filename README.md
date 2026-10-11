@@ -1,6 +1,6 @@
 # Karlene Novel Engine
 
-WPF-приложение для создания и запуска визуальных новелл на Lua/KRL. Требуются Windows и .NET 9 SDK.
+WPF-приложение для создания и запуска визуальных новелл на Lua/KRL. Для сборки требуются Windows и стабильный .NET 10 SDK (10.0.100 или новее в ветке 10.0). `global.json` выбирает последнюю установленную стабильную версию SDK 10.0.
 
 ## Сборка и запуск
 
@@ -8,6 +8,14 @@ WPF-приложение для создания и запуска визуал�
 dotnet build KNE.sln
 dotnet test KNE.sln
 dotnet run --project KNE.csproj
+```
+
+Для запуска готовой сборки без SDK требуется .NET Desktop Runtime 10 для Windows соответствующей архитектуры. Приложение и тесты используют `net10.0-windows`.
+
+Публикация для Windows x64 с установленным Desktop Runtime:
+
+```powershell
+dotnet publish KNE.csproj -c Release -r win-x64 --self-contained false -o artifacts/publish/win-x64
 ```
 
 ## Работа с проектом
