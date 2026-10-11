@@ -26,6 +26,7 @@ public static class ProjectCreator
             foreach (string directory in new[] { "scenes", "characters", "backgrounds", "resources", "scripts", "audio", "gui" })
                 Directory.CreateDirectory(Path.Combine(staging, "game", directory));
             Directory.CreateDirectory(Path.Combine(staging, "engine"));
+            EngineSettings.WriteTemplate(staging);
             Directory.CreateDirectory(Path.Combine(staging, "metadata"));
             cancellationToken.ThrowIfCancellationRequested();
             File.WriteAllText(Path.Combine(staging, "game", "scenes", "main.krl"), """
@@ -37,7 +38,7 @@ public static class ProjectCreator
                 """);
             File.WriteAllText(Path.Combine(staging, "game", "scripts", "gamelogic.lua"), """
                 player_name = "Игрок"
-                score = 0
+                state.score = state.score or 0
                 print("Игра инициализирована!")
                 function process_command(command)
                     d(player_name, command)
@@ -46,6 +47,7 @@ public static class ProjectCreator
             File.WriteAllText(Path.Combine(staging, "README.txt"), $$"""
                 Проект: {{projectName}}
                 Точки входа задаются в project.json.
+                engine/*.json — окно, оформление, меню и начальное состояние; см. engine/README.txt.
                 game/scripts/gamelogic.lua — инициализация и process_command(command).
                 game/scenes/main.krl — главная сцена с функцией main().
                 API: d(имя или nil, текст), print(...), print_to_ui(текст),

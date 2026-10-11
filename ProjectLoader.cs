@@ -13,6 +13,7 @@ public sealed class ProjectInfo
     public string Title => string.IsNullOrWhiteSpace(Configuration.GameInfo?.Title) ? Name : Configuration.GameInfo.Title;
     public ObservableCollection<ProjectFile> Files { get; } = [];
     public List<string> Warnings { get; } = [];
+    public EngineSettings Engine { get; init; } = new();
 
     public string MainScenePath => ResolveEntry(Configuration.EntryPoints?.MainScene, ["game/scenes/main.krl", "main.krl"], ".krl");
     public string InitScriptPath => ResolveEntry(Configuration.EntryPoints?.InitScript, ["game/scripts/gamelogic.lua", "game/scripts/game_init.lua", "gamelogic.lua"], null);
@@ -65,7 +66,17 @@ public static class ProjectLoader
             throw new InvalidDataException("Некорректный project.json: " + ex.Message, ex);
         }
 
-        var result = new ProjectInfo { Path = root, Configuration = configuration };
+        bool hasEngine = File.Exists(PathSafety.ResolveRelative(root, "engine/window.json")) ||
+            File.Exists(PathSafety.ResolveRelative(root, "engine/theme.json")) ||
+            File.Exists(PathSafety.ResolveRelative(root, "engine/game.json")) ||
+            File.Exists(PathSafety.ResolveRelative(root, "engine/state.json"));
+        var engine = hasEngine ? EngineSettings.Load(root) : new EngineSettings
+        {
+            Window = new WindowDefaults { Width = 800, Height = 600 },
+            Theme = new GameTheme { BackgroundColor = "#FF2D2D30", Pattern = false },
+            Game = new GameDefaults { MainMenu = false }
+        };
+        var result = new ProjectInfo { Path = root, Configuration = configuration, Engine = engine };
         var snapshot = await Task.Run(() => EnumerateFiles(root, cancellationToken), cancellationToken);
         foreach (string file in snapshot.Files) result.Files.Add(new ProjectFile { FilePath = file });
         result.Warnings.AddRange(snapshot.Warnings);
