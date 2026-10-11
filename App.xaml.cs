@@ -6,9 +6,9 @@ namespace KNE
     {
         protected override void OnStartup(StartupEventArgs e)
         {
-            if (e.Args is ["--lua-worker", var projectPath])
+            if (e.Args.Length is 2 or 3 && e.Args[0] == "--lua-worker")
             {
-                int exitCode = Task.Run(() => LuaWorker.RunAsync(projectPath)).GetAwaiter().GetResult();
+                int exitCode = Task.Run(() => LuaWorker.RunAsync(e.Args[1], e.Args.Length == 3 ? e.Args[2] : null)).GetAwaiter().GetResult();
                 Shutdown(exitCode);
                 return;
             }

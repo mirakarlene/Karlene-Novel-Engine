@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.ComponentModel;
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.VisualBasic;
@@ -19,8 +21,33 @@ public partial class MainWindow : Window
     private string? monitoredPath;
     private bool pendingRefresh;
     private int viewRevision;
+    private bool closeApproved;
+    private bool checkingClose;
 
     public MainWindow() => InitializeComponent();
+
+    private async void Window_Closing(object? sender, CancelEventArgs e)
+    {
+        if (closeApproved || (SceneEditor.Document == null && !busy)) return;
+        e.Cancel = true;
+        if (checkingClose || busy) return;
+        checkingClose = true;
+        try
+        {
+            if (await SceneEditor.CanLeaveAsync())
+            {
+                closeApproved = true;
+                // Closing may complete synchronously; re-enter Close only after this event has returned.
+                _ = Dispatcher.BeginInvoke(new Action(Close));
+            }
+        }
+        catch (Exception ex)
+        {
+            OperationStatus.Text = ex.Message;
+            if (IsVisible) MessageBox.Show(this, ex.Message, "Ошибка сохранения");
+        }
+        finally { checkingClose = false; }
+    }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e) => await RunOperationAsync(async () =>
     {
@@ -52,8 +79,8 @@ public partial class MainWindow : Window
         {
             if (!closed)
             {
-                OperationStatus.Text = "Операция не завершена.";
-                MessageBox.Show(this, ex.Message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                OperationStatus.Text = "Операция не завершена. " + ex.Message;
+                if (IsVisible) MessageBox.Show(this, ex.Message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
         finally
@@ -75,6 +102,13 @@ public partial class MainWindow : Window
     {
         var loaded = await ProjectLoader.LoadProjectAsync(path, lifetime.Token);
         if (closed) return;
+        if (currentProject != null && !currentProject.Path.Equals(loaded.Path, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!await SceneEditor.CanLeaveAsync()) return;
+            SceneEditor.Clear();
+            SceneEditor.Visibility = Visibility.Collapsed;
+            FilesDataGrid.Visibility = Visibility.Visible;
+        }
         currentProject = loaded;
         ProjectTitleTextBlock.Text = loaded.Name;
         await UpdateFileViewAsync();
@@ -116,8 +150,12 @@ public partial class MainWindow : Window
         }, "Создание проекта…");
     }
 
-    private void BtnBack_Click(object sender, RoutedEventArgs e)
+    private async void BtnBack_Click(object sender, RoutedEventArgs e) => await RunOperationAsync(async () =>
     {
+        if (!await SceneEditor.CanLeaveAsync()) return;
+        SceneEditor.Clear();
+        SceneEditor.Visibility = Visibility.Collapsed;
+        FilesDataGrid.Visibility = Visibility.Visible;
         currentProject = null;
         FilesDataGrid.ItemsSource = null;
         ProjectFilesTree.ItemsSource = null;
@@ -125,7 +163,7 @@ public partial class MainWindow : Window
         pendingRefresh = false;
         OperationStatus.Text = "";
         ShowPanel(WelcomePanel);
-    }
+    }, "Закрытие проекта…");
 
     private void BtnSettings_Click(object sender, RoutedEventArgs e)
     {
@@ -270,9 +308,18 @@ public partial class MainWindow : Window
                     if (!closed) MessageBox.Show(this, details, "Информация о файле");
                     break;
                 case "Редактировать":
+                    if (ScriptDocument.IsCodePath(source) || ScriptDocument.IsVisualPath(source))
+                    {
+                        await OpenScriptAsync(source);
+                        break;
+                    }
+                    goto case "Внешний редактор";
+                case "Внешний редактор":
                     using (Process.Start(EditorLauncher.CreateStartInfo(settings.EditorPath, source))) { }
                     break;
                 case "Переименовать":
+                    if (SceneEditor.Document?.FilePath.Equals(source, StringComparison.OrdinalIgnoreCase) == true)
+                        throw new InvalidOperationException("Открытый сценарий нельзя переименовать. Сначала закройте его в редакторе.");
                     string name = Interaction.InputBox("Введите новое имя с расширением:", "Переименование", file.FileName);
                     if (name.Length == 0) return;
                     await Task.Run(() => operations.Rename(file, name), lifetime.Token);
@@ -286,6 +333,8 @@ public partial class MainWindow : Window
                     await OpenProjectAsync(project.Path);
                     break;
                 case "Удалить":
+                    if (SceneEditor.Document?.FilePath.Equals(source, StringComparison.OrdinalIgnoreCase) == true)
+                        throw new InvalidOperationException("Открытый сценарий нельзя удалить. Сначала закройте его в редакторе.");
                     if (MessageBox.Show(this, $"Удалить {file.FileName}? Действие необратимо.", "Удаление",
                         MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
                     await Task.Run(() => operations.Delete(file), lifetime.Token);
@@ -323,6 +372,7 @@ public partial class MainWindow : Window
         if (currentProject is not { } project) return;
         await RunOperationAsync(async () =>
         {
+            await SceneEditor.SaveAsync();
             // Re-read configuration and files changed by the external editor.
             await OpenProjectAsync(project.Path);
             if (closed || currentProject == null) return;
@@ -332,4 +382,108 @@ public partial class MainWindow : Window
             game.Show();
         }, "Запуск проекта…");
     }
+
+    private async Task OpenScriptAsync(string path)
+    {
+        if (currentProject == null || !await SceneEditor.CanLeaveAsync()) return;
+        await SceneEditor.OpenAsync(currentProject.Path, path);
+        FilesDataGrid.Visibility = Visibility.Collapsed;
+        SceneEditor.Visibility = Visibility.Visible;
+    }
+
+    private async void BtnOpenScript_Click(object sender, RoutedEventArgs e)
+    {
+        if (currentProject is not { } project || FilesDataGrid.SelectedItem is not ProjectFile file) return;
+        await RunOperationAsync(() => OpenScriptAsync(new ProjectFiles(project).ValidateSource(file)), "Открытие сценария…");
+    }
+
+    private void OpenScript_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (FilesDataGrid.SelectedItem is ProjectFile file && (ScriptDocument.IsCodePath(file.FilePath) || ScriptDocument.IsVisualPath(file.FilePath)))
+            BtnOpenScript_Click(sender, e);
+    }
+
+    private void BtnFileList_Click(object sender, RoutedEventArgs e)
+    {
+        FilesDataGrid.Visibility = Visibility.Visible;
+        SceneEditor.Visibility = Visibility.Collapsed;
+    }
+
+    private async void BtnNewVisualScene_Click(object sender, RoutedEventArgs e)
+    {
+        if (currentProject is not { } project) return;
+        var dialog = new SaveFileDialog
+        {
+            Title = "Создать визуальную сцену", InitialDirectory = project.Path,
+            FileName = "scene.knegraph", Filter = "Блок-схема KNE (*.knegraph)|*.knegraph",
+            DefaultExt = ".knegraph", AddExtension = true, OverwritePrompt = false
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        await RunOperationAsync(async () =>
+        {
+            if (!await SceneEditor.CanLeaveAsync()) return;
+            await ScriptDocument.CreateVisualAsync(project.Path, dialog.FileName, lifetime.Token);
+            await OpenProjectAsync(project.Path);
+            await SceneEditor.OpenAsync(project.Path, dialog.FileName);
+            FilesDataGrid.Visibility = Visibility.Collapsed;
+            SceneEditor.Visibility = Visibility.Visible;
+        }, "Создание блок-схемы…");
+    }
+
+    private async void SceneEditor_RunRequested(object? sender, EventArgs e)
+    {
+        if (currentProject is not { } project || SceneEditor.Document is not { } document) return;
+        await RunOperationAsync(async () =>
+        {
+            await SceneEditor.SaveAsync();
+            await OpenProjectAsync(project.Path);
+            if (currentProject == null || closed) return;
+            var configuration = JsonSerializer.Deserialize<ProjectConfiguration>(
+                JsonSerializer.Serialize(currentProject.Configuration, ProjectConfiguration.JsonOptions), ProjectConfiguration.JsonOptions)!;
+            configuration.EntryPoints ??= new EntryPoints();
+            configuration.EntryPoints.MainScene = Path.GetRelativePath(project.Path, document.FilePath).Replace('\\', '/');
+            var preview = new ProjectInfo { Path = project.Path, Configuration = configuration };
+            foreach (var file in currentProject.Files) preview.Files.Add(file);
+            _ = preview.MainScenePath; _ = preview.InitScriptPath;
+            var projectSaves = new GameSaveStore(project.Path);
+            string sceneIdentity = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(configuration.EntryPoints.MainScene.ToUpperInvariant())))[..24];
+            var previewSaves = new GameSaveStore(project.Path, Path.Combine(projectSaves.DirectoryPath, "preview", sceneIdentity));
+            new GameWindow(preview, previewSaves).Show();
+        }, "Запуск выбранной сцены…");
+    }
+
+    private async void SceneEditor_MainSceneRequested(object? sender, EventArgs e)
+    {
+        if (currentProject is not { } project || SceneEditor.Document is not { } document) return;
+        await RunOperationAsync(async () =>
+        {
+            await SceneEditor.SaveAsync();
+            string path = PathSafety.ResolveRelative(project.Path, "project.json");
+            string original = await File.ReadAllTextAsync(path, lifetime.Token);
+            var configuration = JsonSerializer.Deserialize<ProjectConfiguration>(original, ProjectConfiguration.JsonOptions)
+                ?? throw new InvalidDataException("Пустая конфигурация проекта.");
+            configuration.EntryPoints ??= new EntryPoints();
+            configuration.EntryPoints.MainScene = Path.GetRelativePath(project.Path, PathSafety.EnsureInside(project.Path, document.FilePath)).Replace('\\', '/');
+            string staging = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                await File.WriteAllTextAsync(staging, JsonSerializer.Serialize(configuration, ProjectConfiguration.JsonOptions), lifetime.Token);
+                PathSafety.EnsureInside(project.Path, path);
+                if (await File.ReadAllTextAsync(path, lifetime.Token) != original) throw new IOException("project.json изменён другим приложением. Повторите действие.");
+                File.Move(staging, path, overwrite: true);
+            }
+            finally { if (File.Exists(staging)) File.Delete(staging); }
+            await OpenProjectAsync(project.Path);
+            OperationStatus.Text = "Главная сцена: " + configuration.EntryPoints.MainScene;
+        }, "Смена главной сцены…");
+    }
+
+    private async void SceneEditor_CloseRequested(object? sender, EventArgs e) => await RunOperationAsync(async () =>
+    {
+        if (!await SceneEditor.CanLeaveAsync()) return;
+        SceneEditor.Clear();
+        SceneEditor.Visibility = Visibility.Collapsed;
+        FilesDataGrid.Visibility = Visibility.Visible;
+    }, "Закрытие сценария…");
 }

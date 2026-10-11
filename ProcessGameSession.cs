@@ -122,6 +122,7 @@ public sealed class ProcessGameSession : IGameSession
                 if (!File.Exists(executable)) info.ArgumentList.Add(assembly);
                 info.ArgumentList.Add("--lua-worker");
                 info.ArgumentList.Add(project.Path);
+                info.ArgumentList.Add(Path.GetRelativePath(project.Path, project.MainScenePath));
                 worker = Process.Start(info) ?? throw new IOException("Не удалось запустить Lua.");
                 responses = new(worker.StandardOutput);
                 _ = DrainErrorsAsync(worker.StandardError);
