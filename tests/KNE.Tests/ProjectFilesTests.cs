@@ -54,7 +54,8 @@ public sealed class ProjectFilesTests
         var project = await fixture.LoadAsync();
         var operations = new ProjectFiles(project);
         Assert.Throws<IOException>(() => operations.Create(target));
-        Assert.Throws<IOException>(() => operations.Duplicate(project.Files.Single(f => f.FileName == "README.txt"), target));
+        var readme = project.Files.Single(f => f.FilePath == Path.Combine(project.Path, "README.txt"));
+        Assert.Throws<IOException>(() => operations.Duplicate(readme, target));
         Assert.Equal("keep", File.ReadAllText(target));
     }
 

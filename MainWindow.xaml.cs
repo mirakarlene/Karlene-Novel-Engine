@@ -442,14 +442,14 @@ public partial class MainWindow : Window
                 JsonSerializer.Serialize(currentProject.Configuration, ProjectConfiguration.JsonOptions), ProjectConfiguration.JsonOptions)!;
             configuration.EntryPoints ??= new EntryPoints();
             configuration.EntryPoints.MainScene = Path.GetRelativePath(project.Path, document.FilePath).Replace('\\', '/');
-            var preview = new ProjectInfo { Path = project.Path, Configuration = configuration };
+            var preview = new ProjectInfo { Path = project.Path, Configuration = configuration, Engine = currentProject.Engine };
             foreach (var file in currentProject.Files) preview.Files.Add(file);
             _ = preview.MainScenePath; _ = preview.InitScriptPath;
             var projectSaves = new GameSaveStore(project.Path);
             string sceneIdentity = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
                 System.Text.Encoding.UTF8.GetBytes(configuration.EntryPoints.MainScene.ToUpperInvariant())))[..24];
             var previewSaves = new GameSaveStore(project.Path, Path.Combine(projectSaves.DirectoryPath, "preview", sceneIdentity));
-            new GameWindow(preview, previewSaves).Show();
+            new GameWindow(preview, previewSaves, preview: true).Show();
         }, "Запуск выбранной сцены…");
     }
 

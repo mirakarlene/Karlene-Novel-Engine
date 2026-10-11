@@ -25,13 +25,20 @@ public partial class GameWindow : Window
     private SceneVisuals? renderedVisuals;
     private readonly MediaPlayer music = new();
     private readonly MediaPlayer sound = new();
+    private bool loaded;
+    private bool fullscreen;
+    private WindowState previousWindowState;
+    private DateTime noticeUntil;
+    private readonly bool preview;
 
-    public GameWindow(ProjectInfo project, GameSaveStore? saves = null)
+    public GameWindow(ProjectInfo project, GameSaveStore? saves = null, bool preview = false)
     {
         InitializeComponent();
         this.project = project;
+        this.preview = preview;
         this.saves = saves ?? new GameSaveStore(project.Path);
         Title = project.Title;
+        ApplyEngineTheme();
         runtime = new ProcessGameSession(project, QueueOutput);
         music.MediaEnded += (_, _) => { if (runtime.Visuals.LoopMusic) { music.Position = TimeSpan.Zero; music.Play(); } };
         music.MediaFailed += (_, e) => QueueOutput("Ошибка музыки: " + e.ErrorException.Message);
@@ -40,38 +47,199 @@ public partial class GameWindow : Window
             (_, _) => RenderOutput(), Dispatcher);
     }
 
-    private async void Window_Loaded(object sender, RoutedEventArgs e) => await ExecuteAsync(() => runtime.StartAsync(execution!.Token), starting: true);
+    private async void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (loaded) return;
+        loaded = true;
+        if (project.Engine.Window.Mode == "maximized") WindowState = WindowState.Maximized;
+        if (project.Engine.Window.Mode == "fullscreen") ToggleFullscreen();
+        if (project.Engine.Game.MainMenu && !preview) ShowMenu();
+        else await StartGameAsync();
+    }
+
+    private void ApplyEngineTheme()
+    {
+        var settings = project.Engine;
+        var theme = settings.Theme;
+        var dialogue = theme.Dialogue;
+        Width = settings.Window.Width; Height = settings.Window.Height;
+        ResizeMode = settings.Window.Resizable ? ResizeMode.CanResize : ResizeMode.NoResize;
+        WindowStartupLocation = settings.Window.Position == "center" ? WindowStartupLocation.CenterScreen : WindowStartupLocation.Manual;
+        if (settings.Window.Position == "manual")
+        {
+            Left = Math.Clamp(settings.Window.Left, SystemParameters.VirtualScreenLeft,
+                Math.Max(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - Width));
+            Top = Math.Clamp(settings.Window.Top, SystemParameters.VirtualScreenTop,
+                Math.Max(SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - Height));
+        }
+        FontFamily = new FontFamily(theme.FontFamily);
+        Resources["GameTextBrush"] = Brush(theme.TextColor);
+        Resources["GameAccentBrush"] = Brush(theme.AccentColor);
+        Resources["GameButtonBrush"] = Brush(theme.ButtonColor);
+        Background = Brush(theme.BackgroundColor);
+        DefaultBackground.Background = EnginePresentation.CreateBackground(theme);
+        DefaultBackgroundImage.Source = theme.BackgroundImage == null ? null : LoadImage(ResourcePaths.Resolve(project.Path, theme.BackgroundImage));
+        DialoguePanel.Height = dialogue.Height;
+        DialoguePanel.Margin = new Thickness(dialogue.Margin);
+        DialoguePanel.Padding = new Thickness(dialogue.Padding);
+        DialoguePanel.CornerRadius = new CornerRadius(dialogue.CornerRadius);
+        DialoguePanel.Background = Brush(dialogue.BackgroundColor);
+        DialoguePanel.BorderBrush = Brush(dialogue.BorderColor);
+        SpeakerText.FontSize = dialogue.SpeakerFontSize; SpeakerText.Foreground = Brush(dialogue.SpeakerColor);
+        DialogueText.FontSize = dialogue.FontSize; DialogueText.Foreground = Brush(dialogue.TextColor);
+        CharacterImage.Width = theme.CharacterWidth;
+        MenuTitle.Text = project.Title;
+        MenuSubtitle.Text = settings.Game.Subtitle;
+        MenuPanel.Width = theme.Menu.Width;
+        MenuTitle.FontSize = theme.Menu.TitleFontSize;
+        MenuSubtitle.FontSize = theme.Menu.SubtitleFontSize;
+        MenuOverlay.Background = Brush(theme.Menu.OverlayColor);
+        MenuScroll.HorizontalAlignment = theme.Menu.Alignment switch
+        {
+            "left" => HorizontalAlignment.Left, "right" => HorizontalAlignment.Right, _ => HorizontalAlignment.Center
+        };
+        StartButton.Content = settings.Game.StartLabel;
+        ContinueButton.Content = settings.Game.ContinueLabel;
+        ExitButton.Content = settings.Game.ExitLabel;
+        MenuOverlay.Visibility = settings.Game.MainMenu && !preview ? Visibility.Visible : Visibility.Collapsed;
+        renderedSettings = settings.RuntimeDefaults(project.Title);
+    }
+
+    private static SolidColorBrush Brush(string color) => new((Color)ColorConverter.ConvertFromString(color));
+
+    private void SceneArea_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (project == null) return;
+        // Reserve space for the top controls and margins when the player shrinks the window.
+        DialoguePanel.MaxHeight = Math.Max(120, e.NewSize.Height - 2 * project.Engine.Theme.Dialogue.Margin - 80);
+    }
+
+    private async Task StartGameAsync()
+    {
+        await ExecuteAsync(async () =>
+        {
+            var candidate = new ProcessGameSession(project, QueueOutput);
+            try { await candidate.StartAsync(execution!.Token); }
+            catch { await candidate.DisposeAsync(); throw; }
+            await ReplaceSessionAsync(candidate);
+        }, starting: true);
+    }
+
+    private async Task ReplaceSessionAsync(IGameSession candidate)
+    {
+        if (closed) { await candidate.DisposeAsync(); return; }
+        await runtime.DisposeAsync();
+        if (closed) { await candidate.DisposeAsync(); return; }
+        runtime = candidate;
+        ready = true;
+        renderedStory = null; renderedSettings = null; renderedVisuals = null;
+        music.Close(); sound.Close();
+        ShowGameplay();
+    }
+
+    private async void StartButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (execution != null) return;
+        if (ready && MessageBox.Show(this, "Начать новую игру? Несохранённый прогресс будет потерян. Существующие сохранения останутся доступны.",
+                "Новая игра", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        await StartGameAsync();
+    }
+
+    private async void ContinueButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Continue uses the most recent automatically recorded progress, with the manual slot as fallback.
+        await LoadGameAsync(saves.Exists("auto") ? "auto" : "quick");
+    }
+
+    private void PauseButton_Click(object sender, RoutedEventArgs e) { if (execution == null && ready) ShowMenu(); }
+    private void ResumeButton_Click(object sender, RoutedEventArgs e) { if (execution == null && ready) ShowGameplay(); }
+    private void ExitButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void ShowMenu()
+    {
+        MenuOverlay.Visibility = Visibility.Visible;
+        ResumeButton.Visibility = ready ? Visibility.Visible : Visibility.Collapsed;
+        DialoguePanel.Visibility = Visibility.Collapsed;
+        GameControls.Visibility = Visibility.Collapsed;
+        DebugOverlay.Visibility = Visibility.Collapsed;
+        music.Pause(); sound.Pause();
+        ContinueButton.IsEnabled = saves.Exists("auto") || saves.Exists("quick");
+        if (ready) ResumeButton.Focus(); else StartButton.Focus();
+    }
+
+    private void ShowGameplay()
+    {
+        MenuOverlay.Visibility = Visibility.Collapsed;
+        DialoguePanel.Visibility = Visibility.Visible;
+        GameControls.Visibility = Visibility.Visible;
+        if (runtime.Visuals.Music != null) music.Play();
+        NextButton.Focus();
+    }
+
+    private void ToggleFullscreen()
+    {
+        if (!fullscreen)
+        {
+            previousWindowState = WindowState;
+            WindowState = WindowState.Normal;
+            WindowStyle = WindowStyle.None;
+            ResizeMode = ResizeMode.NoResize;
+            WindowState = WindowState.Maximized;
+        }
+        else
+        {
+            WindowState = WindowState.Normal;
+            WindowStyle = WindowStyle.SingleBorderWindow;
+            ResizeMode = project.Engine.Window.Resizable ? ResizeMode.CanResize : ResizeMode.NoResize;
+            WindowState = previousWindowState;
+        }
+        fullscreen = !fullscreen;
+    }
+
+    private void Notify(string text)
+    {
+        NoticeText.Text = text;
+        NoticePanel.Visibility = Visibility.Visible;
+        noticeUntil = DateTime.UtcNow.AddSeconds(5);
+    }
 
     private async Task ExecuteAsync(Func<Task> action, bool starting = false)
     {
         if (closed || execution != null) return;
         execution = new CancellationTokenSource();
+        string? operationNotice = null;
         StopButton.IsEnabled = true;
         CommandInput.IsEnabled = false;
         NextButton.IsEnabled = false;
         ChoicePanel.IsEnabled = false;
+        StartButton.IsEnabled = false; ContinueButton.IsEnabled = false; ResumeButton.IsEnabled = false;
+        PauseButton.IsEnabled = false;
+        Notify(starting ? "Загрузка игры…" : "Выполнение…");
         StatusText.Text = starting ? "Загрузка сценария…" : "Выполнение команды…";
         try
         {
             await action();
             if (closed) return;
             if (starting) ready = true;
-            if (ready && (!starting || !saves.Exists("auto")))
+            if (ready && project.Engine.Game.AutoSave && (!starting || !saves.Exists("auto")))
             {
                 try { await saves.SaveAsync("auto", await runtime.GetCheckpointAsync(execution.Token), execution.Token); }
-                catch (Exception ex) { QueueOutput("Автосохранение не выполнено: " + ex.Message); }
+                catch (Exception ex) { operationNotice = "Автосохранение не выполнено: " + ex.Message; QueueOutput(operationNotice); }
             }
             StatusText.Text = "Готово";
+            if (operationNotice == null) NoticePanel.Visibility = Visibility.Collapsed; else Notify(operationNotice);
         }
         catch (OperationCanceledException)
         {
             QueueOutput("Выполнение остановлено.");
             StatusText.Text = "Остановлено";
+            Notify("Выполнение остановлено.");
         }
         catch (Exception ex)
         {
             QueueOutput("Ошибка: " + ex.Message);
             StatusText.Text = "Ошибка выполнения";
+            Notify("Ошибка: " + ex.Message);
         }
         finally
         {
@@ -82,14 +250,20 @@ public partial class GameWindow : Window
                 StopButton.IsEnabled = false;
                 CommandInput.IsEnabled = ready;
                 RenderOutput();
-                if (ready) CommandInput.Focus();
+                StartButton.IsEnabled = true; ResumeButton.IsEnabled = ready; PauseButton.IsEnabled = ready;
+                if (DebugOverlay.Visibility == Visibility.Visible && ready) CommandInput.Focus();
+                else if (ready && MenuOverlay.Visibility != Visibility.Visible)
+                {
+                    if (runtime.Story.Kind == "choice" && ChoicePanel.Children.Count > 0) ChoicePanel.Children[0].Focus();
+                    else NextButton.Focus();
+                }
             }
         }
     }
 
     private async void CommandInput_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter || execution != null || !ready) return;
+        if (e.Key != Key.Enter || execution != null || !ready || MenuOverlay.Visibility == Visibility.Visible) return;
         e.Handled = true;
         string command = CommandInput.Text.Trim();
         if (command.Length == 0) return;
@@ -107,45 +281,45 @@ public partial class GameWindow : Window
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         if (execution != null || !ready) return;
+        bool saved = false;
         await ExecuteAsync(async () =>
         {
             await saves.SaveAsync("quick", await runtime.GetCheckpointAsync(execution!.Token), execution.Token);
             QueueOutput("Игра сохранена.");
+            saved = true;
         });
+        if (saved) Notify("Игра сохранена.");
     }
 
     private async void LoadButton_Click(object sender, RoutedEventArgs e)
     {
-        if (execution != null) return;
         string slot = sender is Button { Tag: "auto" } ? "auto" : "quick";
+        await LoadGameAsync(slot);
+    }
+
+    private async Task LoadGameAsync(string slot)
+    {
+        if (execution != null) return;
         await ExecuteAsync(async () =>
         {
             var checkpoint = await saves.LoadAsync(slot, execution!.Token);
             var candidate = new ProcessGameSession(project, QueueOutput);
             try { await candidate.RestoreAsync(checkpoint, execution.Token); }
             catch { await candidate.DisposeAsync(); throw; }
-            if (closed) { await candidate.DisposeAsync(); return; }
-            await runtime.DisposeAsync();
-            if (closed) { await candidate.DisposeAsync(); return; }
-            runtime = candidate;
-            ready = true;
-            renderedStory = null;
-            renderedSettings = null;
-            renderedVisuals = null;
-            music.Close(); sound.Close();
+            await ReplaceSessionAsync(candidate);
             QueueOutput("Сохранение загружено.");
         });
     }
 
     private async void NextButton_Click(object sender, RoutedEventArgs e)
     {
-        if (NextButton.IsEnabled) await ExecuteAsync(() => runtime.AdvanceAsync(execution!.Token));
+        if (NextButton.IsEnabled && MenuOverlay.Visibility != Visibility.Visible) await ExecuteAsync(() => runtime.AdvanceAsync(execution!.Token));
         e.Handled = true;
     }
 
     private async void ChoiceButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: int index } && execution == null)
+        if (sender is Button { Tag: int index } && execution == null && MenuOverlay.Visibility != Visibility.Visible)
             await ExecuteAsync(() => runtime.ChooseAsync(index, execution!.Token));
         e.Handled = true;
     }
@@ -157,6 +331,18 @@ public partial class GameWindow : Window
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
+        if (e.Key == Key.F3 && project.Engine.Game.DebugEnabled)
+        {
+            DebugOverlay.Visibility = DebugOverlay.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+            if (DebugOverlay.Visibility == Visibility.Visible) CommandInput.Focus(); else NextButton.Focus();
+            e.Handled = true; return;
+        }
+        if (e.Key == Key.Escape && ready && execution == null)
+        {
+            if (MenuOverlay.Visibility == Visibility.Visible) ShowGameplay(); else ShowMenu();
+            e.Handled = true; return;
+        }
         if (e.Key == Key.Space && e.OriginalSource is not TextBox && NextButton.IsEnabled)
         {
             NextButton_Click(NextButton, e);
@@ -183,6 +369,8 @@ public partial class GameWindow : Window
     private void RenderOutput()
     {
         if (closed) return;
+        if (NoticePanel.Visibility == Visibility.Visible && execution == null && DateTime.UtcNow >= noticeUntil)
+            NoticePanel.Visibility = Visibility.Collapsed;
         bool changed = false;
         foreach (string line in pendingOutput.Drain())
         {
@@ -203,9 +391,13 @@ public partial class GameWindow : Window
         if (settings != renderedSettings)
         {
             Title = settings.Title;
-            Width = settings.Width;
-            Height = settings.Height;
-            Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(settings.Background));
+            // Apply only changed runtime values so a title update does not undo a player's window resize.
+            if (settings.Width != renderedSettings?.Width) Width = settings.Width;
+            if (settings.Height != renderedSettings?.Height) Height = settings.Height;
+            Background = Brush(settings.Background);
+            bool defaultBackground = settings.Background == project.Engine.Theme.BackgroundColor;
+            DefaultBackground.Background = defaultBackground ? EnginePresentation.CreateBackground(project.Engine.Theme) : Background;
+            DefaultBackgroundImage.Visibility = defaultBackground ? Visibility.Visible : Visibility.Collapsed;
             renderedSettings = settings;
         }
         RenderStory();
@@ -218,6 +410,7 @@ public partial class GameWindow : Window
         if (frame != renderedStory)
         {
             SpeakerText.Text = frame.Speaker;
+            SpeakerText.Visibility = frame.Speaker.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
             DialogueText.Text = frame.Text;
             ChoicePanel.Children.Clear();
             for (int i = 0; i < frame.Options.Count; i++)
@@ -235,6 +428,7 @@ public partial class GameWindow : Window
         SaveButton.IsEnabled = execution == null && ready;
         LoadButton.IsEnabled = execution == null && saves.Exists("quick");
         LoadAutoButton.IsEnabled = execution == null && saves.Exists("auto");
+        ContinueButton.IsEnabled = execution == null && (saves.Exists("auto") || saves.Exists("quick"));
         if (execution == null && ready)
             StatusText.Text = frame.Kind switch { "dialogue" => "Ожидание продолжения", "choice" => "Выберите ответ", "completed" => "История завершена", _ => "Готово" };
     }

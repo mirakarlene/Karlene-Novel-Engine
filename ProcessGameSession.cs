@@ -30,10 +30,10 @@ public sealed class ProcessGameSession : IGameSession
     {
         this.project = project ?? throw new ArgumentNullException(nameof(project));
         this.output = output ?? throw new ArgumentNullException(nameof(output));
-        ExecutionLimit = executionLimit ?? TimeSpan.FromSeconds(30);
+        ExecutionLimit = executionLimit ?? TimeSpan.FromSeconds(project.Engine.Game.ExecutionTimeoutSeconds);
         if (ExecutionLimit <= TimeSpan.Zero || ExecutionLimit > TimeSpan.FromHours(1))
             throw new ArgumentOutOfRangeException(nameof(executionLimit));
-        snapshot = new(new(project.Title, 800, 600, "#FF2D2D30"), StoryFrame.Empty, SceneVisuals.Empty);
+        snapshot = new(project.Engine.RuntimeDefaults(project.Title), StoryFrame.Empty, SceneVisuals.Empty);
     }
 
     public Task StartAsync(CancellationToken cancellationToken = default) => ExecuteAsync("start", cancellationToken);

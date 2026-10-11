@@ -37,7 +37,7 @@ public sealed class LuaRuntimeTests
         Assert.Throws<ArgumentNullException>(() => runtime.SetWindowTitle(null!));
         Assert.Throws<FormatException>(() => runtime.SetBgColor("invalid-color"));
         Assert.Equal("Новелла с пробелами", runtime.WindowSettings.Title);
-        Assert.Equal("#FF2D2D30", runtime.WindowSettings.Background);
+        Assert.Equal("#FF201134", runtime.WindowSettings.Background);
     }
 
     [Theory]
@@ -152,8 +152,8 @@ public sealed class LuaRuntimeTests
         using var fixture = new TempProject();
         await using var runtime = new LuaRuntime(await fixture.LoadAsync(), _ => { });
         Assert.Throws<ArgumentOutOfRangeException>(() => runtime.SetWindowSize(width, height));
-        Assert.Equal(800, runtime.WindowSettings.Width);
-        Assert.Equal(600, runtime.WindowSettings.Height);
+        Assert.Equal(1280, runtime.WindowSettings.Width);
+        Assert.Equal(720, runtime.WindowSettings.Height);
     }
 
     [Fact]

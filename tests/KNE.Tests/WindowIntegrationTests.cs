@@ -74,6 +74,7 @@ public sealed class WindowIntegrationTests
     public async Task GameWindow_LoadedEvent_RunsMainAndRendersDialogue()
     {
         using var fixture = new TempProject();
+        fixture.Write("engine/game.json", "{\"main_menu\":false}");
         var project = await fixture.LoadAsync();
         await OnStaAsync(async () =>
         {
@@ -121,6 +122,7 @@ public sealed class WindowIntegrationTests
     public async Task GameWindow_RendersImageAndChoice_AndLoadsManualSave()
     {
         using var fixture = new TempProject();
+        fixture.Write("engine/game.json", "{\"main_menu\":false}");
         fixture.Write("game/scenes/main.krl", """
             function main()
                 background("game/backgrounds/test.png")
@@ -181,6 +183,7 @@ public sealed class WindowIntegrationTests
     public async Task GameWindow_BrokenBackground_DoesNotPreventValidCharacterOrDialogue()
     {
         using var fixture = new TempProject();
+        fixture.Write("engine/game.json", "{\"main_menu\":false}");
         fixture.Write("game/backgrounds/broken.png", "not an image");
         fixture.Write("game/scenes/main.krl", """
             function main()

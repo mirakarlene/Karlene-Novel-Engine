@@ -38,10 +38,10 @@ public sealed class LuaRuntime : IGameSession
         this.project = project;
         this.output = output;
         this.interactive = interactive;
-        ExecutionLimit = executionLimit ?? TimeSpan.FromSeconds(30);
+        ExecutionLimit = executionLimit ?? TimeSpan.FromSeconds(project.Engine.Game.ExecutionTimeoutSeconds);
         if (ExecutionLimit <= TimeSpan.Zero || ExecutionLimit > TimeSpan.FromHours(1))
             throw new ArgumentOutOfRangeException(nameof(executionLimit));
-        windowSettings = new RuntimeWindowSettings(project.Title, 800, 600, "#FF2D2D30");
+        windowSettings = project.Engine.RuntimeDefaults(project.Title);
     }
 
     public RuntimeWindowSettings WindowSettings
@@ -60,6 +60,7 @@ public sealed class LuaRuntime : IGameSession
         lua?.Dispose();
         lua = new Lua();
         lua.State.Encoding = Encoding.UTF8;
+        lock (stateLock) windowSettings = project.Engine.RuntimeDefaults(project.Title);
         Register(nameof(PrintToUI), "print_to_ui");
         Register(nameof(SetWindowTitle), "set_window_title");
         Register(nameof(SetWindowSize), "set_window_size");
@@ -110,6 +111,7 @@ public sealed class LuaRuntime : IGameSession
             end
             """, "KNE API");
         // Resolve all paths before executing any project code.
+        lua.DoString("state = " + StateLiteral(project.Engine.InitialState), "KNE initial state");
         string initPath = project.InitScriptPath;
         string scenePath = project.MainScenePath;
         string scripts = Path.GetDirectoryName(initPath)!.Replace('\\', '/') + "/?.lua";
@@ -252,6 +254,13 @@ public sealed class LuaRuntime : IGameSession
             string path = PathSafety.EnsureInside(project.Path, file.FilePath);
             hash.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(project.Path, path)));
             hash.AppendData(File.ReadAllBytes(path));
+        }
+        // Presentation changes should not invalidate a player's progress; initial game state should.
+        string statePath = PathSafety.ResolveRelative(project.Path, "engine/state.json");
+        if (File.Exists(statePath))
+        {
+            hash.AppendData(Encoding.UTF8.GetBytes("engine/state.json"));
+            hash.AppendData(File.ReadAllBytes(statePath));
         }
         return Convert.ToHexString(hash.GetHashAndReset());
     }
