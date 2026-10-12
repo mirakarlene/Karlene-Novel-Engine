@@ -15,7 +15,7 @@ public sealed class ProjectCreatorTests
         Assert.Equal("Новелла с пробелами", project.Title);
         Assert.Equal(Path.Combine(fixture.ProjectPath, "game", "scenes", "main.krl"), project.MainScenePath);
         Assert.Equal(Path.Combine(fixture.ProjectPath, "game", "scripts", "gamelogic.lua"), project.InitScriptPath);
-        Assert.Equal(new[] { "game.json", "gamelogic.lua", "main.krl", "project.json", "README.txt", "README.txt", "state.json", "theme.json", "window.json" },
+        Assert.Equal(new[] { "game.json", "gamelogic.lua", "main.krl", "project.json", "README.txt", "README.txt", "screens.json", "state.json", "theme.json", "window.json" },
             project.Files.Select(f => f.FileName).OrderBy(n => n, StringComparer.OrdinalIgnoreCase));
         Assert.Contains("function main()", File.ReadAllText(project.MainScenePath));
         Assert.Empty(Directory.GetDirectories(fixture.Root, ".kne-*"));

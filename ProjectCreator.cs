@@ -26,6 +26,7 @@ public static class ProjectCreator
             foreach (string directory in new[] { "scenes", "characters", "backgrounds", "resources", "scripts", "audio", "gui" })
                 Directory.CreateDirectory(Path.Combine(staging, "game", directory));
             Directory.CreateDirectory(Path.Combine(staging, "engine"));
+            Directory.CreateDirectory(Path.Combine(staging, "saves"));
             EngineSettings.WriteTemplate(staging);
             Directory.CreateDirectory(Path.Combine(staging, "metadata"));
             cancellationToken.ThrowIfCancellationRequested();

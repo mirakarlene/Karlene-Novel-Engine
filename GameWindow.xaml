@@ -1,6 +1,6 @@
 <Window x:Class="KNE.GameWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:KNE"
         Title="Karlene Novel Engine" Height="720" Width="1280" MinWidth="640" MinHeight="480"
         Background="#FF201134" Loaded="Window_Loaded" Closed="Window_Closed"
         PreviewKeyDown="Window_PreviewKeyDown">
@@ -26,8 +26,8 @@
                                               VerticalAlignment="Center" RecognizesAccessKey="True"/>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonBorder" Property="BorderThickness" Value="2"/></Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ButtonBorder" Property="BorderThickness" Value="3"/></Trigger>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonBorder" Property="Opacity" Value="0.85"/></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ButtonBorder" Property="BorderThickness" Value="2"/></Trigger>
                             <Trigger Property="IsPressed" Value="True"><Setter TargetName="ButtonBorder" Property="Opacity" Value="0.7"/></Trigger>
                             <Trigger Property="IsEnabled" Value="False"><Setter TargetName="ButtonBorder" Property="Opacity" Value="0.4"/></Trigger>
                         </ControlTemplate.Triggers>
@@ -39,6 +39,7 @@
     <Grid>
         <Grid x:Name="SceneArea" ClipToBounds="True" SizeChanged="SceneArea_SizeChanged">
             <Border x:Name="DefaultBackground"/>
+            <local:AnimatedBackground x:Name="AnimatedBackdrop"/>
             <Image x:Name="DefaultBackgroundImage" Stretch="UniformToFill"/>
             <Image x:Name="BackgroundImage" Stretch="UniformToFill"/>
             <Image x:Name="CharacterImage" Stretch="Uniform" Width="420" HorizontalAlignment="Center" VerticalAlignment="Bottom"/>
@@ -66,10 +67,10 @@
             <Button x:Name="PauseButton" Content="Меню" Padding="14,7" Click="PauseButton_Click"/>
         </StackPanel>
         <Border x:Name="MenuOverlay" Background="#AA160D24">
-            <ScrollViewer x:Name="MenuScroll" VerticalScrollBarVisibility="Auto" HorizontalAlignment="Center" VerticalAlignment="Center"
+            <Grid>
+            <ScrollViewer x:Name="MenuScroll" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalAlignment="Center" VerticalAlignment="Center"
                           MaxHeight="{Binding ActualHeight, ElementName=SceneArea}">
                 <StackPanel x:Name="MenuPanel" Width="420" Margin="32">
-                    <TextBlock Text="ВИЗУАЛЬНАЯ НОВЕЛЛА" Foreground="{DynamicResource GameAccentBrush}" FontSize="12" Margin="0,0,0,20"/>
                     <TextBlock x:Name="MenuTitle" Text="Моя новелла" Foreground="{DynamicResource GameTextBrush}" FontSize="44" FontWeight="Light" TextWrapping="Wrap"/>
                     <TextBlock x:Name="MenuSubtitle" Foreground="{DynamicResource GameTextBrush}" FontSize="16" Opacity="0.7" TextWrapping="Wrap" Margin="0,12,0,32"/>
                     <Button x:Name="ResumeButton" Content="Вернуться к игре" Visibility="Collapsed" Margin="0,0,0,12" Click="ResumeButton_Click"/>
@@ -79,6 +80,37 @@
                     <TextBlock Text="F11 — полный экран" Foreground="{DynamicResource GameTextBrush}" Opacity="0.45" FontSize="12" Margin="0,28,0,0" HorizontalAlignment="Center"/>
                 </StackPanel>
             </ScrollViewer>
+            <Viewbox x:Name="ScreenViewbox" Stretch="Uniform"><Canvas x:Name="ScreenCanvas" Width="1280" Height="720"/></Viewbox>
+            <Border x:Name="SaveBrowserPanel" Visibility="Collapsed" Width="540" MaxHeight="{Binding ActualHeight, ElementName=SceneArea}" VerticalAlignment="Center" Padding="24" Background="#F0201530" CornerRadius="16">
+                <StackPanel>
+                    <TextBlock Text="Сохранения" Foreground="{DynamicResource GameTextBrush}" FontSize="28" Margin="0,0,0,16"/>
+                    <ListBox x:Name="SaveSlotsList" Height="220" SelectionChanged="SaveSlot_Changed" Background="Transparent"
+                             Foreground="{DynamicResource GameTextBrush}" BorderBrush="{DynamicResource GameAccentBrush}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate><DataTemplate>
+                            <StackPanel Margin="8">
+                                <TextBlock Text="{Binding Slot}" FontSize="17" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding Preview}" TextWrapping="Wrap" FontSize="14" Opacity="0.8" Margin="0,4,0,4"/>
+                                <TextBlock Text="{Binding ModifiedLabel}" FontSize="12" Opacity="0.65"/>
+                            </StackPanel>
+                        </DataTemplate></ListBox.ItemTemplate>
+                        <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
+                                <Border x:Name="SlotBorder" Background="Transparent" CornerRadius="8" Margin="4"><ContentPresenter/></Border>
+                                <ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter TargetName="SlotBorder" Property="Background" Value="{DynamicResource GameButtonBrush}"/></Trigger></ControlTemplate.Triggers>
+                            </ControlTemplate></Setter.Value></Setter>
+                        </Style></ListBox.ItemContainerStyle>
+                    </ListBox>
+                    <TextBox x:Name="SaveSlotName" Text="slot-1" Padding="8" Margin="0,12,0,12" ToolTip="Имя ручного слота"/>
+                    <WrapPanel>
+                        <Button x:Name="SaveSelectedButton" Content="Записать слот" Click="SaveSelected_Click" Margin="0,0,8,8"/>
+                        <Button x:Name="LoadSelectedButton" Content="Загрузить" Click="LoadSelected_Click" Margin="0,0,8,8"/>
+                        <Button x:Name="DeleteSelectedButton" Content="Удалить" Click="DeleteSelected_Click" Margin="0,0,8,8"/>
+                    </WrapPanel>
+                    <Button Content="Назад" Click="ScreenBack_Click"/>
+                </StackPanel>
+            </Border>
+            </Grid>
         </Border>
         <Border x:Name="DebugOverlay" VerticalAlignment="Top" Background="#F0181024" BorderBrush="#FF8E60B5" BorderThickness="1" Padding="16" Margin="16" Visibility="Collapsed">
             <StackPanel>

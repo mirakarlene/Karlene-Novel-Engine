@@ -26,7 +26,7 @@ public sealed class EngineSettingsTests
     public async Task LegacyProject_WithoutEngineFiles_RetainsOldWindowAndDirectStart()
     {
         using var fixture = new TempProject();
-        foreach (string name in new[] { "window.json", "theme.json", "game.json", "state.json" })
+        foreach (string name in new[] { "window.json", "theme.json", "game.json", "state.json", "screens.json" })
             File.Delete(Path.Combine(fixture.ProjectPath, "engine", name));
         var project = await fixture.LoadAsync();
         Assert.Equal(new RuntimeWindowSettings(project.Title, 800, 600, "#FF2D2D30"), project.Engine.RuntimeDefaults(project.Title));
