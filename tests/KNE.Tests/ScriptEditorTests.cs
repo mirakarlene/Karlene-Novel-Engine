@@ -11,6 +11,36 @@ namespace KNE.Tests;
 
 public sealed class ScriptEditorTests
 {
+    [Theory]
+    [InlineData(ScriptNodeKind.CallScene, "Вызвать сцену", 1)]
+    [InlineData(ScriptNodeKind.GotoScene, "Перейти на сцену", 0)]
+    public async Task Editor_SceneTransitionPalette_EditsTargetAndKeepsMatchingOutputPorts(ScriptNodeKind kind, string title, int outputCount)
+    {
+        using var fixture = new TempProject();
+        string path = Path.Combine(fixture.ProjectPath, "scene.knegraph");
+        await ScriptDocument.CreateVisualAsync(fixture.ProjectPath, path);
+        await OnStaAsync(async () =>
+        {
+            var editor = new ScriptEditor(); await editor.OpenAsync(fixture.ProjectPath, path);
+            var types = (ComboBox)editor.FindName("BlockType");
+            var item = types.Items.Cast<ScriptNode>().Single(n => n.Kind == kind);
+            Assert.Equal(title, item.Title); types.SelectedItem = item;
+            Click(editor, "AddBlockButton");
+            var added = editor.Document!.Graph!.Nodes.Single(n => n.Kind == kind);
+            Assert.Equal(Visibility.Visible, ((StackPanel)editor.FindName("PathField")).Visibility);
+            Assert.Equal("Путь или имя сцены", ((TextBlock)editor.FindName("PathLabel")).Text);
+            Assert.Equal("Выбрать сцену…", ((Button)editor.FindName("BrowsePathButton")).Content);
+            ((TextBox)editor.FindName("PathInput")).Text = "game/scenes/Глава N.krl";
+            Click(editor, "ApplyPropertiesButton");
+            added = editor.Document.Graph!.Nodes.Single(n => n.Kind == kind);
+            Assert.Equal("game/scenes/Глава N.krl", added.Path);
+            var canvas = (Canvas)editor.FindName("GraphCanvas");
+            Assert.Equal(outputCount, ((StackPanel)Card(canvas, added.Id).Child).Children.OfType<Button>().Count(b => !Equals(b.Content, "● Вход")));
+            await editor.SaveAsync(); await editor.OpenAsync(fixture.ProjectPath, path);
+            Assert.Equal(added.Path, editor.Document.Graph!.Nodes.Single(n => n.Kind == kind).Path);
+        });
+    }
+
     [Fact]
     public async Task Editor_CodeMode_SavesManualCodeAndResetsUndoOnOpen()
     {

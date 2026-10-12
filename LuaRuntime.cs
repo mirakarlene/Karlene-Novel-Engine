@@ -72,6 +72,8 @@ public sealed class LuaRuntime : IGameSession
         Register(nameof(PlayMusic), "play_music");
         Register(nameof(StopMusic), "stop_music");
         Register(nameof(PlaySound), "play_sound");
+        Register(nameof(ScenePathForLua), "kne_scene_path_result");
+        Register(nameof(SceneCodeForLua), "kne_scene_code_result");
         lua["project_dir"] = project.Path;
         lua["kne_interactive"] = interactive;
         lua["kne_seed"] = seed;
@@ -84,6 +86,7 @@ public sealed class LuaRuntime : IGameSession
             end
             state = {}
             math.randomseed(kne_seed)
+            function init() error("init(приоритет) должен быть первым оператором файла до запуска игры.") end
             function d(speaker, text)
                 if kne_interactive and coroutine.isyieldable() then
                     return coroutine.yield({kind = "dialogue", speaker = speaker == nil and "" or tostring(speaker), text = tostring(text)})
@@ -95,7 +98,7 @@ public sealed class LuaRuntime : IGameSession
                 end
             end
             function choice(prompt, options)
-                if not coroutine.isyieldable() then error("choice() доступен только внутри main() сцены") end
+                if not kne_interactive or not coroutine.isyieldable() then error("choice() доступен только внутри игровой сцены") end
                 if type(options) ~= "table" or #options < 1 or #options > 20 then error("choice() требует от 1 до 20 вариантов") end
                 local labels = {}
                 for i = 1, #options do
@@ -110,28 +113,76 @@ public sealed class LuaRuntime : IGameSession
                 return coroutine.status(kne_story), event
             end
             """, "KNE API");
+        lua.DoString(SceneRuntimeLua.Source, "KNE scene scheduler");
         // Resolve all paths before executing any project code.
         lua.DoString("state = " + StateLiteral(project.Engine.InitialState), "KNE initial state");
         string initPath = project.InitScriptPath;
         string scenePath = project.MainScenePath;
+        var startup = StartupScripts.Plan(project);
         string scripts = Path.GetDirectoryName(initPath)!.Replace('\\', '/') + "/?.lua";
         string root = project.Path.Replace('\\', '/') + "/?.lua";
         lua["package.path"] = scripts + ";" + root + ";" + lua["package.path"];
         InstallHook();
         // .NET reads paths containing Unicode independently of the native Lua filesystem.
-        lua.DoString(File.ReadAllText(initPath), "@" + initPath);
+        foreach (var script in startup)
+        {
+            using var compile = (LuaFunction)lua["kne_compile_scene"];
+            using var entry = compile.Call(script.Source, script.Path).FirstOrDefault() as LuaFunction;
+            using var cache = (LuaFunction)lua["kne_cache_scene"];
+            cache.Call(ResolveScenePath(Path.GetRelativePath(project.Path, script.Path)), entry);
+        }
         lua["main"] = null;
-        string sceneCode = File.ReadAllText(scenePath);
-        if (ScriptDocument.IsVisualPath(scenePath)) sceneCode = VisualScript.Parse(sceneCode).Compile();
-        lua.DoString(sceneCode, "@" + scenePath);
-        using var main = lua["main"] as LuaFunction ?? throw new InvalidDataException("Главная сцена должна объявлять функцию main().");
+        string mainPath = ResolveScenePath(Path.GetRelativePath(project.Path, scenePath));
+        lua.DoString("kne_entry = kne_entry_for_file(" + LuaQuote(mainPath) + ")", "KNE entry point");
+        using var main = lua["kne_entry"] as LuaFunction ?? throw new InvalidDataException("Главная сцена должна объявлять main() или возвращать функцию.");
         if (interactive)
         {
-            lua.DoString("kne_story = coroutine.create(main)", "KNE scene");
+            lua.DoString("kne_story = kne_scene_thread(function() kne_run_scene(kne_entry) end)", "KNE scene");
             ResumeStory(null);
         }
-        else main.Call();
+        else
+        {
+            using var run = (LuaFunction)lua["kne_run_scene"];
+            run.Call(main);
+        }
         initialized = true;
+    }
+
+    /// <summary>Canonicalizes a project scene path for the coroutine scheduler's per-session cache.</summary>
+    public string ResolveScenePath(string relative)
+    {
+        string path = PathSafety.ResolveRelative(project.Path, relative);
+        if (!ScriptDocument.IsCodePath(path) && !ScriptDocument.IsVisualPath(path))
+            throw new ArgumentException("Сцена должна быть Lua, KRL или .knegraph.");
+        if (!File.Exists(path)) throw new FileNotFoundException("Сцена не найдена: " + relative, path);
+        return Path.GetRelativePath(project.Path, path).Replace('\\', '/').ToUpperInvariant();
+    }
+
+    /// <summary>Reads a validated scene, compiling a graph into the same Lua API as manual code.</summary>
+    public string ReadSceneCode(string relative)
+    {
+        string path = PathSafety.ResolveRelative(project.Path, ResolveScenePath(relative));
+        if (new FileInfo(path).Length > 8 * 1024 * 1024) throw new InvalidDataException("Сцена больше 8 МБ.");
+        string code = File.ReadAllText(path);
+        return ScriptDocument.IsVisualPath(path) ? VisualScript.Parse(code).Compile() : code;
+    }
+
+    // NLua managed exceptions do not reliably cross coroutine.resume. Return errors as data;
+    // the Lua scheduler raises them in the active coroutine instead.
+    /// <summary>Returns a scene path and error text for the Lua coroutine bridge.</summary>
+    public string[] ScenePathForLua(string relative)
+    {
+        try { return [ResolveScenePath(relative), ""]; }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException)
+        { return ["", ex.Message]; }
+    }
+
+    /// <summary>Returns scene source and error text for the Lua coroutine bridge.</summary>
+    public string[] SceneCodeForLua(string relative)
+    {
+        try { return [ReadSceneCode(relative), ""]; }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException)
+        { return ["", ex.Message]; }
     }
 
     public Task ProcessCommandAsync(string command, CancellationToken cancellationToken = default)

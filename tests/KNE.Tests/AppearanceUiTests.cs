@@ -13,6 +13,99 @@ namespace KNE.Tests;
 [Trait("Category", "Integration")]
 public sealed class AppearanceUiTests
 {
+    [Theory]
+    [InlineData("button")]
+    [InlineData("toggle")]
+    [InlineData("slider")]
+    public async Task AddingElement_SelectsNewElementWithNoAction_AndPreservesPreviousButton(string type)
+    {
+        using var fixture = new TempProject(); var project = await fixture.LoadAsync();
+        await Sta(async () =>
+        {
+            var editor = new AppearanceEditor(); var owner = new Window { Content = editor };
+            try
+            {
+                await editor.OpenAsync(project);
+                var main = editor.Document!.Layout.Find("main_menu")!;
+                var original = main.Elements.Single(e => e.Action == "start");
+                var elements = Find<ListBox>(editor, "ElementsList"); elements.SelectedItem = original;
+                Find<TextBox>(editor, "ElementText").Text = "Старый элемент";
+                var types = Find<ComboBox>(editor, "NewElementType");
+                types.SelectedItem = types.Items.Cast<ComboBoxItem>().Single(i => Equals(i.Tag, type));
+                Click(editor, "AddAppearanceElementButton");
+                var added = Assert.IsType<ScreenElement>(elements.SelectedItem);
+                Assert.NotEqual(original.Id, added.Id);
+                Assert.Same(main.Elements.Last(), added);
+                Assert.Equal(type, added.Type); Assert.Equal("none", added.Action);
+                Assert.Equal("none", Find<ComboBox>(editor, "ElementAction").SelectedValue);
+                Assert.Equal("Старый элемент", original.Text); Assert.Equal("start", original.Action);
+                Find<TextBox>(editor, "ElementText").Text = "Новый элемент";
+                Find<ComboBox>(editor, "ElementAction").SelectedValue = type switch { "button" => "settings", "toggle" => "fullscreen", _ => "sound_volume" };
+                // Selection changes commit the previous fields and keep the UI and edited model in sync.
+                elements.SelectedItem = original;
+                Assert.Same(original, elements.SelectedItem);
+                Assert.Equal("start", Find<ComboBox>(editor, "ElementAction").SelectedValue);
+                Assert.Equal("Новый элемент", added.Text);
+                Assert.Equal(type switch { "button" => "settings", "toggle" => "fullscreen", _ => "sound_volume" }, added.Action);
+                await editor.SaveAsync();
+                var saved = (await fixture.LoadAsync()).Engine.Screens.Find("main_menu")!;
+                Assert.Equal("start", saved.Elements.Single(e => e.Id == original.Id).Action);
+                Assert.Equal(added.Action, saved.Elements.Single(e => e.Id == added.Id).Action);
+            }
+            finally { owner.Close(); }
+        });
+    }
+
+    [Fact]
+    public async Task Runtime_IndependentNavigationTargetsAndUnassignedControls_SurviveRepeatedScreenChanges()
+    {
+        using var fixture = new TempProject(); var project = await fixture.LoadAsync();
+        var document = await AppearanceDocument.OpenAsync(project);
+        var first = document.Layout.AddScreen("Первый экран");
+        var second = document.Layout.AddScreen("Второй экран");
+        var main = document.Layout.Find("main_menu")!;
+        main.Elements.Add(new() { Id = "first-link", Action = "navigate", Target = first.Id, Text = "Первый" });
+        main.Elements.Add(new() { Id = "second-link", Action = "navigate", Target = second.Id, Text = "Второй" });
+        main.Elements.Add(new() { Id = "inert-button", Action = "none", Text = "Без действия" });
+        var settings = document.Layout.Find("settings")!;
+        settings.Elements.Add(new() { Id = "inert-toggle", Type = "toggle", Action = "none" });
+        settings.Elements.Add(new() { Id = "inert-slider", Type = "slider", Action = "none" });
+        await document.SaveAsync(); project = await fixture.LoadAsync();
+        await Sta(() =>
+        {
+            var store = new GameSaveStore(project.Path); var window = new GameWindow(project, store);
+            try
+            {
+                window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    foreach (var (id, title) in new[] { ("first-link", "Первый экран"), ("second-link", "Второй экран") })
+                    {
+                        var button = ScreenCanvas(window).Children.OfType<Button>().Single(b => ((ScreenElement)b.Tag).Id == id);
+                        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        Assert.Contains(ScreenCanvas(window).Children.OfType<TextBlock>(), t => t.Text == title);
+                        ScreenButton(window, "back").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    }
+                    ScreenButton(window, "none").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Assert.Equal(Visibility.Visible, Find<Border>(window, "MenuOverlay").Visibility);
+                    Assert.Contains(ScreenCanvas(window).Children.OfType<Button>(), b => ((ScreenElement)b.Tag).Action == "start");
+                    ScreenButton(window, "settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    var toggle = ScreenCanvas(window).Children.OfType<CheckBox>().Single(t => ((ScreenElement)t.Tag).Id == "inert-toggle");
+                    toggle.IsChecked = false; toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    var slider = ScreenCanvas(window).Children.OfType<StackPanel>().Single(p => ((ScreenElement)p.Tag).Id == "inert-slider").Children.OfType<Slider>().Single();
+                    slider.Value = 0.1;
+                    Assert.Equal(WindowStyle.SingleBorderWindow, window.WindowStyle);
+                    Assert.True(Find<AnimatedBackground>(window, "AnimatedBackdrop").HasAnimatedProperties);
+                    Invoke(window, "RenderOutput");
+                    Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "preferences.json")));
+                    ScreenButton(window, "back").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                }
+            }
+            finally { window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact]
     public async Task MainWindow_OffersAppearanceAndKeepsScriptEditing()
     {
