@@ -82,7 +82,7 @@ public partial class AppearanceEditor : UserControl
             EngineSettings.ValidateAppearance(project.Path, Document.Layout.Theme!);
             string after = Document.Layout.Serialize();
             if (before != after) { undo.Push(before); if (undo.Count > 100) { var recent = undo.Take(100).Reverse().ToArray(); undo.Clear(); foreach (var item in recent) undo.Push(item); } redo.Clear(); }
-            Refresh(id, elementId); EditorStatus.Text = "Изменения не сохранены";
+            Refresh(screen?.Id ?? id, selected?.Id); EditorStatus.Text = "Изменения не сохранены";
             return true;
         }
         catch (Exception ex)
@@ -182,7 +182,7 @@ public partial class AppearanceEditor : UserControl
         var next = ElementsList.SelectedItem as ScreenElement;
         if (fieldsDirty && !ApplyFields()) return;
         selected = next == null ? null : screen?.Elements.FirstOrDefault(x => x.Id == next.Id);
-        filling = true; FillFields(); filling = false; fieldsDirty = false; Draw(false);
+        filling = true; ElementsList.SelectedItem = selected; FillFields(); filling = false; fieldsDirty = false; Draw(false);
     }
 
     private void ReadElement()
@@ -218,13 +218,17 @@ public partial class AppearanceEditor : UserControl
     }
     private void RenameScreen_Click(object sender, RoutedEventArgs e) => Commit(() => { if (screen != null) screen.Name = ScreenName.Text; });
     private void DeleteScreen_Click(object sender, RoutedEventArgs e) => Commit(() => { if (screen != null) Document!.Layout.RemoveScreen(screen.Id); });
-    private void AddElement_Click(object sender, RoutedEventArgs e) => Commit(() =>
+    private void AddElement_Click(object sender, RoutedEventArgs e)
     {
-        if (screen == null || screen.Kind == "gameplay") throw new InvalidOperationException("Выберите экран вне геймплея.");
-        string type = ((ComboBoxItem)NewElementType.SelectedItem).Tag.ToString()!;
-        selected = new() { Type = type, Text = type == "text" ? "Текст" : "Кнопка", Action = type == "toggle" ? "animation" : type == "slider" ? "music_volume" : "none" };
-        screen.Elements.Add(selected);
-    });
+        if (fieldsDirty && !ApplyFields()) return;
+        Commit(() =>
+        {
+            if (screen == null || screen.Kind == "gameplay") throw new InvalidOperationException("Выберите экран вне геймплея.");
+            string type = ((ComboBoxItem)NewElementType.SelectedItem).Tag.ToString()!;
+            selected = new() { Type = type, Text = type == "text" ? "Текст" : "Новый элемент", Action = "none" };
+            screen.Elements.Add(selected);
+        });
+    }
     private void DeleteElement_Click(object sender, RoutedEventArgs e) => Commit(() => { if (screen?.Kind != "gameplay" && selected != null) screen?.Elements.Remove(selected); });
     private void ChangeLayer(int offset) => Commit(() =>
     {

@@ -118,6 +118,10 @@ public sealed class VisualScript
             if (node.Kind is ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound &&
                 string.IsNullOrWhiteSpace(node.Path))
                 Fail(node, "укажите путь к ресурсу");
+            if (node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene && string.IsNullOrWhiteSpace(node.Path))
+                Fail(node, "укажите путь или имя сцены");
+            if (node.Kind == ScriptNodeKind.GotoScene && node.Next != null)
+                Fail(node, "у постоянного перехода нет продолжения в этой сцене");
             if (node.Kind == ScriptNodeKind.Character && node.Position is not ("left" or "center" or "right"))
                 Fail(node, "позиция персонажа: left, center или right");
             foreach (var (_, target) in node.Outputs())
@@ -164,6 +168,8 @@ public sealed class VisualScript
                 ScriptNodeKind.Music => $"play_music({Quote(node.Path)}, {(node.Loop ? "true" : "false")})",
                 ScriptNodeKind.StopMusic => "stop_music()",
                 ScriptNodeKind.Sound => $"play_sound({Quote(node.Path)})",
+                ScriptNodeKind.GotoScene => $"goto_scene({Quote(node.Path)})",
+                ScriptNodeKind.CallScene => $"call_scene({Quote(node.Path)})",
                 _ => ""
             };
             if (command.Length > 0) code.Append("            ").Append(command).Append('\n');
@@ -188,7 +194,7 @@ public sealed class VisualScript
             }
             else
                 code.Append("            __kne_node = ")
-                    .Append(node.Kind == ScriptNodeKind.End ? "nil" : Quote(node.Next!)).Append('\n');
+                    .Append(node.Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene ? "nil" : Quote(node.Next!)).Append('\n');
         }
 
         code.Append("        else\n            error('Неизвестный блок')\n        end\n    end\nend\n");
@@ -241,7 +247,9 @@ public enum ScriptNodeKind
     Music,
     StopMusic,
     Sound,
-    End
+    End,
+    GotoScene,
+    CallScene
 }
 
 /// <summary>Literal types accepted by variable assignment and comparison blocks.</summary>
@@ -326,14 +334,15 @@ public sealed class ScriptNode
         ScriptNodeKind.Background => "Фон",
         ScriptNodeKind.Character => "Персонаж", ScriptNodeKind.HideCharacter => "Скрыть персонажа",
         ScriptNodeKind.Music => "Музыка",
-        ScriptNodeKind.StopMusic => "Остановить музыку", ScriptNodeKind.Sound => "Звук", _ => "Конец"
+        ScriptNodeKind.StopMusic => "Остановить музыку", ScriptNodeKind.Sound => "Звук",
+        ScriptNodeKind.GotoScene => "Перейти на сцену", ScriptNodeKind.CallScene => "Вызвать сцену", _ => "Конец"
     };
 
     /// <summary>Returns ordered ports, including unconnected ports in an unfinished draft.</summary>
     /// <returns>Labels and optional destination identifiers in display order.</returns>
     public IEnumerable<(string Label, string? Target)> Outputs()
     {
-        if (Kind == ScriptNodeKind.End) yield break;
+        if (Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene) yield break;
         if (Kind == ScriptNodeKind.Choice)
         {
             foreach (var option in Options) yield return (option.Text, option.Target);

@@ -336,7 +336,10 @@ public partial class ScriptEditor : UserControl
             Visible(OptionsField, node.Kind == ScriptNodeKind.Choice);
             Visible(PathField,
                 node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music
-                    or ScriptNodeKind.Sound);
+                    or ScriptNodeKind.Sound or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene);
+            bool sceneTarget = node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene;
+            PathLabel.Text = sceneTarget ? "Путь или имя сцены" : "Путь от корня проекта";
+            BrowsePathButton.Content = sceneTarget ? "Выбрать сцену…" : "Выбрать ресурс…";
             Visible(PositionField, node.Kind == ScriptNodeKind.Character);
             Visible(LoopInput, node.Kind == ScriptNodeKind.Music);
             Visible(VariableField, node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable);
@@ -365,7 +368,7 @@ public partial class ScriptEditor : UserControl
         }
 
         if (node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music
-            or ScriptNodeKind.Sound) changed.Path = PathInput.Text.Trim();
+            or ScriptNodeKind.Sound or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene) changed.Path = PathInput.Text.Trim();
         if (node.Kind == ScriptNodeKind.Character)
             changed.Position = (PositionInput.SelectedItem as ComboBoxItem)?.Content.ToString() ?? "center";
         if (node.Kind == ScriptNodeKind.Music) changed.Loop = LoopInput.IsChecked == true;
@@ -566,6 +569,7 @@ public partial class ScriptEditor : UserControl
         ScriptNodeKind.Condition or ScriptNodeKind.SetVariable => "state." + node.Variable + " / " + node.Value,
         ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound =>
             node.Path.Length == 0 ? "Ресурс не выбран" : node.Path,
+        ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene => node.Path.Length == 0 ? "Сцена не выбрана" : node.Path,
         _ => node.Kind == ScriptNodeKind.End ? "Завершение сцены" : "Команда сцены"
     };
 
@@ -652,7 +656,12 @@ public partial class ScriptEditor : UserControl
 
     private void BrowseResource_Click(object sender, RoutedEventArgs e) => Guard(() =>
     {
-        var dialog = new OpenFileDialog { InitialDirectory = projectRoot, Title = "Выберите ресурс внутри проекта" };
+        bool scene = Selected?.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene;
+        var dialog = new OpenFileDialog
+        {
+            InitialDirectory = projectRoot, Title = scene ? "Выберите игровую сцену" : "Выберите ресурс внутри проекта",
+            Filter = scene ? "Сцены KNE (*.lua;*.krl;*.knegraph)|*.lua;*.krl;*.knegraph" : "Все файлы|*.*"
+        };
         if (dialog.ShowDialog(Window.GetWindow(this)) == true)
             PathInput.Text = System.IO.Path
                 .GetRelativePath(projectRoot, PathSafety.EnsureInside(projectRoot, dialog.FileName)).Replace('\\', '/');

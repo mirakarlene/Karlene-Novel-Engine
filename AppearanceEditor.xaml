@@ -23,7 +23,7 @@
    <TextBlock Text="Элементы · снизу вверх" FontWeight="Bold" Margin="0,14,0,6"/>
    <ListBox x:Name="ElementsList" Height="160" SelectionChanged="Elements_Changed"/>
    <ComboBox x:Name="NewElementType" SelectedIndex="0" Margin="0,8,0,6"><ComboBoxItem Content="Кнопка" Tag="button"/><ComboBoxItem Content="Текст" Tag="text"/><ComboBoxItem Content="Панель" Tag="panel"/><ComboBoxItem Content="Изображение" Tag="image"/><ComboBoxItem Content="Переключатель" Tag="toggle"/><ComboBoxItem Content="Ползунок" Tag="slider"/><ComboBoxItem Content="Список сохранений" Tag="save_list"/><ComboBoxItem Content="Имя слота" Tag="save_name"/></ComboBox>
-   <WrapPanel><Button Content="+ Элемент" Click="AddElement_Click"/><Button Content="−" Click="DeleteElement_Click" Margin="4,0"/><Button x:Name="RaiseLayerButton" Content="↑" Click="RaiseLayer_Click"/><Button Content="↓" Click="LowerLayer_Click" Margin="4,0"/></WrapPanel>
+   <WrapPanel><Button x:Name="AddAppearanceElementButton" Content="+ Элемент" Click="AddElement_Click"/><Button Content="−" Click="DeleteElement_Click" Margin="4,0"/><Button x:Name="RaiseLayerButton" Content="↑" Click="RaiseLayer_Click"/><Button Content="↓" Click="LowerLayer_Click" Margin="4,0"/></WrapPanel>
    <TextBlock Text="Сцена игры управляется Lua и блоками. Здесь меняется оформление экранов вне геймплея." TextWrapping="Wrap" Foreground="Gray" Margin="0,14,0,0"/>
   </StackPanel>
   <Grid Grid.Row="1" Grid.Column="1" Margin="0,0,12,0">

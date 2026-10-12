@@ -5,6 +5,55 @@ namespace KNE.Tests;
 
 public sealed class VisualScriptTests
 {
+    [Theory]
+    [InlineData(ScriptNodeKind.CallScene)]
+    [InlineData(ScriptNodeKind.GotoScene)]
+    public async Task SceneBlocks_TransitionBetweenGraphsAndLua_AndRestoreReturnPosition(ScriptNodeKind kind)
+    {
+        using var fixture = new TempProject();
+        var child = VisualScript.Create(); child.Nodes.Single(n => n.Kind == ScriptNodeKind.Dialogue).Text = "Дочерняя блок-схема";
+        fixture.Write("game/scenes/дочерняя.knegraph", child.Serialize());
+        fixture.Write("game/scenes/bridge.lua", "return function() call_scene('game/scenes/дочерняя.knegraph') end");
+        var graph = new VisualScript { Nodes = [new() { Id = "start", Kind = ScriptNodeKind.Start, Next = "transition" },
+            new() { Id = "transition", Kind = kind, Path = "game/scenes/bridge.lua", Next = kind == ScriptNodeKind.CallScene ? "after" : null }] };
+        if (kind == ScriptNodeKind.CallScene)
+        {
+            graph.Nodes.Add(new() { Id = "after", Kind = ScriptNodeKind.Dialogue, Text = "После вызова", Next = "end" });
+            graph.Nodes.Add(new() { Id = "end", Kind = ScriptNodeKind.End });
+        }
+        var project = await LoadGraphAsync(fixture, graph);
+        await using var runtime = new ProcessGameSession(project, _ => { });
+        await runtime.StartAsync(); Assert.Equal("Дочерняя блок-схема", runtime.Story.Text);
+        await using var restored = new ProcessGameSession(project, _ => { });
+        await restored.RestoreAsync(await runtime.GetCheckpointAsync());
+        await restored.AdvanceAsync();
+        if (kind == ScriptNodeKind.CallScene)
+        {
+            Assert.Equal("После вызова", restored.Story.Text);
+            await restored.AdvanceAsync();
+        }
+        Assert.True(restored.Story.Completed);
+    }
+
+    [Fact]
+    public void SceneBlocks_ValidateDestinationAndContinuation_AndExposeMatchingPorts()
+    {
+        var call = new ScriptNode { Id = "call", Kind = ScriptNodeKind.CallScene, Path = "chapter" };
+        var jump = new ScriptNode { Id = "jump", Kind = ScriptNodeKind.GotoScene, Path = "chapter" };
+        Assert.Single(call.Outputs()); Assert.Empty(jump.Outputs());
+        Assert.Throws<ArgumentOutOfRangeException>(() => jump.SetOutput(0, "end"));
+        var graph = new VisualScript { Nodes = [new() { Id = "start", Kind = ScriptNodeKind.Start, Next = "jump" }, jump] };
+        jump.Path = "";
+        Assert.Contains("путь или имя сцены", Assert.Throws<InvalidDataException>(() => graph.Compile()).Message);
+        jump.Path = "chapter"; jump.Next = "start";
+        Assert.Contains("нет продолжения", Assert.Throws<InvalidDataException>(() => graph.Compile()).Message);
+        jump.Next = null; Assert.Contains("goto_scene(\"chapter\")", graph.Compile());
+        graph.Nodes[0].Next = "call"; graph.Nodes[1] = call;
+        Assert.Contains("соедините", Assert.Throws<InvalidDataException>(() => graph.Compile()).Message);
+        call.Path = "";
+        Assert.Contains("путь или имя сцены", Assert.Throws<InvalidDataException>(() => graph.Compile()).Message);
+    }
+
     internal static async Task<ProjectInfo> LoadGraphAsync(TempProject fixture, VisualScript graph)
     {
         fixture.Write("game/scenes/visual.knegraph", graph.Serialize());

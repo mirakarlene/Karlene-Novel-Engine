@@ -93,7 +93,7 @@ public partial class GameWindow
             view.Margin = new Thickness(0);
             view.Tag = element;
             if (view is Button actionButton) screenButtons.Add((actionButton, element.Action));
-            if (view is CheckBox toggle)
+            if (view is CheckBox toggle && element.Action is "fullscreen" or "animation")
             {
                 toggle.IsChecked = element.Action == "fullscreen" ? fullscreen : preferences.Animate;
                 toggle.Click += (_, _) =>
@@ -102,7 +102,7 @@ public partial class GameWindow
                     else { preferences.Animate = toggle.IsChecked == true; preferencesDirty = true; AnimatedBackdrop.Configure(project.Engine.Theme, preferences.Animate); ShowLayout(id); }
                 };
             }
-            if (view is StackPanel stack && element.Type == "slider")
+            if (view is StackPanel stack && element.Type == "slider" && element.Action is "music_volume" or "sound_volume")
             {
                 var slider = stack.Children.OfType<Slider>().Single();
                 slider.Value = element.Action == "music_volume" ? preferences.MusicVolume : preferences.SoundVolume;

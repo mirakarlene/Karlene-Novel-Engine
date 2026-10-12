@@ -55,8 +55,8 @@ public sealed class ScreenLayouts
                 Bound(element.MotionX, -1280, 1280, "motion_x"); Bound(element.MotionY, -720, 720, "motion_y");
                 Bound(element.Delay, 0, 60, "delay"); Bound(element.Duration, 0.1, 60, "duration");
                 if (element.MotionOrder is < 0 or > 100) throw new InvalidDataException("motion_order должен быть от 0 до 100.");
-                if (element.Type == "toggle" && element.Action is not ("fullscreen" or "animation")) throw new InvalidDataException("Переключатель поддерживает fullscreen/animation.");
-                if (element.Type == "slider" && element.Action is not ("music_volume" or "sound_volume")) throw new InvalidDataException("Ползунок поддерживает music_volume/sound_volume.");
+                if (element.Type == "toggle" && element.Action is not ("none" or "fullscreen" or "animation")) throw new InvalidDataException("Переключатель поддерживает none/fullscreen/animation.");
+                if (element.Type == "slider" && element.Action is not ("none" or "music_volume" or "sound_volume")) throw new InvalidDataException("Ползунок поддерживает none/music_volume/sound_volume.");
             }
             if (screen.Elements.Count(e => e.Type == "save_list") > 1 || screen.Elements.Count(e => e.Type == "save_name") > 1)
                 throw new InvalidDataException("На экране может быть по одному списку сохранений и полю имени.");

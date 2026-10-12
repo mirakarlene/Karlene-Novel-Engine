@@ -38,6 +38,7 @@ public static class ProjectCreator
                 end
                 """);
             File.WriteAllText(Path.Combine(staging, "game", "scripts", "gamelogic.lua"), """
+                -- Для смены приоритета добавьте init(-10) первым оператором; меньшие числа загружаются раньше.
                 player_name = "Игрок"
                 state.score = state.score or 0
                 print("Игра инициализирована!")
@@ -51,6 +52,11 @@ public static class ProjectCreator
                 engine/*.json — окно, оформление, меню и начальное состояние; см. engine/README.txt.
                 game/scripts/gamelogic.lua — инициализация и process_command(command).
                 game/scenes/main.krl — главная сцена с функцией main().
+                init(-10) в начале Lua/KRL подключает файл к загрузке: меньшие числа раньше.
+                goto_scene("game/scenes/chapter.krl") — постоянный переход; jump — короткое имя.
+                call_scene("game/scenes/chapter.krl") — вызов с возвратом после завершения сцены; call — короткое имя.
+                Каждая сцена объявляет свою main() или возвращает функцию. Пути отсчитываются от корня проекта.
+                scene("chapter", function() ... end) объявляет сцену, доступную по имени.
                 API: d(имя или nil, текст), print(...), print_to_ui(текст),
                 choice(вопрос, {"Ответ 1", "Ответ 2"}) возвращает индекс ответа с 1.
                 background("game/backgrounds/фон.png"), show_character(путь, "center"), hide_character(),
