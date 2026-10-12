@@ -230,7 +230,7 @@ public sealed class EngineWindowTests
             var window = new GameWindow(project, new GameSaveStore(project.Path, Path.Combine(fixture.Root, "saves")));
             try
             {
-                Assert.IsType<DrawingBrush>(Find<Border>(window, "DefaultBackground").Background);
+                Assert.IsType<SolidColorBrush>(Find<Border>(window, "DefaultBackground").Background);
                 Assert.Equal(1, ((BitmapSource)Find<Image>(window, "DefaultBackgroundImage").Source).PixelWidth);
                 await ActAsync(window, () => window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent)));
                 Assert.NotNull(Find<Image>(window, "BackgroundImage").Source);
@@ -241,7 +241,7 @@ public sealed class EngineWindowTests
                 Assert.Equal(Color.FromRgb(16, 32, 48), ((SolidColorBrush)Find<Border>(window, "DefaultBackground").Background).Color);
                 Assert.Equal(Visibility.Collapsed, Find<Image>(window, "DefaultBackgroundImage").Visibility);
                 await ActAsync(window, () => Click(window, "NextButton"));
-                Assert.IsType<DrawingBrush>(Find<Border>(window, "DefaultBackground").Background);
+                Assert.IsType<SolidColorBrush>(Find<Border>(window, "DefaultBackground").Background);
                 Assert.Equal(Visibility.Visible, Find<Image>(window, "DefaultBackgroundImage").Visibility);
             }
             finally { window.Close(); }
@@ -253,7 +253,7 @@ public sealed class EngineWindowTests
     {
         await OnStaAsync(() =>
         {
-            var theme = new GameTheme { BackgroundColor = "#FF102030", PatternColor = "#FF405060" };
+            var theme = new GameTheme { BackgroundColor = "#FF102030", PatternColor = "#FF405060", PatternStyle = "ornament" };
             var brush = Assert.IsType<DrawingBrush>(EnginePresentation.CreateBackground(theme));
             Assert.True(brush.IsFrozen); Assert.Equal(TileMode.Tile, brush.TileMode);
             Assert.Equal(new Rect(0, 0, 240, 240), brush.Viewport);
@@ -350,6 +350,7 @@ public sealed class EngineWindowTests
         if (directory == null) return;
         Directory.CreateDirectory(directory);
         var content = (FrameworkElement)window.Content;
+        var overlay = Find<Border>(window, "MenuOverlay"); overlay.BeginAnimation(UIElement.OpacityProperty, null); overlay.Opacity = 1;
         content.Measure(new Size(1280, 720)); content.Arrange(new Rect(0, 0, 1280, 720)); content.UpdateLayout();
         var bitmap = new RenderTargetBitmap(1280, 720, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(content);

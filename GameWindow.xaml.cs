@@ -37,6 +37,7 @@ public partial class GameWindow : Window
         this.project = project;
         this.preview = preview;
         this.saves = saves ?? new GameSaveStore(project.Path);
+        LoadPreferences();
         Title = project.Title;
         ApplyEngineTheme();
         runtime = new ProcessGameSession(project, QueueOutput);
@@ -52,8 +53,8 @@ public partial class GameWindow : Window
         if (loaded) return;
         loaded = true;
         if (project.Engine.Window.Mode == "maximized") WindowState = WindowState.Maximized;
-        if (project.Engine.Window.Mode == "fullscreen") ToggleFullscreen();
-        if (project.Engine.Game.MainMenu && !preview) ShowMenu();
+        if (preferences.Fullscreen ?? project.Engine.Window.Mode == "fullscreen") ToggleFullscreen();
+        if (project.Engine.Game.MainMenu && !preview && project.Engine.Screens.Find("main_menu") != null) ShowMenu();
         else await StartGameAsync();
     }
 
@@ -78,7 +79,9 @@ public partial class GameWindow : Window
         Resources["GameButtonBrush"] = Brush(theme.ButtonColor);
         Background = Brush(theme.BackgroundColor);
         DefaultBackground.Background = EnginePresentation.CreateBackground(theme);
+        AnimatedBackdrop.Configure(theme, preferences.Animate);
         DefaultBackgroundImage.Source = theme.BackgroundImage == null ? null : LoadImage(ResourcePaths.Resolve(project.Path, theme.BackgroundImage));
+        AnimatedBackdrop.Visibility = theme.BackgroundImage == null ? Visibility.Visible : Visibility.Collapsed;
         DialoguePanel.Height = dialogue.Height;
         DialoguePanel.Margin = new Thickness(dialogue.Margin);
         DialoguePanel.Padding = new Thickness(dialogue.Padding);
@@ -94,6 +97,7 @@ public partial class GameWindow : Window
         MenuTitle.FontSize = theme.Menu.TitleFontSize;
         MenuSubtitle.FontSize = theme.Menu.SubtitleFontSize;
         MenuOverlay.Background = Brush(theme.Menu.OverlayColor);
+        SaveBrowserPanel.Background = Brush(theme.Dialogue.BackgroundColor);
         MenuScroll.HorizontalAlignment = theme.Menu.Alignment switch
         {
             "left" => HorizontalAlignment.Left, "right" => HorizontalAlignment.Right, _ => HorizontalAlignment.Center
@@ -157,6 +161,14 @@ public partial class GameWindow : Window
 
     private void ShowMenu()
     {
+        screenHistory.Clear();
+        var layout = project.Engine.Screens.Find(ready ? "pause" : "main_menu");
+        if (layout == null)
+        {
+            if (ready) { ShowGameplay(); return; }
+            Notify("Главное меню отключено."); return;
+        }
+        ShowLayout(layout.Id);
         MenuOverlay.Visibility = Visibility.Visible;
         ResumeButton.Visibility = ready ? Visibility.Visible : Visibility.Collapsed;
         DialoguePanel.Visibility = Visibility.Collapsed;
@@ -169,6 +181,7 @@ public partial class GameWindow : Window
 
     private void ShowGameplay()
     {
+        activeScreen = null; screenHistory.Clear();
         MenuOverlay.Visibility = Visibility.Collapsed;
         DialoguePanel.Visibility = Visibility.Visible;
         GameControls.Visibility = Visibility.Visible;
@@ -194,6 +207,7 @@ public partial class GameWindow : Window
             WindowState = previousWindowState;
         }
         fullscreen = !fullscreen;
+        preferences.Fullscreen = fullscreen; preferencesDirty = true;
     }
 
     private void Notify(string text)
@@ -354,6 +368,7 @@ public partial class GameWindow : Window
     {
         closed = true;
         renderTimer.Stop();
+        FlushPreferences();
         music.Close();
         sound.Close();
         execution?.Cancel();
@@ -369,6 +384,7 @@ public partial class GameWindow : Window
     private void RenderOutput()
     {
         if (closed) return;
+        FlushPreferences();
         if (NoticePanel.Visibility == Visibility.Visible && execution == null && DateTime.UtcNow >= noticeUntil)
             NoticePanel.Visibility = Visibility.Collapsed;
         bool changed = false;
@@ -398,6 +414,7 @@ public partial class GameWindow : Window
             bool defaultBackground = settings.Background == project.Engine.Theme.BackgroundColor;
             DefaultBackground.Background = defaultBackground ? EnginePresentation.CreateBackground(project.Engine.Theme) : Background;
             DefaultBackgroundImage.Visibility = defaultBackground ? Visibility.Visible : Visibility.Collapsed;
+            AnimatedBackdrop.Visibility = defaultBackground && project.Engine.Theme.BackgroundImage == null ? Visibility.Visible : Visibility.Collapsed;
             renderedSettings = settings;
         }
         RenderStory();
@@ -429,6 +446,7 @@ public partial class GameWindow : Window
         LoadButton.IsEnabled = execution == null && saves.Exists("quick");
         LoadAutoButton.IsEnabled = execution == null && saves.Exists("auto");
         ContinueButton.IsEnabled = execution == null && (saves.Exists("auto") || saves.Exists("quick"));
+        UpdateScreenButtons();
         if (execution == null && ready)
             StatusText.Text = frame.Kind switch { "dialogue" => "Ожидание продолжения", "choice" => "Выберите ответ", "completed" => "История завершена", _ => "Готово" };
     }

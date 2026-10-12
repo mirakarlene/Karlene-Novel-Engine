@@ -397,6 +397,31 @@ public partial class MainWindow : Window
         await RunOperationAsync(() => OpenScriptAsync(new ProjectFiles(project).ValidateSource(file)), "Открытие сценария…");
     }
 
+    private async void BtnAppearance_Click(object sender, RoutedEventArgs e)
+    {
+        if (currentProject == null) return;
+        await RunOperationAsync(async () =>
+        {
+            var editor = new AppearanceEditor();
+            await editor.OpenAsync(currentProject);
+            var window = new Window { Title = "Оформление · " + currentProject.Title, Content = editor, Owner = this,
+                Width = 1280, Height = 850, MinWidth = 1000, MinHeight = 650, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+            bool approved = false; bool checking = false;
+            window.Closing += async (_, args) =>
+            {
+                if (approved || !editor.IsDirty) return;
+                args.Cancel = true;
+                if (checking) return;
+                checking = true;
+                try { if (await editor.CanLeaveAsync()) { approved = true; _ = window.Dispatcher.BeginInvoke(new Action(window.Close)); } }
+                catch (Exception ex) { MessageBox.Show(window, ex.Message, "Оформление"); }
+                finally { checking = false; }
+            };
+            window.ShowDialog();
+            await OpenProjectAsync(currentProject.Path);
+        }, "Оформление…");
+    }
+
     private void OpenScript_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (FilesDataGrid.SelectedItem is ProjectFile file && (ScriptDocument.IsCodePath(file.FilePath) || ScriptDocument.IsVisualPath(file.FilePath)))
@@ -448,7 +473,8 @@ public partial class MainWindow : Window
             var projectSaves = new GameSaveStore(project.Path);
             string sceneIdentity = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
                 System.Text.Encoding.UTF8.GetBytes(configuration.EntryPoints.MainScene.ToUpperInvariant())))[..24];
-            var previewSaves = new GameSaveStore(project.Path, Path.Combine(projectSaves.DirectoryPath, "preview", sceneIdentity));
+            var previewSaves = new GameSaveStore(project.Path, Path.Combine(projectSaves.DirectoryPath, "preview", sceneIdentity),
+                Path.Combine(GameSaveStore.LegacyDirectory(project.Path), "preview", sceneIdentity));
             new GameWindow(preview, previewSaves, preview: true).Show();
         }, "Запуск выбранной сцены…");
     }

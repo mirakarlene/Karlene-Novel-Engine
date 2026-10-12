@@ -9,7 +9,8 @@ namespace KNE;
 public sealed class EngineSettings
 {
     public WindowDefaults Window { get; init; } = new();
-    public GameTheme Theme { get; init; } = new();
+    public GameTheme Theme { get; set; } = new();
+    public ScreenLayouts Screens { get; set; } = ScreenLayouts.CreateDefaults();
     public GameDefaults Game { get; init; } = new();
     public JsonElement InitialState { get; init; } = JsonSerializer.SerializeToElement(new Dictionary<string, object>());
     public static JsonSerializerOptions JsonOptions { get; } = new()
@@ -29,6 +30,12 @@ public sealed class EngineSettings
             Game = Read<GameDefaults>(root, "game.json"),
             InitialState = Read<JsonElement>(root, "state.json", JsonSerializer.SerializeToElement(new Dictionary<string, object>()))
         };
+        string screensPath = PathSafety.ResolveRelative(root, "engine/screens.json");
+        if (File.Exists(screensPath) && new FileInfo(screensPath).Length > 2 * 1024 * 1024) throw new InvalidDataException("Оформление больше 2 МБ.");
+        settings.Screens = File.Exists(screensPath) ? ScreenLayouts.Parse(File.ReadAllText(screensPath)) : ScreenLayouts.CreateDefaults(settings.Theme);
+        settings.Theme = settings.Screens.Theme ?? settings.Theme;
+        foreach (var e in settings.Screens.Screens.SelectMany(s => s.Elements))
+            if (e.Type == "image") _ = ResourcePaths.Resolve(root, e.Image ?? "");
         settings.Validate(root);
         return settings;
     }
@@ -42,11 +49,13 @@ public sealed class EngineSettings
         foreach (var item in new (string Name, object Value)[]
         {
             ("window.json", settings.Window), ("theme.json", settings.Theme),
-            ("game.json", settings.Game), ("state.json", settings.InitialState)
+            ("game.json", settings.Game), ("state.json", settings.InitialState), ("screens.json", settings.Screens)
         })
             File.WriteAllText(Path.Combine(directory, item.Name), JsonSerializer.Serialize(item.Value, JsonOptions));
         File.WriteAllText(Path.Combine(directory, "README.txt"), """
             engine — настройки игры. Изменения применяются при следующем запуске окна игры.
+            Кнопка «Оформление» визуально редактирует engine/screens.json: экраны, элементы и тему.
+            Секция theme в screens.json имеет приоритет над theme.json после визуального сохранения.
             window.json: width/height (640..7680 / 480..4320), position center или manual,
             left/top для manual (координаты экрана в DIP), mode windowed/maximized/fullscreen, resizable.
             theme.json: фон, узор, цвета, шрифт, кнопки, размер персонажа и окно диалога.
@@ -61,13 +70,15 @@ public sealed class EngineSettings
             Escape — меню паузы; F11 — полноэкранный режим; F3 — журнал и команды отладки.
             В fullscreen системная рамка скрыта; F11 возвращает оконный режим.
             Предпросмотр выбранной сцены пропускает начальное меню.
-            Сохранения игрока находятся в LOCALAPPDATA/KNE/saves, а не в engine.
+            Сохранения игрока находятся в папке проекта saves, а не в engine.
             Изменение state.json отменяет совместимость старых сохранений; изменение темы — нет.
             """);
     }
 
     /// <summary>Returns initial settings shared by the UI and the isolated Lua worker.</summary>
     public RuntimeWindowSettings RuntimeDefaults(string title) => new(title, Window.Width, Window.Height, Theme.BackgroundColor);
+
+    public static void ValidateAppearance(string root, GameTheme theme) => new EngineSettings { Theme = theme }.Validate(root);
 
     private static T Read<T>(string root, string name, T? fallback = default) where T : new()
     {
@@ -93,6 +104,10 @@ public sealed class EngineSettings
         Range(Window.Left, -32768, 32768, "window.left"); Range(Window.Top, -32768, 32768, "window.top");
         Range(Game.ExecutionTimeoutSeconds, 1, 3600, "game.execution_timeout_seconds");
         Range(Theme.CharacterWidth, 100, 2000, "theme.character_width");
+        if (Theme.PatternStyle is not ("waves" or "ornament" or "grid" or "dots" or "none")) throw new InvalidDataException("Неизвестный узор оформления.");
+        if (!ThemePalettes.Names.Contains(Theme.Palette)) throw new InvalidDataException("Неизвестная палитра оформления.");
+        Range(Theme.AnimationSpeed, 0.1, 3, "theme.animation_speed");
+        Range(Theme.WaveAmplitude, 0, 80, "theme.wave_amplitude");
         Range(Theme.Menu.Width, 240, 560, "menu.width");
         Range(Theme.Menu.TitleFontSize, 20, 72, "menu.title_font_size");
         Range(Theme.Menu.SubtitleFontSize, 12, 32, "menu.subtitle_font_size");
@@ -170,6 +185,11 @@ public sealed class GameTheme
     public string FontFamily { get; set; } = "Segoe UI";
     public string BackgroundColor { get; set; } = "#FF201134";
     public bool Pattern { get; set; } = true;
+    public string PatternStyle { get; set; } = "waves";
+    public string Palette { get; set; } = "violet";
+    public bool AnimationEnabled { get; set; } = true;
+    public double AnimationSpeed { get; set; } = 1;
+    public double WaveAmplitude { get; set; } = 24;
     public string PatternColor { get; set; } = "#FF704697";
     public string? BackgroundImage { get; set; }
     public string AccentColor { get; set; } = "#FFD3ACFF";

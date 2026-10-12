@@ -9,10 +9,12 @@ public sealed class ProjectChangeMonitor : IDisposable
     private readonly Timer timer;
     private readonly object sync = new();
     private bool disposed;
+    private readonly string savesPrefix;
     public event EventHandler? Changed;
 
     public ProjectChangeMonitor(string path)
     {
+        savesPrefix = Path.Combine(PathSafety.NormalizeDirectory(path), "saves") + Path.DirectorySeparatorChar;
         watcher = new FileSystemWatcher(path)
         {
             IncludeSubdirectories = true,
@@ -30,6 +32,9 @@ public sealed class ProjectChangeMonitor : IDisposable
 
     private void Schedule(object? sender, FileSystemEventArgs? e)
     {
+        bool IsSavePath(string value) => value.StartsWith(savesPrefix, StringComparison.OrdinalIgnoreCase) ||
+            value.Equals(Path.TrimEndingDirectorySeparator(savesPrefix), StringComparison.OrdinalIgnoreCase);
+        if (e != null && IsSavePath(e.FullPath) && (e is not RenamedEventArgs renamed || IsSavePath(renamed.OldFullPath))) return;
         lock (sync) { if (!disposed) timer.Change(400, Timeout.Infinite); }
     }
 

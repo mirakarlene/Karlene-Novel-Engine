@@ -10,7 +10,7 @@ public static class EnginePresentation
     public static Brush CreateBackground(GameTheme theme)
     {
         var background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(theme.BackgroundColor));
-        if (!theme.Pattern) { background.Freeze(); return background; }
+        if (!theme.Pattern || theme.PatternStyle != "ornament") { background.Freeze(); return background; }
         var ink = new SolidColorBrush((Color)ColorConverter.ConvertFromString(theme.PatternColor)) { Opacity = 0.35 };
         var drawing = new DrawingGroup();
         using (var context = drawing.Open())
