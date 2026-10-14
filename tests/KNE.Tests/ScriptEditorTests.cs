@@ -12,6 +12,32 @@ namespace KNE.Tests;
 public sealed class ScriptEditorTests
 {
     [Fact]
+    public async Task ColoredCodeEditor_PreservesExistingTabsAndCrLf_SaveUndoAndPreviewUseActualSource()
+    {
+        using var fixture = new TempProject();
+        const string original = "function chapter()\r\n\td(nil, 'Привет')\r\nend\r\n";
+        string path = fixture.Write("chapter.krl", original);
+        await OnStaAsync(async () =>
+        {
+            var editor = new ScriptEditor(); await editor.OpenAsync(fixture.ProjectPath, path);
+            var code = (KrlCodeEditor)editor.FindName("CodeEditor");
+            Assert.Equal(original, code.Text); Assert.False(editor.Document!.IsDirty);
+            Assert.Contains(code.Tokens, token => token.Kind == LuaTokenKind.Function);
+            await editor.SaveAsync(); Assert.Equal(original, File.ReadAllText(path));
+            code.Select(original.IndexOf("d(", StringComparison.Ordinal), 0); code.IndentSelection();
+            Assert.True(editor.Document.IsDirty); Assert.Equal(code.Text, editor.Document.Code);
+            Assert.True(((Button)editor.FindName("UndoButton")).IsEnabled);
+            var preview = editor.CapturePreview()!;
+            Assert.Equal(code.Text, preview.Source); Assert.Equal(2, preview.Line); Assert.Equal("chapter", preview.Function);
+            Click(editor, "UndoButton"); Assert.Equal(original, code.Text); Assert.False(editor.Document.IsDirty);
+            Click(editor, "RedoButton"); Assert.Equal(original.Replace("\td(", "\t    d("), code.Text);
+            await editor.SaveAsync(); Assert.Equal(code.Text, File.ReadAllText(path));
+            await editor.OpenAsync(fixture.ProjectPath, fixture.Write("other.lua", "function other() end"));
+            Assert.False(code.CanUndo); Assert.False(code.CanRedo);
+        });
+    }
+
+    [Fact]
     public async Task Preview_CodeCaretCapturesUnsavedSourceAndFunction_ExternalEditorButtonRequestsConfiguredLaunch()
     {
         using var fixture = new TempProject();
@@ -22,7 +48,7 @@ public sealed class ScriptEditorTests
             int previews = 0, launches = 0;
             editor.PreviewRequested += (_, _) => previews++;
             editor.ExternalEditorRequested += (_, _) => launches++;
-            var text = (TextBox)editor.FindName("CodeEditor");
+            var text = (KrlCodeEditor)editor.FindName("CodeEditor");
             text.Text = "function chapter()\n  d(nil, 'Новое')\nend\nfunction other()\n d(nil, 'Другое')\nend";
             text.CaretIndex = text.Text.IndexOf("Другое", StringComparison.Ordinal);
             var capture = editor.CapturePreview()!;
@@ -127,7 +153,7 @@ public sealed class ScriptEditorTests
         {
             var editor = new ScriptEditor();
             await editor.OpenAsync(fixture.ProjectPath, path);
-            var input = (TextBox)editor.FindName("CodeEditor");
+            var input = (KrlCodeEditor)editor.FindName("CodeEditor");
             Assert.False(input.IsReadOnly);
             Assert.False(((RadioButton)editor.FindName("GraphMode")).IsEnabled);
             input.Text = "function main() d(nil, 'Ручной код') end";
@@ -180,7 +206,7 @@ public sealed class ScriptEditorTests
             ((TextBox)editor.FindName("SceneTextInput")).Text = "Возвращаемся домой.";
             Click(editor, "ApplyPropertiesButton");
             ((RadioButton)editor.FindName("CodeMode")).IsChecked = true;
-            var code = (TextBox)editor.FindName("CodeEditor");
+            var code = (KrlCodeEditor)editor.FindName("CodeEditor");
             Assert.True(code.IsReadOnly);
             Assert.Contains("choice(\"Куда?\", {\"Домой\", \"Конец\"})", code.Text);
             Assert.Contains("d(\"Алиса\", \"Возвращаемся домой.\")", code.Text);
