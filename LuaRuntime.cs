@@ -31,6 +31,7 @@ public sealed class LuaRuntime : IGameSession
     private string fingerprint = "";
     private GameScripts? scripts;
     private readonly bool preview;
+    private (string? File, int? Line, string Trace, string Problem)? scriptFailure;
     public TimeSpan ExecutionLimit { get; }
 
     public LuaRuntime(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool interactive = false, bool preview = false)
@@ -55,7 +56,7 @@ public sealed class LuaRuntime : IGameSession
     public StoryFrame Story { get { lock (stateLock) return story; } }
     public SceneVisuals Visuals { get { lock (stateLock) return visuals; } }
 
-    public Task StartAsync(CancellationToken cancellationToken = default) => RunAsync(StartCore, cancellationToken);
+    public Task StartAsync(CancellationToken cancellationToken = default) => RunAsync(StartCore, cancellationToken, "Запуск игры");
 
     private void StartCore()
     {
@@ -66,17 +67,10 @@ public sealed class LuaRuntime : IGameSession
         lua.State.Encoding = Encoding.UTF8;
         lock (stateLock) windowSettings = project.Engine.RuntimeDefaults(project.Title);
         Register(nameof(PrintToUI), "print_to_ui");
-        Register(nameof(SetWindowTitle), "set_window_title");
-        Register(nameof(SetWindowSize), "set_window_size");
-        Register(nameof(SetBgColor), "set_bg_color");
         Register(nameof(ShouldStop), "kne_should_stop");
-        Register(nameof(SetBackground), "background");
-        Register(nameof(ShowCharacter), "show_character");
-        Register(nameof(HideCharacter), "hide_character");
-        Register(nameof(PlayMusic), "play_music");
-        Register(nameof(StopMusic), "stop_music");
-        Register(nameof(PlaySound), "play_sound");
         Register(nameof(SceneCodeForLua), "kne_scene_code_result");
+        Register(nameof(RecordScriptError), "kne_record_script_error");
+        Register(nameof(InvokeScriptApi), "kne_script_api");
         lua["project_dir"] = project.Path;
         lua["kne_interactive"] = interactive;
         lua["kne_seed"] = seed;
@@ -90,6 +84,13 @@ public sealed class LuaRuntime : IGameSession
             state = {}
             math.randomseed(kne_seed)
             function init() error("init(приоритет) должен быть первым оператором файла до запуска игры.") end
+            for _, name in ipairs({"set_window_title", "set_window_size", "set_bg_color", "background",
+                                  "show_character", "hide_character", "play_music", "stop_music", "play_sound"}) do
+                _G[name] = function(...)
+                    local problem = kne_script_api(name, table.pack(...))
+                    if problem ~= "" then error(problem, 2) end
+                end
+            end
             function d(speaker, text)
                 if kne_interactive and coroutine.isyieldable() then
                     return coroutine.yield({kind = "dialogue", speaker = speaker == nil and "" or tostring(speaker), text = tostring(text)})
@@ -112,7 +113,7 @@ public sealed class LuaRuntime : IGameSession
             end
             function kne_resume(answer)
                 local ok, event = coroutine.resume(kne_story, answer)
-                if not ok then error(event) end
+                if not ok then error(event, 0) end
                 return coroutine.status(kne_story), event
             end
             """, "KNE API");
@@ -188,9 +189,10 @@ public sealed class LuaRuntime : IGameSession
             using var function = lua["process_command"] as LuaFunction
                 ?? throw new InvalidOperationException("Скрипт не объявляет process_command(command).");
             string before = FrameSignature(Story);
-            function.Call(command);
+            using var invoke = (LuaFunction)lua["kne_invoke_command"];
+            invoke.Call(command);
             if (!replaying) history.Add(new StoryAction("command", before, Command: command));
-        }, cancellationToken);
+        }, cancellationToken, "Команда отладки");
     }
 
     public Task AdvanceAsync(CancellationToken cancellationToken = default) => RunAsync(() =>
@@ -200,7 +202,7 @@ public sealed class LuaRuntime : IGameSession
         string before = FrameSignature(Story);
         ResumeStory(null);
         if (!replaying) history.Add(new StoryAction("advance", before));
-    }, cancellationToken);
+    }, cancellationToken, "Продолжение сценария");
 
     public Task ChooseAsync(int option, CancellationToken cancellationToken = default) => RunAsync(() =>
     {
@@ -210,7 +212,7 @@ public sealed class LuaRuntime : IGameSession
         string before = FrameSignature(Story);
         ResumeStory(option);
         if (!replaying) history.Add(new StoryAction("choose", before, option));
-    }, cancellationToken);
+    }, cancellationToken, "Выбор ответа");
 
     private void ResumeStory(object? answer)
     {
@@ -275,7 +277,7 @@ public sealed class LuaRuntime : IGameSession
                     case "advance" when Story.Kind == "dialogue": ResumeStory(null); break;
                     case "choose" when Story.Kind == "choice" && action.Option >= 1 && action.Option <= Story.Options.Count: ResumeStory(action.Option); break;
                     case "command" when !string.IsNullOrWhiteSpace(action.Command):
-                        using (var command = lua!["process_command"] as LuaFunction ?? throw new InvalidDataException("Нет обработчика команд.")) command.Call(action.Command);
+                        using (var command = lua!["kne_invoke_command"] as LuaFunction) command!.Call(action.Command);
                         break;
                     default: throw new InvalidDataException("Некорректная последовательность действий в сохранении.");
                 }
@@ -286,7 +288,7 @@ public sealed class LuaRuntime : IGameSession
             lock (stateLock) visuals = visuals with { Sound = null };
         }
         finally { replaying = false; }
-    }, cancellationToken);
+    }, cancellationToken, "Загрузка сохранения");
 
     private string ComputeFingerprint(GameScripts? program = null)
     {
@@ -355,7 +357,7 @@ public sealed class LuaRuntime : IGameSession
         return builder.Append('"').ToString();
     }
 
-    private async Task RunAsync(Action action, CancellationToken cancellationToken)
+    private async Task RunAsync(Action action, CancellationToken cancellationToken, string operation = "Выполнение сценария")
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lifetime.Token);
         await gate.WaitAsync(linked.Token).ConfigureAwait(false);
@@ -366,6 +368,7 @@ public sealed class LuaRuntime : IGameSession
                 ObjectDisposedException.ThrowIf(stopping, this);
                 executionToken = linked.Token;
                 deadline = Stopwatch.GetTimestamp() + (long)(ExecutionLimit.TotalSeconds * Stopwatch.Frequency);
+                scriptFailure = null;
             }
             await Task.Run(action, linked.Token).ConfigureAwait(false);
             linked.Token.ThrowIfCancellationRequested();
@@ -374,7 +377,14 @@ public sealed class LuaRuntime : IGameSession
         catch (Exception ex) when (ex is not OperationCanceledException && ShouldStop())
         {
             if (linked.IsCancellationRequested) throw new OperationCanceledException("Выполнение остановлено.", ex, linked.Token);
-            throw new TimeoutException("Превышено время выполнения сценария.", ex);
+            var timeout = new TimeoutException("Превышено время выполнения сценария.", ex);
+            AttachScriptReport(timeout, operation);
+            throw timeout;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException && (ex is NLua.Exceptions.LuaScriptException || scriptFailure != null))
+        {
+            AttachScriptReport(ex, operation);
+            throw;
         }
         finally { gate.Release(); }
     }
@@ -382,6 +392,70 @@ public sealed class LuaRuntime : IGameSession
     private void Register(string method, string name)
     {
         using var function = lua!.RegisterFunction(name, this, GetType().GetMethod(method)!);
+    }
+
+    private void AttachScriptReport(Exception error, string operation)
+    {
+        var report = GameErrorReport.Create(project, error, operation);
+        if (scriptFailure is { } failure)
+            report = report with { File = failure.File, Line = failure.Line, Details = failure.Trace + "\n\n" + error };
+        GameErrorReport.Attach(error, report);
+    }
+
+    /// <summary>Captures the original failing Lua frame before coroutine unwinding loses its stack.</summary>
+    public void RecordScriptError(string source, int line, string trace, string problem)
+    {
+        if (scriptFailure is { } previous && previous.Problem == problem) return;
+        string? file = string.IsNullOrEmpty(source) ? null : source.Replace('\\', '/');
+        if (file != null && Path.IsPathRooted(file))
+        {
+            string relative = Path.GetRelativePath(project.Path, file);
+            if (!relative.StartsWith("..", StringComparison.Ordinal)) file = relative.Replace('\\', '/');
+        }
+        scriptFailure = (file, line > 0 ? line : null, trace, problem);
+    }
+
+    /// <summary>Returns managed API validation failures as data so Lua raises them in the calling script frame.</summary>
+    public string InvokeScriptApi(string name, LuaTable arguments)
+    {
+        using var ownedArguments = arguments;
+        string? Text(int index, bool optional = false)
+        {
+            object? value = arguments[index];
+            if (value == null && optional) return null;
+            return value as string ?? throw new ArgumentException(name + ": аргумент " + index + " должен быть строкой.");
+        }
+        int Number(int index)
+        {
+            object? value = arguments[index];
+            if (value is not (double or long or int)) throw new ArgumentException(name + ": аргумент " + index + " должен быть целым числом.");
+            double number = Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture);
+            if (!double.IsFinite(number) || number != Math.Truncate(number) || number < int.MinValue || number > int.MaxValue)
+                throw new ArgumentException(name + ": аргумент " + index + " должен быть целым числом.");
+            return (int)number;
+        }
+        try
+        {
+            switch (name)
+            {
+                case "set_window_title": SetWindowTitle(Text(1)!); break;
+                case "set_window_size": SetWindowSize(Number(1), Number(2)); break;
+                case "set_bg_color": SetBgColor(Text(1)!); break;
+                case "background": SetBackground(Text(1, optional: true)); break;
+                case "show_character": ShowCharacter(Text(1)!, Text(2, optional: true) ?? "center"); break;
+                case "hide_character": HideCharacter(); break;
+                case "play_music":
+                    object? loop = arguments[2];
+                    if (loop is not (null or bool)) throw new ArgumentException("play_music: второй аргумент должен быть true/false.");
+                    PlayMusic(Text(1)!, loop as bool? ?? true); break;
+                case "stop_music": StopMusic(); break;
+                case "play_sound": PlaySound(Text(1)!); break;
+                default: throw new ArgumentException("Неизвестная команда игры: " + name);
+            }
+            return "";
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or FormatException or UnauthorizedAccessException)
+        { return name + ": " + ex.Message; }
     }
 
     private void InstallHook() => lua!.DoString("""

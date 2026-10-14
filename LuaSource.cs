@@ -102,6 +102,7 @@ public static class LuaSource
     }
 
     private sealed record Token(string Text, int Offset, int Line);
+    internal static int? FirstExecutableLine(string source) => Tokens(source).FirstOrDefault()?.Line;
     private sealed class Scope(string kind, int tableDepth)
     {
         public string Kind { get; } = kind;

@@ -8,7 +8,7 @@ namespace KNE;
 internal sealed record WorkerRequest(long Id, string Command, int Option = 0, string? Text = null, GameCheckpoint? Checkpoint = null);
 internal sealed record SessionSnapshot(RuntimeWindowSettings Window, StoryFrame Story, SceneVisuals Visuals);
 internal sealed record WorkerMessage(string Type, long Id = 0, string? Text = null, SessionSnapshot? Snapshot = null,
-    GameCheckpoint? Checkpoint = null, string? Error = null, string? ErrorType = null);
+    GameCheckpoint? Checkpoint = null, string? Error = null, string? ErrorType = null, GameErrorReport? Report = null);
 
 internal static class LuaWorker
 {
@@ -78,7 +78,7 @@ internal static class LuaWorker
                     }
                     Send(new("result", request.Id, Snapshot: new(runtime.WindowSettings, runtime.Story, runtime.Visuals), Checkpoint: checkpoint));
                 }
-                catch (Exception ex) { Send(new("error", request.Id, Error: ex.Message, ErrorType: ex.GetType().Name)); }
+                catch (Exception ex) { Send(new("error", request.Id, Error: ex.Message, ErrorType: ex.GetType().Name, Report: GameErrorReport.TryGet(ex))); }
             }
             return 0;
         }

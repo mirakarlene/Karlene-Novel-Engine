@@ -29,19 +29,30 @@ public sealed class GameScripts
         {
             string full = PathSafety.EnsureInside(project.Path, candidate);
             string path = Path.GetRelativePath(project.Path, full).Replace('\\', '/');
-            if (new FileInfo(full).Length > 8 * 1024 * 1024) throw new InvalidDataException("Сценарий больше 8 МБ: " + path);
-            string source = File.ReadAllText(full);
-            if (ScriptDocument.IsVisualPath(full))
+            string source = "";
+            try
             {
-                var graph = VisualScript.Parse(source);
-                files.Add(new(path, source, null, graph));
-                functions.Add(new(graph.FunctionName, path, 1));
+                if (new FileInfo(full).Length > 8 * 1024 * 1024) throw new InvalidDataException("Сценарий больше 8 МБ: " + path);
+                source = File.ReadAllText(full);
+                if (ScriptDocument.IsVisualPath(full))
+                {
+                    var graph = VisualScript.Parse(source);
+                    files.Add(new(path, source, null, graph));
+                    functions.Add(new(graph.FunctionName, path, 1));
+                }
+                else
+                {
+                    var declaration = StartupScripts.Declaration(source);
+                    files.Add(new(path, LuaSource.Prepare(declaration.Source), declaration.Priority ?? (full.Equals(init, StringComparison.OrdinalIgnoreCase) ? 0 : null), null));
+                    functions.AddRange(LuaSource.Functions(source).Select(f => new GameFunction(f.Name, path, f.Line)));
+                }
             }
-            else
+            catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
             {
-                var declaration = StartupScripts.Declaration(source);
-                files.Add(new(path, LuaSource.Prepare(declaration.Source), declaration.Priority ?? (full.Equals(init, StringComparison.OrdinalIgnoreCase) ? 0 : null), null));
-                functions.AddRange(LuaSource.Functions(source).Select(f => new GameFunction(f.Name, path, f.Line)));
+                int? line = ex.InnerException is System.Text.Json.JsonException { LineNumber: { } jsonLine } ? checked((int)jsonLine + 1) :
+                    ScriptDocument.IsCodePath(full) && ex is InvalidDataException ? LuaSource.FirstExecutableLine(source) : null;
+                GameErrorReport.Attach(ex, GameErrorReport.Create(project, ex, "Проверка сценариев") with { File = path, Line = line });
+                throw;
             }
         }
         var mains = functions.Where(f => f.Name == "main").ToArray();

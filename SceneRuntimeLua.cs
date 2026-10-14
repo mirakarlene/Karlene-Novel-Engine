@@ -8,12 +8,31 @@ internal static class SceneRuntimeLua
             local definitions, loaded = {}, {}
             local owned = setmetatable({}, {__mode = "k"})
             local transfer = {}
-            local function checked(result)
-                if result[1] ~= "" then error(result[1]) end
-                return result[0]
+            local inspect, traceback = debug.getinfo, debug.traceback
+            function kne_capture_error(thread, problem)
+                local trace = thread and traceback(thread, tostring(problem), 0) or traceback(tostring(problem), 2)
+                for level = 1, 100 do
+                    local info = thread and inspect(thread, level, "Sl") or inspect(level + 1, "Sl")
+                    if not info then break end
+                    if info.source:sub(1, 1) == "@" then
+                        kne_record_script_error(info.source:sub(2), info.currentline, trace, tostring(problem))
+                        return problem
+                    end
+                end
+                kne_record_script_error("", 0, trace, tostring(problem))
+                return problem
+            end
+            local function handle_error(problem) return kne_capture_error(nil, problem) end
+            function kne_invoke_command(command)
+                local ok, problem = xpcall(process_command, handle_error, command)
+                if not ok then error(problem, 0) end
             end
             function kne_scene_thread(entry)
-                local thread = coroutine.create(entry)
+                local thread = coroutine.create(function(...)
+                    local result = table.pack(xpcall(entry, handle_error, ...))
+                    if not result[1] then error(result[2], 0) end
+                    return table.unpack(result, 2, result.n)
+                end)
                 local hook, mask, count = debug.gethook()
                 if type(hook) == "function" then debug.sethook(thread, hook, mask, count) end
                 return thread
@@ -28,10 +47,19 @@ internal static class SceneRuntimeLua
             function kne_load_script(path)
                 if loaded[path] then return end
                 loaded[path] = true
-                local code = checked(kne_scene_code_result(path))
+                local result = kne_scene_code_result(path)
+                if result[1] ~= "" then
+                    kne_record_script_error(path, 0, result[1], result[1])
+                    error(result[1], 0)
+                end
+                local code = result[0]
                 local chunk, problem = load(code, "@" .. path, "t", _G)
-                if not chunk then error(problem) end
-                chunk()
+                if not chunk then
+                    kne_record_script_error(path, tonumber(problem:match(":(%d+):")) or 0, problem, problem)
+                    error(problem, 0)
+                end
+                local ok, result = xpcall(chunk, handle_error)
+                if not ok then error(result, 0) end
             end
             function kne_declare_function(name, path)
                 if rawget(_G, name) ~= nil then return end
@@ -69,7 +97,7 @@ internal static class SceneRuntimeLua
                     local thread = stack[#stack]
                     owned[thread] = true
                     local values = table.pack(coroutine.resume(thread, table.unpack(input, 1, input.n)))
-                    if not values[1] then error(values[2]) end
+                    if not values[1] then kne_capture_error(thread, values[2]); error(values[2], 0) end
                     if coroutine.status(thread) == "dead" then
                         owned[thread] = nil
                         table.remove(stack)
@@ -79,9 +107,10 @@ internal static class SceneRuntimeLua
                         if type(event) ~= "table" then error("Сцена приостановлена без команды") end
                         if event.token == transfer then
                             transitions = transitions + 1
-                            if transitions > 10000 then error("Больше 10000 переходов между репликами") end
-                            if event.kind == "call" and #stack >= 64 then error("Глубина вызовов сцен больше 64") end
-                            local next_entry = resolve(event.target)
+                            if transitions > 10000 then error(kne_capture_error(thread, "Больше 10000 переходов между репликами"), 0) end
+                            if event.kind == "call" and #stack >= 64 then error(kne_capture_error(thread, "Глубина вызовов сцен больше 64"), 0) end
+                            local ok, next_entry = pcall(resolve, event.target)
+                            if not ok then error(kne_capture_error(thread, next_entry), 0) end
                             if event.kind == "goto" then
                                 owned[thread] = nil
                                 table.remove(stack)
