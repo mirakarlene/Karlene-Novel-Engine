@@ -193,4 +193,3 @@ public sealed class KrlCodeEditorTests
         thread.SetApartmentState(ApartmentState.STA); thread.Start(); return completion.Task.WaitAsync(TimeSpan.FromSeconds(20));
     }
 }
-
