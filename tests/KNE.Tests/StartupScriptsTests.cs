@@ -72,13 +72,13 @@ public sealed class StartupScriptsTests
     }
 
     [Theory]
-    [InlineData("function main() d(nil, state.loads) end")]
-    [InlineData("return function() d(nil, state.loads) end")]
+    [InlineData("function child() d(nil, state.loads) end")]
+    [InlineData("child = function() d(nil, state.loads) end")]
     public async Task InitScene_CachesEntryAndExecutesTopLevelOnlyOnce(string entry)
     {
         using var fixture = new TempProject();
         fixture.Write("game/scenes/child.krl", "init(-10) state.loads = (state.loads or 0) + 1; " + entry);
-        fixture.Write("game/scenes/main.krl", "function main() call_scene('game/scenes/child.krl'); call_scene('GAME/SCENES/CHILD.KRL'); d(nil, state.loads) end");
+        fixture.Write("game/scenes/main.krl", "function main() call_scene(child); call_scene('child'); d(nil, state.loads) end");
         await using var runtime = new LuaRuntime(await fixture.LoadAsync(), _ => { }, interactive: true);
         await runtime.StartAsync();
         Assert.Equal("1", runtime.Story.Text);
@@ -104,20 +104,22 @@ public sealed class StartupScriptsTests
     public async Task InitModuleWithoutEntry_IsNotExecutedAgain_WhenCalledAsScene()
     {
         using var fixture = new TempProject();
-        fixture.Write("startup.lua", "init(-10) state.loads = (state.loads or 0) + 1");
-        fixture.Write("game/scenes/main.krl", "function main() call_scene('startup.lua') end");
-        await using var runtime = new LuaRuntime(await fixture.LoadAsync(), _ => { }, interactive: true);
-        Assert.Contains("main()", (await Assert.ThrowsAnyAsync<Exception>(() => runtime.StartAsync())).Message);
+        fixture.Write("startup.lua", "init(-10) print('loaded once')");
+        fixture.Write("game/scenes/main.krl", "function main() call_scene('startup') end");
+        var output = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        await using var runtime = new LuaRuntime(await fixture.LoadAsync(), output.Enqueue, interactive: true);
+        Assert.Contains("Не найдена функция", (await Assert.ThrowsAnyAsync<Exception>(() => runtime.StartAsync())).Message);
+        Assert.Equal(1, output.Count(s => s == "loaded once"));
     }
 
     [Fact]
-    public async Task InitScene_MainBindingRemainsLocal_AfterOtherFilesLoad()
+    public async Task InitScene_FunctionBindingSurvivesOtherFilesLoading()
     {
         using var fixture = new TempProject();
-        fixture.Write("game/scenes/child.krl", "init(-10) function main(n) if n > 0 then main(n - 1) else d(nil, 'Своя main') end end");
-        fixture.Write("game/scenes/main.krl", "function main() call_scene('game/scenes/child.krl', 1); d(nil, 'Возврат') end");
+        fixture.Write("game/scenes/child.krl", "init(-10) function child(n) if n > 0 then child(n - 1) else d(nil, 'Своя функция') end end");
+        fixture.Write("game/scenes/main.krl", "function main() call_scene(child, 1); d(nil, 'Возврат') end");
         await using var runtime = new LuaRuntime(await fixture.LoadAsync(), _ => { }, interactive: true);
-        await runtime.StartAsync(); Assert.Equal("Своя main", runtime.Story.Text);
+        await runtime.StartAsync(); Assert.Equal("Своя функция", runtime.Story.Text);
         await runtime.AdvanceAsync(); Assert.Equal("Возврат", runtime.Story.Text);
     }
 }

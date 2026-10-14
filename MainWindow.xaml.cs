@@ -485,6 +485,10 @@ public partial class MainWindow : Window
         await RunOperationAsync(async () =>
         {
             await SceneEditor.SaveAsync();
+            var program = GameScripts.Load(project);
+            string relative = Path.GetRelativePath(project.Path, document.FilePath).Replace('\\', '/');
+            if (!program.Main.Path.Equals(relative, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Игра всегда начинается с единственной main(). Назовите функцию выбранного сценария main, а прежнюю main переименуйте, затем повторите действие.");
             string path = PathSafety.ResolveRelative(project.Path, "project.json");
             string original = await File.ReadAllTextAsync(path, lifetime.Token);
             var configuration = JsonSerializer.Deserialize<ProjectConfiguration>(original, ProjectConfiguration.JsonOptions)

@@ -24,6 +24,8 @@
             <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                 <WrapPanel Margin="0,0,0,6">
+                    <TextBlock Text="Функция" VerticalAlignment="Center" Margin="0,0,5,4"/>
+                    <TextBox x:Name="FunctionNameInput" Width="130" Margin="0,0,8,4" ToolTip="Имя функции этой блок-схемы. main — единственная точка старта игры."/>
                     <ComboBox x:Name="BlockType" Width="140" Margin="0,0,5,4" DisplayMemberPath="Title"/>
                     <Button x:Name="AddBlockButton" Content="+ Блок" Padding="8,4" Margin="0,0,8,4" Click="Add_Click"/>
                     <TextBlock Text="Масштаб" VerticalAlignment="Center" Margin="0,0,5,4"/>

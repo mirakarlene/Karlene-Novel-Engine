@@ -12,6 +12,9 @@ public sealed class VisualScript
     /// <summary>The persisted schema version; this editor supports version 1.</summary>
     public int Version { get; set; } = 1;
 
+    /// <summary>The global function exported by this graph; main is the unique game entry point.</summary>
+    public string FunctionName { get; set; } = "main";
+
     /// <summary>Blocks in arbitrary storage order. Connections determine execution order.</summary>
     public List<ScriptNode> Nodes { get; set; } = [];
 
@@ -68,6 +71,7 @@ public sealed class VisualScript
     private void ValidateStructure()
     {
         if (Version != 1) throw new InvalidDataException("Неподдерживаемая версия блок-схемы.");
+        if (!LuaSource.IsIdentifier(FunctionName)) throw new InvalidDataException("Имя функции блок-схемы: латинские буквы, цифры и _, без цифры в начале и ключевых слов Lua.");
         if (Nodes == null || Nodes.Count > 500) throw new InvalidDataException("Допускается не более 500 блоков.");
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var node in Nodes)
@@ -89,7 +93,7 @@ public sealed class VisualScript
         }
     }
 
-    /// <summary>Validates the graph and generates a Lua main function using the existing KNE API.</summary>
+    /// <summary>Validates the graph and generates its named Lua function using the KNE API.</summary>
     /// <returns>Lua source for a complete, acyclic scene.</returns>
     public string Compile()
     {
@@ -119,7 +123,9 @@ public sealed class VisualScript
                 string.IsNullOrWhiteSpace(node.Path))
                 Fail(node, "укажите путь к ресурсу");
             if (node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene && string.IsNullOrWhiteSpace(node.Path))
-                Fail(node, "укажите путь или имя сцены");
+                Fail(node, "укажите имя функции");
+            if (node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene && !LuaSource.IsIdentifier(node.Path))
+                Fail(node, "цель перехода должна быть именем функции, например chapter, без пути к файлу");
             if (node.Kind == ScriptNodeKind.GotoScene && node.Next != null)
                 Fail(node, "у постоянного перехода нет продолжения в этой сцене");
             if (node.Kind == ScriptNodeKind.Character && node.Position is not ("left" or "center" or "right"))
@@ -148,7 +154,7 @@ public sealed class VisualScript
         if (visited.Count != Nodes.Count)
             throw new InvalidDataException("Есть блоки, недостижимые из «Начала». Соедините или удалите их.");
 
-        var code = new StringBuilder("-- Сгенерировано из блок-схемы KNE.\nfunction main()\n");
+        var code = new StringBuilder("-- Сгенерировано из блок-схемы KNE.\nfunction ").Append(FunctionName).Append("()\n");
         code.Append("    local __kne_node = ").Append(Quote(starts[0].Id)).Append('\n');
         code.Append("    while __kne_node do\n");
         bool first = true;
@@ -292,7 +298,7 @@ public sealed class ScriptNode
     /// <summary>Dialogue text or the question displayed by a choice.</summary>
     public string Text { get; set; } = "";
 
-    /// <summary>Project-relative resource path. Empty backgrounds clear the scene.</summary>
+    /// <summary>Resource path or target function name for a transition. Empty backgrounds clear the scene.</summary>
     public string Path { get; set; } = "";
 
     /// <summary>Character placement: left, center, or right.</summary>

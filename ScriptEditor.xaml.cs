@@ -50,7 +50,7 @@ public partial class ScriptEditor : UserControl
         ComparisonInput.ItemsSource = Enum.GetValues<ScriptComparison>().Select((value, index) =>
             new { Label = new[] { "=", "≠", ">", "<", "≥", "≤" }[index], Value = value }).ToArray();
         foreach (var input in new[]
-                     { SpeakerInput, SceneTextInput, OptionsInput, PathInput, VariableInput, ValueInput })
+                     { SpeakerInput, SceneTextInput, OptionsInput, PathInput, VariableInput, ValueInput, FunctionNameInput })
             input.TextChanged += (_, _) => TrackProperties();
         foreach (var input in new[] { PositionInput, ValueTypeInput, ComparisonInput })
             input.SelectionChanged += (_, _) => TrackProperties();
@@ -308,6 +308,7 @@ public partial class ScriptEditor : UserControl
         try
         {
             var node = Selected;
+            FunctionNameInput.Text = Document?.Graph?.FunctionName ?? "";
             PropertiesPanel.IsEnabled = true;
             SelectedTitle.Text = node?.Title ?? "Выберите блок";
             ApplyPropertiesButton.IsEnabled = DeleteBlockButton.IsEnabled = node != null;
@@ -338,8 +339,9 @@ public partial class ScriptEditor : UserControl
                 node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music
                     or ScriptNodeKind.Sound or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene);
             bool sceneTarget = node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene;
-            PathLabel.Text = sceneTarget ? "Путь или имя сцены" : "Путь от корня проекта";
+            PathLabel.Text = sceneTarget ? "Имя функции" : "Путь от корня проекта";
             BrowsePathButton.Content = sceneTarget ? "Выбрать сцену…" : "Выбрать ресурс…";
+            Visible(BrowsePathButton, !sceneTarget);
             Visible(PositionField, node.Kind == ScriptNodeKind.Character);
             Visible(LoopInput, node.Kind == ScriptNodeKind.Music);
             Visible(VariableField, node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable);
@@ -353,8 +355,15 @@ public partial class ScriptEditor : UserControl
 
     private void ApplyProperties(bool repaint = true)
     {
+        if (Document?.Graph is { } graph && FunctionNameInput.Text.Trim() != graph.FunctionName)
+        {
+            var renamed = VisualScript.Parse(graph.Serialize());
+            renamed.FunctionName = FunctionNameInput.Text.Trim();
+            _ = renamed.Serialize();
+            Remember(); Document.Graph = renamed;
+        }
         var node = Selected;
-        if (node == null || Document?.Graph is not { } model) return;
+        if (node == null || Document?.Graph is not { } model) { propertyDraft = false; UpdateTitle(); return; }
         // Edit a copy first so invalid draft properties cannot damage the current document.
         var copy = VisualScript.Parse(model.Serialize());
         var changed = copy.Nodes.Single(n => n.Id == node.Id);
@@ -569,7 +578,7 @@ public partial class ScriptEditor : UserControl
         ScriptNodeKind.Condition or ScriptNodeKind.SetVariable => "state." + node.Variable + " / " + node.Value,
         ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound =>
             node.Path.Length == 0 ? "Ресурс не выбран" : node.Path,
-        ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene => node.Path.Length == 0 ? "Сцена не выбрана" : node.Path,
+        ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene => node.Path.Length == 0 ? "Функция не выбрана" : node.Path,
         _ => node.Kind == ScriptNodeKind.End ? "Завершение сцены" : "Команда сцены"
     };
 

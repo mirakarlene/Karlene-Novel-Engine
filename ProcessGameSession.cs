@@ -19,6 +19,7 @@ public sealed class ProcessGameSession : IGameSession
     private SessionSnapshot snapshot;
     private GameCheckpoint? recovery;
     private bool started;
+    private readonly bool preview;
     private long requestId;
     public TimeSpan ExecutionLimit { get; }
     public int? WorkerProcessId { get { lock (sync) return worker?.Id; } }
@@ -26,9 +27,10 @@ public sealed class ProcessGameSession : IGameSession
     public StoryFrame Story { get { lock (sync) return snapshot.Story; } }
     public SceneVisuals Visuals { get { lock (sync) return snapshot.Visuals; } }
 
-    public ProcessGameSession(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null)
+    public ProcessGameSession(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool preview = false)
     {
         this.project = project ?? throw new ArgumentNullException(nameof(project));
+        this.preview = preview;
         this.output = output ?? throw new ArgumentNullException(nameof(output));
         ExecutionLimit = executionLimit ?? TimeSpan.FromSeconds(project.Engine.Game.ExecutionTimeoutSeconds);
         if (ExecutionLimit <= TimeSpan.Zero || ExecutionLimit > TimeSpan.FromHours(1))
@@ -123,6 +125,7 @@ public sealed class ProcessGameSession : IGameSession
                 info.ArgumentList.Add("--lua-worker");
                 info.ArgumentList.Add(project.Path);
                 info.ArgumentList.Add(Path.GetRelativePath(project.Path, project.MainScenePath));
+                if (preview) info.ArgumentList.Add("--preview");
                 worker = Process.Start(info) ?? throw new IOException("Не удалось запустить Lua.");
                 responses = new(worker.StandardOutput);
                 _ = DrainErrorsAsync(worker.StandardError);

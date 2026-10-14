@@ -12,7 +12,7 @@ internal sealed record WorkerMessage(string Type, long Id = 0, string? Text = nu
 
 internal static class LuaWorker
 {
-    public static async Task<int> RunAsync(string projectPath, string? scenePath = null)
+    public static async Task<int> RunAsync(string projectPath, string? scenePath = null, bool preview = false)
     {
         using var input = new StreamReader(Console.OpenStandardInput(), Encoding.UTF8);
         using var output = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false)) { AutoFlush = true };
@@ -35,7 +35,7 @@ internal static class LuaWorker
                 project.Configuration.EntryPoints.MainScene = scenePath;
             }
             await using var runtime = new LuaRuntime(project, line => Send(new("log", Text: line)),
-                TimeSpan.FromHours(1), interactive: true);
+                TimeSpan.FromHours(1), interactive: true, preview: preview);
             var queue = Channel.CreateBounded<WorkerRequest>(1);
             _ = Task.Run(async () =>
             {

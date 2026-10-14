@@ -18,15 +18,15 @@ public sealed class LuaRuntimeTests
     }
 
     [Fact]
-    public async Task Start_MainOnlyInInitialization_DoesNotReplaceMissingSceneMain()
+    public async Task Start_UniqueMainInInitialization_IsTheGameEntry()
     {
         using var fixture = new TempProject();
-        fixture.Write("game/scripts/gamelogic.lua", "function main() print('wrong main') end");
+        fixture.Write("game/scripts/gamelogic.lua", "function main() print('only main') end");
         fixture.Write("game/scenes/main.krl", "score = 0");
         var output = new ConcurrentQueue<string>();
         await using var runtime = new LuaRuntime(await fixture.LoadAsync(), output.Enqueue);
-        await Assert.ThrowsAsync<InvalidDataException>(() => runtime.StartAsync());
-        Assert.Empty(output);
+        await runtime.StartAsync();
+        Assert.Equal(new[] { "only main" }, output.ToArray());
     }
 
     [Fact]
@@ -91,6 +91,7 @@ public sealed class LuaRuntimeTests
             {"entry_points":{"main_scene":"alternate/scene.krl","init_script":"alternate/init.lua"}}
             """);
         fixture.Write("alternate/init.lua", "value = 41");
+        fixture.Write("game/scenes/main.krl", "function prologue() end");
         fixture.Write("alternate/scene.krl", """
             function main()
                 print(value + 1, nil, true)

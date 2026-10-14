@@ -5,7 +5,7 @@ internal static class SceneRuntimeLua
 {
     public const string Source = """
         do
-            local definitions, cache = {}, {}
+            local definitions, loaded = {}, {}
             local owned = setmetatable({}, {__mode = "k"})
             local transfer = {}
             local function checked(result)
@@ -25,31 +25,32 @@ internal static class SceneRuntimeLua
                 if definitions[name] then error("Сцена уже объявлена: " .. name) end
                 definitions[name] = entry
             end
-            function kne_compile_scene(code, name)
-                local env = setmetatable({}, {
-                    __index = _G,
-                    __newindex = function(t, k, v)
-                        if k == "main" then rawset(t, k, v) else rawset(_G, k, v) end
-                    end
-                })
-                local chunk, problem = load(code, "@" .. name, "t", env)
+            function kne_load_script(path)
+                if loaded[path] then return end
+                loaded[path] = true
+                local code = checked(kne_scene_code_result(path))
+                local chunk, problem = load(code, "@" .. path, "t", _G)
                 if not chunk then error(problem) end
-                local result = chunk()
-                local entry = rawget(env, "main") or result
-                if type(entry) == "function" then return entry end
-                return nil
+                chunk()
             end
-            function kne_cache_scene(path, entry) cache[path] = entry or false end
-            function kne_entry_for_file(path)
-                if cache[path] == nil then cache[path] = kne_compile_scene(checked(kne_scene_code_result(path)), path) or false end
-                return cache[path] or nil
+            function kne_declare_function(name, path)
+                if rawget(_G, name) ~= nil then return end
+                local placeholder
+                placeholder = function(...)
+                    kne_load_script(path)
+                    local entry = rawget(_G, name)
+                    if type(entry) ~= "function" or entry == placeholder then error("Не найдена функция " .. name .. " в " .. path) end
+                    return entry(...)
+                end
+                rawset(_G, name, placeholder)
             end
             local function resolve(target)
-                if type(target) ~= "string" or target == "" then error("Укажите имя сцены или путь к файлу") end
+                if type(target) == "function" then return target end
+                if type(target) ~= "string" or target == "" then error("Цель call/goto должна быть существующей функцией или её именем") end
                 if definitions[target] then return definitions[target] end
-                local path = checked(kne_scene_path_result(target))
-                local entry = kne_entry_for_file(path)
-                if not entry then error("Сцена должна объявлять main() или возвращать функцию: " .. target) end
+                if target:find("[/\\.]") then error("Укажите имя функции вместо пути к файлу: " .. target) end
+                local entry = rawget(_G, target)
+                if type(entry) ~= "function" then error("Не найдена функция: " .. target) end
                 return entry
             end
             function call_scene(target, ...)

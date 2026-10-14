@@ -26,6 +26,7 @@ public partial class GameWindow : Window
     private readonly MediaPlayer music = new();
     private readonly MediaPlayer sound = new();
     private bool loaded;
+    private bool startupFailed;
     private bool fullscreen;
     private WindowState previousWindowState;
     private DateTime noticeUntil;
@@ -40,7 +41,7 @@ public partial class GameWindow : Window
         LoadPreferences();
         Title = project.Title;
         ApplyEngineTheme();
-        runtime = new ProcessGameSession(project, QueueOutput);
+        runtime = new ProcessGameSession(project, QueueOutput, preview: preview);
         music.MediaEnded += (_, _) => { if (runtime.Visuals.LoopMusic) { music.Position = TimeSpan.Zero; music.Play(); } };
         music.MediaFailed += (_, e) => QueueOutput("Ошибка музыки: " + e.ErrorException.Message);
         sound.MediaFailed += (_, e) => QueueOutput("Ошибка звука: " + e.ErrorException.Message);
@@ -54,6 +55,8 @@ public partial class GameWindow : Window
         loaded = true;
         if (project.Engine.Window.Mode == "maximized") WindowState = WindowState.Maximized;
         if (preferences.Fullscreen ?? project.Engine.Window.Mode == "fullscreen") ToggleFullscreen();
+        try { GameScripts.Load(project); }
+        catch (Exception ex) { ShowStartupError(ex); return; }
         if (project.Engine.Game.MainMenu && !preview && project.Engine.Screens.Find("main_menu") != null) ShowMenu();
         else await StartGameAsync();
     }
@@ -111,6 +114,37 @@ public partial class GameWindow : Window
 
     private static SolidColorBrush Brush(string color) => new((Color)ColorConverter.ConvertFromString(color));
 
+    private void ShowStartupError(Exception error)
+    {
+        startupFailed = true;
+        ready = false;
+        activeScreen = null;
+        screenHistory.Clear();
+        screenButtons.Clear();
+        ScreenCanvas.Children.Clear();
+        SceneArea.Visibility = Visibility.Collapsed;
+        MenuOverlay.Visibility = Visibility.Collapsed;
+        GameControls.Visibility = Visibility.Collapsed;
+        DebugOverlay.Visibility = Visibility.Collapsed;
+        NoticePanel.Visibility = Visibility.Collapsed;
+        MenuOverlay.IsEnabled = false;
+        GameControls.IsEnabled = false;
+        CommandInput.IsEnabled = false;
+        NextButton.IsEnabled = false;
+        ChoicePanel.IsEnabled = false;
+        StopButton.IsEnabled = false;
+        StartButton.IsEnabled = false;
+        ContinueButton.IsEnabled = false;
+        ResumeButton.IsEnabled = false;
+        AnimatedBackdrop.Configure(project.Engine.Theme, false);
+        renderTimer.Stop();
+        music.Close();
+        sound.Close();
+        StartupErrorMessage.Text = error.Message;
+        StartupErrorOverlay.Visibility = Visibility.Visible;
+        StartupErrorExitButton.Focus();
+    }
+
     private void SceneArea_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         if (project == null) return;
@@ -122,7 +156,7 @@ public partial class GameWindow : Window
     {
         await ExecuteAsync(async () =>
         {
-            var candidate = new ProcessGameSession(project, QueueOutput);
+            var candidate = new ProcessGameSession(project, QueueOutput, preview: preview);
             try { await candidate.StartAsync(execution!.Token); }
             catch { await candidate.DisposeAsync(); throw; }
             await ReplaceSessionAsync(candidate);
@@ -143,7 +177,7 @@ public partial class GameWindow : Window
 
     private async void StartButton_Click(object sender, RoutedEventArgs e)
     {
-        if (execution != null) return;
+        if (startupFailed || execution != null) return;
         if (ready && MessageBox.Show(this, "Начать новую игру? Несохранённый прогресс будет потерян. Существующие сохранения останутся доступны.",
                 "Новая игра", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         await StartGameAsync();
@@ -161,6 +195,7 @@ public partial class GameWindow : Window
 
     private void ShowMenu()
     {
+        if (startupFailed) return;
         screenHistory.Clear();
         var layout = project.Engine.Screens.Find(ready ? "pause" : "main_menu");
         if (layout == null)
@@ -181,6 +216,7 @@ public partial class GameWindow : Window
 
     private void ShowGameplay()
     {
+        if (startupFailed) return;
         activeScreen = null; screenHistory.Clear();
         MenuOverlay.Visibility = Visibility.Collapsed;
         DialoguePanel.Visibility = Visibility.Visible;
@@ -212,6 +248,7 @@ public partial class GameWindow : Window
 
     private void Notify(string text)
     {
+        if (startupFailed) return;
         NoticeText.Text = text;
         NoticePanel.Visibility = Visibility.Visible;
         noticeUntil = DateTime.UtcNow.AddSeconds(5);
@@ -219,7 +256,7 @@ public partial class GameWindow : Window
 
     private async Task ExecuteAsync(Func<Task> action, bool starting = false)
     {
-        if (closed || execution != null) return;
+        if (closed || startupFailed || execution != null) return;
         execution = new CancellationTokenSource();
         string? operationNotice = null;
         StopButton.IsEnabled = true;
@@ -253,13 +290,14 @@ public partial class GameWindow : Window
         {
             QueueOutput("Ошибка: " + ex.Message);
             StatusText.Text = "Ошибка выполнения";
-            Notify("Ошибка: " + ex.Message);
+            if (starting) ShowStartupError(ex);
+            else Notify("Ошибка: " + ex.Message);
         }
         finally
         {
             execution.Dispose();
             execution = null;
-            if (!closed)
+            if (!closed && !startupFailed)
             {
                 StopButton.IsEnabled = false;
                 CommandInput.IsEnabled = ready;
@@ -317,7 +355,7 @@ public partial class GameWindow : Window
         await ExecuteAsync(async () =>
         {
             var checkpoint = await saves.LoadAsync(slot, execution!.Token);
-            var candidate = new ProcessGameSession(project, QueueOutput);
+            var candidate = new ProcessGameSession(project, QueueOutput, preview: preview);
             try { await candidate.RestoreAsync(checkpoint, execution.Token); }
             catch { await candidate.DisposeAsync(); throw; }
             await ReplaceSessionAsync(candidate);
@@ -345,6 +383,11 @@ public partial class GameWindow : Window
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (startupFailed)
+        {
+            if (e.Key is Key.F3 or Key.Escape or Key.Space or Key.F11) e.Handled = true;
+            return;
+        }
         if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
         if (e.Key == Key.F3 && project.Engine.Game.DebugEnabled)
         {
@@ -383,7 +426,7 @@ public partial class GameWindow : Window
 
     private void RenderOutput()
     {
-        if (closed) return;
+        if (closed || startupFailed) return;
         FlushPreferences();
         if (NoticePanel.Visibility == Visibility.Visible && execution == null && DateTime.UtcNow >= noticeUntil)
             NoticePanel.Visibility = Visibility.Collapsed;
