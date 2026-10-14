@@ -132,7 +132,7 @@
             <Grid MaxWidth="960">
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <StackPanel Margin="0,0,0,24">
-                    <TextBlock Text="Не удалось запустить игру" Foreground="#FFF5EEFF" FontSize="32" TextWrapping="Wrap"/>
+                    <TextBlock Text="Ошибка игры" Foreground="#FFF5EEFF" FontSize="32" TextWrapping="Wrap"/>
                     <TextBlock Text="Исправьте сценарии проекта и запустите игру снова." Foreground="#FFD3ACFF" FontSize="16" TextWrapping="Wrap" Margin="0,12,0,0"/>
                 </StackPanel>
                 <TextBox x:Name="StartupErrorMessage" Grid.Row="1" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"

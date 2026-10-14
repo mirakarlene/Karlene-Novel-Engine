@@ -88,6 +88,16 @@ public sealed class ProcessGameSession : IGameSession
             }
             return message;
         }
+        catch (Exception ex) when (ex is TimeoutException or IOException)
+        {
+            if (GameErrorReport.TryGet(ex) == null)
+                GameErrorReport.Attach(ex, GameErrorReport.Create(project, ex, command switch
+                {
+                    "start" => "Запуск игры", "advance" => "Продолжение сценария", "choose" => "Выбор ответа",
+                    "command" => "Команда отладки", "restore" => "Загрузка сохранения", _ => "Связь с Lua-worker"
+                }));
+            KillWorker(); throw;
+        }
         catch { KillWorker(); throw; }
         finally { gate.Release(); }
     }
@@ -160,16 +170,21 @@ public sealed class ProcessGameSession : IGameSession
         }
     }
 
-    private static Exception CreateException(WorkerMessage message) => message.ErrorType switch
+    private static Exception CreateException(WorkerMessage message)
     {
+        Exception error = message.ErrorType switch
+        {
         nameof(InvalidDataException) => new InvalidDataException(message.Error),
         nameof(InvalidOperationException) => new InvalidOperationException(message.Error),
         nameof(ArgumentException) => new ArgumentException(message.Error),
         nameof(ArgumentOutOfRangeException) => new ArgumentOutOfRangeException(null, message.Error),
         nameof(FileNotFoundException) => new FileNotFoundException(message.Error),
         nameof(TimeoutException) => new TimeoutException(message.Error),
-        _ => new InvalidOperationException("Ошибка Lua: " + message.Error)
-    };
+            _ => new InvalidOperationException("Ошибка Lua: " + message.Error)
+        };
+        if (message.Report != null) GameErrorReport.Attach(error, message.Report);
+        return error;
+    }
 
     private static async Task DrainErrorsAsync(StreamReader reader)
     {
