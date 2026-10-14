@@ -43,7 +43,7 @@ public partial class ScriptEditor : UserControl
         return new(Document.FilePath, Document.Code, line, null, false, function);
     }
 
-    private void Code_SelectionChanged(object sender, RoutedEventArgs e)
+    private void Code_SelectionChanged(object? sender, EventArgs e)
     {
         if (!updating && Document?.IsVisual == false) PreviewRequested?.Invoke(this, EventArgs.Empty);
     }
@@ -113,9 +113,7 @@ public partial class ScriptEditor : UserControl
         selectedId = null;
         pendingConnection = null;
         updating = true;
-        CodeEditor.IsUndoEnabled = false;
         CodeEditor.Text = document.IsVisual ? "" : document.Code;
-        CodeEditor.IsUndoEnabled = true;
         CodeEditor.IsReadOnly = document.IsVisual;
         CodeMode.IsEnabled = true;
         GraphMode.IsEnabled = document.IsVisual;
@@ -142,7 +140,7 @@ public partial class ScriptEditor : UserControl
         UpdateTitle();
         EditorStatus.Text = document.IsVisual
             ? "Сохранение допускает незавершённую схему. Код и запуск проверяют все связи."
-            : "Ручное редактирование Lua/KRL. Ctrl+S — сохранить.";
+            : "Lua/KRL · Tab — 4 пробела · Shift+Tab — убрать отступ · Ctrl+S — сохранить.";
         PreviewRequested?.Invoke(this, EventArgs.Empty);
     }
 
@@ -218,7 +216,7 @@ public partial class ScriptEditor : UserControl
         RedoButton.IsEnabled = Document != null && (Document.IsVisual ? redo.Count > 0 && !propertyDraft : CodeEditor.CanRedo);
     }
 
-    private void Code_TextChanged(object sender, TextChangedEventArgs e)
+    private void Code_TextChanged(object? sender, EventArgs e)
     {
         if (updating || Document == null || Document.IsVisual) return;
         Document.Code = CodeEditor.Text;

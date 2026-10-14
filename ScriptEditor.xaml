@@ -1,6 +1,7 @@
 <UserControl x:Class="KNE.ScriptEditor"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:KNE"
              PreviewKeyDown="Editor_KeyDown" Background="White">
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -17,7 +18,7 @@
                 <Button x:Name="CloseDocumentButton" Content="Закрыть" Padding="8,5" Margin="0,0,5,4" Click="CloseDocument_Click" IsEnabled="False"/>
             </WrapPanel>
         </StackPanel>
-        <TextBox x:Name="CodeEditor" Grid.Row="1" Visibility="Collapsed" AcceptsReturn="True" AcceptsTab="True"
+        <local:KrlCodeEditor x:Name="CodeEditor" Grid.Row="1" Visibility="Collapsed"
                  FontFamily="Consolas" FontSize="14" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
                  TextChanged="Code_TextChanged" SelectionChanged="Code_SelectionChanged"/>
         <Grid x:Name="GraphPanel" Grid.Row="1" Visibility="Collapsed">
