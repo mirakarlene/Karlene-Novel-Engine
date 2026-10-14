@@ -6,6 +6,7 @@ namespace KNE;
 /// <summary>Shared project.json contract. Unknown fields survive configuration updates.</summary>
 public sealed class ProjectConfiguration
 {
+    [JsonPropertyName("authoring_mode")] public ProjectAuthoringMode AuthoringMode { get; set; } = ProjectAuthoringMode.Code;
     [JsonPropertyName("metadata")] public ProjectMetadata? Metadata { get; set; }
     [JsonPropertyName("game_info")] public GameInfo? GameInfo { get; set; }
     [JsonPropertyName("entry_points")] public EntryPoints? EntryPoints { get; set; }
@@ -22,6 +23,10 @@ public sealed class ProjectConfiguration
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 }
+
+/// <summary>The initial source format chosen when creating a project; both formats remain available.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ProjectAuthoringMode>))]
+public enum ProjectAuthoringMode { Code, Visual }
 
 public sealed class ProjectMetadata
 {

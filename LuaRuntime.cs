@@ -31,10 +31,17 @@ public sealed class LuaRuntime : IGameSession
     private string fingerprint = "";
     private GameScripts? scripts;
     private readonly bool preview;
+    private readonly EditorPreviewSource? editorSource;
+    private readonly Action<JsonElement>? variablesUpdated;
+    private JsonElement variables = JsonSerializer.SerializeToElement(new { Globals = new { }, Frames = new { } });
+    private PreviewLocation? location;
+    private long nextVariablesAt;
+    private bool transitionPending;
     private (string? File, int? Line, string Trace, string Problem)? scriptFailure;
     public TimeSpan ExecutionLimit { get; }
 
-    public LuaRuntime(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool interactive = false, bool preview = false)
+    public LuaRuntime(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool interactive = false, bool preview = false,
+        EditorPreviewSource? editorSource = null, Action<JsonElement>? variablesUpdated = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(output);
@@ -42,6 +49,8 @@ public sealed class LuaRuntime : IGameSession
         this.output = output;
         this.interactive = interactive;
         this.preview = preview;
+        this.editorSource = editorSource;
+        this.variablesUpdated = variablesUpdated;
         ExecutionLimit = executionLimit ?? TimeSpan.FromSeconds(project.Engine.Game.ExecutionTimeoutSeconds);
         if (ExecutionLimit <= TimeSpan.Zero || ExecutionLimit > TimeSpan.FromHours(1))
             throw new ArgumentOutOfRangeException(nameof(executionLimit));
@@ -55,13 +64,20 @@ public sealed class LuaRuntime : IGameSession
 
     public StoryFrame Story { get { lock (stateLock) return story; } }
     public SceneVisuals Visuals { get { lock (stateLock) return visuals; } }
+    public PreviewLocation? Location { get { lock (stateLock) return location; } }
+    public bool PreviewPaused => Story.Kind == "preview";
+    public JsonElement Variables { get { lock (stateLock) return variables; } }
+    public bool TransitionInProgress { get { lock (stateLock) return transitionPending; } }
 
     public Task StartAsync(CancellationToken cancellationToken = default) => RunAsync(StartCore, cancellationToken, "Запуск игры");
 
     private void StartCore()
     {
         if (initialized) throw new InvalidOperationException("Игра уже запущена.");
-        scripts = GameScripts.Load(project);
+        transitionPending = false;
+        nextVariablesAt = 0;
+        lock (stateLock) location = null;
+        scripts = GameScripts.Load(project, editorSource);
         lua?.Dispose();
         lua = new Lua();
         lua.State.Encoding = Encoding.UTF8;
@@ -71,8 +87,13 @@ public sealed class LuaRuntime : IGameSession
         Register(nameof(SceneCodeForLua), "kne_scene_code_result");
         Register(nameof(RecordScriptError), "kne_record_script_error");
         Register(nameof(InvokeScriptApi), "kne_script_api");
+        Register(nameof(ReceiveVariables), "kne_receive_variables");
+        Register(nameof(ShouldPublishVariables), "kne_should_publish_variables");
+        Register(nameof(TransitionPending), "kne_transition_pending");
+        Register(nameof(ErrorSnapshotNeeded), "kne_error_snapshot_needed");
         lua["project_dir"] = project.Path;
         lua["kne_interactive"] = interactive;
+        lua["kne_editor"] = editorSource != null;
         lua["kne_seed"] = seed;
         fingerprint = ComputeFingerprint(scripts);
         lua.DoString("""
@@ -89,11 +110,12 @@ public sealed class LuaRuntime : IGameSession
                 _G[name] = function(...)
                     local problem = kne_script_api(name, table.pack(...))
                     if problem ~= "" then error(problem, 2) end
+                    kne_editor_pause()
                 end
             end
             function d(speaker, text)
                 if kne_interactive and coroutine.isyieldable() then
-                    return coroutine.yield({kind = "dialogue", speaker = speaker == nil and "" or tostring(speaker), text = tostring(text)})
+                    return coroutine.yield(kne_event_location({kind = "dialogue", speaker = speaker == nil and "" or tostring(speaker), text = tostring(text)}))
                 end
                 if speaker == nil or tostring(speaker) == "" then
                     print_to_ui(tostring(text))
@@ -109,7 +131,7 @@ public sealed class LuaRuntime : IGameSession
                     if type(options[i]) ~= "string" or options[i] == "" then error("Варианты choice() должны быть непустыми строками") end
                     labels[i] = options[i]
                 end
-                return coroutine.yield({kind = "choice", text = tostring(prompt), options = labels})
+                return coroutine.yield(kne_event_location({kind = "choice", text = tostring(prompt), options = labels}))
             end
             function kne_resume(answer)
                 local ok, event = coroutine.resume(kne_story, answer)
@@ -117,7 +139,9 @@ public sealed class LuaRuntime : IGameSession
                 return coroutine.status(kne_story), event
             end
             """, "KNE API");
+        lua.DoString(RuntimeDiagnosticsLua.Source, "KNE diagnostics");
         lua.DoString(SceneRuntimeLua.Source, "KNE scene scheduler");
+        lua.DoString("kne_diagnostics_baseline()", "KNE baseline");
         // Resolve all paths before executing any project code.
         lua.DoString("state = " + StateLiteral(project.Engine.InitialState), "KNE initial state");
         string initPath = project.InitScriptPath;
@@ -133,7 +157,10 @@ public sealed class LuaRuntime : IGameSession
             foreach (var script in scripts.Initialization) load.Call(script.Path);
             load.Call(preview ? Path.GetRelativePath(project.Path, scenePath).Replace('\\', '/') : scripts.Main.Path);
         }
-        string entryName = preview ? scripts.PreviewFunction(Path.GetRelativePath(project.Path, scenePath)) : "main";
+        string entryName = editorSource?.EntryFunction ?? (preview ? scripts.PreviewFunction(Path.GetRelativePath(project.Path, scenePath)) : "main");
+        if (editorSource?.EntryFunction != null && !scripts.Functions.Any(f => f.Name == entryName &&
+            f.Path.Equals(editorSource.RelativePath(project.Path), StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidDataException("Функция предпросмотра не объявлена в выбранном файле: " + entryName);
         lua["kne_entry"] = lua[entryName];
         using var main = lua["kne_entry"] as LuaFunction ?? throw new InvalidDataException("Не найдена игровая функция: " + entryName);
         if (interactive)
@@ -162,7 +189,11 @@ public sealed class LuaRuntime : IGameSession
     /// <summary>Reads a validated scene, compiling a graph into the same Lua API as manual code.</summary>
     public string ReadSceneCode(string relative)
     {
-        if (scripts != null) return scripts.FindFile(relative).ExecutableSource;
+        if (scripts != null)
+        {
+            var script = scripts.FindFile(relative);
+            return script.Graph?.Compile(editorPreview: editorSource != null) ?? script.Source;
+        }
         string path = PathSafety.ResolveRelative(project.Path, ResolveScenePath(relative));
         if (new FileInfo(path).Length > 8 * 1024 * 1024) throw new InvalidDataException("Сцена больше 8 МБ.");
         string code = File.ReadAllText(path);
@@ -197,7 +228,7 @@ public sealed class LuaRuntime : IGameSession
 
     public Task AdvanceAsync(CancellationToken cancellationToken = default) => RunAsync(() =>
     {
-        if (!initialized || Story.Kind != "dialogue") throw new InvalidOperationException("Нет реплики для продолжения.");
+        if (!initialized || Story.Kind is not ("dialogue" or "preview")) throw new InvalidOperationException("Нет реплики для продолжения.");
         InstallHook();
         string before = FrameSignature(Story);
         ResumeStory(null);
@@ -225,15 +256,18 @@ public sealed class LuaRuntime : IGameSession
             using var value = result.Length > 1 ? result[1] as LuaTable : null;
             if (value == null) throw new InvalidDataException("Сцена приостановлена без реплики или выбора.");
             string kind = value["kind"] as string ?? "";
-            if (kind is not ("dialogue" or "choice")) throw new InvalidDataException("Неизвестное событие сцены: " + kind);
+            if (kind is not ("dialogue" or "choice" or "preview")) throw new InvalidDataException("Неизвестное событие сцены: " + kind);
+            lock (stateLock) location = new PreviewLocation(value["file"] as string ?? "", Convert.ToInt32(value["line"] ?? 0),
+                value["node"] as string, value["functionline"] == null ? null : Convert.ToInt32(value["functionline"]));
             var options = new List<string>();
             if (kind == "choice")
             {
                 using var table = (LuaTable)value["options"];
                 for (int i = 1; i <= 20 && table[i] is string label; i++) options.Add(label);
             }
-            frame = new StoryFrame(kind, value["speaker"] as string ?? "", value["text"] as string ?? "", options.AsReadOnly());
-            PrintToUI(frame.Speaker.Length == 0 ? frame.Text : frame.Speaker + ": " + frame.Text);
+            frame = kind == "preview" ? Story with { Kind = "preview", Options = Array.Empty<string>() } :
+                new StoryFrame(kind, value["speaker"] as string ?? "", value["text"] as string ?? "", options.AsReadOnly());
+            if (kind != "preview") PrintToUI(frame.Speaker.Length == 0 ? frame.Text : frame.Speaker + ": " + frame.Text);
         }
         lock (stateLock) story = frame;
     }
@@ -370,7 +404,11 @@ public sealed class LuaRuntime : IGameSession
                 deadline = Stopwatch.GetTimestamp() + (long)(ExecutionLimit.TotalSeconds * Stopwatch.Frequency);
                 scriptFailure = null;
             }
-            await Task.Run(action, linked.Token).ConfigureAwait(false);
+            await Task.Run(() =>
+            {
+                action();
+                if (lua != null) lua.DoString("kne_publish_variables()", "KNE variable snapshot");
+            }, linked.Token).ConfigureAwait(false);
             linked.Token.ThrowIfCancellationRequested();
             if (Stopwatch.GetTimestamp() >= deadline) throw new TimeoutException("Превышено время выполнения сценария.");
         }
@@ -397,6 +435,7 @@ public sealed class LuaRuntime : IGameSession
     private void AttachScriptReport(Exception error, string operation)
     {
         var report = GameErrorReport.Create(project, error, operation);
+        report = report with { TransitionFailure = transitionPending };
         if (scriptFailure is { } failure)
             report = report with { File = failure.File, Line = failure.Line, Details = failure.Trace + "\n\n" + error };
         GameErrorReport.Attach(error, report);
@@ -461,18 +500,62 @@ public sealed class LuaRuntime : IGameSession
     private void InstallHook() => lua!.DoString("""
         do
             local stop, fail = kne_should_stop, error
-            debug.sethook(function()
+            local function hook()
                 if stop() then fail("KNE_EXECUTION_CANCELLED", 0) end
-            end, "", 10000)
+                if kne_should_publish_variables() then kne_publish_variables(coroutine.running()) end
+            end
+            debug.sethook(hook, "", 10000)
             if kne_story and coroutine.status(kne_story) ~= "dead" then
-                debug.sethook(kne_story, function()
-                    if stop() then fail("KNE_EXECUTION_CANCELLED", 0) end
-                end, "", 10000)
+                debug.sethook(kne_story, hook, "", 10000)
             end
         end
         """, "KNE execution limit");
 
     public bool ShouldStop() => executionToken.IsCancellationRequested || Stopwatch.GetTimestamp() >= deadline;
+    public bool ShouldPublishVariables()
+    {
+        long now = Stopwatch.GetTimestamp();
+        if (now < nextVariablesAt) return false;
+        nextVariablesAt = now + Stopwatch.Frequency / 10;
+        return true;
+    }
+    public void TransitionPending(bool pending)
+    {
+        JsonElement value;
+        lock (stateLock)
+        {
+            if (transitionPending == pending) return;
+            transitionPending = pending;
+            value = variables;
+        }
+        if (!replaying) variablesUpdated?.Invoke(value);
+    }
+    public bool ErrorSnapshotNeeded(string problem) => scriptFailure == null || scriptFailure.Value.Problem != problem;
+
+    public void ReceiveVariables(LuaTable snapshot)
+    {
+        using (snapshot)
+        {
+            var value = JsonSerializer.SerializeToElement(ReadDiagnostics(snapshot));
+            lock (stateLock) variables = value;
+            if (!replaying) variablesUpdated?.Invoke(value);
+        }
+    }
+
+    private static Dictionary<string, object?> ReadDiagnostics(LuaTable table)
+    {
+        var result = new Dictionary<string, object?>();
+        foreach (KeyValuePair<object, object> entry in table)
+        {
+            if (entry.Key is not string key) continue;
+            if (entry.Value is LuaTable nested)
+            {
+                using (nested) result[key] = ReadDiagnostics(nested);
+            }
+            else if (entry.Value is null or bool or string or long or int or double) result[key] = entry.Value;
+        }
+        return result;
+    }
     public void PrintToUI(string text) { if (!replaying) output(text); }
 
     public void SetWindowTitle(string title)

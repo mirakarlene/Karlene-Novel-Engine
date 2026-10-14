@@ -20,22 +20,31 @@ public sealed class ProcessGameSession : IGameSession
     private GameCheckpoint? recovery;
     private bool started;
     private readonly bool preview;
+    private readonly EditorPreviewSource? editorSource;
+    private bool canReturnAfterError;
     private long requestId;
     public TimeSpan ExecutionLimit { get; }
     public int? WorkerProcessId { get { lock (sync) return worker?.Id; } }
     public RuntimeWindowSettings WindowSettings { get { lock (sync) return snapshot.Window; } }
     public StoryFrame Story { get { lock (sync) return snapshot.Story; } }
     public SceneVisuals Visuals { get { lock (sync) return snapshot.Visuals; } }
+    public PreviewLocation? Location { get { lock (sync) return snapshot.Location; } }
+    public bool PreviewPaused => Story.Kind == "preview";
+    public JsonElement Variables { get { lock (sync) return snapshot.Variables; } }
+    public bool CanReturnAfterError { get { lock (sync) return canReturnAfterError && recovery != null; } }
 
-    public ProcessGameSession(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool preview = false)
+    public ProcessGameSession(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool preview = false,
+        EditorPreviewSource? editorSource = null)
     {
         this.project = project ?? throw new ArgumentNullException(nameof(project));
         this.preview = preview;
+        this.editorSource = editorSource;
         this.output = output ?? throw new ArgumentNullException(nameof(output));
         ExecutionLimit = executionLimit ?? TimeSpan.FromSeconds(project.Engine.Game.ExecutionTimeoutSeconds);
         if (ExecutionLimit <= TimeSpan.Zero || ExecutionLimit > TimeSpan.FromHours(1))
             throw new ArgumentOutOfRangeException(nameof(executionLimit));
-        snapshot = new(project.Engine.RuntimeDefaults(project.Title), StoryFrame.Empty, SceneVisuals.Empty);
+        snapshot = new(project.Engine.RuntimeDefaults(project.Title), StoryFrame.Empty, SceneVisuals.Empty,
+            Variables: JsonSerializer.SerializeToElement(new { Globals = new { }, Frames = new { } }));
     }
 
     public Task StartAsync(CancellationToken cancellationToken = default) => ExecuteAsync("start", cancellationToken);
@@ -53,6 +62,17 @@ public sealed class ProcessGameSession : IGameSession
     {
         ArgumentNullException.ThrowIfNull(checkpoint);
         return ExecuteAsync("restore", cancellationToken, checkpoint: checkpoint);
+    }
+
+    public Task ReturnAsync(CancellationToken cancellationToken = default)
+    {
+        GameCheckpoint checkpoint;
+        lock (sync)
+        {
+            if (!canReturnAfterError || recovery == null) throw new InvalidOperationException("Нет безопасного сегмента для возврата после перехода.");
+            checkpoint = recovery;
+        }
+        return RestoreAsync(checkpoint, cancellationToken);
     }
 
     private async Task<WorkerMessage> ExecuteAsync(string command, CancellationToken token, int option = 0,
@@ -84,6 +104,7 @@ public sealed class ProcessGameSession : IGameSession
             {
                 if (message.Snapshot != null) snapshot = message.Snapshot;
                 recovery = message.Checkpoint;
+                canReturnAfterError = false;
                 if (command is "start" or "restore") started = true;
             }
             return message;
@@ -91,11 +112,19 @@ public sealed class ProcessGameSession : IGameSession
         catch (Exception ex) when (ex is TimeoutException or IOException)
         {
             if (GameErrorReport.TryGet(ex) == null)
+            {
+                bool transitionFailure;
+                lock (sync)
+                {
+                    transitionFailure = snapshot.TransitionInProgress;
+                    canReturnAfterError = transitionFailure && recovery != null;
+                }
                 GameErrorReport.Attach(ex, GameErrorReport.Create(project, ex, command switch
                 {
                     "start" => "Запуск игры", "advance" => "Продолжение сценария", "choose" => "Выбор ответа",
                     "command" => "Команда отладки", "restore" => "Загрузка сохранения", _ => "Связь с Lua-worker"
-                }));
+                }) with { TransitionFailure = transitionFailure });
+            }
             KillWorker(); throw;
         }
         catch { KillWorker(); throw; }
@@ -146,8 +175,8 @@ public sealed class ProcessGameSession : IGameSession
                 throw new InvalidOperationException("После остановки требуется перезапустить игру: состояние нельзя восстановить.");
         }
         if (restart && started && command is not ("start" or "restore"))
-            await SendAsync(process, new(++requestId, "restore", Checkpoint: safePoint), token).ConfigureAwait(false);
-        return await SendAsync(process, new(++requestId, command, option, text, checkpoint), token).ConfigureAwait(false);
+            await SendAsync(process, new(++requestId, "restore", Checkpoint: safePoint, EditorSource: editorSource), token).ConfigureAwait(false);
+        return await SendAsync(process, new(++requestId, command, option, text, checkpoint, editorSource), token).ConfigureAwait(false);
     }
 
     private async Task<WorkerMessage> SendAsync(Process process, WorkerRequest request, CancellationToken token)
@@ -162,9 +191,22 @@ public sealed class ProcessGameSession : IGameSession
             var message = JsonSerializer.Deserialize<WorkerMessage>(line)
                 ?? throw new InvalidDataException("Некорректный ответ Lua.");
             if (message.Type == "log") { output(message.Text ?? ""); continue; }
+            if (message.Type == "variables")
+            {
+                if (message.Snapshot != null) lock (sync) snapshot = message.Snapshot;
+                continue;
+            }
             if (message.Type == "fatal") throw new IOException(message.Error);
             if (message.Id != request.Id) throw new InvalidDataException("Нарушен порядок ответов Lua.");
-            if (message.Type == "error") throw CreateException(message);
+            if (message.Type == "error")
+            {
+                lock (sync)
+                {
+                    if (message.Snapshot != null) snapshot = message.Snapshot;
+                    canReturnAfterError = message.Report?.TransitionFailure == true && recovery != null;
+                }
+                throw CreateException(message);
+            }
             if (message.Type != "result" || message.Snapshot == null) throw new InvalidDataException("Некорректный ответ Lua.");
             return message;
         }

@@ -23,6 +23,40 @@ public partial class ScriptEditor : UserControl
     /// <summary>Requests closing this document with an unsaved-change check.</summary>
     public event EventHandler? CloseRequested;
 
+    public event EventHandler? PreviewRequested;
+    public event EventHandler? ExternalEditorRequested;
+
+    /// <summary>Captures unsaved edits for an isolated editor worker.</summary>
+    public EditorSelection? CapturePreview()
+    {
+        if (Document == null) return null;
+        ApplyProperties();
+        var graph = Document.Graph;
+        if (graph != null)
+            return new(Document.FilePath, graph.Compile(editorPreview: true), 1,
+                Selected?.Id ?? graph.Nodes.Single(n => n.Kind == ScriptNodeKind.Start).Id,
+                Selected?.PreviewAnimation == true, graph.FunctionName);
+        int line = 1;
+        for (int index = 0; index < Math.Min(CodeEditor.CaretIndex, Document.Code.Length); index++)
+            if (Document.Code[index] == '\n') line++;
+        string? function = LuaSource.Functions(Document.Code).LastOrDefault(f => f.Line <= line)?.Name;
+        return new(Document.FilePath, Document.Code, line, null, false, function);
+    }
+
+    private void Code_SelectionChanged(object sender, RoutedEventArgs e)
+    {
+        if (!updating && Document?.IsVisual == false) PreviewRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void ExternalEditor_Click(object sender, RoutedEventArgs e) => ExternalEditorRequested?.Invoke(this, EventArgs.Empty);
+
+    private void PreviewAnimation_Changed(object sender, RoutedEventArgs e)
+    {
+        if (updating || Selected == null) return;
+        TrackProperties();
+        Guard(() => { ApplyProperties(); PreviewRequested?.Invoke(this, EventArgs.Empty); });
+    }
+
     private string projectRoot = "";
     private bool updating;
     private bool saving;
@@ -109,6 +143,7 @@ public partial class ScriptEditor : UserControl
         EditorStatus.Text = document.IsVisual
             ? "Сохранение допускает незавершённую схему. Код и запуск проверяют все связи."
             : "Ручное редактирование Lua/KRL. Ctrl+S — сохранить.";
+        PreviewRequested?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Resets the editor when leaving a project, after checking unsaved changes.</summary>
@@ -129,6 +164,7 @@ public partial class ScriptEditor : UserControl
             MainSceneButton.IsEnabled = ExportButton.IsEnabled = CloseDocumentButton.IsEnabled = false;
         CodeMode.IsChecked = GraphMode.IsChecked = false;
         CodeEditor.Visibility = GraphPanel.Visibility = Visibility.Collapsed;
+        ExternalEditorButton.Visibility = Visibility.Collapsed;
         PropertiesPanel.IsEnabled = false;
         EditorStatus.Text = "";
         updating = false;
@@ -187,6 +223,7 @@ public partial class ScriptEditor : UserControl
         if (updating || Document == null || Document.IsVisual) return;
         Document.Code = CodeEditor.Text;
         UpdateTitle();
+        PreviewRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private void Mode_Changed(object sender, RoutedEventArgs e)
@@ -204,6 +241,7 @@ public partial class ScriptEditor : UserControl
         bool graph = Document?.IsVisual == true && GraphMode.IsChecked == true;
         GraphPanel.Visibility = graph ? Visibility.Visible : Visibility.Collapsed;
         CodeEditor.Visibility = Document != null && !graph ? Visibility.Visible : Visibility.Collapsed;
+        ExternalEditorButton.Visibility = Document?.IsVisual == false && !graph ? Visibility.Visible : Visibility.Collapsed;
         if (!graph && Document?.Graph is { } model)
         {
             updating = true;
@@ -317,7 +355,7 @@ public partial class ScriptEditor : UserControl
                 foreach (var field in new UIElement[]
                          {
                              SpeakerField, TextField, OptionsField, PathField, PositionField, LoopInput, VariableField,
-                             ComparisonField
+                             ComparisonField, PreviewAnimationInput, TransitionHelp
                          }) Visible(field, false);
                 return;
             }
@@ -328,6 +366,8 @@ public partial class ScriptEditor : UserControl
             OptionsInput.Text = string.Join(Environment.NewLine, node.Options.Select(o => o.Text));
             PositionInput.SelectedIndex = Array.IndexOf(new[] { "left", "center", "right" }, node.Position);
             LoopInput.IsChecked = node.Loop;
+            PreviewAnimationInput.IsChecked = node.PreviewAnimation;
+            Visible(PreviewAnimationInput, true);
             VariableInput.Text = node.Variable;
             ValueInput.Text = node.Value;
             ValueTypeInput.SelectedValue = node.ValueKind;
@@ -346,6 +386,10 @@ public partial class ScriptEditor : UserControl
             Visible(LoopInput, node.Kind == ScriptNodeKind.Music);
             Visible(VariableField, node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable);
             Visible(ComparisonField, node.Kind == ScriptNodeKind.Condition);
+            Visible(TransitionHelp, sceneTarget);
+            TransitionHelp.Text = node.Kind == ScriptNodeKind.CallScene
+                ? "call — вызвать функцию, затем продолжить со следующего блока этой ветки."
+                : "goto — перейти в функцию навсегда. Продолжение этой ветки не выполняется.";
         }
         finally
         {
@@ -367,6 +411,7 @@ public partial class ScriptEditor : UserControl
         // Edit a copy first so invalid draft properties cannot damage the current document.
         var copy = VisualScript.Parse(model.Serialize());
         var changed = copy.Nodes.Single(n => n.Id == node.Id);
+        changed.PreviewAnimation = PreviewAnimationInput.IsChecked == true;
         if (node.Kind == ScriptNodeKind.Dialogue) changed.Speaker = SpeakerInput.Text;
         if (node.Kind is ScriptNodeKind.Dialogue or ScriptNodeKind.Choice) changed.Text = SceneTextInput.Text;
         if (node.Kind == ScriptNodeKind.Choice)
@@ -408,6 +453,7 @@ public partial class ScriptEditor : UserControl
     {
         ApplyProperties();
         EditorStatus.Text = "Свойства применены.";
+        PreviewRequested?.Invoke(this, EventArgs.Empty);
     });
 
     private void Delete_Click(object sender, RoutedEventArgs e) => Guard(() =>
@@ -590,6 +636,7 @@ public partial class ScriptEditor : UserControl
         if (repaint) RenderGraph();
         foreach (var (key, card) in cards) card.BorderBrush = key == id ? Brushes.DarkOrange : Brushes.LightSlateGray;
         UpdateProperties();
+        PreviewRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private void ConnectTo(string target)

@@ -11,6 +11,7 @@ public sealed record GameErrorReport(string ProjectName, string ProjectTitle, st
     DateTimeOffset OccurredAt, string OperatingSystem, string DeviceName, string Architecture,
     string ErrorType, string Message, string? File, int? Line, string Details, string Operation)
 {
+    public bool TransitionFailure { get; init; }
     private const string DataKey = "KNE.GameErrorReport";
 
     /// <summary>Reads a previously captured report without changing its occurrence time or source information.</summary>

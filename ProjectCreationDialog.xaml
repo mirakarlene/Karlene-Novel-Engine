@@ -1,0 +1,96 @@
+<Window x:Class="KNE.ProjectCreationDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Способ работы над проектом" Width="860" Height="550" MinWidth="760" MinHeight="520"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Background="#F7F5FC">
+    <Window.Resources>
+        <Style x:Key="ModeCard" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#29233B"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="CardBorder" BorderThickness="2" BorderBrush="#D7D0E6" Background="White" CornerRadius="14" Padding="18">
+                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="#7650D1"/>
+                                <Setter TargetName="CardBorder" Property="Background" Value="#F1EBFF"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="#967CD1"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="#462185"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <StackPanel Margin="0,0,0,18">
+            <TextBlock Text="Как вы хотите создавать историю?" FontSize="23" FontWeight="SemiBold" Foreground="#29233B"/>
+            <TextBlock Text="Выбор определяет начальную main(). Другие сцены можно создавать обоими способами." TextWrapping="Wrap" Margin="0,8,0,0" Foreground="#665E78"/>
+        </StackPanel>
+        <Grid x:Name="ModeCards" Grid.Row="1">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <RadioButton x:Name="CodeModeCard" GroupName="Authoring" Style="{StaticResource ModeCard}" IsChecked="True" AutomationProperties.Name="Традиционный код">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="Традиционный · код" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14"/>
+                    <Border Grid.Row="1" Background="#211D31" CornerRadius="8" Padding="16">
+                        <TextBlock x:Name="CodeExample" FontFamily="Consolas" FontSize="14" Foreground="#E5DEF6" TextWrapping="Wrap" VerticalAlignment="Center">
+                            <Run Foreground="#B59AF5" Text="function main()"/><LineBreak/>
+                            <Run Text="  background(&quot;forest.png&quot;)"/><LineBreak/>
+                            <Run Text="  d(&quot;Алиса&quot;, &quot;Привет!&quot;)"/><LineBreak/>
+                            <Run Foreground="#B59AF5" Text="  call(chapter)"/><LineBreak/>
+                            <Run Foreground="#B59AF5" Text="end"/>
+                        </TextBlock>
+                    </Border>
+                    <TextBlock Grid.Row="2" Text="Пишите команды и условия на Lua/KRL. Стартовая функция будет в main.krl." TextWrapping="Wrap" Margin="0,14,0,0" Foreground="#665E78"/>
+                </Grid>
+            </RadioButton>
+            <RadioButton x:Name="VisualModeCard" Grid.Column="2" GroupName="Authoring" Style="{StaticResource ModeCard}" AutomationProperties.Name="Визуальные блок-схемы">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="Визуальный · блок-схемы" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14"/>
+                    <Border Grid.Row="1" Background="#211D31" CornerRadius="8" Padding="8">
+                        <Viewbox Stretch="Uniform">
+                            <Canvas x:Name="GraphExample" Width="320" Height="190">
+                                <Path Stroke="#BBA8E4" StrokeThickness="3" Data="M 87,58 C 87,95 207,62 207,98 M 207,138 C 207,173 87,135 87,163"/>
+                                <Border Canvas.Left="17" Canvas.Top="16" Width="140" Height="42" Background="#604B9B" CornerRadius="7">
+                                    <TextBlock Text="Начало · main" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <Ellipse Canvas.Left="82" Canvas.Top="53" Width="10" Height="10" Fill="#C5B7FF"/>
+                                <Border Canvas.Left="137" Canvas.Top="96" Width="166" Height="44" Background="#396B83" CornerRadius="7">
+                                    <StackPanel VerticalAlignment="Center"><TextBlock Text="Диалог · Алиса" Foreground="White" HorizontalAlignment="Center"/><TextBlock Text="«Привет!»" Foreground="#D8EDF7" HorizontalAlignment="Center"/></StackPanel>
+                                </Border>
+                                <Ellipse Canvas.Left="202" Canvas.Top="91" Width="10" Height="10" Fill="#C5B7FF"/>
+                                <Ellipse Canvas.Left="202" Canvas.Top="135" Width="10" Height="10" Fill="#C5B7FF"/>
+                                <Border Canvas.Left="17" Canvas.Top="159" Width="140" Height="30" Background="#765442" CornerRadius="7">
+                                    <TextBlock Text="Конец" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <Ellipse Canvas.Left="82" Canvas.Top="154" Width="10" Height="10" Fill="#C5B7FF"/>
+                            </Canvas>
+                        </Viewbox>
+                    </Border>
+                    <TextBlock Grid.Row="2" Text="Соединяйте блоки диалога, выбора и действий. Готовая main() будет в main.knegraph." TextWrapping="Wrap" Margin="0,14,0,0" Foreground="#665E78"/>
+                </Grid>
+            </RadioButton>
+        </Grid>
+        <TextBlock Grid.Row="2" Margin="0,18,0,16" Foreground="#665E78" TextWrapping="Wrap">
+            <Run FontWeight="SemiBold" Text="Переходы: "/><Run Text="goto / «Перейти» продолжает историю в другой функции без возврата. call / «Вызвать» возвращается к следующему шагу после завершения вызванной функции."/>
+        </TextBlock>
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Отмена" IsCancel="True" Padding="18,8" Margin="0,0,10,0"/>
+            <Button x:Name="ContinueButton" Content="Продолжить" IsDefault="True" Padding="22,8" Click="Continue_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

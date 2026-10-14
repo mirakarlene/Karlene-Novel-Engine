@@ -95,7 +95,7 @@ public sealed class VisualScript
 
     /// <summary>Validates the graph and generates its named Lua function using the KNE API.</summary>
     /// <returns>Lua source for a complete, acyclic scene.</returns>
-    public string Compile()
+    public string Compile(bool editorPreview = false)
     {
         ValidateStructure();
         var starts = Nodes.Where(n => n.Kind == ScriptNodeKind.Start).ToArray();
@@ -163,6 +163,7 @@ public sealed class VisualScript
             code.Append(first ? "        if " : "        elseif ").Append("__kne_node == ").Append(Quote(node.Id))
                 .Append(" then\n");
             first = false;
+            if (editorPreview) code.Append("            kne_editor_node(").Append(Quote(node.Id)).Append(")\n");
             string command = node.Kind switch
             {
                 ScriptNodeKind.Dialogue =>
@@ -179,6 +180,8 @@ public sealed class VisualScript
                 _ => ""
             };
             if (command.Length > 0) code.Append("            ").Append(command).Append('\n');
+            if (editorPreview && node.Kind is ScriptNodeKind.Start or ScriptNodeKind.End or ScriptNodeKind.SetVariable or ScriptNodeKind.Condition)
+                code.Append("            kne_editor_pause()\n");
             if (node.Kind == ScriptNodeKind.Choice)
             {
                 code.Append("            local answer = choice(").Append(Quote(node.Text)).Append(", {")
@@ -306,6 +309,9 @@ public sealed class ScriptNode
 
     /// <summary>Whether a music block repeats its track.</summary>
     public bool Loop { get; set; } = true;
+
+    /// <summary>Play the project's visual animations when this block is selected in the editor.</summary>
+    public bool PreviewAnimation { get; set; }
 
     /// <summary>Flat key in the runtime state table.</summary>
     public string Variable { get; set; } = "score";
