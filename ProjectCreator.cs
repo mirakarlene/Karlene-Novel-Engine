@@ -53,9 +53,11 @@ public static class ProjectCreator
                 game/scripts/gamelogic.lua — инициализация и process_command(command).
                 game/scenes/main.krl — главная сцена с функцией main().
                 init(-10) в начале Lua/KRL подключает файл к загрузке: меньшие числа раньше.
-                goto_scene("game/scenes/chapter.krl") — постоянный переход; jump — короткое имя.
-                call_scene("game/scenes/chapter.krl") — вызов с возвратом после завершения сцены; call — короткое имя.
-                Каждая сцена объявляет свою main() или возвращает функцию. Пути отсчитываются от корня проекта.
+                main() — единственная глобальная функция старта во всём проекте; дубликаты показывают экран ошибки.
+                goto(chapter) — переход в function chapter() без возврата; также goto_scene(chapter) и jump(chapter).
+                call(chapter) — вызов function chapter() с возвратом после её завершения; также call_scene(chapter).
+                Аргумент перехода — функция или строка с её именем, без пути к файлу.
+                Остальные функции имеют свои имена; у блок-схем имя задаётся полем «Функция».
                 scene("chapter", function() ... end) объявляет сцену, доступную по имени.
                 API: d(имя или nil, текст), print(...), print_to_ui(текст),
                 choice(вопрос, {"Ответ 1", "Ответ 2"}) возвращает индекс ответа с 1.

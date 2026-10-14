@@ -29,15 +29,18 @@ public sealed class LuaRuntime : IGameSession
     private bool replaying;
     private int seed = Random.Shared.Next(1, int.MaxValue);
     private string fingerprint = "";
+    private GameScripts? scripts;
+    private readonly bool preview;
     public TimeSpan ExecutionLimit { get; }
 
-    public LuaRuntime(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool interactive = false)
+    public LuaRuntime(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool interactive = false, bool preview = false)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(output);
         this.project = project;
         this.output = output;
         this.interactive = interactive;
+        this.preview = preview;
         ExecutionLimit = executionLimit ?? TimeSpan.FromSeconds(project.Engine.Game.ExecutionTimeoutSeconds);
         if (ExecutionLimit <= TimeSpan.Zero || ExecutionLimit > TimeSpan.FromHours(1))
             throw new ArgumentOutOfRangeException(nameof(executionLimit));
@@ -57,6 +60,7 @@ public sealed class LuaRuntime : IGameSession
     private void StartCore()
     {
         if (initialized) throw new InvalidOperationException("Игра уже запущена.");
+        scripts = GameScripts.Load(project);
         lua?.Dispose();
         lua = new Lua();
         lua.State.Encoding = Encoding.UTF8;
@@ -72,12 +76,11 @@ public sealed class LuaRuntime : IGameSession
         Register(nameof(PlayMusic), "play_music");
         Register(nameof(StopMusic), "stop_music");
         Register(nameof(PlaySound), "play_sound");
-        Register(nameof(ScenePathForLua), "kne_scene_path_result");
         Register(nameof(SceneCodeForLua), "kne_scene_code_result");
         lua["project_dir"] = project.Path;
         lua["kne_interactive"] = interactive;
         lua["kne_seed"] = seed;
-        fingerprint = ComputeFingerprint();
+        fingerprint = ComputeFingerprint(scripts);
         lua.DoString("""
             function print(...)
                 local values = {}
@@ -118,23 +121,20 @@ public sealed class LuaRuntime : IGameSession
         lua.DoString("state = " + StateLiteral(project.Engine.InitialState), "KNE initial state");
         string initPath = project.InitScriptPath;
         string scenePath = project.MainScenePath;
-        var startup = StartupScripts.Plan(project);
-        string scripts = Path.GetDirectoryName(initPath)!.Replace('\\', '/') + "/?.lua";
+        string scriptModules = Path.GetDirectoryName(initPath)!.Replace('\\', '/') + "/?.lua";
         string root = project.Path.Replace('\\', '/') + "/?.lua";
-        lua["package.path"] = scripts + ";" + root + ";" + lua["package.path"];
+        lua["package.path"] = scriptModules + ";" + root + ";" + lua["package.path"];
         InstallHook();
-        // .NET reads paths containing Unicode independently of the native Lua filesystem.
-        foreach (var script in startup)
+        using (var declare = (LuaFunction)lua["kne_declare_function"])
+            foreach (var function in scripts.Functions) declare.Call(function.Name, function.Path);
+        using (var load = (LuaFunction)lua["kne_load_script"])
         {
-            using var compile = (LuaFunction)lua["kne_compile_scene"];
-            using var entry = compile.Call(script.Source, script.Path).FirstOrDefault() as LuaFunction;
-            using var cache = (LuaFunction)lua["kne_cache_scene"];
-            cache.Call(ResolveScenePath(Path.GetRelativePath(project.Path, script.Path)), entry);
+            foreach (var script in scripts.Initialization) load.Call(script.Path);
+            load.Call(preview ? Path.GetRelativePath(project.Path, scenePath).Replace('\\', '/') : scripts.Main.Path);
         }
-        lua["main"] = null;
-        string mainPath = ResolveScenePath(Path.GetRelativePath(project.Path, scenePath));
-        lua.DoString("kne_entry = kne_entry_for_file(" + LuaQuote(mainPath) + ")", "KNE entry point");
-        using var main = lua["kne_entry"] as LuaFunction ?? throw new InvalidDataException("Главная сцена должна объявлять main() или возвращать функцию.");
+        string entryName = preview ? scripts.PreviewFunction(Path.GetRelativePath(project.Path, scenePath)) : "main";
+        lua["kne_entry"] = lua[entryName];
+        using var main = lua["kne_entry"] as LuaFunction ?? throw new InvalidDataException("Не найдена игровая функция: " + entryName);
         if (interactive)
         {
             lua.DoString("kne_story = kne_scene_thread(function() kne_run_scene(kne_entry) end)", "KNE scene");
@@ -161,22 +161,15 @@ public sealed class LuaRuntime : IGameSession
     /// <summary>Reads a validated scene, compiling a graph into the same Lua API as manual code.</summary>
     public string ReadSceneCode(string relative)
     {
+        if (scripts != null) return scripts.FindFile(relative).ExecutableSource;
         string path = PathSafety.ResolveRelative(project.Path, ResolveScenePath(relative));
         if (new FileInfo(path).Length > 8 * 1024 * 1024) throw new InvalidDataException("Сцена больше 8 МБ.");
         string code = File.ReadAllText(path);
-        return ScriptDocument.IsVisualPath(path) ? VisualScript.Parse(code).Compile() : code;
+        return ScriptDocument.IsVisualPath(path) ? VisualScript.Parse(code).Compile() : LuaSource.Prepare(code);
     }
 
     // NLua managed exceptions do not reliably cross coroutine.resume. Return errors as data;
     // the Lua scheduler raises them in the active coroutine instead.
-    /// <summary>Returns a scene path and error text for the Lua coroutine bridge.</summary>
-    public string[] ScenePathForLua(string relative)
-    {
-        try { return [ResolveScenePath(relative), ""]; }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException)
-        { return ["", ex.Message]; }
-    }
-
     /// <summary>Returns scene source and error text for the Lua coroutine bridge.</summary>
     public string[] SceneCodeForLua(string relative)
     {
@@ -295,14 +288,17 @@ public sealed class LuaRuntime : IGameSession
         finally { replaying = false; }
     }, cancellationToken);
 
-    private string ComputeFingerprint()
+    private string ComputeFingerprint(GameScripts? program = null)
     {
+        program ??= GameScripts.Load(project);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        string entry = preview ? program.PreviewFunction(Path.GetRelativePath(project.Path, project.MainScenePath)) : "main";
+        hash.AppendData(Encoding.UTF8.GetBytes("functions-v1:" + entry));
         // Include the resolved scene identity: previewing another scene must not accept its sibling's saves.
         hash.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(project.Path, project.MainScenePath)));
-        foreach (var file in project.Files.Where(f => Path.GetExtension(f.FilePath).ToLowerInvariant() is ".lua" or ".krl" or ".knegraph" || f.FileName == "project.json").OrderBy(f => f.FilePath, StringComparer.OrdinalIgnoreCase))
+        foreach (string relative in program.Files.Select(f => f.Path).Append("project.json").OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
-            string path = PathSafety.EnsureInside(project.Path, file.FilePath);
+            string path = PathSafety.ResolveRelative(project.Path, relative);
             hash.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(project.Path, path)));
             hash.AppendData(File.ReadAllBytes(path));
         }

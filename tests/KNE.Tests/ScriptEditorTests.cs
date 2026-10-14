@@ -11,6 +11,28 @@ namespace KNE.Tests;
 
 public sealed class ScriptEditorTests
 {
+    [Fact]
+    public async Task Editor_GraphFunctionRename_SavesAndSupportsUndo_AndRejectsLuaKeywords()
+    {
+        using var fixture = new TempProject(); string path = Path.Combine(fixture.ProjectPath, "chapter.knegraph");
+        await ScriptDocument.CreateVisualAsync(fixture.ProjectPath, path);
+        await OnStaAsync(async () =>
+        {
+            var editor = new ScriptEditor(); await editor.OpenAsync(fixture.ProjectPath, path);
+            var name = (TextBox)editor.FindName("FunctionNameInput");
+            Assert.Equal("scene_chapter", name.Text);
+            name.Text = "lmao"; await editor.SaveAsync();
+            Assert.Equal("lmao", editor.Document!.Graph!.FunctionName);
+            Assert.Equal("lmao", VisualScript.Parse(File.ReadAllText(path)).FunctionName);
+            Click(editor, "UndoButton"); Assert.Equal("scene_chapter", name.Text);
+            Click(editor, "RedoButton"); Assert.Equal("lmao", name.Text);
+            name.Text = "goto";
+            await Assert.ThrowsAsync<InvalidDataException>(() => editor.SaveAsync());
+            Assert.Equal("lmao", editor.Document.Graph.FunctionName);
+            Assert.Equal("lmao", VisualScript.Parse(File.ReadAllText(path)).FunctionName);
+        });
+    }
+
     [Theory]
     [InlineData(ScriptNodeKind.CallScene, "Вызвать сцену", 1)]
     [InlineData(ScriptNodeKind.GotoScene, "Перейти на сцену", 0)]
@@ -28,12 +50,12 @@ public sealed class ScriptEditorTests
             Click(editor, "AddBlockButton");
             var added = editor.Document!.Graph!.Nodes.Single(n => n.Kind == kind);
             Assert.Equal(Visibility.Visible, ((StackPanel)editor.FindName("PathField")).Visibility);
-            Assert.Equal("Путь или имя сцены", ((TextBlock)editor.FindName("PathLabel")).Text);
-            Assert.Equal("Выбрать сцену…", ((Button)editor.FindName("BrowsePathButton")).Content);
-            ((TextBox)editor.FindName("PathInput")).Text = "game/scenes/Глава N.krl";
+            Assert.Equal("Имя функции", ((TextBlock)editor.FindName("PathLabel")).Text);
+            Assert.Equal(Visibility.Collapsed, ((Button)editor.FindName("BrowsePathButton")).Visibility);
+            ((TextBox)editor.FindName("PathInput")).Text = "chapter_N";
             Click(editor, "ApplyPropertiesButton");
             added = editor.Document.Graph!.Nodes.Single(n => n.Kind == kind);
-            Assert.Equal("game/scenes/Глава N.krl", added.Path);
+            Assert.Equal("chapter_N", added.Path);
             var canvas = (Canvas)editor.FindName("GraphCanvas");
             Assert.Equal(outputCount, ((StackPanel)Card(canvas, added.Id).Child).Children.OfType<Button>().Count(b => !Equals(b.Content, "● Вход")));
             await editor.SaveAsync(); await editor.OpenAsync(fixture.ProjectPath, path);
@@ -151,7 +173,9 @@ public sealed class ScriptEditorTests
     {
         using var fixture = new TempProject();
         string path = Path.Combine(fixture.ProjectPath, "scene.knegraph");
-        await ScriptDocument.CreateVisualAsync(fixture.ProjectPath, path);
+        var mainGraph = await ScriptDocument.CreateVisualAsync(fixture.ProjectPath, path);
+        mainGraph.Graph!.FunctionName = "main"; await mainGraph.SaveAsync();
+        fixture.Write("game/scenes/main.krl", "function prologue() end");
         fixture.Write("project.json",
             File.ReadAllText(Path.Combine(fixture.ProjectPath, "project.json"))
                 .Replace("\"metadata\":", "\"custom\": {\"keep\": true}, \"metadata\":"));

@@ -50,6 +50,7 @@ public partial class GameWindow
 
     private void ShowLayout(string id)
     {
+        if (startupFailed) return;
         var layout = project.Engine.Screens.Screens.FirstOrDefault(s => s.Id == id);
         if (layout == null) { Notify("Экран не найден."); return; }
         activeScreen = id;
@@ -124,7 +125,7 @@ public partial class GameWindow
 
     private async Task DispatchScreenActionAsync(ScreenElement element)
     {
-        if (execution != null) return;
+        if (startupFailed || execution != null) return;
         switch (element.Action)
         {
             case "start": StartButton_Click(StartButton, new()); break;
@@ -148,17 +149,20 @@ public partial class GameWindow
     }
     private void Navigate(string? target)
     {
+        if (startupFailed) return;
         if (target == null) { Notify("Экран отключён в оформлении."); return; }
         screenHistory.Push(activeScreen ?? "gameplay"); ShowLayout(target);
     }
     private void GoBackScreen()
     {
+        if (startupFailed) return;
         string previous = screenHistory.TryPop(out string? value) ? value : ready ? "gameplay" : project.Engine.Screens.Find("main_menu")?.Id ?? "gameplay";
         if (previous == "gameplay") ShowGameplay(); else ShowLayout(previous);
     }
     private void ScreenBack_Click(object sender, RoutedEventArgs e) => GoBackScreen();
     private void UpdateScreenButtons()
     {
+        if (startupFailed) return;
         foreach (var (button, action) in screenButtons)
             button.IsEnabled = execution == null && action switch
             {
@@ -175,12 +179,12 @@ public partial class GameWindow
 
     private async Task ShowSaveBrowserAsync()
     {
-        if (execution != null || openingSaveBrowser || closed) return;
+        if (startupFailed || execution != null || openingSaveBrowser || closed) return;
         openingSaveBrowser = true;
         try
         {
             var slots = await saves.ListAsync();
-            if (closed) return;
+            if (closed || startupFailed) return;
             var layout = project.Engine.Screens.Find("saves");
             if (layout == null) { Notify("Экран сохранений отключён."); return; }
             screenHistory.Push(activeScreen ?? "gameplay");
@@ -208,7 +212,7 @@ public partial class GameWindow
     { if (SaveSlotsList.SelectedItem is GameSaveEntry slot) await LoadGameAsync(slot.Slot); }
     private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
     {
-        if (SaveSlotsList.SelectedItem is not GameSaveEntry slot || execution != null) return;
+        if (startupFailed || SaveSlotsList.SelectedItem is not GameSaveEntry slot || execution != null) return;
         if (MessageBox.Show(this, "Удалить слот «" + slot.Slot + "»?", "Сохранения", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
         try { saves.Delete(slot.Slot); SaveSlotsList.ItemsSource = await saves.ListAsync(); }
         catch (Exception ex) { Notify(ex.Message); }

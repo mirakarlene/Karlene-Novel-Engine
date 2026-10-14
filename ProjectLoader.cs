@@ -84,7 +84,7 @@ public static class ProjectLoader
         return result;
     }
 
-    private static (List<string> Files, List<string> Warnings) EnumerateFiles(string root, CancellationToken cancellationToken)
+    internal static (List<string> Files, List<string> Warnings) EnumerateFiles(string root, CancellationToken cancellationToken)
     {
         var files = new List<string>();
         var warnings = new List<string>();

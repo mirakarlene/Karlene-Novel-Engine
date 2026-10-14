@@ -128,5 +128,18 @@
         <Border x:Name="NoticePanel" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#ED21162F" CornerRadius="8" Margin="24" Padding="14,8" Visibility="Collapsed" MaxWidth="420">
             <TextBlock x:Name="NoticeText" Foreground="{DynamicResource GameTextBrush}" TextWrapping="Wrap"/>
         </Border>
+        <Border x:Name="StartupErrorOverlay" Background="#FF201134" Padding="32" Visibility="Collapsed">
+            <Grid MaxWidth="960">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <StackPanel Margin="0,0,0,24">
+                    <TextBlock Text="Не удалось запустить игру" Foreground="#FFF5EEFF" FontSize="32" TextWrapping="Wrap"/>
+                    <TextBlock Text="Исправьте сценарии проекта и запустите игру снова." Foreground="#FFD3ACFF" FontSize="16" TextWrapping="Wrap" Margin="0,12,0,0"/>
+                </StackPanel>
+                <TextBox x:Name="StartupErrorMessage" Grid.Row="1" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                         MinHeight="100" Padding="16" FontFamily="Consolas" FontSize="16"
+                         Foreground="#FFF5EEFF" Background="#FF2B1A40" BorderBrush="#FF8E60B5"/>
+                <Button x:Name="StartupErrorExitButton" Grid.Row="2" Content="Выйти" HorizontalAlignment="Left" Margin="0,24,0,0" Click="ExitButton_Click"/>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

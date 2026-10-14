@@ -13,20 +13,20 @@ public sealed class SceneTransitionTests
         fixture.Write("game/scenes/main.krl", """
             function main()
                 local saved_local = 40
-                local x, hole, y = call_scene('game/scenes/child.lua', 2, nil, '🌸')
+                local x, hole, y = call_scene(child, 2, nil, '🌸')
                 assert(hole == nil)
                 d(nil, saved_local + x .. y)
             end
             """);
         fixture.Write("game/scenes/child.lua", """
-            return function(value, hole, flower)
+            function child(value, hole, flower)
                 assert(hole == nil and flower == '🌸')
-                local answer = call_scene('game/scenes/grandchild.krl')
+                local answer = call_scene(grandchild)
                 d(nil, 'Дочерняя: ' .. answer)
                 return value + answer, nil, flower
             end
             """);
-        fixture.Write("game/scenes/grandchild.krl", "return function() return choice('Путь', {'Один', 'Два'}) end");
+        fixture.Write("game/scenes/grandchild.krl", "function grandchild() return choice('Путь', {'Один', 'Два'}) end");
         var project = await fixture.LoadAsync();
         await using var runtime = new ProcessGameSession(project, _ => { });
         await runtime.StartAsync();
@@ -54,10 +54,10 @@ public sealed class SceneTransitionTests
     {
         using var fixture = new TempProject();
         fixture.Write("game/scenes/main.krl", insideCall
-            ? "function main() local result = call_scene('game/scenes/branch.krl'); d(nil, 'Возврат: ' .. result) end"
-            : "function main() goto_scene('game/scenes/branch.krl'); error('discarded root resumed') end");
-        fixture.Write("game/scenes/branch.krl", "function main() jump('game/scenes/target.lua', 'Аргумент'); error('discarded branch resumed') end");
-        fixture.Write("game/scenes/target.lua", "return function(arg) d(nil, arg); return 7 end");
+            ? "function main() local result = call_scene(branch); d(nil, 'Возврат: ' .. result) end"
+            : "function main() goto_scene(branch); error('discarded root resumed') end");
+        fixture.Write("game/scenes/branch.krl", "function branch() jump(target, 'Аргумент'); error('discarded branch resumed') end");
+        fixture.Write("game/scenes/target.lua", "function target(arg) d(nil, arg); return 7 end");
         var project = await fixture.LoadAsync();
         await using var runtime = new ProcessGameSession(project, _ => { });
         await runtime.StartAsync();
@@ -74,11 +74,11 @@ public sealed class SceneTransitionTests
     }
 
     [Fact]
-    public async Task NamedScenes_CanUseCallAlias_AndMainFileCanReturnFunction()
+    public async Task NamedScenes_CanUseCallAlias_WithUniqueMain()
     {
         using var fixture = new TempProject();
         fixture.Write("startup.lua", "init(-5) scene('Глава 🌸', function(x) d(nil, 'Глава'); return x + 1 end)");
-        fixture.Write("game/scenes/main.krl", "return function() local n = call('Глава 🌸', 6); d(nil, n) end");
+        fixture.Write("game/scenes/main.krl", "function main() local n = call('Глава 🌸', 6); d(nil, n) end");
         await using var runtime = new ProcessGameSession(await fixture.LoadAsync(), _ => { });
         await runtime.StartAsync(); Assert.Equal("Глава", runtime.Story.Text);
         await runtime.AdvanceAsync(); Assert.Equal("7", runtime.Story.Text);
@@ -86,10 +86,9 @@ public sealed class SceneTransitionTests
     }
 
     [Theory]
-    [InlineData("game/scenes/missing.krl", "Сцена не найдена")]
-    [InlineData("../outside.lua", "внутри папки проекта")]
-    [InlineData("game/scenes/data.txt", "Lua, KRL")]
-    [InlineData("game/scenes/noentry.lua", "main()")]
+    [InlineData("game/scenes/missing.krl", "вместо пути")]
+    [InlineData("../outside.lua", "вместо пути")]
+    [InlineData("noentry", "Не найдена функция")]
     public async Task InvalidDestination_ReportsTargetProblem(string target, string message)
     {
         using var fixture = new TempProject();
@@ -116,8 +115,8 @@ public sealed class SceneTransitionTests
     public async Task InvalidGraphDestination_ReportsCompilationProblemAcrossCoroutineBoundary()
     {
         using var fixture = new TempProject();
-        fixture.Write("game/scenes/broken.knegraph", """{"Version":1,"Nodes":[]}""");
-        fixture.Write("game/scenes/main.krl", "function main() call_scene('game/scenes/broken.knegraph') end");
+        fixture.Write("game/scenes/broken.knegraph", """{"Version":1,"FunctionName":"broken","Nodes":[]}""");
+        fixture.Write("game/scenes/main.krl", "function main() call_scene(broken) end");
         await using var runtime = new ProcessGameSession(await fixture.LoadAsync(), _ => { });
         Assert.Contains("ровно один", (await Assert.ThrowsAnyAsync<Exception>(() => runtime.StartAsync())).Message);
     }
@@ -127,9 +126,9 @@ public sealed class SceneTransitionTests
     {
         using var fixture = new TempProject();
         fixture.Write("game/scripts/gamelogic.lua", "state.order = ''");
-        fixture.Write("game/scenes/main.krl", "function main() d(nil, 'Начало'); call_scene('game/scenes/child.lua'); d(nil, 'Возврат'); goto_scene('game/scenes/end.krl'); error('discarded') end");
-        fixture.Write("game/scenes/child.lua", "return function() d(nil, 'Вызов') end");
-        fixture.Write("game/scenes/end.krl", "function main() d(nil, 'Конец') end");
+        fixture.Write("game/scenes/main.krl", "function main() d(nil, 'Начало'); call_scene(child); d(nil, 'Возврат'); goto_scene(finale); error('discarded') end");
+        fixture.Write("game/scenes/child.lua", "function child() d(nil, 'Вызов') end");
+        fixture.Write("game/scenes/end.krl", "function finale() d(nil, 'Конец') end");
         var output = new System.Collections.Concurrent.ConcurrentQueue<string>();
         await using var runtime = new LuaRuntime(await fixture.LoadAsync(), output.Enqueue);
         await runtime.StartAsync();
@@ -167,8 +166,8 @@ public sealed class SceneTransitionTests
     public async Task WorkerCancellation_InCalledScene_RecoversStackAndCallerLocals()
     {
         using var fixture = new TempProject();
-        fixture.Write("game/scenes/main.krl", "function main() local x = 42; call_scene('game/scenes/child.lua'); d(nil, x) end");
-        fixture.Write("game/scenes/child.lua", "return function() d(nil, 'Дочерняя'); print('entered child loop'); debug.sethook(); while state.finish ~= true do end end");
+        fixture.Write("game/scenes/main.krl", "function main() local x = 42; call_scene(child); d(nil, x) end");
+        fixture.Write("game/scenes/child.lua", "function child() d(nil, 'Дочерняя'); print('entered child loop'); debug.sethook(); while state.finish ~= true do end end");
         fixture.Write("game/scripts/gamelogic.lua", "function process_command(command) state.finish = true end");
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var runtime = new ProcessGameSession(await fixture.LoadAsync(), line => { if (line == "entered child loop") entered.TrySetResult(); });

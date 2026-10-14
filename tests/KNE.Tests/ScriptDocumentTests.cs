@@ -6,6 +6,17 @@ namespace KNE.Tests;
 public sealed class ScriptDocumentTests
 {
     [Fact]
+    public async Task NewGraphs_UseUniqueNamedFunctions_AndLeaveMainUnique()
+    {
+        using var fixture = new TempProject();
+        Directory.CreateDirectory(Path.Combine(fixture.ProjectPath, "chapters"));
+        var first = await ScriptDocument.CreateVisualAsync(fixture.ProjectPath, Path.Combine(fixture.ProjectPath, "chapter.knegraph"));
+        var second = await ScriptDocument.CreateVisualAsync(fixture.ProjectPath, Path.Combine(fixture.ProjectPath, "chapters", "chapter.knegraph"));
+        Assert.Equal("scene_chapter", first.Graph!.FunctionName);
+        Assert.Equal("scene_chapter_2", second.Graph!.FunctionName);
+        Assert.Equal("main", GameScripts.Load(await fixture.LoadAsync()).Main.Name);
+    }
+    [Fact]
     public async Task CreateSaveReopen_PreservesDraftConnectionsAndLayout()
     {
         using var fixture = new TempProject();
@@ -61,7 +72,7 @@ public sealed class ScriptDocumentTests
         Assert.False(code.IsVisual);
         var project = await fixture.LoadAsync();
         project.Configuration.EntryPoints!.MainScene = "export.krl";
-        await using var runtime = new LuaRuntime(project, _ => { }, interactive: true);
+        await using var runtime = new LuaRuntime(project, _ => { }, interactive: true, preview: true);
         await runtime.StartAsync();
         Assert.Equal("Экспорт 🌸", runtime.Story.Text);
         Assert.Equal("Добро пожаловать!",

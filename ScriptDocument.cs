@@ -80,7 +80,23 @@ public sealed class ScriptDocument
     {
         path = PathSafety.EnsureInside(root, path);
         if (!IsVisualPath(path)) throw new ArgumentException("Выберите расширение .knegraph.");
-        string content = VisualScript.Create().Serialize();
+        var graph = VisualScript.Create();
+        string stem = Path.GetFileNameWithoutExtension(path);
+        string name = "scene_" + new string(stem.Select(c => char.IsAsciiLetterOrDigit(c) || c == '_' ? c : '_').ToArray());
+        var used = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string file in ProjectLoader.EnumerateFiles(root, cancellationToken).Files)
+        {
+            if (!IsCodePath(file) && !IsVisualPath(file)) continue;
+            PathSafety.EnsureInside(root, file);
+            if (new FileInfo(file).Length > 8 * 1024 * 1024) continue;
+            string source = await File.ReadAllTextAsync(file, cancellationToken);
+            if (IsCodePath(file)) used.UnionWith(LuaSource.Functions(source).Select(f => f.Name));
+            else used.Add(VisualScript.Parse(source).FunctionName);
+        }
+        string unique = name;
+        for (int suffix = 2; used.Contains(unique); suffix++) unique = name + "_" + suffix;
+        graph.FunctionName = unique;
+        string content = graph.Serialize();
         await WriteNewAsync(root, path, content, cancellationToken);
         return new ScriptDocument(root, path, content);
     }
