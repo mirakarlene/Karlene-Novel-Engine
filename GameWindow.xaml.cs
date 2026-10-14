@@ -125,11 +125,12 @@ public partial class GameWindow : Window
         SceneArea.Visibility = Visibility.Collapsed;
         MenuOverlay.Visibility = Visibility.Collapsed;
         GameControls.Visibility = Visibility.Collapsed;
-        DebugOverlay.Visibility = Visibility.Collapsed;
+        DebugOverlay.Visibility = diagnosticConsole ? Visibility.Visible : Visibility.Collapsed;
         NoticePanel.Visibility = Visibility.Collapsed;
         MenuOverlay.IsEnabled = false;
         GameControls.IsEnabled = false;
         CommandInput.IsEnabled = false;
+        CommandInput.Visibility = Visibility.Collapsed;
         NextButton.IsEnabled = false;
         ChoicePanel.IsEnabled = false;
         StopButton.IsEnabled = false;
@@ -147,7 +148,11 @@ public partial class GameWindow : Window
         renderTimer.Stop();
         music.Close();
         sound.Close();
-        StartupErrorMessage.Text = GameErrorReport.Create(project, error, operation).ToDisplayText();
+        currentErrorReport = GameErrorReport.Create(project, error, operation);
+        StartupErrorMessage.Text = currentErrorReport.ToDisplayText();
+        ErrorActionStatus.Text = "";
+        RefreshErrorActions();
+        RenderConsole();
         StartupErrorOverlay.Visibility = Visibility.Visible;
         StartupErrorExitButton.Focus();
     }
@@ -318,6 +323,7 @@ public partial class GameWindow : Window
                     else NextButton.Focus();
                 }
             }
+            else if (!closed) RefreshErrorActions();
         }
     }
 
@@ -398,7 +404,7 @@ public partial class GameWindow : Window
             return;
         }
         if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
-        if (e.Key == Key.F3 && project.Engine.Game.DebugEnabled)
+        if (e.Key == Key.F3 && (project.Engine.Game.DebugEnabled || diagnosticConsole))
         {
             DebugOverlay.Visibility = DebugOverlay.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
             if (DebugOverlay.Visibility == Visibility.Visible) CommandInput.Focus(); else NextButton.Focus();
@@ -439,22 +445,7 @@ public partial class GameWindow : Window
         FlushPreferences();
         if (NoticePanel.Visibility == Visibility.Visible && execution == null && DateTime.UtcNow >= noticeUntil)
             NoticePanel.Visibility = Visibility.Collapsed;
-        bool changed = false;
-        foreach (string line in pendingOutput.Drain())
-        {
-            string entry = line + Environment.NewLine;
-            lines.Enqueue(entry);
-            textLength += entry.Length;
-            while (lines.Count > 1000 || textLength > 200_000) textLength -= lines.Dequeue().Length;
-            changed = true;
-        }
-        if (changed)
-        {
-            var builder = new StringBuilder(textLength);
-            foreach (string line in lines) builder.Append(line);
-            ConsoleOutput.Text = builder.ToString();
-            ConsoleOutputScroll.ScrollToEnd();
-        }
+        RenderConsole();
         var settings = runtime.WindowSettings;
         if (settings != renderedSettings)
         {
@@ -471,6 +462,27 @@ public partial class GameWindow : Window
         }
         RenderStory();
         RenderVisuals();
+    }
+
+    private void RenderConsole()
+    {
+        bool changed = false;
+        foreach (string line in pendingOutput.Drain(startupFailed ? 1000 : 100))
+        {
+            string entry = line + Environment.NewLine;
+            lines.Enqueue(entry);
+            textLength += entry.Length;
+            while (lines.Count > 1000 || textLength > 200_000) textLength -= lines.Dequeue().Length;
+            changed = true;
+        }
+        if (changed)
+        {
+            var builder = new StringBuilder(textLength);
+            foreach (string line in lines) builder.Append(line);
+            ConsoleOutput.Text = builder.ToString();
+            ConsoleOutputScroll.ScrollToEnd();
+        }
+        RenderVariables();
     }
 
     private void RenderStory()

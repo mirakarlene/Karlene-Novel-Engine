@@ -8,7 +8,8 @@
             <TextBlock x:Name="DocumentTitle" Text="Выберите сценарий в дереве и нажмите «Открыть сценарий»." TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,6"/>
             <WrapPanel>
                 <Button x:Name="SaveButton" Content="Сохранить" Padding="8,5" Margin="0,0,5,4" Click="Save_Click" IsEnabled="False"/>
-                <Button x:Name="RunButton" Content="Запустить сцену" Padding="8,5" Margin="0,0,5,4" Click="Run_Click" IsEnabled="False"/>
+                <Button x:Name="RunButton" Content="Предпросмотр сегмента" Padding="8,5" Margin="0,0,5,4" Click="Run_Click" IsEnabled="False"/>
+                <Button x:Name="ExternalEditorButton" Content="Внешний редактор" Padding="8,5" Margin="0,0,5,4" Click="ExternalEditor_Click" Visibility="Collapsed"/>
                 <Button x:Name="MainSceneButton" Content="Сделать главной" Padding="8,5" Margin="0,0,5,4" Click="MainScene_Click" IsEnabled="False"/>
                 <Button x:Name="ExportButton" Content="Копия как KRL…" Padding="8,5" Margin="0,0,5,4" Click="Export_Click" IsEnabled="False"/>
                 <Button x:Name="UndoButton" Content="Отменить" Padding="8,5" Margin="0,0,5,4" Click="Undo_Click" IsEnabled="False"/>
@@ -18,7 +19,7 @@
         </StackPanel>
         <TextBox x:Name="CodeEditor" Grid.Row="1" Visibility="Collapsed" AcceptsReturn="True" AcceptsTab="True"
                  FontFamily="Consolas" FontSize="14" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
-                 TextChanged="Code_TextChanged"/>
+                 TextChanged="Code_TextChanged" SelectionChanged="Code_SelectionChanged"/>
         <Grid x:Name="GraphPanel" Grid.Row="1" Visibility="Collapsed">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="210"/></Grid.ColumnDefinitions>
             <Grid>
@@ -47,6 +48,8 @@
                     <StackPanel x:Name="PathField"><TextBlock x:Name="PathLabel" Text="Путь от корня проекта"/><TextBox x:Name="PathInput" Margin="0,3,0,8"/><Button x:Name="BrowsePathButton" Content="Выбрать ресурс…" Click="BrowseResource_Click" Margin="0,0,0,8"/></StackPanel>
                     <StackPanel x:Name="PositionField"><TextBlock Text="Позиция"/><ComboBox x:Name="PositionInput" Margin="0,3,0,8"><ComboBoxItem Content="left"/><ComboBoxItem Content="center"/><ComboBoxItem Content="right"/></ComboBox></StackPanel>
                     <CheckBox x:Name="LoopInput" Content="Повторять музыку" Margin="0,0,0,8"/>
+                    <CheckBox x:Name="PreviewAnimationInput" Content="Анимация при выделении блока" ToolTip="Проигрывать анимацию фона проекта в предпросмотре. Без флажка кадр неподвижен." Margin="0,0,0,8" Checked="PreviewAnimation_Changed" Unchecked="PreviewAnimation_Changed"/>
+                    <TextBlock x:Name="TransitionHelp" Foreground="#FF536174" TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed"/>
                     <StackPanel x:Name="VariableField"><TextBlock Text="Переменная state"/><TextBox x:Name="VariableInput" Margin="0,3,0,8"/><TextBlock Text="Тип значения"/><ComboBox x:Name="ValueTypeInput" Margin="0,3,0,8" DisplayMemberPath="Label" SelectedValuePath="Value"/><TextBlock Text="Значение"/><TextBox x:Name="ValueInput" Margin="0,3,0,8"/></StackPanel>
                     <StackPanel x:Name="ComparisonField"><TextBlock Text="Сравнение"/><ComboBox x:Name="ComparisonInput" Margin="0,3,0,8" DisplayMemberPath="Label" SelectedValuePath="Value"/></StackPanel>
                     <Button x:Name="ApplyPropertiesButton" Content="Применить свойства" Click="Apply_Click" Padding="8,5" Margin="0,0,0,6"/>

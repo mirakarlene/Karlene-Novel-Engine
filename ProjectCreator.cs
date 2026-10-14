@@ -8,10 +8,17 @@ namespace KNE;
 public static class ProjectCreator
 {
     public static Task<string> CreateProjectAsync(string projectName, string basePath, CancellationToken cancellationToken = default) =>
-        Task.Run(() => CreateProject(projectName, basePath, cancellationToken), cancellationToken);
+        CreateProjectAsync(projectName, basePath, ProjectAuthoringMode.Code, cancellationToken);
 
-    public static string CreateProject(string projectName, string basePath, CancellationToken cancellationToken = default)
+    public static Task<string> CreateProjectAsync(string projectName, string basePath, ProjectAuthoringMode authoringMode, CancellationToken cancellationToken = default) =>
+        Task.Run(() => CreateProject(projectName, basePath, authoringMode, cancellationToken), cancellationToken);
+
+    public static string CreateProject(string projectName, string basePath, CancellationToken cancellationToken = default) =>
+        CreateProject(projectName, basePath, ProjectAuthoringMode.Code, cancellationToken);
+
+    public static string CreateProject(string projectName, string basePath, ProjectAuthoringMode authoringMode, CancellationToken cancellationToken = default)
     {
+        if (!Enum.IsDefined(authoringMode)) throw new ArgumentOutOfRangeException(nameof(authoringMode));
         PathSafety.ValidateFileName(projectName);
         string root = PathSafety.NormalizeDirectory(basePath);
         if (!Directory.Exists(root)) throw new DirectoryNotFoundException("Выбранная папка не существует.");
@@ -30,7 +37,22 @@ public static class ProjectCreator
             EngineSettings.WriteTemplate(staging);
             Directory.CreateDirectory(Path.Combine(staging, "metadata"));
             cancellationToken.ThrowIfCancellationRequested();
-            File.WriteAllText(Path.Combine(staging, "game", "scenes", "main.krl"), """
+            string mainScene = authoringMode == ProjectAuthoringMode.Visual ? "game/scenes/main.knegraph" : "game/scenes/main.krl";
+            if (authoringMode == ProjectAuthoringMode.Visual)
+            {
+                var graph = VisualScript.Create();
+                var introduction = graph.Nodes.Single(n => n.Kind == ScriptNodeKind.Dialogue);
+                introduction.Text = "Добро пожаловать! Это базовая сцена.";
+                introduction.Next = "continue";
+                graph.Nodes.Single(n => n.Kind == ScriptNodeKind.End).X = 910;
+                graph.Nodes.Insert(2, new ScriptNode
+                {
+                    Id = "continue", Kind = ScriptNodeKind.Dialogue, X = 620, Y = 60,
+                    Speaker = "Игрок", Text = "Нажмите «Далее» или пробел, чтобы продолжить.", Next = "end"
+                });
+                File.WriteAllText(Path.Combine(staging, "game", "scenes", "main.knegraph"), graph.Serialize());
+            }
+            else File.WriteAllText(Path.Combine(staging, "game", "scenes", "main.krl"), """
                 -- Главная сцена. KRL использует синтаксис Lua.
                 function main()
                     d(nil, "Добро пожаловать! Это базовая сцена.")
@@ -51,7 +73,8 @@ public static class ProjectCreator
                 Точки входа задаются в project.json.
                 engine/*.json — окно, оформление, меню и начальное состояние; см. engine/README.txt.
                 game/scripts/gamelogic.lua — инициализация и process_command(command).
-                game/scenes/main.krl — главная сцена с функцией main().
+                {{mainScene}} — главная сцена с функцией main().
+                Основной способ: {{(authoringMode == ProjectAuthoringMode.Visual ? "визуальные блок-схемы; откройте main.knegraph и редактируйте связанные блоки" : "традиционный код; откройте main.krl и редактируйте функцию main()")}}.
                 init(-10) в начале Lua/KRL подключает файл к загрузке: меньшие числа раньше.
                 main() — единственная глобальная функция старта во всём проекте; дубликаты показывают экран ошибки.
                 goto(chapter) — переход в function chapter() без возврата; также goto_scene(chapter) и jump(chapter).
@@ -69,9 +92,10 @@ public static class ProjectCreator
                 """);
             var configuration = new ProjectConfiguration
             {
+                AuthoringMode = authoringMode,
                 Metadata = new ProjectMetadata { Name = projectName, CreatedDate = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
                 GameInfo = new GameInfo { Title = projectName, Description = "Новая визуальная новелла" },
-                EntryPoints = new EntryPoints { MainScene = "game/scenes/main.krl", InitScript = "game/scripts/gamelogic.lua" }
+                EntryPoints = new EntryPoints { MainScene = mainScene, InitScript = "game/scripts/gamelogic.lua" }
             };
             File.WriteAllText(Path.Combine(staging, "project.json"), JsonSerializer.Serialize(configuration, ProjectConfiguration.JsonOptions));
             cancellationToken.ThrowIfCancellationRequested();

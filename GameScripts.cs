@@ -17,7 +17,7 @@ public sealed class GameScripts
     }
 
     /// <summary>Validates all declarations before any project code runs; main must be globally unique.</summary>
-    public static GameScripts Load(ProjectInfo project)
+    public static GameScripts Load(ProjectInfo project, EditorPreviewSource? editorSource = null)
     {
         string init = project.InitScriptPath;
         var paths = ProjectLoader.EnumerateFiles(project.Path, CancellationToken.None).Files
@@ -33,8 +33,9 @@ public sealed class GameScripts
             try
             {
                 if (new FileInfo(full).Length > 8 * 1024 * 1024) throw new InvalidDataException("Сценарий больше 8 МБ: " + path);
-                source = File.ReadAllText(full);
-                if (ScriptDocument.IsVisualPath(full))
+                bool overridden = editorSource != null && path.Equals(editorSource.RelativePath(project.Path), StringComparison.OrdinalIgnoreCase);
+                source = overridden ? editorSource!.Source : File.ReadAllText(full);
+                if (ScriptDocument.IsVisualPath(full) && !overridden)
                 {
                     var graph = VisualScript.Parse(source);
                     files.Add(new(path, source, null, graph));

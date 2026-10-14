@@ -12,6 +12,61 @@ namespace KNE.Tests;
 public sealed class ScriptEditorTests
 {
     [Fact]
+    public async Task Preview_CodeCaretCapturesUnsavedSourceAndFunction_ExternalEditorButtonRequestsConfiguredLaunch()
+    {
+        using var fixture = new TempProject();
+        string path = fixture.Write("manual.krl", "function chapter() d(nil, 'Сохранённое') end");
+        await OnStaAsync(async () =>
+        {
+            var editor = new ScriptEditor(); await editor.OpenAsync(fixture.ProjectPath, path);
+            int previews = 0, launches = 0;
+            editor.PreviewRequested += (_, _) => previews++;
+            editor.ExternalEditorRequested += (_, _) => launches++;
+            var text = (TextBox)editor.FindName("CodeEditor");
+            text.Text = "function chapter()\n  d(nil, 'Новое')\nend\nfunction other()\n d(nil, 'Другое')\nend";
+            text.CaretIndex = text.Text.IndexOf("Другое", StringComparison.Ordinal);
+            var capture = editor.CapturePreview()!;
+            Assert.Equal(5, capture.Line); Assert.Equal("other", capture.Function); Assert.Null(capture.NodeId);
+            Assert.Equal(text.Text, capture.Source); Assert.True(editor.Document!.IsDirty);
+            Assert.Contains("Сохранённое", File.ReadAllText(path)); Assert.True(previews >= 2);
+            Assert.Equal(Visibility.Visible, ((Button)editor.FindName("ExternalEditorButton")).Visibility);
+            Click(editor, "ExternalEditorButton"); Assert.Equal(1, launches);
+            editor.Clear(); Assert.Equal(Visibility.Collapsed, ((Button)editor.FindName("ExternalEditorButton")).Visibility);
+        });
+    }
+
+    [Fact]
+    public async Task Preview_SelectedBlockIncludesAppliedDraftAndPersistedAnimation_AndExplainsCallVersusGoto()
+    {
+        using var fixture = new TempProject(); string path = Path.Combine(fixture.ProjectPath, "chapter.knegraph");
+        await ScriptDocument.CreateVisualAsync(fixture.ProjectPath, path);
+        await OnStaAsync(async () =>
+        {
+            var editor = new ScriptEditor(); await editor.OpenAsync(fixture.ProjectPath, path);
+            var canvas = (Canvas)editor.FindName("GraphCanvas");
+            Select(canvas, "dialogue");
+            ((TextBox)editor.FindName("SceneTextInput")).Text = "Несохранённая реплика";
+            var animate = (CheckBox)editor.FindName("PreviewAnimationInput");
+            Assert.False(animate.IsChecked); animate.IsChecked = true;
+            var selection = editor.CapturePreview()!;
+            Assert.Equal("dialogue", selection.NodeId); Assert.True(selection.Animate);
+            Assert.Contains("Несохранённая реплика", selection.Source);
+            Assert.Contains("kne_editor_node(\"dialogue\")", selection.Source);
+            Assert.DoesNotContain("Несохранённая реплика", File.ReadAllText(path));
+            Assert.Equal(Visibility.Collapsed, ((Button)editor.FindName("ExternalEditorButton")).Visibility);
+            await editor.SaveAsync(); await editor.OpenAsync(fixture.ProjectPath, path);
+            Assert.True(editor.Document!.Graph!.Nodes.Single(n => n.Id == "dialogue").PreviewAnimation);
+            var types = (ComboBox)editor.FindName("BlockType");
+            types.SelectedItem = types.Items.Cast<ScriptNode>().Single(n => n.Kind == ScriptNodeKind.CallScene);
+            Click(editor, "AddBlockButton");
+            Assert.Contains("продолжить со следующего блока", ((TextBlock)editor.FindName("TransitionHelp")).Text);
+            types.SelectedItem = types.Items.Cast<ScriptNode>().Single(n => n.Kind == ScriptNodeKind.GotoScene);
+            Click(editor, "AddBlockButton");
+            Assert.Contains("Продолжение этой ветки не выполняется", ((TextBlock)editor.FindName("TransitionHelp")).Text);
+        });
+    }
+
+    [Fact]
     public async Task Editor_GraphFunctionRename_SavesAndSupportsUndo_AndRejectsLuaKeywords()
     {
         using var fixture = new TempProject(); string path = Path.Combine(fixture.ProjectPath, "chapter.knegraph");

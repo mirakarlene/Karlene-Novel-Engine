@@ -5,8 +5,10 @@ using System.Threading.Channels;
 
 namespace KNE;
 
-internal sealed record WorkerRequest(long Id, string Command, int Option = 0, string? Text = null, GameCheckpoint? Checkpoint = null);
-internal sealed record SessionSnapshot(RuntimeWindowSettings Window, StoryFrame Story, SceneVisuals Visuals);
+internal sealed record WorkerRequest(long Id, string Command, int Option = 0, string? Text = null, GameCheckpoint? Checkpoint = null,
+    EditorPreviewSource? EditorSource = null);
+internal sealed record SessionSnapshot(RuntimeWindowSettings Window, StoryFrame Story, SceneVisuals Visuals,
+    PreviewLocation? Location = null, JsonElement Variables = default, bool TransitionInProgress = false);
 internal sealed record WorkerMessage(string Type, long Id = 0, string? Text = null, SessionSnapshot? Snapshot = null,
     GameCheckpoint? Checkpoint = null, string? Error = null, string? ErrorType = null, GameErrorReport? Report = null);
 
@@ -34,8 +36,7 @@ internal static class LuaWorker
                 project.Configuration.EntryPoints ??= new EntryPoints();
                 project.Configuration.EntryPoints.MainScene = scenePath;
             }
-            await using var runtime = new LuaRuntime(project, line => Send(new("log", Text: line)),
-                TimeSpan.FromHours(1), interactive: true, preview: preview);
+            LuaRuntime? runtime = null;
             var queue = Channel.CreateBounded<WorkerRequest>(1);
             _ = Task.Run(async () =>
             {
@@ -60,6 +61,10 @@ internal static class LuaWorker
             {
                 try
                 {
+                    runtime ??= new LuaRuntime(project, line => Send(new("log", Text: line)),
+                        TimeSpan.FromHours(1), interactive: true, preview: preview, editorSource: request.EditorSource,
+                        variablesUpdated: value => Send(new("variables", Snapshot: new(runtime!.WindowSettings, runtime.Story, runtime.Visuals,
+                            runtime.Location, value, runtime.TransitionInProgress))));
                     switch (request.Command)
                     {
                         case "start": await runtime.StartAsync().ConfigureAwait(false); break;
@@ -71,15 +76,18 @@ internal static class LuaWorker
                         default: throw new InvalidDataException("Неизвестная команда рабочего процесса.");
                     }
                     GameCheckpoint? checkpoint = null;
-                    try { checkpoint = await runtime.GetCheckpointAsync().ConfigureAwait(false); }
+                    try { if (request.EditorSource == null) checkpoint = await runtime.GetCheckpointAsync().ConfigureAwait(false); }
                     catch (Exception ex) when (request.Command != "checkpoint")
                     {
                         Send(new("log", Text: "Сохранение недоступно: " + ex.Message));
                     }
-                    Send(new("result", request.Id, Snapshot: new(runtime.WindowSettings, runtime.Story, runtime.Visuals), Checkpoint: checkpoint));
+                    Send(new("result", request.Id, Snapshot: new(runtime.WindowSettings, runtime.Story, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress), Checkpoint: checkpoint));
                 }
-                catch (Exception ex) { Send(new("error", request.Id, Error: ex.Message, ErrorType: ex.GetType().Name, Report: GameErrorReport.TryGet(ex))); }
+                catch (Exception ex) { Send(new("error", request.Id,
+                    Snapshot: runtime == null ? null : new(runtime.WindowSettings, runtime.Story, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress),
+                    Error: ex.Message, ErrorType: ex.GetType().Name, Report: GameErrorReport.TryGet(ex))); }
             }
+            if (runtime != null) await runtime.DisposeAsync().ConfigureAwait(false);
             return 0;
         }
         catch (Exception ex)

@@ -24,7 +24,11 @@ public partial class MainWindow : Window
     private bool closeApproved;
     private bool checkingClose;
 
-    public MainWindow() => InitializeComponent();
+    public MainWindow()
+    {
+        InitializeComponent();
+        EmbeddedPreview.SelectionProvider = SceneEditor.CapturePreview;
+    }
 
     private async void Window_Closing(object? sender, CancelEventArgs e)
     {
@@ -61,6 +65,7 @@ public partial class MainWindow : Window
         closed = true;
         lifetime.Cancel();
         monitor?.Dispose();
+        EmbeddedPreview.Stop();
     }
 
     private async Task RunOperationAsync(Func<Task> operation, string status)
@@ -106,7 +111,8 @@ public partial class MainWindow : Window
         {
             if (!await SceneEditor.CanLeaveAsync()) return;
             SceneEditor.Clear();
-            SceneEditor.Visibility = Visibility.Collapsed;
+            EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Collapsed;
+            EmbeddedPreview.Stop();
             FilesDataGrid.Visibility = Visibility.Visible;
         }
         currentProject = loaded;
@@ -137,6 +143,8 @@ public partial class MainWindow : Window
     {
         string name = Interaction.InputBox("Введите имя нового проекта:", "Создание проекта", "");
         if (string.IsNullOrWhiteSpace(name)) return;
+        var method = new ProjectCreationDialog { Owner = this };
+        if (method.ShowDialog() != true) return;
         var dialog = new OpenFolderDialog
         {
             Title = "Выберите папку для нового проекта",
@@ -145,8 +153,9 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) != true) return;
         await RunOperationAsync(async () =>
         {
-            string path = await ProjectCreator.CreateProjectAsync(name, dialog.FolderName, lifetime.Token);
+            string path = await ProjectCreator.CreateProjectAsync(name, dialog.FolderName, method.AuthoringMode, lifetime.Token);
             await OpenProjectAsync(path, remember: true);
+            if (currentProject != null) await OpenScriptAsync(currentProject.MainScenePath);
         }, "Создание проекта…");
     }
 
@@ -154,7 +163,8 @@ public partial class MainWindow : Window
     {
         if (!await SceneEditor.CanLeaveAsync()) return;
         SceneEditor.Clear();
-        SceneEditor.Visibility = Visibility.Collapsed;
+        EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Collapsed;
+        EmbeddedPreview.Stop();
         FilesDataGrid.Visibility = Visibility.Visible;
         currentProject = null;
         FilesDataGrid.ItemsSource = null;
@@ -386,9 +396,10 @@ public partial class MainWindow : Window
     private async Task OpenScriptAsync(string path)
     {
         if (currentProject == null || !await SceneEditor.CanLeaveAsync()) return;
+        EmbeddedPreview.Open(currentProject);
         await SceneEditor.OpenAsync(currentProject.Path, path);
         FilesDataGrid.Visibility = Visibility.Collapsed;
-        SceneEditor.Visibility = Visibility.Visible;
+        EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Visible;
     }
 
     private async void BtnOpenScript_Click(object sender, RoutedEventArgs e)
@@ -431,7 +442,8 @@ public partial class MainWindow : Window
     private void BtnFileList_Click(object sender, RoutedEventArgs e)
     {
         FilesDataGrid.Visibility = Visibility.Visible;
-        SceneEditor.Visibility = Visibility.Collapsed;
+        EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Collapsed;
+        EmbeddedPreview.Stop();
     }
 
     private async void BtnNewVisualScene_Click(object sender, RoutedEventArgs e)
@@ -449,34 +461,27 @@ public partial class MainWindow : Window
             if (!await SceneEditor.CanLeaveAsync()) return;
             await ScriptDocument.CreateVisualAsync(project.Path, dialog.FileName, lifetime.Token);
             await OpenProjectAsync(project.Path);
-            await SceneEditor.OpenAsync(project.Path, dialog.FileName);
-            FilesDataGrid.Visibility = Visibility.Collapsed;
-            SceneEditor.Visibility = Visibility.Visible;
+            await OpenScriptAsync(dialog.FileName);
         }, "Создание блок-схемы…");
     }
 
-    private async void SceneEditor_RunRequested(object? sender, EventArgs e)
+    private void SceneEditor_RunRequested(object? sender, EventArgs e) => SceneEditor_PreviewRequested(sender, e);
+
+    private void SceneEditor_PreviewRequested(object? sender, EventArgs e)
     {
-        if (currentProject is not { } project || SceneEditor.Document is not { } document) return;
+        if (closed || currentProject == null) return;
+        try { EmbeddedPreview.RequestSelection(); }
+        catch (Exception error) { OperationStatus.Text = "Предпросмотр: " + error.Message; }
+    }
+
+    private async void SceneEditor_ExternalEditorRequested(object? sender, EventArgs e)
+    {
+        if (SceneEditor.Document is not { IsVisual: false } document) return;
         await RunOperationAsync(async () =>
         {
             await SceneEditor.SaveAsync();
-            await OpenProjectAsync(project.Path);
-            if (currentProject == null || closed) return;
-            var configuration = JsonSerializer.Deserialize<ProjectConfiguration>(
-                JsonSerializer.Serialize(currentProject.Configuration, ProjectConfiguration.JsonOptions), ProjectConfiguration.JsonOptions)!;
-            configuration.EntryPoints ??= new EntryPoints();
-            configuration.EntryPoints.MainScene = Path.GetRelativePath(project.Path, document.FilePath).Replace('\\', '/');
-            var preview = new ProjectInfo { Path = project.Path, Configuration = configuration, Engine = currentProject.Engine };
-            foreach (var file in currentProject.Files) preview.Files.Add(file);
-            _ = preview.MainScenePath; _ = preview.InitScriptPath;
-            var projectSaves = new GameSaveStore(project.Path);
-            string sceneIdentity = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-                System.Text.Encoding.UTF8.GetBytes(configuration.EntryPoints.MainScene.ToUpperInvariant())))[..24];
-            var previewSaves = new GameSaveStore(project.Path, Path.Combine(projectSaves.DirectoryPath, "preview", sceneIdentity),
-                Path.Combine(GameSaveStore.LegacyDirectory(project.Path), "preview", sceneIdentity));
-            new GameWindow(preview, previewSaves, preview: true).Show();
-        }, "Запуск выбранной сцены…");
+            using (Process.Start(EditorLauncher.CreateStartInfo(settings.EditorPath, document.FilePath))) { }
+        }, "Открытие внешнего редактора…");
     }
 
     private async void SceneEditor_MainSceneRequested(object? sender, EventArgs e)
@@ -513,7 +518,8 @@ public partial class MainWindow : Window
     {
         if (!await SceneEditor.CanLeaveAsync()) return;
         SceneEditor.Clear();
-        SceneEditor.Visibility = Visibility.Collapsed;
+        EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Collapsed;
+        EmbeddedPreview.Stop();
         FilesDataGrid.Visibility = Visibility.Visible;
     }, "Закрытие сценария…");
 }

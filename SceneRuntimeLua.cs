@@ -8,8 +8,16 @@ internal static class SceneRuntimeLua
             local definitions, loaded = {}, {}
             local owned = setmetatable({}, {__mode = "k"})
             local transfer = {}
+            local active_stack = {}
+            function kne_scene_owned(thread) return owned[thread] == true end
+            function kne_diagnostics_threads()
+                local result = {}
+                for index = 1, #active_stack do result[#result + 1] = active_stack[index] end
+                return result
+            end
             local inspect, traceback = debug.getinfo, debug.traceback
             function kne_capture_error(thread, problem)
+                if kne_error_snapshot_needed(tostring(problem)) then kne_publish_variables(thread or coroutine.running()) end
                 local trace = thread and traceback(thread, tostring(problem), 0) or traceback(tostring(problem), 2)
                 for level = 1, 100 do
                     local info = thread and inspect(thread, level, "Sl") or inspect(level + 1, "Sl")
@@ -83,22 +91,26 @@ internal static class SceneRuntimeLua
             end
             function call_scene(target, ...)
                 if not owned[coroutine.running()] then error("call_scene доступен только внутри игровой сцены") end
+                kne_editor_pause()
                 return coroutine.yield({token = transfer, kind = "call", target = target, args = table.pack(...)})
             end
             function goto_scene(target, ...)
                 if not owned[coroutine.running()] then error("goto_scene доступен только внутри игровой сцены") end
+                kne_editor_pause()
                 return coroutine.yield({token = transfer, kind = "goto", target = target, args = table.pack(...)})
             end
             call = call_scene
             jump = goto_scene
             function kne_run_scene(entry)
                 local stack, input, transitions = {kne_scene_thread(entry)}, table.pack(), 0
+                active_stack = stack
                 while #stack > 0 do
                     local thread = stack[#stack]
                     owned[thread] = true
                     local values = table.pack(coroutine.resume(thread, table.unpack(input, 1, input.n)))
                     if not values[1] then kne_capture_error(thread, values[2]); error(values[2], 0) end
                     if coroutine.status(thread) == "dead" then
+                        kne_transition_pending(#stack > 1)
                         owned[thread] = nil
                         table.remove(stack)
                         input = table.pack(table.unpack(values, 2, values.n))
@@ -106,6 +118,7 @@ internal static class SceneRuntimeLua
                         local event = values[2]
                         if type(event) ~= "table" then error("Сцена приостановлена без команды") end
                         if event.token == transfer then
+                            kne_transition_pending(true)
                             transitions = transitions + 1
                             if transitions > 10000 then error(kne_capture_error(thread, "Больше 10000 переходов между репликами"), 0) end
                             if event.kind == "call" and #stack >= 64 then error(kne_capture_error(thread, "Глубина вызовов сцен больше 64"), 0) end
@@ -119,7 +132,8 @@ internal static class SceneRuntimeLua
                             end
                             stack[#stack + 1] = kne_scene_thread(next_entry)
                             input = event.args
-                        elseif event.kind == "dialogue" or event.kind == "choice" then
+                        elseif event.kind == "dialogue" or event.kind == "choice" or (kne_editor and event.kind == "preview") then
+                            if event.kind ~= "preview" then kne_transition_pending(false) end
                             transitions = 0
                             input = table.pack(coroutine.yield(event))
                         else error("Неизвестная команда сцены") end

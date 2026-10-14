@@ -112,15 +112,26 @@
             </Border>
             </Grid>
         </Border>
-        <Border x:Name="DebugOverlay" VerticalAlignment="Top" Background="#F0181024" BorderBrush="#FF8E60B5" BorderThickness="1" Padding="16" Margin="16" Visibility="Collapsed">
+        <Border x:Name="DebugOverlay" Panel.ZIndex="10" VerticalAlignment="Top" Background="#F0181024" BorderBrush="#FF8E60B5" BorderThickness="1" Padding="16" Margin="16" Visibility="Collapsed">
             <StackPanel>
                 <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Закрыть консоль" Padding="12,5" Margin="8,0,0,0" Click="CloseConsole_Click"/>
                     <Button x:Name="StopButton" DockPanel.Dock="Right" Content="Остановить" Padding="12,5" Click="StopButton_Click" IsEnabled="False"/>
                     <TextBlock x:Name="StatusText" Text="Подготовка игры…" Foreground="White" TextWrapping="Wrap" Margin="0,0,16,8"/>
                 </DockPanel>
-                <ScrollViewer x:Name="ConsoleOutputScroll" Height="140" VerticalScrollBarVisibility="Auto">
-                    <TextBlock x:Name="ConsoleOutput" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Foreground="#FFDDDDDD"/>
-                </ScrollViewer>
+                <Grid Height="140">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <ScrollViewer x:Name="ConsoleOutputScroll" VerticalScrollBarVisibility="Auto">
+                        <TextBlock x:Name="ConsoleOutput" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" Foreground="#FFDDDDDD"/>
+                    </ScrollViewer>
+                    <Grid Grid.Column="2">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <TextBlock Text="Переменные проекта" Foreground="#FFD3ACFF" Margin="0,0,0,4"/>
+                        <TextBox x:Name="VariablesOutput" Grid.Row="1" IsReadOnly="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                                 FontFamily="Consolas" FontSize="12" Foreground="#FFDDDDDD" Background="Transparent" BorderThickness="0"
+                                 ToolTip="Глобальные переменные и локальные переменные активных корутин. Обновляются во время выполнения."/>
+                    </Grid>
+                </Grid>
                 <TextBox x:Name="CommandInput" Margin="0,10,0,0" Padding="6" KeyDown="CommandInput_KeyDown" IsEnabled="False"
                          FontFamily="Consolas" FontSize="14" ToolTip="Команда отладки: Enter. F3 — закрыть журнал."/>
             </StackPanel>
@@ -133,12 +144,21 @@
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <StackPanel Margin="0,0,0,24">
                     <TextBlock Text="Ошибка игры" Foreground="#FFF5EEFF" FontSize="32" TextWrapping="Wrap"/>
-                    <TextBlock Text="Исправьте сценарии проекта и запустите игру снова." Foreground="#FFD3ACFF" FontSize="16" TextWrapping="Wrap" Margin="0,12,0,0"/>
+                    <TextBlock Text="Проверьте подробности ошибки и выберите действие ниже." Foreground="#FFD3ACFF" FontSize="16" TextWrapping="Wrap" Margin="0,12,0,0"/>
                 </StackPanel>
                 <TextBox x:Name="StartupErrorMessage" Grid.Row="1" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
                          MinHeight="100" Padding="16" FontFamily="Consolas" FontSize="16"
                          Foreground="#FFF5EEFF" Background="#FF2B1A40" BorderBrush="#FF8E60B5"/>
-                <Button x:Name="StartupErrorExitButton" Grid.Row="2" Content="Выйти" HorizontalAlignment="Left" Margin="0,24,0,0" Click="ExitButton_Click"/>
+                <StackPanel Grid.Row="2" Margin="0,24,0,0">
+                    <WrapPanel>
+                        <Button x:Name="StartupErrorExitButton" Content="Выйти" Margin="0,0,8,8" Click="ExitButton_Click"/>
+                        <Button x:Name="ErrorRestartButton" Content="Перезапуск" Margin="0,0,8,8" Click="ErrorRestart_Click" ToolTip="Начать игру заново с открытой консолью и переменными проекта."/>
+                        <Button x:Name="ErrorReturnButton" Content="Вернуться" Margin="0,0,8,8" Click="ErrorReturn_Click" IsEnabled="False" ToolTip="Вернуться к последнему корректному сегменту после ошибки перехода между функциями."/>
+                        <Button x:Name="ErrorMarkdownButton" Content="Сохранить отчёт в Markdown" Margin="0,0,8,8" Click="ErrorMarkdown_Click" ToolTip="Скопировать раздел «Подробности» в буфер обмена в формате Markdown."/>
+                        <Button x:Name="ErrorConsoleButton" Content="Консоль" Margin="0,0,8,8" Click="ErrorConsole_Click"/>
+                    </WrapPanel>
+                    <TextBlock x:Name="ErrorActionStatus" Foreground="#FFD3ACFF" TextWrapping="Wrap"/>
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>

@@ -70,4 +70,16 @@ public sealed class SettingsAndEditorTests
         using var fixture = new TempProject();
         Assert.Throws<FileNotFoundException>(() => EditorLauncher.CreateStartInfo(Path.Combine(fixture.Root, "missing.exe"), "main.krl"));
     }
+
+    [Fact]
+    public void Editor_ConfiguredExecutableWithSpaces_IsUsedWithSingleSourceArgument()
+    {
+        using var fixture = new TempProject();
+        string executable = Path.Combine(fixture.Root, "Мой редактор.exe");
+        File.WriteAllText(executable, "fixture");
+        string source = Path.Combine(fixture.ProjectPath, "game", "scenes", "main.krl");
+        var info = EditorLauncher.CreateStartInfo($" \"{executable}\" ", source);
+        Assert.Equal(executable, info.FileName); Assert.Equal(new[] { source }, info.ArgumentList);
+        Assert.False(info.UseShellExecute); Assert.Equal("", info.Arguments);
+    }
 }
