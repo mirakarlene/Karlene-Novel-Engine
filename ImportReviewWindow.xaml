@@ -1,0 +1,32 @@
+<Window x:Class="KNE.ImportReviewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:KNE"
+        Title="Экспериментальный импорт сценария" Width="1250" Height="800" MinWidth="800" MinHeight="500"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="16">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="120"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Border Background="#FFFFE3A1" Padding="12" Margin="0,0,0,12">
+            <TextBlock x:Name="ExperimentalNote" TextWrapping="Wrap" Foreground="#FF503400"
+                       Text="Экспериментальная функция: адаптация может содержать ошибки и терять возможности исходного сценария. Используйте осторожно. Проверьте и отредактируйте KRL перед сохранением. Исходный файл не изменяется."/>
+        </Border>
+        <Grid Grid.Row="1" Margin="0,0,0,6">
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <TextBlock x:Name="SourceLabel" Text="Исходный сценарий" FontWeight="Bold"/>
+            <TextBlock Grid.Column="2" Text="Адаптация KRL — можно редактировать" FontWeight="Bold"/>
+        </Grid>
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <TextBox x:Name="OriginalEditor" IsReadOnly="True" AcceptsReturn="True" FontFamily="Consolas" FontSize="14"
+                     TextWrapping="NoWrap" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
+            <local:KrlCodeEditor Grid.Column="2" x:Name="AdaptedEditor" FontFamily="Consolas" FontSize="14"/>
+        </Grid>
+        <TextBox Grid.Row="3" x:Name="WarningsText" Margin="0,10,0,10" IsReadOnly="True" TextWrapping="Wrap"
+                 VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Предупреждения импорта"/>
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="SaveImportButton" Content="Сохранить адаптацию…" Click="Save_Click" Padding="14,7" Margin="0,0,8,0" IsDefault="True"/>
+            <Button x:Name="CancelImportButton" Content="Отмена" Padding="14,7" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

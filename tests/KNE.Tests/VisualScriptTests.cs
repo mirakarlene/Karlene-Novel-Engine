@@ -304,7 +304,7 @@ public sealed class VisualScriptTests
     [InlineData("{\"Nodes\":[null]}")]
     [InlineData("{\"Nodes\":[{\"Id\":\"x\",\"Kind\":\"FutureCommand\"}]}")]
     [InlineData("{\"Nodes\":[{\"Id\":\"x\"},{\"Id\":\"x\"}]}")]
-    [InlineData("{\"Nodes\":[{\"X\":-1}]}")]
+    [InlineData("{\"Nodes\":[{\"X\":-1000000001}]}")]
     [InlineData("{\"Nodes\":[{\"Options\":[null]}]}")]
     [InlineData("{\"Nodes\":[{\"Text\":null}]}")]
     [InlineData("{\"UnknownFeature\":true}")]
@@ -396,7 +396,7 @@ public sealed class VisualScriptTests
         graph.Nodes[1].Options.Add(new() { Text = "Лишний", Target = "end" });
         Assert.Throws<InvalidDataException>(() => graph.Serialize());
         graph = VisualScript.Create();
-        graph.Nodes[1].X = 10000.1;
+        graph.Nodes[1].X = 1_000_000_001;
         Assert.Throws<InvalidDataException>(() => graph.Serialize());
     }
 }

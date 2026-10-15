@@ -4,7 +4,7 @@
              xmlns:local="clr-namespace:KNE" MinHeight="180" Background="#FFF7F6FA">
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <DockPanel Margin="0,0,0,6">
+        <DockPanel x:Name="PreviewToolbar" Margin="0,0,0,6">
             <WrapPanel DockPanel.Dock="Right">
                 <CheckBox x:Name="FromMainInput" Content="От main" IsChecked="True" VerticalAlignment="Center" Margin="4,0,8,0" Checked="FromMain_Changed" Unchecked="FromMain_Changed" ToolTip="Учитывать предыдущие сцены и вызовы от начала игры. Снимите, чтобы проверить текущую функцию отдельно."/>
                 <Button x:Name="SeekButton" Content="К выделению" Padding="8,4" Margin="4,0" Click="Seek_Click"/>

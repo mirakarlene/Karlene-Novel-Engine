@@ -33,7 +33,7 @@
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-                <TextBlock x:Name="ProjectTitleTextBlock" FontSize="24" FontWeight="Bold" Margin="0,0,0,16"/>
+                <DockPanel Margin="0,0,0,16"><Button x:Name="AppearanceButton" DockPanel.Dock="Right" Content="Оформление" Padding="10,6" Click="BtnAppearance_Click"/><TextBlock x:Name="ProjectTitleTextBlock" FontSize="24" FontWeight="Bold"/></DockPanel>
                 <Grid Grid.Row="1">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -70,23 +70,34 @@
                     </DataGrid.Columns>
                 </DataGrid>
                     <Grid x:Name="EditorWorkspace" Grid.Row="1" Grid.Column="2" Visibility="Collapsed">
-                        <Grid.RowDefinitions><RowDefinition Height="2*" MinHeight="180"/><RowDefinition Height="8"/><RowDefinition Height="3*" MinHeight="220"/></Grid.RowDefinitions>
-                        <local:ScenePreview x:Name="EmbeddedPreview"/>
-                        <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
-                        <local:ScriptEditor x:Name="SceneEditor" Grid.Row="2" Visibility="Collapsed"
-                            PreviewRequested="SceneEditor_PreviewRequested" ExternalEditorRequested="SceneEditor_ExternalEditorRequested"
+                        <local:ScriptEditor x:Name="SceneEditor" Visibility="Collapsed"
+                            TestSceneRequested="SceneEditor_TestSceneRequested" ExternalEditorRequested="SceneEditor_ExternalEditorRequested"
                             RunRequested="SceneEditor_RunRequested" MainSceneRequested="SceneEditor_MainSceneRequested" CloseRequested="SceneEditor_CloseRequested"/>
                     </Grid>
                 </Grid>
-                <WrapPanel Grid.Row="2" Margin="0,16,0,0">
-                    <Button Content="Назад" Padding="14,10" Margin="0,0,10,0" Click="BtnBack_Click"/>
-                    <Button Content="Создать файл" Padding="14,10" Margin="0,0,10,0" Click="BtnCreateFile_Click"/>
-                    <Button x:Name="AppearanceButton" Content="Оформление" Padding="10,10" Margin="0,0,10,0" Click="BtnAppearance_Click"/>
-                    <Button Content="Новая блок-схема" Padding="10,10" Margin="0,0,10,0" Click="BtnNewVisualScene_Click"/>
-                    <Button Content="Список файлов" Padding="10,10" Margin="0,0,10,0" Click="BtnFileList_Click"/>
-                    <Button Content="Обновить" Padding="14,10" Margin="0,0,10,0" Click="BtnRefresh_Click"/>
-                    <Button Content="Запустить проект" Padding="14,10" Click="BtnRunProject_Click"/>
-                </WrapPanel>
+                <DockPanel Grid.Row="2" Margin="0,12,0,0" LastChildFill="False">
+                    <WrapPanel x:Name="RunActionsGroup" DockPanel.Dock="Right" Margin="8,0,0,0">
+                        <Button x:Name="AnalyzeProjectButton" Content="Анализ проекта" Padding="10,8" Margin="0,0,6,4" Click="BtnAnalyzeProject_Click"/>
+                        <Button Content="Запустить проект" Padding="10,8" Margin="0,0,0,4" Click="BtnRunProject_Click"/>
+                    </WrapPanel>
+                    <WrapPanel>
+                        <WrapPanel x:Name="ExitActionsGroup" Margin="0,0,12,0">
+                            <Button Content="Выйти" Padding="10,8" Margin="0,0,6,4" Click="BtnExit_Click"/>
+                            <Button Content="Сохранить всё и выйти" Padding="10,8" Margin="0,0,0,4" Click="BtnSaveAllExit_Click"/>
+                        </WrapPanel>
+                        <WrapPanel x:Name="ImportActionsGroup" Margin="0,0,12,0">
+                            <Button Content="Создать файл" Padding="8,8" Margin="0,0,6,4" Click="BtnCreateFile_Click"/>
+                            <Button Content="Импорт файла" Padding="8,8" Margin="0,0,6,4" Click="BtnImportFile_Click"/>
+                            <Button Content="Новая блок-схема" Padding="8,8" Margin="0,0,6,4" Click="BtnNewVisualScene_Click"/>
+                            <Button Content="Импорт .rpy" Tag=".rpy" Padding="8,8" Margin="0,0,6,4" Click="BtnImportScript_Click"/>
+                            <Button Content="Импорт .docx" Tag=".docx" Padding="8,8" Margin="0,0,0,4" Click="BtnImportScript_Click"/>
+                        </WrapPanel>
+                        <WrapPanel x:Name="FileViewActionsGroup">
+                            <Button Content="Список файлов" Padding="8,8" Margin="0,0,6,4" Click="BtnFileList_Click"/>
+                            <Button Content="Обновить" Padding="8,8" Margin="0,0,0,4" Click="BtnRefresh_Click"/>
+                        </WrapPanel>
+                    </WrapPanel>
+                </DockPanel>
             </Grid>
 
             <StackPanel x:Name="SettingsPanel" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center">

@@ -62,7 +62,7 @@ public sealed class ScriptEditorTests
     }
 
     [Fact]
-    public async Task Preview_SelectedBlockIncludesAppliedDraftAndPersistedAnimation_AndExplainsCallVersusGoto()
+    public async Task Preview_SelectedBlockIncludesAppliedDraft_AndExplainsCallVersusGoto()
     {
         using var fixture = new TempProject(); string path = Path.Combine(fixture.ProjectPath, "chapter.knegraph");
         await ScriptDocument.CreateVisualAsync(fixture.ProjectPath, path);
@@ -72,16 +72,14 @@ public sealed class ScriptEditorTests
             var canvas = (Canvas)editor.FindName("GraphCanvas");
             Select(canvas, "dialogue");
             ((TextBox)editor.FindName("SceneTextInput")).Text = "Несохранённая реплика";
-            var animate = (CheckBox)editor.FindName("PreviewAnimationInput");
-            Assert.False(animate.IsChecked); animate.IsChecked = true;
             var selection = editor.CapturePreview()!;
-            Assert.Equal("dialogue", selection.NodeId); Assert.True(selection.Animate);
+            Assert.Equal("dialogue", selection.NodeId);
             Assert.Contains("Несохранённая реплика", selection.Source);
             Assert.Contains("kne_editor_node(\"dialogue\")", selection.Source);
             Assert.DoesNotContain("Несохранённая реплика", File.ReadAllText(path));
             Assert.Equal(Visibility.Collapsed, ((Button)editor.FindName("ExternalEditorButton")).Visibility);
             await editor.SaveAsync(); await editor.OpenAsync(fixture.ProjectPath, path);
-            Assert.True(editor.Document!.Graph!.Nodes.Single(n => n.Id == "dialogue").PreviewAnimation);
+            Assert.Equal("Несохранённая реплика", editor.Document!.Graph!.Nodes.Single(n => n.Id == "dialogue").Text);
             var types = (ComboBox)editor.FindName("BlockType");
             types.SelectedItem = types.Items.Cast<ScriptNode>().Single(n => n.Kind == ScriptNodeKind.CallScene);
             Click(editor, "AddBlockButton");
@@ -228,7 +226,8 @@ public sealed class ScriptEditorTests
             Assert.Equal(choice.Id, editor.Document.Graph.Nodes.Single(n => n.Id == "start").Next);
             Assert.Equal(4, editor.Document.Graph.Nodes.Count);
             ((Slider)editor.FindName("ZoomSlider")).Value = 0.8;
-            Assert.Equal(0.8, ((ScaleTransform)canvas.LayoutTransform).ScaleX);
+            Assert.Equal(0.8, ((ScaleTransform)editor.FindName("CanvasScale")).ScaleX);
+            Assert.Contains((ScaleTransform)editor.FindName("CanvasScale"), ((TransformGroup)canvas.RenderTransform).Children);
             Select(canvas, choice.Id);
 
             // Exercise the actual WPF layout and rendering without showing a desktop window.

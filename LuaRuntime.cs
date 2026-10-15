@@ -30,6 +30,8 @@ public sealed class LuaRuntime : IGameSession
     private int seed = Random.Shared.Next(1, int.MaxValue);
     private string fingerprint = "";
     private GameScripts? scripts;
+    private FrameCatalog? frames;
+    private FrameIdentity? currentScriptFrame;
     private readonly bool preview;
     private readonly EditorPreviewSource? editorSource;
     private readonly Action<JsonElement>? variablesUpdated;
@@ -37,7 +39,7 @@ public sealed class LuaRuntime : IGameSession
     private PreviewLocation? location;
     private long nextVariablesAt;
     private bool transitionPending;
-    private (string? File, int? Line, string Trace, string Problem)? scriptFailure;
+    private (string? File, int? Line, string Trace, string Problem, FrameIdentity? Frame)? scriptFailure;
     public TimeSpan ExecutionLimit { get; }
 
     public LuaRuntime(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool interactive = false, bool preview = false,
@@ -50,6 +52,7 @@ public sealed class LuaRuntime : IGameSession
         this.interactive = interactive;
         this.preview = preview;
         this.editorSource = editorSource;
+        if (editorSource?.Seed is { } previewSeed) seed = previewSeed;
         this.variablesUpdated = variablesUpdated;
         ExecutionLimit = executionLimit ?? TimeSpan.FromSeconds(project.Engine.Game.ExecutionTimeoutSeconds);
         if (ExecutionLimit <= TimeSpan.Zero || ExecutionLimit > TimeSpan.FromHours(1))
@@ -78,6 +81,7 @@ public sealed class LuaRuntime : IGameSession
         nextVariablesAt = 0;
         lock (stateLock) location = null;
         scripts = GameScripts.Load(project, editorSource);
+        frames = FrameCatalog.Load(project, scripts, editorSource);
         lua?.Dispose();
         lua = new Lua();
         lua.State.Encoding = Encoding.UTF8;
@@ -86,6 +90,7 @@ public sealed class LuaRuntime : IGameSession
         Register(nameof(ShouldStop), "kne_should_stop");
         Register(nameof(SceneCodeForLua), "kne_scene_code_result");
         Register(nameof(RecordScriptError), "kne_record_script_error");
+        Register(nameof(RecordScriptContext), "kne_record_script_context");
         Register(nameof(InvokeScriptApi), "kne_script_api");
         Register(nameof(ReceiveVariables), "kne_receive_variables");
         Register(nameof(ShouldPublishVariables), "kne_should_publish_variables");
@@ -93,7 +98,8 @@ public sealed class LuaRuntime : IGameSession
         Register(nameof(ErrorSnapshotNeeded), "kne_error_snapshot_needed");
         lua["project_dir"] = project.Path;
         lua["kne_interactive"] = interactive;
-        lua["kne_editor"] = editorSource != null;
+        lua["kne_editor"] = editorSource?.StepCommands == true;
+        lua["kne_scene_test"] = editorSource?.SceneTest == true;
         lua["kne_seed"] = seed;
         fingerprint = ComputeFingerprint(scripts);
         lua.DoString("""
@@ -192,7 +198,7 @@ public sealed class LuaRuntime : IGameSession
         if (scripts != null)
         {
             var script = scripts.FindFile(relative);
-            return script.Graph?.Compile(editorPreview: editorSource != null) ?? script.Source;
+            return script.Graph?.Compile(editorPreview: editorSource?.StepCommands == true) ?? FrameCatalog.Instrument(script.Path, script.Source);
         }
         string path = PathSafety.ResolveRelative(project.Path, ResolveScenePath(relative));
         if (new FileInfo(path).Length > 8 * 1024 * 1024) throw new InvalidDataException("Сцена больше 8 МБ.");
@@ -267,6 +273,8 @@ public sealed class LuaRuntime : IGameSession
             }
             frame = kind == "preview" ? Story with { Kind = "preview", Options = Array.Empty<string>() } :
                 new StoryFrame(kind, value["speaker"] as string ?? "", value["text"] as string ?? "", options.AsReadOnly());
+            frame = frame with { Identity = frames?.ResolveKey(value["key"] as string, Location!.File, Location.Line, Location.FunctionLine) ??
+                frames?.Resolve(Location!.File, Location.Line, Location.NodeId, Location.FunctionLine) };
             if (kind != "preview") PrintToUI(frame.Speaker.Length == 0 ? frame.Text : frame.Speaker + ": " + frame.Text);
         }
         lock (stateLock) story = frame;
@@ -348,7 +356,9 @@ public sealed class LuaRuntime : IGameSession
         return Convert.ToHexString(hash.GetHashAndReset());
     }
 
-    private static string FrameSignature(StoryFrame frame) => JsonSerializer.Serialize(frame);
+    // Presentation identities may be assigned/reused after an edit; version-1 saves compare the original visible fields.
+    private static string FrameSignature(StoryFrame frame) => JsonSerializer.Serialize(new
+        { frame.Kind, frame.Speaker, frame.Text, frame.Options, frame.Completed });
 
     private static object ReadState(LuaTable table, int depth)
     {
@@ -403,6 +413,7 @@ public sealed class LuaRuntime : IGameSession
                 executionToken = linked.Token;
                 deadline = Stopwatch.GetTimestamp() + (long)(ExecutionLimit.TotalSeconds * Stopwatch.Frequency);
                 scriptFailure = null;
+                currentScriptFrame = null;
             }
             await Task.Run(() =>
             {
@@ -437,7 +448,8 @@ public sealed class LuaRuntime : IGameSession
         var report = GameErrorReport.Create(project, error, operation);
         report = report with { TransitionFailure = transitionPending };
         if (scriptFailure is { } failure)
-            report = report with { File = failure.File, Line = failure.Line, Details = failure.Trace + "\n\n" + error };
+            report = report with { File = failure.File, Line = failure.Line, Details = failure.Trace + "\n\n" + error,
+                Frame = failure.Frame ?? frames?.Resolve(failure.File, failure.Line) };
         GameErrorReport.Attach(error, report);
     }
 
@@ -451,8 +463,12 @@ public sealed class LuaRuntime : IGameSession
             string relative = Path.GetRelativePath(project.Path, file);
             if (!relative.StartsWith("..", StringComparison.Ordinal)) file = relative.Replace('\\', '/');
         }
-        scriptFailure = (file, line > 0 ? line : null, trace, problem);
+        scriptFailure = (file, line > 0 ? line : null, trace, problem, currentScriptFrame);
     }
+
+    /// <summary>Captures the actual failing coroutine's command before Lua unwinds it.</summary>
+    public void RecordScriptContext(string file, int line, int functionLine, string node, string key) =>
+        currentScriptFrame = frames?.ResolveKey(key, file, line, functionLine) ?? frames?.Resolve(file, line, node.Length == 0 ? null : node, functionLine);
 
     /// <summary>Returns managed API validation failures as data so Lua raises them in the calling script frame.</summary>
     public string InvokeScriptApi(string name, LuaTable arguments)

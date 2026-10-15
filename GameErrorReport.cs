@@ -12,6 +12,7 @@ public sealed record GameErrorReport(string ProjectName, string ProjectTitle, st
     string ErrorType, string Message, string? File, int? Line, string Details, string Operation)
 {
     public bool TransitionFailure { get; init; }
+    public FrameIdentity? Frame { get; init; }
     private const string DataKey = "KNE.GameErrorReport";
 
     /// <summary>Reads a previously captured report without changing its occurrence time or source information.</summary>
@@ -58,6 +59,11 @@ public sealed record GameErrorReport(string ProjectName, string ProjectTitle, st
             .AppendLine("Строка: " + (Line?.ToString(CultureInfo.InvariantCulture) ?? "Не определена"));
         if (File != null && ScriptDocument.IsVisualPath(File) && Line != null)
             text.AppendLine("Строка относится к Lua, сгенерированному из блок-схемы.");
+        if (Frame is { } frame)
+            text.AppendLine("Сцена: " + frame.Scene)
+                .AppendLine("ID фрейма в сцене: " + frame.SceneFrameId.ToString(CultureInfo.InvariantCulture))
+                .AppendLine("ID фрейма в игре: " + frame.GlobalFrameId.ToString(CultureInfo.InvariantCulture))
+                .AppendLine("ID блока: " + frame.BlockId);
         return text.AppendLine("Ошибка: " + Message).AppendLine("Тип ошибки: " + ErrorType)
             .AppendLine("Когда: " + OccurredAt.ToString("yyyy-MM-dd HH:mm:ss.fff zzz", CultureInfo.InvariantCulture))
             .AppendLine("Действие: " + Operation).AppendLine("ОС: " + OperatingSystem)

@@ -9,6 +9,7 @@ internal static class SceneRuntimeLua
             local owned = setmetatable({}, {__mode = "k"})
             local transfer = {}
             local active_stack = {}
+            local scene_test = kne_scene_test == true
             function kne_scene_owned(thread) return owned[thread] == true end
             function kne_diagnostics_threads()
                 local result = {}
@@ -23,6 +24,7 @@ internal static class SceneRuntimeLua
                     local info = thread and inspect(thread, level, "Sl") or inspect(level + 1, "Sl")
                     if not info then break end
                     if info.source:sub(1, 1) == "@" then
+                        kne_error_context(thread, info)
                         kne_record_script_error(info.source:sub(2), info.currentline, trace, tostring(problem))
                         return problem
                     end
@@ -124,6 +126,9 @@ internal static class SceneRuntimeLua
                             if event.kind == "call" and #stack >= 64 then error(kne_capture_error(thread, "Глубина вызовов сцен больше 64"), 0) end
                             local ok, next_entry = pcall(resolve, event.target)
                             if not ok then error(kne_capture_error(thread, next_entry), 0) end
+                            -- Validate the destination before ending the selected scene, without running its successor.
+                            -- Only an engine-owned root transfer can reach this boundary.
+                            if scene_test and #stack == 1 and event.kind == "goto" then return end
                             if event.kind == "goto" then
                                 owned[thread] = nil
                                 table.remove(stack)

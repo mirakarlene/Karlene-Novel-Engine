@@ -80,9 +80,9 @@ public sealed class VisualScript
                 throw new InvalidDataException("У каждого блока должен быть уникальный непустой идентификатор.");
             if (!Enum.IsDefined(node.Kind) || !Enum.IsDefined(node.ValueKind) || !Enum.IsDefined(node.Comparison))
                 throw new InvalidDataException("Неизвестный тип блока, значения или сравнения.");
-            if (!double.IsFinite(node.X) || !double.IsFinite(node.Y) || node.X is < 0 or > 10000 ||
-                node.Y is < 0 or > 10000)
-                throw new InvalidDataException("Координаты блока должны быть от 0 до 10000.");
+            if (!double.IsFinite(node.X) || !double.IsFinite(node.Y) || Math.Abs(node.X) > 1_000_000_000 ||
+                Math.Abs(node.Y) > 1_000_000_000)
+                throw new InvalidDataException("Координаты блока должны быть конечными числами от −1000000000 до 1000000000.");
             if (node.Options == null || node.Options.Count > 20 || node.Options.Any(o => o == null || o.Text == null))
                 throw new InvalidDataException("У выбора должно быть не более 20 вариантов.");
             if (node.Text == null || node.Speaker == null || node.Path == null || node.Variable == null ||
@@ -163,6 +163,7 @@ public sealed class VisualScript
             code.Append(first ? "        if " : "        elseif ").Append("__kne_node == ").Append(Quote(node.Id))
                 .Append(" then\n");
             first = false;
+            code.Append("            if kne_runtime_node then kne_runtime_node(").Append(Quote(node.Id)).Append(") end\n");
             if (editorPreview) code.Append("            kne_editor_node(").Append(Quote(node.Id)).Append(")\n");
             string command = node.Kind switch
             {

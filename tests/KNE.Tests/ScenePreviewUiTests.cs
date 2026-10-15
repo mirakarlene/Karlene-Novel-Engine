@@ -57,7 +57,7 @@ public sealed class ScenePreviewUiTests
     }
 
     [Fact]
-    public async Task Workspace_LargerWindowPreservesFileSidebar_AndEmbedsPreviewAboveEditor()
+    public async Task Workspace_PreservesFileSidebar_AndGivesFullHeightToEditorWithoutEmbeddedPreview()
     {
         using var fixture = new TempProject();
         await Sta(async () =>
@@ -71,14 +71,13 @@ public sealed class ScenePreviewUiTests
                 var tree = Find<TreeView>(window, "ProjectFilesTree");
                 var workspace = Find<Grid>(window, "EditorWorkspace");
                 var editor = Find<ScriptEditor>(window, "SceneEditor");
-                var preview = Find<ScenePreview>(window, "EmbeddedPreview");
+                Assert.Null(window.FindName("EmbeddedPreview"));
                 Assert.NotEmpty(tree.Items); Assert.Equal(0, Grid.GetColumn(tree)); Assert.Equal(2, Grid.GetColumn(workspace));
                 Assert.Equal(Visibility.Visible, workspace.Visibility); Assert.Equal(Visibility.Collapsed, Find<DataGrid>(window, "FilesDataGrid").Visibility);
-                Assert.Same(workspace, editor.Parent); Assert.Same(workspace, preview.Parent);
-                Assert.True(Grid.GetRow(preview) < Grid.GetRow(editor));
+                Assert.Same(workspace, editor.Parent); Assert.Single(workspace.Children.Cast<UIElement>());
                 var content = (FrameworkElement)window.Content;
                 content.Measure(new Size(1460, 900)); content.Arrange(new Rect(0, 0, 1460, 900)); content.UpdateLayout();
-                Assert.True(tree.ActualWidth >= 200); Assert.True(preview.ActualHeight >= 180); Assert.True(editor.ActualHeight >= 220);
+                Assert.True(tree.ActualWidth >= 200); Assert.True(editor.ActualHeight >= 500);
                 Capture(content, "editor-workspace.png");
                 typeof(MainWindow).GetMethod("BtnFileList_Click", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, [window, new RoutedEventArgs()]);
                 Assert.Equal(Visibility.Collapsed, workspace.Visibility); Assert.Equal(Visibility.Visible, Find<DataGrid>(window, "FilesDataGrid").Visibility);
