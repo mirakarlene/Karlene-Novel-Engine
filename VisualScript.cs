@@ -51,6 +51,7 @@ public sealed partial class VisualScript
         {
             var script = JsonSerializer.Deserialize<VisualScript>(json, JsonOptions)
                          ?? throw new InvalidDataException("Блок-схема не должна содержать null.");
+            script.DetachLegacyComments();
             script.ValidateStructure();
             return script;
         }
@@ -86,20 +87,46 @@ public sealed partial class VisualScript
             if (node.Options == null || node.Options.Count > 20 || node.Options.Any(o => o == null || o.Text == null))
                 throw new InvalidDataException("У выбора должно быть не более 20 вариантов.");
             if (node.Text == null || node.Speaker == null || node.Path == null || node.Variable == null ||
-                node.Value == null || node.Position == null || node.Channel == null || node.Target == null || node.IterationKey == null || node.Category == null)
+                node.Value == null || node.Position == null || node.Channel == null || node.Target == null || node.IterationKey == null || node.Category == null || node.ScreenLayer == null || node.UiTarget == null)
                 throw new InvalidDataException("Свойства блока не должны содержать null.");
-            if (node.Category is not ("" or "terminals" or "narrative" or "logic" or "visual" or "audio" or "async"))
+            if (node.Category is not ("" or "terminals" or "narrative" or "logic" or "visual" or "audio" or "async" or "configurations" or "plugins"))
                 throw new InvalidDataException("Неизвестная группа блока.");
-            if (new[] { node.Duration, node.OffsetX, node.OffsetY, node.Amount, node.Minimum, node.Maximum }.Any(v => !double.IsFinite(v)))
+            if (new[] { node.Duration, node.OffsetX, node.OffsetY, node.Amount, node.Minimum, node.Maximum, node.Opacity }.Any(v => !double.IsFinite(v)))
                 throw new InvalidDataException("Числовые свойства блока должны быть конечными.");
             if (new[] { node.Text, node.Speaker, node.Path, node.Value }.Any(value => value.Length > 16000))
                 throw new InvalidDataException("Свойство блока слишком длинное (максимум 16000 символов).");
+            if (node.Ui != null)
+            {
+                try { node.Ui.Validate(); }
+                catch (ArgumentException error) { Fail(node, error.Message); }
+            }
         }
     }
 
     /// <summary>Validates the graph and generates its named Lua function using the KNE API.</summary>
     /// <returns>Lua source for a complete, acyclic scene.</returns>
     public string Compile(bool editorPreview = false) => CompileCore(editorPreview);
+
+    private void DetachLegacyComments()
+    {
+        if (Nodes == null || Nodes.Any(node => node == null || node.Id == null) || Nodes.Select(node => node.Id).Distinct().Count() != Nodes.Count) return;
+        var map = Nodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
+        foreach (var node in Nodes.Where(node => node.Kind != ScriptNodeKind.Comment))
+        {
+            var outputs = node.Outputs().ToArray();
+            for (int i = 0; i < outputs.Length; i++)
+            {
+                string? target = outputs[i].Target; var seen = new HashSet<string>(StringComparer.Ordinal);
+                while (target != null && map.TryGetValue(target, out var next) && next.Kind == ScriptNodeKind.Comment)
+                {
+                    if (!seen.Add(target)) throw new InvalidDataException("Циклическая цепочка комментариев в старой схеме.");
+                    target = next.Next;
+                }
+                if (target != outputs[i].Target) node.SetOutput(i, target);
+            }
+        }
+        foreach (var note in Nodes.Where(node => node.Kind == ScriptNodeKind.Comment)) { note.Next = note.True = note.False = null; note.Options?.Clear(); }
+    }
 
     private static string Literal(ScriptNode node)
     {
@@ -152,7 +179,8 @@ public enum ScriptNodeKind
     CallScene,
     Comment, Title, Switch, While, ForEach, TryCatch, SetFlag, CheckFlag, Random,
     HideBackground, MoveBackground, MoveCharacter, Animation, Shake, Flash, Camera, ShowScreen,
-    AudioChannel, StopSound, Voice, MasterVolume, Parallel, Async, Join, Timer, Pause, WaitCondition
+    AudioChannel, StopSound, Voice, MasterVolume, Parallel, Async, Join, Timer, Pause, WaitCondition,
+    IncludeLua, IncludeCs, Script, ConfigureDialogue, ConfigureButton, ClearBackgrounds, ClearSprites
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -245,6 +273,14 @@ public sealed class ScriptNode
     public string IterationKey { get; set; } = "index";
     /// <summary>Return from the current graph/body, open menu/screen, or close the game.</summary>
     public ScriptEndAction EndAction { get; set; }
+    /// <summary>Transparency of a shown screen, from 0 to 1.</summary>
+    public double Opacity { get; set; } = 1;
+    /// <summary>Screen drawing layer: main or overlay.</summary>
+    public string ScreenLayer { get; set; } = "overlay";
+    /// <summary>Named gameplay control affected by a UI configuration.</summary>
+    public string UiTarget { get; set; } = "dialogue";
+    /// <summary>Typed gameplay appearance; null retains target defaults.</summary>
+    public GameplayUiStyle? Ui { get; set; }
 
     /// <summary>Destination of a command's single continuation port.</summary>
     public string? Next { get; set; }
@@ -277,14 +313,17 @@ public sealed class ScriptNode
         ScriptNodeKind.Camera => "Камера", ScriptNodeKind.ShowScreen => "Показать экран", ScriptNodeKind.AudioChannel => "Канал аудио",
         ScriptNodeKind.StopSound => "Остановить звук", ScriptNodeKind.Voice => "Озвучка", ScriptNodeKind.MasterVolume => "Общая громкость",
         ScriptNodeKind.Parallel => "Параллель", ScriptNodeKind.Async => "Асинхронность", ScriptNodeKind.Join => "Join",
-        ScriptNodeKind.Timer => "Таймер", ScriptNodeKind.Pause => "Пауза", ScriptNodeKind.WaitCondition => "Ожидание условия", _ => "Конец"
+        ScriptNodeKind.Timer => "Таймер", ScriptNodeKind.Pause => "Пауза", ScriptNodeKind.WaitCondition => "Ожидание условия",
+        ScriptNodeKind.IncludeLua => "Подключить .lua", ScriptNodeKind.IncludeCs => "Подключить .cs", ScriptNodeKind.Script => "Скрипт",
+        ScriptNodeKind.ConfigureDialogue => "Настроить текстовое окно", ScriptNodeKind.ConfigureButton => "Настроить кнопку",
+        ScriptNodeKind.ClearBackgrounds => "Удалить все фоны", ScriptNodeKind.ClearSprites => "Удалить все спрайты", _ => "Конец"
     };
 
     /// <summary>Returns ordered ports, including unconnected ports in an unfinished draft.</summary>
     /// <returns>Labels and optional destination identifiers in display order.</returns>
     public IEnumerable<(string Label, string? Target)> Outputs()
     {
-        if (Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene) yield break;
+        if (Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.Comment) yield break;
         if (Kind is ScriptNodeKind.Choice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async)
         {
             foreach (var option in Options) yield return (option.Text, option.Target);

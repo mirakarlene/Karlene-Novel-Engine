@@ -117,7 +117,8 @@ public sealed partial class LuaRuntime : IGameSession
             for _, name in ipairs({"set_window_title", "set_window_size", "set_bg_color", "background",
                                   "show_character", "hide_character", "play_music", "stop_music", "play_sound",
                                   "show_title", "hide_background", "move_visual", "animate_visual", "screen_shake",
-                                  "screen_flash", "camera", "show_screen", "set_audio_channel", "play_audio", "stop_audio", "set_master_volume"}) do
+                                  "screen_flash", "camera", "show_screen", "set_audio_channel", "play_audio", "stop_audio", "set_master_volume",
+                                  "clear_backgrounds", "clear_sprites", "configure_ui"}) do
                 _G[name] = function(...)
                     local problem = kne_script_api(name, table.pack(...))
                     if problem ~= "" then error(problem, 2) end
@@ -155,6 +156,7 @@ public sealed partial class LuaRuntime : IGameSession
         lua.DoString("kne_diagnostics_baseline()", "KNE baseline");
         // Resolve all paths before executing any project code.
         lua.DoString("state = " + StateLiteral(project.Engine.InitialState), "KNE initial state");
+        InitializePlugins();
         string initPath = project.InitScriptPath;
         string scenePath = project.MainScenePath;
         string scriptModules = Path.GetDirectoryName(initPath)!.Replace('\\', '/') + "/?.lua";
@@ -371,7 +373,9 @@ public sealed partial class LuaRuntime : IGameSession
         hash.AppendData(Encoding.UTF8.GetBytes("functions-v1:" + entry));
         // Include the resolved scene identity: previewing another scene must not accept its sibling's saves.
         hash.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(project.Path, project.MainScenePath)));
-        foreach (string relative in program.Files.Select(f => f.Path).Append("project.json").OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+        foreach (string relative in program.Files.Select(f => f.Path).Concat(ProjectLoader.EnumerateFiles(project.Path, CancellationToken.None).Files
+                     .Where(path => Path.GetExtension(path).Equals(".cs", StringComparison.OrdinalIgnoreCase)).Select(path => Path.GetRelativePath(project.Path, path).Replace('\\', '/')))
+                     .Append("project.json").OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
             string path = PathSafety.ResolveRelative(project.Path, relative);
             hash.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(project.Path, path)));
@@ -554,6 +558,7 @@ public sealed partial class LuaRuntime : IGameSession
                 case "stop_music": StopMusic(); break;
                 case "play_sound": PlaySound(Text(1)!); break;
                 default:
+                    if (TryInvokeUi(name, arguments, out string uiProblem)) return uiProblem;
                     if (!TryInvokeEffect(name, arguments, out string problem)) throw new ArgumentException("Неизвестная команда игры: " + name);
                     return problem;
             }
@@ -599,8 +604,12 @@ public sealed partial class LuaRuntime : IGameSession
     public bool ErrorSnapshotNeeded(string problem) => scriptFailure == null || scriptFailure.Value.Problem != problem;
 
     /// <summary>Validates an engine-owned end screen without changing the visible scene.</summary>
-    public string ValidateEndAction(string action, string? screen) => action == "screen" &&
-        !project.Engine.Screens.Screens.Any(item => item.Id == screen) ? "Экран не найден: " + screen : "";
+    public string ValidateEndAction(string action, string? screen)
+    {
+        if (action != "screen") return "";
+        try { project.Engine.Screens.ResolveReference(screen ?? ""); return ""; }
+        catch (ArgumentException error) { return error.Message; }
+    }
 
     public void ReceiveVariables(LuaTable snapshot)
     {
@@ -637,7 +646,7 @@ public sealed partial class LuaRuntime : IGameSession
     public void SetBackground(string? relative)
     {
         string? path = relative == null ? null : ResourcePaths.Resolve(project.Path, relative);
-        lock (stateLock) visuals = visuals with { Background = path };
+        lock (stateLock) visuals = visuals with { Background = path, BackgroundsCleared = false };
     }
 
     public void ShowCharacter(string relative, string position = "center")
@@ -702,6 +711,7 @@ public sealed partial class LuaRuntime : IGameSession
         await gate.WaitAsync().ConfigureAwait(false);
         try
         {
+            DisposePlugins();
             lua?.Dispose();
             lua = null;
             lifetime.Dispose();

@@ -22,6 +22,12 @@ public sealed partial class LuaRuntime
         {
             switch (command)
             {
+                case "clear_backgrounds":
+                    lock (stateLock) visuals = visuals with { Background = null, BackgroundsCleared = true, BackgroundMotion = new(), BackgroundAnimation = new() };
+                    break;
+                case "clear_sprites":
+                    lock (stateLock) visuals = visuals with { Character = null, CharacterMotion = new(), CharacterAnimation = new() };
+                    break;
                 case "show_title":
                     string title = Text(1);
                     if (title.Length > 10000) throw new ArgumentException("Титр слишком длинный.");
@@ -60,15 +66,18 @@ public sealed partial class LuaRuntime
                     break;
                 case "show_screen":
                     string id = Text(1);
+                    double opacity = args[2] == null ? 1 : Number(2, 0, 1);
+                    string layer = args[3] == null ? "overlay" : Text(3);
+                    if (layer is not ("main" or "overlay")) throw new ArgumentException("Слой экрана: main или overlay.");
                     if (id.Length == 0)
                     {
-                        lock (stateLock) visuals = visuals with { OverlayScreen = null, ScreenVersion = visuals.ScreenVersion + 1 };
+                        lock (stateLock) visuals = visuals with { OverlayScreen = null, ScreenOpacity = opacity, ScreenLayer = layer, ScreenVersion = visuals.ScreenVersion + 1 };
                         break;
                     }
-                    var screen = project.Engine.Screens.Screens.FirstOrDefault(s => s.Id == id) ?? throw new ArgumentException("Экран не найден: " + id);
+                    var screen = project.Engine.Screens.ResolveReference(id);
                     foreach (var element in screen.Elements.Where(element => element.Type == "image"))
                         if (!string.IsNullOrWhiteSpace(element.Image)) ResourcePaths.Resolve(project.Path, element.Image);
-                    lock (stateLock) visuals = visuals with { OverlayScreen = id, ScreenVersion = visuals.ScreenVersion + 1 };
+                    lock (stateLock) visuals = visuals with { OverlayScreen = screen.Id, ScreenOpacity = opacity, ScreenLayer = layer, ScreenVersion = visuals.ScreenVersion + 1 };
                     break;
                 case "set_audio_channel":
                     string channel = AudioChannel(Text(1)); double volume = Number(2, 0, 1); bool loop = Flag(3, false);

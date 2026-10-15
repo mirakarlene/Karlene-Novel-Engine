@@ -25,6 +25,7 @@ public partial class ScenePreview : UserControl
     /// <summary>Resets presentation clocks before replaying or restarting a scene, without creating a worker.</summary>
     public void ResetPresentation()
     {
+        ResetGameplayUi();
         sceneEffects?.Stop();
         AnimatedBackdrop.BeginAnimation(AnimatedBackground.PhaseProperty, null);
         renderedBackdropAnimate = null; renderedSceneStory = null;
@@ -171,6 +172,7 @@ public partial class ScenePreview : UserControl
 
     private void ClearScene()
     {
+        ResetGameplayUi();
         sceneEffects?.Stop();
         ScriptScreenCanvas.Children.Clear(); ScriptScreenViewbox.Visibility = Visibility.Collapsed;
         renderedOverlay = null; renderedOverlayVersion = -1;
@@ -195,7 +197,7 @@ public partial class ScenePreview : UserControl
         var theme = project.Engine.Theme;
         SceneArea.Width = window.Width; SceneArea.Height = window.Height;
         SceneArea.Background = Brush(window.Background);
-        DefaultBackground.Visibility = window.Background == theme.BackgroundColor ? Visibility.Visible : Visibility.Collapsed;
+        DefaultBackground.Visibility = !visuals.BackgroundsCleared && window.Background == theme.BackgroundColor ? Visibility.Visible : Visibility.Collapsed;
         DefaultBackgroundImage.Visibility = DefaultBackground.Visibility;
         if (renderedBackgroundPath != visuals.Background) { BackgroundImage.Source = LoadImage(visuals.Background); renderedBackgroundPath = visuals.Background; }
         if (renderedCharacterPath != visuals.Character) { CharacterImage.Source = LoadImage(visuals.Character); renderedCharacterPath = visuals.Character; }
@@ -206,8 +208,12 @@ public partial class ScenePreview : UserControl
         if (renderedOverlay != visuals.OverlayScreen || renderedOverlayVersion != visuals.ScreenVersion)
         {
             ScriptScreenCanvas.Children.Clear();
+            MainScriptScreenCanvas.Children.Clear();
             var layout = project.Engine.Screens.Screens.FirstOrDefault(item => item.Id == visuals.OverlayScreen);
-            ScriptScreenViewbox.Visibility = layout == null ? Visibility.Collapsed : Visibility.Visible;
+            ScriptScreenViewbox.Visibility = layout != null && visuals.ScreenLayer == "overlay" ? Visibility.Visible : Visibility.Collapsed;
+            MainScriptScreenViewbox.Visibility = layout != null && visuals.ScreenLayer == "main" ? Visibility.Visible : Visibility.Collapsed;
+            ScriptScreenViewbox.Opacity = MainScriptScreenViewbox.Opacity = visuals.ScreenOpacity;
+            var targetCanvas = visuals.ScreenLayer == "main" ? MainScriptScreenCanvas : ScriptScreenCanvas;
             if (layout != null)
                 foreach (var element in layout.Elements)
                 {
@@ -215,12 +221,16 @@ public partial class ScenePreview : UserControl
                         .Replace("{{subtitle}}", project.Engine.Game.Subtitle).Replace("{{start_label}}", project.Engine.Game.StartLabel)
                         .Replace("{{continue_label}}", project.Engine.Game.ContinueLabel).Replace("{{exit_label}}", project.Engine.Game.ExitLabel));
                     view.Width = element.Width; view.Height = element.Height; Canvas.SetLeft(view, element.X); Canvas.SetTop(view, element.Y);
-                    ScriptScreenCanvas.Children.Add(view); ScreenRenderer.Animate(view, element, animate);
+                    targetCanvas.Children.Add(view); ScreenRenderer.Animate(view, element, animate);
                 }
             renderedOverlay = visuals.OverlayScreen; renderedOverlayVersion = visuals.ScreenVersion;
         }
         if (renderedSceneStory is { } previousStory && previousStory.Kind == story.Kind && previousStory.Speaker == story.Speaker &&
-            previousStory.Text == story.Text && previousStory.Options.SequenceEqual(story.Options)) return;
+            previousStory.Text == story.Text && previousStory.Options.SequenceEqual(story.Options))
+        {
+            ApplyGameplayUi(visuals, story);
+            return;
+        }
         renderedSceneStory = story;
         DialoguePanel.Visibility = story.Text.Length > 0 || story.Options.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         SpeakerText.Text = story.Speaker; SpeakerText.Visibility = story.Speaker.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -239,6 +249,7 @@ public partial class ScenePreview : UserControl
             };
             ChoicePanel.Children.Add(button);
         }
+        ApplyGameplayUi(visuals, story);
     }
 
     private static Brush Brush(string color) => new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));

@@ -2,7 +2,7 @@ using System.IO;
 
 namespace KNE;
 
-public sealed record SceneVisuals(string? Background, string? Character, string Position,
+public sealed partial record SceneVisuals(string? Background, string? Character, string Position,
     string? Music, bool LoopMusic, long MusicVersion, string? Sound, long SoundVersion)
 {
     public static SceneVisuals Empty { get; } = new(null, null, "center", null, false, 0, null, 0);

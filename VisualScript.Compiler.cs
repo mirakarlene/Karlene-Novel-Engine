@@ -21,6 +21,7 @@ public sealed partial class VisualScript
                 if (string.IsNullOrEmpty(target) || !map.ContainsKey(target))
                     Fail(node, "соедините все выходы с существующими блоками");
                 if (map[target!].Kind == ScriptNodeKind.Start) Fail(node, "нельзя соединять выход с блоком «Начало»");
+                if (map[target!].Kind == ScriptNodeKind.Comment) Fail(node, "комментарии не имеют портов и не подключаются к схеме");
             }
         }
         var visited = new HashSet<string>(StringComparer.Ordinal);
@@ -151,7 +152,13 @@ public sealed partial class VisualScript
         ScriptNodeKind.Shake => $"screen_shake({Number(node.Amount)}, {Number(node.Duration)})",
         ScriptNodeKind.Flash => $"screen_flash({Quote(node.Value)}, {Number(node.Duration)})",
         ScriptNodeKind.Camera => $"camera({Number(node.Amount)}, {Number(node.OffsetX)}, {Number(node.OffsetY)}, {Number(node.Duration)})",
-        ScriptNodeKind.ShowScreen => $"show_screen({Quote(node.Path)})",
+        ScriptNodeKind.ShowScreen => $"show_screen({Quote(node.Path)}, {Number(node.Opacity)}, {Quote(node.ScreenLayer)})",
+        ScriptNodeKind.ClearBackgrounds => "clear_backgrounds()",
+        ScriptNodeKind.ClearSprites => "clear_sprites()",
+        ScriptNodeKind.IncludeLua => $"include_lua({Quote(node.Path)})",
+        ScriptNodeKind.IncludeCs => $"include_cs({Quote(node.Path)})",
+        ScriptNodeKind.Script => $"run_script({Quote(node.Path)})",
+        ScriptNodeKind.ConfigureDialogue or ScriptNodeKind.ConfigureButton => $"configure_ui({Quote(node.Kind == ScriptNodeKind.ConfigureDialogue ? "dialogue" : node.UiTarget)}, {Quote(System.Text.Json.JsonSerializer.Serialize(node.Ui ?? GameplayUiStyle.ForTarget(node.Kind == ScriptNodeKind.ConfigureDialogue ? "dialogue" : node.UiTarget), EngineSettings.JsonOptions))})",
         ScriptNodeKind.Join => $"kne_join(state[{Quote(node.Variable)}])",
         ScriptNodeKind.Timer or ScriptNodeKind.Pause => $"kne_pause({Number(node.Duration)})",
         ScriptNodeKind.WaitCondition => $"kne_wait_condition(function() return {Comparison(node)} end, {Number(node.Duration)})",
@@ -198,6 +205,18 @@ public sealed partial class VisualScript
 
     private static void ValidateCommand(ScriptNode node)
     {
+        if (node.Kind == ScriptNodeKind.ConfigureButton && (node.UiTarget == "dialogue" || !GameplayUiStyle.IsTarget(node.UiTarget)))
+            Fail(node, "выберите игровую кнопку: choice, next, save, load, auto_save или pause");
+        if (node.Kind == ScriptNodeKind.ShowScreen && (node.Opacity < 0 || node.Opacity > 1 || node.ScreenLayer is not ("main" or "overlay")))
+            Fail(node, "прозрачность должна быть от 0 до 1, слой — main или overlay");
+        if (node.Kind is ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script)
+        {
+            string extension = Path.GetExtension(node.Path).ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(node.Path) || (node.Kind == ScriptNodeKind.IncludeLua && extension != ".lua") ||
+                (node.Kind == ScriptNodeKind.IncludeCs && extension != ".cs") ||
+                (node.Kind == ScriptNodeKind.Script && extension is not (".lua" or ".krl" or ".cs")))
+                Fail(node, "выберите файл .lua / .cs, для скрипта также доступен .krl");
+        }
         if (node.Kind is ScriptNodeKind.Choice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async &&
             (node.Options.Count == 0 || node.Options.Any(o => string.IsNullOrWhiteSpace(o.Text))))
             Fail(node, "укажите от 1 до 20 непустых вариантов выбора или ветвей");

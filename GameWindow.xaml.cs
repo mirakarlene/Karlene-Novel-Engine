@@ -161,6 +161,11 @@ public partial class GameWindow : Window
     private void SceneArea_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         if (project == null) return;
+        if (runtime?.Visuals.UiConfigurations.Any(item => item.Target == "dialogue") == true)
+        {
+            DialoguePanel.MaxHeight = double.PositiveInfinity;
+            return;
+        }
         // Reserve space for the top controls and margins when the player shrinks the window.
         DialoguePanel.MaxHeight = Math.Max(120, e.NewSize.Height - 2 * project.Engine.Theme.Dialogue.Margin - 80);
     }
@@ -182,6 +187,7 @@ public partial class GameWindow : Window
         await runtime.DisposeAsync();
         if (closed) { await candidate.DisposeAsync(); return; }
         runtime = candidate;
+        gameplayUi?.Reset();
         clockSuspended = false;
         lastSceneTick = System.Diagnostics.Stopwatch.GetTimestamp();
         ready = true;
@@ -471,6 +477,7 @@ public partial class GameWindow : Window
         }
         RenderStory();
         RenderVisuals();
+        ApplyGameplayUi(runtime.Visuals);
         HandleSceneEnd(runtime.Story);
     }
 
@@ -550,6 +557,9 @@ public partial class GameWindow : Window
         }
         catch (Exception ex) { QueueOutput("Ошибка звука: " + ex.Message); }
         RenderBlockEffects(scene);
+        bool showDefaultBackground = !scene.BackgroundsCleared && runtime.WindowSettings.Background == project.Engine.Theme.BackgroundColor;
+        DefaultBackground.Visibility = DefaultBackgroundImage.Visibility = showDefaultBackground ? Visibility.Visible : Visibility.Collapsed;
+        AnimatedBackdrop.Visibility = showDefaultBackground && project.Engine.Theme.BackgroundImage == null ? Visibility.Visible : Visibility.Collapsed;
         renderedVisuals = scene;
     }
 

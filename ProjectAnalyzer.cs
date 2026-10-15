@@ -101,8 +101,9 @@ public static class ProjectAnalyzer
                     functions.Add(new(visual.FunctionName, path, 1, []));
                     foreach (var node in visual.Nodes)
                     {
-                        if (node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound or ScriptNodeKind.Voice && !string.IsNullOrWhiteSpace(node.Path))
+                        if (node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script && !string.IsNullOrWhiteSpace(node.Path))
                             CheckResource(root, path, null, node.Path, findings, node.Id);
+                        if (node.Ui?.Texture is { Length: > 0 } texture) CheckResource(root, path, null, texture, findings, node.Id);
                         if (node.Kind is ScriptNodeKind.CallScene or ScriptNodeKind.GotoScene)
                             references.Add(new(node.Path, path, 1, node.Id));
                     }
@@ -248,7 +249,7 @@ public static class ProjectAnalyzer
                 if (target == null && LuaSource.IsIdentifier(tokens[argument].Text)) target = tokens[argument].Text;
                 if (target != null) references.Add(new(target, source.Path, tokens[i].Line, Identifier: tokens[argument].Token.Kind != LuaTokenKind.String));
             }
-            if (name is "background" or "show_character" or "play_music" or "play_sound")
+            if (name is "background" or "show_character" or "play_music" or "play_sound" or "include_lua" or "include_cs" or "run_script")
             {
                 string? resource = Literal(tokens[argument]);
                 if (resource != null && resource.Length > 0) CheckResource(root, source.Path, tokens[i].Line, resource, findings);

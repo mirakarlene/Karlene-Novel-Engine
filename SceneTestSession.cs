@@ -75,6 +75,8 @@ public sealed class SceneTestSession : IAsyncDisposable
     {
         var scripts = GameScripts.Load(project, new(selection.FilePath, selection.Source));
         string sources = string.Join("\n", scripts.Files.Select(file => file.Path + "\n" + file.Priority + "\n" + file.Source));
+        foreach (string path in ProjectLoader.EnumerateFiles(project.Path, token).Files.Where(path => Path.GetExtension(path).Equals(".cs", StringComparison.OrdinalIgnoreCase)).Order(StringComparer.OrdinalIgnoreCase))
+            sources += "\n" + Path.GetRelativePath(project.Path, path) + "\n" + File.ReadAllText(path);
         foreach (string relative in new[] { "project.json", "engine/state.json" })
         {
             string path = PathSafety.ResolveRelative(project.Path, relative);

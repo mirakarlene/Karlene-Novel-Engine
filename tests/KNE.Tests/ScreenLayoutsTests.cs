@@ -76,7 +76,7 @@ public sealed class ScreenLayoutsTests
         main.Elements[1].Id = main.Elements[0].Id;
         Assert.Throws<InvalidDataException>(layouts.Validate);
         main.Elements[1].Id = "subtitle";
-        while (layouts.Screens.Count < 32) layouts.AddScreen("custom");
+        while (layouts.Screens.Count < 32) layouts.AddScreen("custom " + layouts.Screens.Count);
         Assert.Throws<InvalidOperationException>(() => layouts.AddScreen("overflow"));
         layouts.Validate();
     }
