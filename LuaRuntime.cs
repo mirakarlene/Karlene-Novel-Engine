@@ -8,7 +8,7 @@ using NLua;
 namespace KNE;
 
 /// <summary>Owns a Lua state used only by serialized background operations.</summary>
-public sealed class LuaRuntime : IGameSession
+public sealed partial class LuaRuntime : IGameSession
 {
     private readonly ProjectInfo project;
     private readonly Action<string> output;
@@ -96,6 +96,9 @@ public sealed class LuaRuntime : IGameSession
         Register(nameof(ShouldPublishVariables), "kne_should_publish_variables");
         Register(nameof(TransitionPending), "kne_transition_pending");
         Register(nameof(ErrorSnapshotNeeded), "kne_error_snapshot_needed");
+        Register(nameof(ValidateEndAction), "kne_validate_end");
+        Register(nameof(SuspendFlowError), "kne_suspend_flow_error");
+        Register(nameof(RestoreFlowError), "kne_restore_flow_error");
         lua["project_dir"] = project.Path;
         lua["kne_interactive"] = interactive;
         lua["kne_editor"] = editorSource?.StepCommands == true;
@@ -112,7 +115,9 @@ public sealed class LuaRuntime : IGameSession
             math.randomseed(kne_seed)
             function init() error("init(приоритет) должен быть первым оператором файла до запуска игры.") end
             for _, name in ipairs({"set_window_title", "set_window_size", "set_bg_color", "background",
-                                  "show_character", "hide_character", "play_music", "stop_music", "play_sound"}) do
+                                  "show_character", "hide_character", "play_music", "stop_music", "play_sound",
+                                  "show_title", "hide_background", "move_visual", "animate_visual", "screen_shake",
+                                  "screen_flash", "camera", "show_screen", "set_audio_channel", "play_audio", "stop_audio", "set_master_volume"}) do
                 _G[name] = function(...)
                     local problem = kne_script_api(name, table.pack(...))
                     if problem ~= "" then error(problem, 2) end
@@ -139,9 +144,9 @@ public sealed class LuaRuntime : IGameSession
                 end
                 return coroutine.yield(kne_event_location({kind = "choice", text = tostring(prompt), options = labels}))
             end
-            function kne_resume(answer)
-                local ok, event = coroutine.resume(kne_story, answer)
-                if not ok then error(event, 0) end
+            function kne_resume(answer, seconds, tick)
+                local ok, event = coroutine.resume(kne_story, answer, seconds, tick)
+                if not ok then error(tostring(event), 0) end
                 return coroutine.status(kne_story), event
             end
             """, "KNE API");
@@ -171,7 +176,7 @@ public sealed class LuaRuntime : IGameSession
         using var main = lua["kne_entry"] as LuaFunction ?? throw new InvalidDataException("Не найдена игровая функция: " + entryName);
         if (interactive)
         {
-            lua.DoString("kne_story = kne_scene_thread(function() kne_run_scene(kne_entry) end)", "KNE scene");
+            lua.DoString("kne_story = kne_scene_thread(function() return kne_run_scene(kne_entry) end)", "KNE scene");
             ResumeStory(null);
         }
         else
@@ -251,18 +256,36 @@ public sealed class LuaRuntime : IGameSession
         if (!replaying) history.Add(new StoryAction("choose", before, option));
     }, cancellationToken, "Выбор ответа");
 
-    private void ResumeStory(object? answer)
+    public Task TickAsync(double seconds, CancellationToken cancellationToken = default)
+    {
+        if (!double.IsFinite(seconds) || seconds <= 0 || seconds > 60) throw new ArgumentOutOfRangeException(nameof(seconds));
+        return RunAsync(() =>
+        {
+            if (!initialized || !Story.NeedsTick) return;
+            InstallHook();
+            string before = FrameSignature(Story);
+            ResumeStory(null, seconds, tick: true);
+            if (!replaying) history.Add(new StoryAction("tick", before, Command: seconds.ToString("R", System.Globalization.CultureInfo.InvariantCulture)));
+        }, cancellationToken, "Фоновая ветка сценария");
+    }
+
+    private void ResumeStory(object? answer, double seconds = 0, bool tick = false)
     {
         using var resume = (LuaFunction)lua!["kne_resume"];
-        object[] result = resume.Call(answer);
+        object[] result = resume.Call(answer, seconds, tick);
         StoryFrame frame;
-        if ((string)result[0] == "dead") frame = new StoryFrame("completed", "", "История завершена.", Array.Empty<string>());
+        if ((string)result[0] == "dead")
+        {
+            using var ending = result.Length > 1 ? result[1] as LuaTable : null;
+            frame = new StoryFrame("completed", "", "История завершена.", Array.Empty<string>())
+            { EndAction = ending?["action"] as string, EndScreen = ending?["screen"] as string };
+        }
         else
         {
             using var value = result.Length > 1 ? result[1] as LuaTable : null;
             if (value == null) throw new InvalidDataException("Сцена приостановлена без реплики или выбора.");
             string kind = value["kind"] as string ?? "";
-            if (kind is not ("dialogue" or "choice" or "preview")) throw new InvalidDataException("Неизвестное событие сцены: " + kind);
+            if (kind is not ("dialogue" or "choice" or "preview" or "wait")) throw new InvalidDataException("Неизвестное событие сцены: " + kind);
             lock (stateLock) location = new PreviewLocation(value["file"] as string ?? "", Convert.ToInt32(value["line"] ?? 0),
                 value["node"] as string, value["functionline"] == null ? null : Convert.ToInt32(value["functionline"]));
             var options = new List<string>();
@@ -273,9 +296,10 @@ public sealed class LuaRuntime : IGameSession
             }
             frame = kind == "preview" ? Story with { Kind = "preview", Options = Array.Empty<string>() } :
                 new StoryFrame(kind, value["speaker"] as string ?? "", value["text"] as string ?? "", options.AsReadOnly());
-            frame = frame with { Identity = frames?.ResolveKey(value["key"] as string, Location!.File, Location.Line, Location.FunctionLine) ??
+            frame = frame with { HasBackgroundTasks = value["background"] as bool? == true,
+                Identity = frames?.ResolveKey(value["key"] as string, Location!.File, Location.Line, Location.FunctionLine) ??
                 frames?.Resolve(Location!.File, Location.Line, Location.NodeId, Location.FunctionLine) };
-            if (kind != "preview") PrintToUI(frame.Speaker.Length == 0 ? frame.Text : frame.Speaker + ": " + frame.Text);
+            if (kind is "dialogue" or "choice" && !tick) PrintToUI(frame.Speaker.Length == 0 ? frame.Text : frame.Speaker + ": " + frame.Text);
         }
         lock (stateLock) story = frame;
     }
@@ -321,13 +345,20 @@ public sealed class LuaRuntime : IGameSession
                     case "command" when !string.IsNullOrWhiteSpace(action.Command):
                         using (var command = lua!["kne_invoke_command"] as LuaFunction) command!.Call(action.Command);
                         break;
+                    case "tick" when Story.NeedsTick && double.TryParse(action.Command, System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out double seconds) && double.IsFinite(seconds) && seconds > 0 && seconds <= 60:
+                        ResumeStory(null, seconds, tick: true); break;
                     default: throw new InvalidDataException("Некорректная последовательность действий в сохранении.");
                 }
             }
             if (FrameSignature(Story) != FrameSignature(checkpoint.Frame)) throw new InvalidDataException("Реплика сохранения не совпадает со сценарием.");
             lua!.DoString("for k in pairs(state) do state[k] = nil end; local restored = " + StateLiteral(checkpoint.State) + "; for k,v in pairs(restored) do state[k] = v end", "KNE restore state");
             history.AddRange(checkpoint.History);
-            lock (stateLock) visuals = visuals with { Sound = null };
+            lock (stateLock) visuals = visuals with
+            {
+                Sound = null,
+                AudioChannels = visuals.AudioChannels.Select(channel => channel.Channel is "sfx" or "voice" && !channel.Loop ? channel with { Path = null } : channel).ToArray()
+            };
         }
         finally { replaying = false; }
     }, cancellationToken, "Загрузка сохранения");
@@ -360,20 +391,36 @@ public sealed class LuaRuntime : IGameSession
     private static string FrameSignature(StoryFrame frame) => JsonSerializer.Serialize(new
         { frame.Kind, frame.Speaker, frame.Text, frame.Options, frame.Completed });
 
-    private static object ReadState(LuaTable table, int depth)
+    private static object ReadState(LuaTable table, int depth, bool allowArray = false)
     {
         if (depth > 16) throw new InvalidDataException("state слишком глубокий или содержит цикл.");
         var map = new Dictionary<string, object?>();
+        var array = new SortedDictionary<int, object?>();
         foreach (KeyValuePair<object, object> entry in table)
         {
-            if (entry.Key is not string key) throw new InvalidDataException("Ключи state должны быть строками.");
+            object? value;
             if (entry.Value is LuaTable nested)
             {
-                using (nested) map[key] = ReadState(nested, depth + 1);
+                using (nested) value = ReadState(nested, depth + 1, allowArray: true);
             }
-            else if (entry.Value is null or string or bool or long or int or double) map[key] = entry.Value;
+            else if (entry.Value is null or string or bool or long or int or double) value = entry.Value;
             else throw new InvalidDataException("state может содержать только числа, строки, логические значения и вложенные таблицы.");
-            if (map.Count > 10_000) throw new InvalidDataException("state слишком большой.");
+            if (entry.Key is string key) map[key] = value;
+            else if (allowArray && entry.Key is double or long or int)
+            {
+                double index = Convert.ToDouble(entry.Key, System.Globalization.CultureInfo.InvariantCulture);
+                if (!double.IsFinite(index) || index != Math.Truncate(index) || index < 1 || index > 10_000)
+                    throw new InvalidDataException("Массив state должен иметь последовательные индексы от 1 до 10000.");
+                array[(int)index] = value;
+            }
+            else throw new InvalidDataException("Ключи state должны быть строками; во вложенном массиве — последовательными числами от 1.");
+            if (map.Count + array.Count > 10_000) throw new InvalidDataException("state слишком большой.");
+        }
+        if (array.Count > 0)
+        {
+            if (map.Count > 0 || array.Keys.Last() != array.Count)
+                throw new InvalidDataException("state не поддерживает смешанные таблицы или массивы с пропущенными индексами.");
+            return array.Values.ToArray();
         }
         return map;
     }
@@ -381,12 +428,13 @@ public sealed class LuaRuntime : IGameSession
     private static string StateLiteral(JsonElement element) => element.ValueKind switch
     {
         JsonValueKind.Object => "{" + string.Join(",", element.EnumerateObject().Select(p => "[" + LuaQuote(p.Name) + "]=" + StateLiteral(p.Value))) + "}",
+        JsonValueKind.Array => "{" + string.Join(",", element.EnumerateArray().Select(StateLiteral)) + "}",
         JsonValueKind.String => LuaQuote(element.GetString()!),
         JsonValueKind.Number => element.GetRawText(),
         JsonValueKind.True => "true",
         JsonValueKind.False => "false",
         JsonValueKind.Null => "nil",
-        _ => throw new InvalidDataException("В state не поддерживаются массивы.")
+        _ => throw new InvalidDataException("Недопустимое значение state.")
     };
 
     private static string LuaQuote(string text)
@@ -505,7 +553,9 @@ public sealed class LuaRuntime : IGameSession
                     PlayMusic(Text(1)!, loop as bool? ?? true); break;
                 case "stop_music": StopMusic(); break;
                 case "play_sound": PlaySound(Text(1)!); break;
-                default: throw new ArgumentException("Неизвестная команда игры: " + name);
+                default:
+                    if (!TryInvokeEffect(name, arguments, out string problem)) throw new ArgumentException("Неизвестная команда игры: " + name);
+                    return problem;
             }
             return "";
         }
@@ -547,6 +597,10 @@ public sealed class LuaRuntime : IGameSession
         if (!replaying) variablesUpdated?.Invoke(value);
     }
     public bool ErrorSnapshotNeeded(string problem) => scriptFailure == null || scriptFailure.Value.Problem != problem;
+
+    /// <summary>Validates an engine-owned end screen without changing the visible scene.</summary>
+    public string ValidateEndAction(string action, string? screen) => action == "screen" &&
+        !project.Engine.Screens.Screens.Any(item => item.Id == screen) ? "Экран не найден: " + screen : "";
 
     public void ReceiveVariables(LuaTable snapshot)
     {
@@ -599,14 +653,20 @@ public sealed class LuaRuntime : IGameSession
     {
         string path = ResourcePaths.Resolve(project.Path, relative, audio: true);
         lock (stateLock) visuals = visuals with { Music = path, LoopMusic = loop, MusicVersion = visuals.MusicVersion + 1 };
+        UpdateAudio("music", current => current with { Path = path, Loop = loop, Version = current.Version + 1 });
     }
 
-    public void StopMusic() { lock (stateLock) visuals = visuals with { Music = null, MusicVersion = visuals.MusicVersion + 1 }; }
+    public void StopMusic()
+    {
+        lock (stateLock) visuals = visuals with { Music = null, MusicVersion = visuals.MusicVersion + 1 };
+        UpdateAudio("music", current => current with { Path = null, Version = current.Version + 1 });
+    }
 
     public void PlaySound(string relative)
     {
         string path = ResourcePaths.Resolve(project.Path, relative, audio: true);
         lock (stateLock) visuals = visuals with { Sound = path, SoundVersion = visuals.SoundVersion + 1 };
+        UpdateAudio("sfx", current => current with { Path = path, Loop = false, Version = current.Version + 1 });
     }
 
     public void SetWindowSize(int width, int height)

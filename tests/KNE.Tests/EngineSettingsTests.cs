@@ -86,7 +86,7 @@ public sealed class EngineSettingsTests
     [InlineData("state.json", "[]")]
     [InlineData("state.json", "null")]
     [InlineData("state.json", "{\"x\":null}")]
-    [InlineData("state.json", "{\"x\":[1]}")]
+    [InlineData("state.json", "{\"x\":[null]}")]
     [InlineData("state.json", "{\"x\":1,\"x\":2}")]
     [InlineData("state.json", "{\"x\":1e999}")]
     [InlineData("window.json", "null")]

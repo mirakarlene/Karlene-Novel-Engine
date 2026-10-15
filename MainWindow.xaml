@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:KNE"
         Title="Karlene Novel Engine" Height="950" Width="1500" MinHeight="700" MinWidth="1100" Background="#FFF7F6FA"
-        Loaded="Window_Loaded" Closed="Window_Closed" Closing="Window_Closing">
+        Loaded="Window_Loaded" Closed="Window_Closed" Closing="Window_Closing" PreviewKeyDown="MainWindow_PreviewKeyDown">
+    <Grid>
     <DockPanel Margin="20" Background="#FFF7F6FA">
         <TextBlock x:Name="OperationStatus" DockPanel.Dock="Bottom" Margin="0,12,0,0" TextWrapping="Wrap"/>
         <Grid>
@@ -71,7 +72,7 @@
                 </DataGrid>
                     <Grid x:Name="EditorWorkspace" Grid.Row="1" Grid.Column="2" Visibility="Collapsed">
                         <local:ScriptEditor x:Name="SceneEditor" Visibility="Collapsed"
-                            TestSceneRequested="SceneEditor_TestSceneRequested" ExternalEditorRequested="SceneEditor_ExternalEditorRequested"
+                            BlockLibraryRequested="SceneEditor_BlockLibraryRequested" TestSceneRequested="SceneEditor_TestSceneRequested" ExternalEditorRequested="SceneEditor_ExternalEditorRequested"
                             RunRequested="SceneEditor_RunRequested" MainSceneRequested="SceneEditor_MainSceneRequested" CloseRequested="SceneEditor_CloseRequested"/>
                     </Grid>
                 </Grid>
@@ -115,4 +116,12 @@
             </StackPanel>
         </Grid>
     </DockPanel>
+        <Border x:Name="BlockLibraryOverlay" Visibility="Collapsed" Background="#B9181420" Padding="36" MouseDown="BlockLibraryBackdrop_Click"
+                KeyboardNavigation.TabNavigation="Cycle">
+            <Border Background="#FFF9F8FC" CornerRadius="12" Padding="24" MaxWidth="1120" MaxHeight="760" VerticalAlignment="Center" HorizontalAlignment="Stretch"
+                    MouseDown="BlockLibraryPanel_Click">
+                <local:BlockLibraryView x:Name="LibraryView" BlockSelected="Library_BlockSelected" CloseRequested="Library_CloseRequested"/>
+            </Border>
+        </Border>
+    </Grid>
 </Window>

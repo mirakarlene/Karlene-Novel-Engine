@@ -8,6 +8,7 @@ internal static class SceneRuntimeLua
             local definitions, loaded = {}, {}
             local owned = setmetatable({}, {__mode = "k"})
             local transfer = {}
+            local flow_failure = {}
             local active_stack = {}
             local scene_test = kne_scene_test == true
             function kne_scene_owned(thread) return owned[thread] == true end
@@ -18,6 +19,10 @@ internal static class SceneRuntimeLua
             end
             local inspect, traceback = debug.getinfo, debug.traceback
             function kne_capture_error(thread, problem)
+                if type(problem) == "table" and problem.token == flow_failure then
+                    kne_restore_flow_error(problem.context)
+                    return problem
+                end
                 if kne_error_snapshot_needed(tostring(problem)) then kne_publish_variables(thread or coroutine.running()) end
                 local trace = thread and traceback(thread, tostring(problem), 0) or traceback(tostring(problem), 2)
                 for level = 1, 100 do
@@ -103,45 +108,201 @@ internal static class SceneRuntimeLua
             end
             call = call_scene
             jump = goto_scene
+            local function duration(value)
+                if type(value) ~= "number" or value ~= value or value < 0 or value > 3600 then
+                    error("Время должно быть числом от 0 до 3600 секунд", 3)
+                end
+                return value
+            end
+            local function flow(event)
+                if not owned[coroutine.running()] then error("Команда доступна только внутри игровой сцены", 3) end
+                return coroutine.yield(kne_event_location(event))
+            end
+            local function branches(entries)
+                if type(entries) ~= "table" or #entries < 1 or #entries > 64 then error("Нужно от 1 до 64 параллельных веток", 3) end
+                for index = 1, #entries do if type(entries[index]) ~= "function" then error("Ветка должна быть функцией", 3) end end
+                return entries
+            end
+            function kne_pause(seconds) return flow({kind = "pause", seconds = duration(seconds)}) end
+            kne_timer = kne_pause
+            function kne_wait_condition(condition, timeout)
+                if type(condition) ~= "function" then error("Ожидание требует функцию условия", 2) end
+                timeout = duration(timeout or 0)
+                local wait_id = {}
+                while not condition() do
+                    local elapsed = flow({kind = "poll", timeout = timeout, wait_id = wait_id})
+                    if elapsed == false then error("Истекло время ожидания условия", 2) end
+                end
+            end
+            function kne_parallel(entries)
+                local ok, problem = flow({kind = "spawn", entries = branches(entries), detached = false})
+                if ok == false then error(problem, 0) end
+            end
+            function kne_async(entries) return flow({kind = "spawn", entries = branches(entries), detached = true}) end
+            function kne_join(handle)
+                if type(handle) ~= "number" or handle % 1 ~= 0 then error("Join требует идентификатор асинхронной ветки", 2) end
+                local ok, problem = flow({kind = "join", handle = handle})
+                if ok == false then error(problem, 0) end
+            end
+            function kne_end(action, screen)
+                if action ~= "menu" and action ~= "screen" and action ~= "exit" then error("Неизвестное действие конца", 2) end
+                if action == "screen" and (type(screen) ~= "string" or screen == "") then error("Укажите экран конца", 2) end
+                local problem = kne_validate_end(action, screen)
+                if problem ~= "" then error(problem, 2) end
+                return flow({kind = "end", action = action, screen = screen})
+            end
             function kne_run_scene(entry)
-                local stack, input, transitions = {kne_scene_thread(entry)}, table.pack(), 0
-                active_stack = stack
-                while #stack > 0 do
-                    local thread = stack[#stack]
+                local tasks, groups, clock, group_id, visible = {}, {}, 0, 0, nil
+                local function create(fn, detached, group)
+                    local task = {stack = {kne_scene_thread(fn)}, input = table.pack(), detached = detached, group = group, transitions = 0}
+                    tasks[#tasks + 1] = task
+                    return task
+                end
+                local root = create(entry, false)
+                local function close_task(task)
+                    for _, group in pairs(groups) do
+                        if group.owner == task then for _, child in ipairs(group) do close_task(child) end end
+                    end
+                    if task.done then return end
+                    task.done = true
+                    for _, thread in ipairs(task.stack) do
+                        owned[thread] = nil
+                        if coroutine.status(thread) ~= "dead" then pcall(coroutine.close, thread) end
+                    end
+                    task.stack, task.done = {}, true
+                end
+                local function close_others()
+                    for _, task in ipairs(tasks) do if task ~= root then close_task(task) end end
+                end
+                local function group_done(handle)
+                    local group = groups[handle]
+                    if not group then error("Не найдена асинхронная ветка: " .. tostring(handle)) end
+                    for _, task in ipairs(group) do if not task.done then return false end end
+                    return true
+                end
+                local function refresh_threads()
+                    active_stack = {}
+                    for _, task in ipairs(tasks) do
+                        for _, thread in ipairs(task.stack) do active_stack[#active_stack + 1] = thread end
+                    end
+                end
+                local function fail(task, problem)
+                    local thread = task.stack[#task.stack]
+                    kne_capture_error(thread, problem)
+                    if task.group and (not task.detached or groups[task.group].awaited) then
+                        local group = groups[task.group]
+                        group.failure = setmetatable({token = flow_failure, context = kne_suspend_flow_error(), message = tostring(problem)},
+                            {__tostring = function(value) return value.message end})
+                        for _, child in ipairs(group) do close_task(child) end
+                        return
+                    end
+                    for _, current in ipairs(tasks) do close_task(current) end
+                    error(problem, 0)
+                end
+                local function step(task)
+                    local stack, thread = task.stack, task.stack[#task.stack]
                     owned[thread] = true
-                    local values = table.pack(coroutine.resume(thread, table.unpack(input, 1, input.n)))
-                    if not values[1] then kne_capture_error(thread, values[2]); error(values[2], 0) end
+                    local values = table.pack(coroutine.resume(thread, table.unpack(task.input, 1, task.input.n)))
+                    task.input = table.pack()
+                    if not values[1] then return fail(task, values[2]) end
                     if coroutine.status(thread) == "dead" then
                         kne_transition_pending(#stack > 1)
                         owned[thread] = nil
                         table.remove(stack)
-                        input = table.pack(table.unpack(values, 2, values.n))
-                    else
-                        local event = values[2]
-                        if type(event) ~= "table" then error("Сцена приостановлена без команды") end
-                        if event.token == transfer then
-                            kne_transition_pending(true)
-                            transitions = transitions + 1
-                            if transitions > 10000 then error(kne_capture_error(thread, "Больше 10000 переходов между репликами"), 0) end
-                            if event.kind == "call" and #stack >= 64 then error(kne_capture_error(thread, "Глубина вызовов сцен больше 64"), 0) end
-                            local ok, next_entry = pcall(resolve, event.target)
-                            if not ok then error(kne_capture_error(thread, next_entry), 0) end
-                            -- Validate the destination before ending the selected scene, without running its successor.
-                            -- Only an engine-owned root transfer can reach this boundary.
-                            if scene_test and #stack == 1 and event.kind == "goto" then return end
-                            if event.kind == "goto" then
-                                owned[thread] = nil
-                                table.remove(stack)
-                                local ok, problem = coroutine.close(thread)
-                                if not ok then error(problem) end
-                            end
-                            stack[#stack + 1] = kne_scene_thread(next_entry)
-                            input = event.args
-                        elseif event.kind == "dialogue" or event.kind == "choice" or (kne_editor and event.kind == "preview") then
+                        task.input = table.pack(table.unpack(values, 2, values.n))
+                        task.done = #stack == 0
+                        return
+                    end
+                    local event = values[2]
+                    if type(event) ~= "table" then return fail(task, "Сцена приостановлена без команды") end
+                    if event.token == transfer then
+                        kne_transition_pending(true)
+                        task.transitions = task.transitions + 1
+                        if task.transitions > 10000 then return fail(task, "Больше 10000 переходов между репликами") end
+                        if event.kind == "call" and #stack >= 64 then return fail(task, "Глубина вызовов сцен больше 64") end
+                        local ok, next_entry = pcall(resolve, event.target)
+                        if not ok then return fail(task, next_entry) end
+                        if task == root and #stack == 1 and event.kind == "goto" then
+                            close_others()
+                            if scene_test then close_task(root); return end
+                        end
+                        if event.kind == "goto" then owned[thread] = nil; table.remove(stack); pcall(coroutine.close, thread) end
+                        stack[#stack + 1], task.input = kne_scene_thread(next_entry), event.args
+                    elseif event.kind == "spawn" then
+                        local count = 0
+                        for _, current in ipairs(tasks) do if not current.done then count = count + 1 end end
+                        if count + #event.entries > 128 then return fail(task, "Одновременно разрешено не более 128 веток") end
+                        group_id = group_id + 1
+                        if group_id > 10000 then return fail(task, "Больше 10000 групп параллельных веток") end
+                        local group = {owner = task, awaited = not event.detached}; groups[group_id] = group
+                        for _, fn in ipairs(event.entries) do group[#group + 1] = create(fn, task.detached or event.detached, group_id) end
+                        if event.detached then task.input = table.pack(group_id) else task.join = group_id end
+                    elseif event.kind == "join" then
+                        if task.group == event.handle then return fail(task, "Ветка не может ожидать завершения собственной группы") end
+                        local ok, completed = pcall(group_done, event.handle)
+                        if not ok then return fail(task, completed) end
+                        groups[event.handle].awaited = true
+                        if completed and groups[event.handle].failure then task.input = table.pack(false, groups[event.handle].failure)
+                        elseif not completed then task.join = event.handle end
+                    elseif event.kind == "pause" then
+                        if event.seconds > 0 then task.wake = clock + event.seconds end
+                    elseif event.kind == "poll" then
+                        if task.poll_id ~= event.wait_id then task.poll_id, task.poll_started = event.wait_id, clock end
+                        task.poll_timeout = event.timeout
+                        task.wake = clock + 0.01
+                    elseif event.kind == "end" then
+                        root.ending = {kind = "completed", action = event.action, screen = event.screen,
+                            file = event.file, line = event.line, node = event.node, key = event.key, functionline = event.functionline}
+                        for _, current in ipairs(tasks) do close_task(current) end
+                    elseif event.kind == "dialogue" or event.kind == "choice" or (kne_editor and event.kind == "preview") then
+                        task.transitions = 0
+                        if task.detached then
+                            if event.kind == "choice" then return fail(task, "Выбор недоступен в фоновой асинхронной ветке; используйте Параллель") end
+                            if event.kind == "dialogue" then print_to_ui(event.speaker == "" and event.text or event.speaker .. ": " .. event.text) end
+                        else
                             if event.kind ~= "preview" then kne_transition_pending(false) end
-                            transitions = 0
-                            input = table.pack(coroutine.yield(event))
-                        else error("Неизвестная команда сцены") end
+                            task.event = event
+                        end
+                    else return fail(task, "Неизвестная команда сцены: " .. tostring(event.kind)) end
+                end
+                while true do
+                    local progressed, passes = true, 0
+                    while progressed and not root.done do
+                        progressed = false
+                        for _, task in ipairs(tasks) do
+                            if not task.done and task.join and group_done(task.join) then
+                                if groups[task.join].failure then task.input = table.pack(false, groups[task.join].failure) end
+                                task.join = nil
+                            end
+                            if not task.done and task.wake and clock + 0.0000001 >= task.wake then
+                                task.wake = nil
+                                if task.poll_started then
+                                    task.input = table.pack(not (task.poll_timeout > 0 and clock - task.poll_started + 0.0000001 >= task.poll_timeout))
+                                end
+                            end
+                            if not task.done and not task.event and not task.join and not task.wake then
+                                step(task); progressed = true; passes = passes + 1
+                                if passes > 10000 then fail(task, "Больше 10000 команд без остановки; добавьте паузу") end
+                            end
+                            if root.done then break end
+                        end
+                    end
+                    refresh_threads()
+                    if root.done then close_others(); return root.ending end
+                    if not visible or visible.done or not visible.event then
+                        visible = nil
+                        for _, task in ipairs(tasks) do if not task.done and task.event then visible = task; break end end
+                    end
+                    local background = false
+                    for _, task in ipairs(tasks) do if not task.done and (task.detached or task.wake or task.join) then background = true; break end end
+                    local event = visible and visible.event or {kind = "wait"}
+                    event.background = background
+                    if not kne_interactive then
+                        clock = clock + 0.1
+                    else
+                        local answer, seconds, tick = coroutine.yield(event)
+                        if tick then clock = clock + (seconds or 0)
+                        elseif visible then visible.event, visible.input = nil, table.pack(answer); visible = nil end
                     end
                 end
             end

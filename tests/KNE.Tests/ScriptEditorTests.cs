@@ -80,12 +80,9 @@ public sealed class ScriptEditorTests
             Assert.Equal(Visibility.Collapsed, ((Button)editor.FindName("ExternalEditorButton")).Visibility);
             await editor.SaveAsync(); await editor.OpenAsync(fixture.ProjectPath, path);
             Assert.Equal("Несохранённая реплика", editor.Document!.Graph!.Nodes.Single(n => n.Id == "dialogue").Text);
-            var types = (ComboBox)editor.FindName("BlockType");
-            types.SelectedItem = types.Items.Cast<ScriptNode>().Single(n => n.Kind == ScriptNodeKind.CallScene);
-            Click(editor, "AddBlockButton");
+            editor.AddBlock(ScriptNodeKind.CallScene);
             Assert.Contains("продолжить со следующего блока", ((TextBlock)editor.FindName("TransitionHelp")).Text);
-            types.SelectedItem = types.Items.Cast<ScriptNode>().Single(n => n.Kind == ScriptNodeKind.GotoScene);
-            Click(editor, "AddBlockButton");
+            editor.AddBlock(ScriptNodeKind.GotoScene);
             Assert.Contains("Продолжение этой ветки не выполняется", ((TextBlock)editor.FindName("TransitionHelp")).Text);
         });
     }
@@ -123,10 +120,8 @@ public sealed class ScriptEditorTests
         await OnStaAsync(async () =>
         {
             var editor = new ScriptEditor(); await editor.OpenAsync(fixture.ProjectPath, path);
-            var types = (ComboBox)editor.FindName("BlockType");
-            var item = types.Items.Cast<ScriptNode>().Single(n => n.Kind == kind);
-            Assert.Equal(title, item.Title); types.SelectedItem = item;
-            Click(editor, "AddBlockButton");
+            Assert.Equal(title, new ScriptNode { Kind = kind }.Title);
+            editor.AddBlock(kind);
             var added = editor.Document!.Graph!.Nodes.Single(n => n.Kind == kind);
             Assert.Equal(Visibility.Visible, ((StackPanel)editor.FindName("PathField")).Visibility);
             Assert.Equal("Имя функции", ((TextBlock)editor.FindName("PathLabel")).Text);
@@ -182,9 +177,7 @@ public sealed class ScriptEditorTests
             var canvas = (Canvas)editor.FindName("GraphCanvas");
             Assert.Equal(3, canvas.Children.OfType<Border>().Count());
             Assert.Equal(2, canvas.Children.OfType<System.Windows.Shapes.Path>().Count());
-            var types = (ComboBox)editor.FindName("BlockType");
-            types.SelectedItem = types.Items.Cast<ScriptNode>().Single(n => n.Kind == ScriptNodeKind.Choice);
-            Click(editor, "AddBlockButton");
+            editor.AddBlock(ScriptNodeKind.Choice);
             var choice = editor.Document!.Graph!.Nodes.Single(n => n.Kind == ScriptNodeKind.Choice);
             ((TextBox)editor.FindName("SceneTextInput")).Text = "Куда?";
             ((TextBox)editor.FindName("OptionsInput")).Text = "Домой\nКонец\n";

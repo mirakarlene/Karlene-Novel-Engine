@@ -38,11 +38,14 @@
     </Window.Resources>
     <Grid>
         <Grid x:Name="SceneArea" ClipToBounds="True" SizeChanged="SceneArea_SizeChanged">
+            <Grid x:Name="VisualLayer">
             <Border x:Name="DefaultBackground"/>
             <local:AnimatedBackground x:Name="AnimatedBackdrop"/>
             <Image x:Name="DefaultBackgroundImage" Stretch="UniformToFill"/>
             <Image x:Name="BackgroundImage" Stretch="UniformToFill"/>
             <Image x:Name="CharacterImage" Stretch="Uniform" Width="420" HorizontalAlignment="Center" VerticalAlignment="Bottom"/>
+            </Grid>
+            <TextBlock x:Name="SceneTitle" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" FontSize="36" Foreground="{DynamicResource GameTextBrush}" Margin="48" IsHitTestVisible="False" Visibility="Collapsed"/>
             <Border x:Name="DialoguePanel" VerticalAlignment="Bottom" Height="240"
                     Background="#ED21162F" BorderBrush="#FF8E60B5" BorderThickness="1" CornerRadius="16" Margin="28" Padding="24"
                     MouseLeftButtonUp="Dialogue_Click" Visibility="Collapsed">
@@ -59,6 +62,8 @@
                             Click="NextButton_Click" IsEnabled="False"/>
                 </Grid>
             </Border>
+            <Viewbox x:Name="ScriptScreenViewbox" Stretch="Uniform" Visibility="Collapsed"><Canvas x:Name="ScriptScreenCanvas" Width="1280" Height="720"/></Viewbox>
+            <Border x:Name="SceneFlash" Background="White" Opacity="0" IsHitTestVisible="False"/>
         </Grid>
         <StackPanel x:Name="GameControls" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="24" Visibility="Collapsed">
             <Button x:Name="SaveButton" Content="Сохранить" Padding="14,7" Margin="0,0,8,0" Click="SaveButton_Click" IsEnabled="False"/>

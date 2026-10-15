@@ -61,7 +61,8 @@ public sealed class EditorPreview : IAsyncDisposable
     public async Task StepAsync(CancellationToken token = default)
     {
         if (session == null || Story.Completed || NeedsChoice) return;
-        await session.AdvanceAsync(token).ConfigureAwait(false);
+        if (Story.Kind == "wait") await session.TickAsync(1, token).ConfigureAwait(false);
+        else await session.AdvanceAsync(token).ConfigureAwait(false);
         Reached = Matches(); Status = DescribeLocation();
     }
 
@@ -86,6 +87,7 @@ public sealed class EditorPreview : IAsyncDisposable
                 choiceIndex++;
                 await session!.ChooseAsync(remembered.Answer, token).ConfigureAwait(false);
             }
+            else if (Story.Kind == "wait") await session!.TickAsync(1, token).ConfigureAwait(false);
             else await session!.AdvanceAsync(token).ConfigureAwait(false);
         }
         throw new InvalidDataException("Предпросмотр остановлен после 2000 шагов. Выберите более ранний сегмент или проверьте цикл.");
@@ -97,7 +99,7 @@ public sealed class EditorPreview : IAsyncDisposable
         string relative = Path.GetRelativePath(project.Path, target.FilePath).Replace('\\', '/');
         if (!Location.File.Replace('\\', '/').Equals(relative, StringComparison.OrdinalIgnoreCase) &&
             !Location.File.Equals(target.FilePath, StringComparison.OrdinalIgnoreCase)) return false;
-        if (targetFunctionLine != null && Location.FunctionLine != null && targetFunctionLine != Location.FunctionLine)
+        if (target.NodeId == null && targetFunctionLine != null && Location.FunctionLine != null && targetFunctionLine != Location.FunctionLine)
             return false;
         return target.NodeId != null ? target.NodeId == Location.NodeId : Location.Line >= target.Line;
     }

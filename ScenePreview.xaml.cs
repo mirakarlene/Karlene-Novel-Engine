@@ -22,7 +22,22 @@ public partial class ScenePreview : UserControl
     private bool captureSelection;
     public Func<EditorSelection?>? SelectionProvider { get; set; }
     public event EventHandler<int>? SceneChoiceRequested;
+    /// <summary>Resets presentation clocks before replaying or restarting a scene, without creating a worker.</summary>
+    public void ResetPresentation()
+    {
+        sceneEffects?.Stop();
+        AnimatedBackdrop.BeginAnimation(AnimatedBackground.PhaseProperty, null);
+        renderedBackdropAnimate = null; renderedSceneStory = null;
+        renderedOverlay = null; renderedOverlayVersion = -1;
+    }
     private bool standalone;
+    private SceneEffectsPresenter? sceneEffects;
+    private string? renderedOverlay;
+    private long renderedOverlayVersion = -1;
+    private string? renderedBackgroundPath;
+    private string? renderedCharacterPath;
+    private bool? renderedBackdropAnimate;
+    private StoryFrame? renderedSceneStory;
     public void DisplayScene(ProjectInfo value, RuntimeWindowSettings window, SceneVisuals visuals, StoryFrame story, bool animate, bool allowChoices)
     {
         standalone = true; PreviewToolbar.Visibility = PreviewStatus.Visibility = Visibility.Collapsed;
@@ -34,6 +49,7 @@ public partial class ScenePreview : UserControl
     public ScenePreview()
     {
         InitializeComponent();
+        sceneEffects = new(VisualLayer, BackgroundImage, CharacterImage, SceneFlash, SceneTitle);
         debounce.Tick += async (_, _) =>
         {
             debounce.Stop();
@@ -71,6 +87,7 @@ public partial class ScenePreview : UserControl
     public void Stop()
     {
         active = false; revision++; debounce.Stop(); operation?.Cancel();
+        ResetPresentation();
         var previous = preview; preview = null; pendingSelection = null;
         AnimatedBackdrop.BeginAnimation(AnimatedBackground.PhaseProperty, null);
         if (previous != null) _ = DisposePreviousAsync(previous);
@@ -147,13 +164,19 @@ public partial class ScenePreview : UserControl
         SpeakerText.FontSize = dialogue.SpeakerFontSize; SpeakerText.Foreground = Brush(dialogue.SpeakerColor);
         DialogueText.FontSize = dialogue.FontSize; DialogueText.Foreground = Brush(dialogue.TextColor);
         SpeakerText.FontFamily = DialogueText.FontFamily = new FontFamily(theme.FontFamily);
+        SceneTitle.FontFamily = new FontFamily(theme.FontFamily); SceneTitle.Foreground = Brush(theme.TextColor);
         CharacterImage.Width = theme.CharacterWidth;
         ClearScene();
     }
 
     private void ClearScene()
     {
+        sceneEffects?.Stop();
+        ScriptScreenCanvas.Children.Clear(); ScriptScreenViewbox.Visibility = Visibility.Collapsed;
+        renderedOverlay = null; renderedOverlayVersion = -1;
         BackgroundImage.Source = CharacterImage.Source = null;
+        renderedBackgroundPath = renderedCharacterPath = null;
+        renderedBackdropAnimate = null; renderedSceneStory = null;
         DialoguePanel.Visibility = Visibility.Collapsed; ChoicePanel.Children.Clear();
         AnimatedBackdrop.Configure(project?.Engine.Theme ?? new(), false);
         StepButton.IsEnabled = false;
@@ -174,10 +197,31 @@ public partial class ScenePreview : UserControl
         SceneArea.Background = Brush(window.Background);
         DefaultBackground.Visibility = window.Background == theme.BackgroundColor ? Visibility.Visible : Visibility.Collapsed;
         DefaultBackgroundImage.Visibility = DefaultBackground.Visibility;
-        BackgroundImage.Source = LoadImage(visuals.Background); CharacterImage.Source = LoadImage(visuals.Character);
+        if (renderedBackgroundPath != visuals.Background) { BackgroundImage.Source = LoadImage(visuals.Background); renderedBackgroundPath = visuals.Background; }
+        if (renderedCharacterPath != visuals.Character) { CharacterImage.Source = LoadImage(visuals.Character); renderedCharacterPath = visuals.Character; }
         AnimatedBackdrop.Visibility = visuals.Background == null && theme.BackgroundImage == null && DefaultBackground.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
-        AnimatedBackdrop.Configure(theme, animate);
+        if (renderedBackdropAnimate != animate) { AnimatedBackdrop.Configure(theme, animate); renderedBackdropAnimate = animate; }
         CharacterImage.HorizontalAlignment = visuals.Position switch { "left" => HorizontalAlignment.Left, "right" => HorizontalAlignment.Right, _ => HorizontalAlignment.Center };
+        sceneEffects!.Apply(visuals, animate);
+        if (renderedOverlay != visuals.OverlayScreen || renderedOverlayVersion != visuals.ScreenVersion)
+        {
+            ScriptScreenCanvas.Children.Clear();
+            var layout = project.Engine.Screens.Screens.FirstOrDefault(item => item.Id == visuals.OverlayScreen);
+            ScriptScreenViewbox.Visibility = layout == null ? Visibility.Collapsed : Visibility.Visible;
+            if (layout != null)
+                foreach (var element in layout.Elements)
+                {
+                    var view = ScreenRenderer.Create(element, theme, project.Path, text => text.Replace("{{title}}", project.Title)
+                        .Replace("{{subtitle}}", project.Engine.Game.Subtitle).Replace("{{start_label}}", project.Engine.Game.StartLabel)
+                        .Replace("{{continue_label}}", project.Engine.Game.ContinueLabel).Replace("{{exit_label}}", project.Engine.Game.ExitLabel));
+                    view.Width = element.Width; view.Height = element.Height; Canvas.SetLeft(view, element.X); Canvas.SetTop(view, element.Y);
+                    ScriptScreenCanvas.Children.Add(view); ScreenRenderer.Animate(view, element, animate);
+                }
+            renderedOverlay = visuals.OverlayScreen; renderedOverlayVersion = visuals.ScreenVersion;
+        }
+        if (renderedSceneStory is { } previousStory && previousStory.Kind == story.Kind && previousStory.Speaker == story.Speaker &&
+            previousStory.Text == story.Text && previousStory.Options.SequenceEqual(story.Options)) return;
+        renderedSceneStory = story;
         DialoguePanel.Visibility = story.Text.Length > 0 || story.Options.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         SpeakerText.Text = story.Speaker; SpeakerText.Visibility = story.Speaker.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         DialogueText.Text = story.Text; ChoicePanel.Children.Clear();

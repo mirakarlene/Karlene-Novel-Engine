@@ -109,8 +109,9 @@ public partial class GameWindow
                 slider.Value = element.Action == "music_volume" ? preferences.MusicVolume : preferences.SoundVolume;
                 slider.ValueChanged += (_, _) =>
                 {
-                    if (element.Action == "music_volume") { preferences.MusicVolume = slider.Value; music.Volume = slider.Value; }
-                    else { preferences.SoundVolume = slider.Value; sound.Volume = slider.Value; }
+                    if (element.Action == "music_volume") preferences.MusicVolume = slider.Value;
+                    else preferences.SoundVolume = slider.Value;
+                    RefreshAudioVolumes();
                     preferencesDirty = true;
                 };
             }

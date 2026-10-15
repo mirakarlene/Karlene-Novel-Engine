@@ -65,7 +65,7 @@ public sealed class EngineSettings
             Диалог: height, margin, padding, corner_radius, font_size, speaker_font_size и цвета.
             game.json: main_menu, подписи кнопок, subtitle, auto_save, execution_timeout_seconds,
             debug_enabled (F3), начальный запуск и продолжение из quick/auto.
-            state.json: начальные переменные state (объект; строки, числа, true/false, вложенные объекты).
+            state.json: начальные переменные state (объект; строки, числа, true/false, вложенные объекты и массивы).
             Затем gamelogic.lua может переопределить начальные переменные и настройки окна.
             Escape — меню паузы; F11 — полноэкранный режим; F3 — журнал и команды отладки.
             В fullscreen системная рамка скрыта; F11 возвращает оконный режим.
@@ -148,9 +148,13 @@ public sealed class EngineSettings
                     ValidateState(property.Value, depth + 1);
                 }
                 break;
+            case JsonValueKind.Array:
+                if (value.GetArrayLength() > 10_000) throw new InvalidDataException("engine/state.json: массив больше 10000 элементов.");
+                foreach (var item in value.EnumerateArray()) ValidateState(item, depth + 1);
+                break;
             case JsonValueKind.String: case JsonValueKind.True: case JsonValueKind.False: break;
             case JsonValueKind.Number when value.TryGetDouble(out double number) && double.IsFinite(number): break;
-            default: throw new InvalidDataException("engine/state.json: разрешены объекты, строки, конечные числа и логические значения.");
+            default: throw new InvalidDataException("engine/state.json: разрешены объекты, массивы, строки, конечные числа и логические значения.");
         }
     }
 
