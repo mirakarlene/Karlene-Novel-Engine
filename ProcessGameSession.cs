@@ -50,6 +50,11 @@ public sealed class ProcessGameSession : IGameSession
     public Task StartAsync(CancellationToken cancellationToken = default) => ExecuteAsync("start", cancellationToken);
     public Task AdvanceAsync(CancellationToken cancellationToken = default) => ExecuteAsync("advance", cancellationToken);
     public Task ChooseAsync(int option, CancellationToken cancellationToken = default) => ExecuteAsync("choose", cancellationToken, option: option);
+    public Task TickAsync(double seconds, CancellationToken cancellationToken = default)
+    {
+        if (!double.IsFinite(seconds) || seconds <= 0 || seconds > 60) throw new ArgumentOutOfRangeException(nameof(seconds));
+        return Story.NeedsTick ? ExecuteAsync("tick", cancellationToken, seconds: seconds) : Task.CompletedTask;
+    }
     public Task ProcessCommandAsync(string command, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
@@ -76,7 +81,7 @@ public sealed class ProcessGameSession : IGameSession
     }
 
     private async Task<WorkerMessage> ExecuteAsync(string command, CancellationToken token, int option = 0,
-        string? text = null, GameCheckpoint? checkpoint = null)
+        string? text = null, GameCheckpoint? checkpoint = null, double seconds = 0)
     {
         CancellationToken shutdown;
         lock (sync)
@@ -89,7 +94,7 @@ public sealed class ProcessGameSession : IGameSession
         try
         {
             token.ThrowIfCancellationRequested();
-            var exchange = ExchangeAsync(command, option, text, checkpoint, linked.Token);
+            var exchange = ExchangeAsync(command, option, text, checkpoint, linked.Token, seconds);
             WorkerMessage message;
             try { message = await exchange.WaitAsync(ExecutionLimit, linked.Token).ConfigureAwait(false); }
             catch
@@ -132,7 +137,7 @@ public sealed class ProcessGameSession : IGameSession
     }
 
     private async Task<WorkerMessage> ExchangeAsync(string command, int option, string? text,
-        GameCheckpoint? checkpoint, CancellationToken token)
+        GameCheckpoint? checkpoint, CancellationToken token, double seconds = 0)
     {
         Process process;
         bool restart;
@@ -176,7 +181,7 @@ public sealed class ProcessGameSession : IGameSession
         }
         if (restart && started && command is not ("start" or "restore"))
             await SendAsync(process, new(++requestId, "restore", Checkpoint: safePoint, EditorSource: editorSource), token).ConfigureAwait(false);
-        return await SendAsync(process, new(++requestId, command, option, text, checkpoint, editorSource), token).ConfigureAwait(false);
+        return await SendAsync(process, new(++requestId, command, option, text, checkpoint, editorSource, seconds), token).ConfigureAwait(false);
     }
 
     private async Task<WorkerMessage> SendAsync(Process process, WorkerRequest request, CancellationToken token)

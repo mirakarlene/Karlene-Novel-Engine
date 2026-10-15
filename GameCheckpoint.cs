@@ -18,6 +18,7 @@ public interface IGameSession : IAsyncDisposable
     Task StartAsync(CancellationToken cancellationToken = default);
     Task AdvanceAsync(CancellationToken cancellationToken = default);
     Task ChooseAsync(int option, CancellationToken cancellationToken = default);
+    Task TickAsync(double seconds, CancellationToken cancellationToken = default) => Task.CompletedTask;
     Task ProcessCommandAsync(string command, CancellationToken cancellationToken = default);
     Task<GameCheckpoint> GetCheckpointAsync(CancellationToken cancellationToken = default);
     Task RestoreAsync(GameCheckpoint checkpoint, CancellationToken cancellationToken = default);

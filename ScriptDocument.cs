@@ -81,6 +81,7 @@ public sealed class ScriptDocument
         path = PathSafety.EnsureInside(root, path);
         if (!IsVisualPath(path)) throw new ArgumentException("Выберите расширение .knegraph.");
         var graph = VisualScript.Create();
+        graph.Nodes.Single(node => node.Kind == ScriptNodeKind.End).EndAction = ScriptEndAction.Menu;
         string stem = Path.GetFileNameWithoutExtension(path);
         string name = "scene_" + new string(stem.Select(c => char.IsAsciiLetterOrDigit(c) || c == '_' ? c : '_').ToArray());
         var used = new HashSet<string>(StringComparer.Ordinal);

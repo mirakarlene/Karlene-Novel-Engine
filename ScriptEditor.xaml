@@ -29,8 +29,7 @@
                 <WrapPanel Margin="0,0,0,6">
                     <TextBlock Text="Функция" VerticalAlignment="Center" Margin="0,0,5,4"/>
                     <TextBox x:Name="FunctionNameInput" Width="130" Margin="0,0,8,4" ToolTip="Имя функции этой блок-схемы. main — единственная точка старта игры."/>
-                    <ComboBox x:Name="BlockType" Width="140" Margin="0,0,5,4" DisplayMemberPath="Title"/>
-                    <Button x:Name="AddBlockButton" Content="+ Блок" Padding="8,4" Margin="0,0,8,4" Click="Add_Click"/>
+                    <Button x:Name="AddBlockButton" Content="+ Добавить блок" Padding="12,5" Margin="0,0,12,4" Click="Add_Click"/>
                     <TextBlock Text="Масштаб" VerticalAlignment="Center" Margin="0,0,5,4"/>
                     <Button x:Name="ZoomOutButton" Content="−" Width="26" Margin="0,0,4,4" Click="ZoomOut_Click" ToolTip="Уменьшить на один шаг"/>
                     <Slider x:Name="ZoomSlider" Minimum="0.4" Maximum="1.5" Value="1" Width="75" ValueChanged="Zoom_Changed" Margin="0,0,0,4"/>
@@ -50,13 +49,14 @@
                     <TextBlock x:Name="SelectedTitle" Text="Свойства блока" FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,0,8"/>
                     <StackPanel x:Name="SpeakerField"><TextBlock Text="Говорящий (пусто — рассказчик)" TextWrapping="Wrap"/><TextBox x:Name="SpeakerInput" Margin="0,3,0,8"/></StackPanel>
                     <StackPanel x:Name="TextField"><TextBlock Text="Текст / вопрос"/><TextBox x:Name="SceneTextInput" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" Margin="0,3,0,8"/></StackPanel>
-                    <StackPanel x:Name="OptionsField"><TextBlock Text="Ответы — по одному на строку" TextWrapping="Wrap"/><TextBox x:Name="OptionsInput" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" Margin="0,3,0,8"/></StackPanel>
+                    <StackPanel x:Name="OptionsField"><TextBlock x:Name="OptionsLabel" Text="Ответы — по одному на строку" TextWrapping="Wrap"/><TextBox x:Name="OptionsInput" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" Margin="0,3,0,8"/></StackPanel>
                     <StackPanel x:Name="PathField"><TextBlock x:Name="PathLabel" Text="Путь от корня проекта"/><TextBox x:Name="PathInput" Margin="0,3,0,8"/><Button x:Name="BrowsePathButton" Content="Выбрать ресурс…" Click="BrowseResource_Click" Margin="0,0,0,8"/></StackPanel>
                     <StackPanel x:Name="PositionField"><TextBlock Text="Позиция"/><ComboBox x:Name="PositionInput" Margin="0,3,0,8"><ComboBoxItem Content="left"/><ComboBoxItem Content="center"/><ComboBoxItem Content="right"/></ComboBox></StackPanel>
                     <CheckBox x:Name="LoopInput" Content="Повторять музыку" Margin="0,0,0,8"/>
                     <TextBlock x:Name="TransitionHelp" Foreground="#FF536174" TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed"/>
-                    <StackPanel x:Name="VariableField"><TextBlock Text="Переменная state"/><TextBox x:Name="VariableInput" Margin="0,3,0,8"/><TextBlock Text="Тип значения"/><ComboBox x:Name="ValueTypeInput" Margin="0,3,0,8" DisplayMemberPath="Label" SelectedValuePath="Value"/><TextBlock Text="Значение"/><TextBox x:Name="ValueInput" Margin="0,3,0,8"/></StackPanel>
+                    <StackPanel x:Name="VariableField"><TextBlock x:Name="VariableLabel" Text="Переменная state"/><TextBox x:Name="VariableInput" Margin="0,3,0,8"/><TextBlock x:Name="ValueTypeLabel" Text="Тип значения"/><ComboBox x:Name="ValueTypeInput" Margin="0,3,0,8" DisplayMemberPath="Label" SelectedValuePath="Value"/><TextBlock x:Name="ValueLabel" Text="Значение"/><TextBox x:Name="ValueInput" Margin="0,3,0,8"/></StackPanel>
                     <StackPanel x:Name="ComparisonField"><TextBlock Text="Сравнение"/><ComboBox x:Name="ComparisonInput" Margin="0,3,0,8" DisplayMemberPath="Label" SelectedValuePath="Value"/></StackPanel>
+                    <StackPanel x:Name="ExtendedProperties"/>
                     <Button x:Name="ApplyPropertiesButton" Content="Применить свойства" Click="Apply_Click" Padding="8,5" Margin="0,0,0,6"/>
                     <Button x:Name="DeleteBlockButton" Content="Удалить блок" Click="Delete_Click" Padding="8,5" Margin="0,0,0,8"/>
                     <TextBlock Text="Правая кнопка мыши — перемещать обзор. Ctrl+колесо или +/− — масштаб. Связь: выход → вход; правая кнопка по выходу удаляет связь. Заголовок блока можно перетаскивать." Foreground="#FF536174" TextWrapping="Wrap"/>

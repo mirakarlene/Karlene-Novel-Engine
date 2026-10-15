@@ -42,11 +42,12 @@ public partial class GameWindow : Window
         Title = project.Title;
         ApplyEngineTheme();
         runtime = new ProcessGameSession(project, QueueOutput, preview: preview);
-        music.MediaEnded += (_, _) => { if (runtime.Visuals.LoopMusic) { music.Position = TimeSpan.Zero; music.Play(); } };
+        InitializeBlockEffects();
+        music.MediaEnded += (_, _) => { if (runtime.Visuals.AudioChannels.All(c => c.Channel != "music") && runtime.Visuals.LoopMusic) { music.Position = TimeSpan.Zero; music.Play(); } };
         music.MediaFailed += (_, e) => QueueOutput("Ошибка музыки: " + e.ErrorException.Message);
         sound.MediaFailed += (_, e) => QueueOutput("Ошибка звука: " + e.ErrorException.Message);
         renderTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background,
-            (_, _) => RenderOutput(), Dispatcher);
+            PlayerClock_Tick, Dispatcher);
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -146,8 +147,8 @@ public partial class GameWindow : Window
         DeleteSelectedButton.IsEnabled = false;
         AnimatedBackdrop.Configure(project.Engine.Theme, false);
         renderTimer.Stop();
-        music.Close();
-        sound.Close();
+        CloseAudio();
+        sceneEffects?.Stop();
         currentErrorReport = GameErrorReport.Create(project, error, operation);
         StartupErrorMessage.Text = currentErrorReport.ToDisplayText();
         ErrorActionStatus.Text = "";
@@ -181,9 +182,12 @@ public partial class GameWindow : Window
         await runtime.DisposeAsync();
         if (closed) { await candidate.DisposeAsync(); return; }
         runtime = candidate;
+        clockSuspended = false;
+        lastSceneTick = System.Diagnostics.Stopwatch.GetTimestamp();
         ready = true;
         renderedStory = null; renderedSettings = null; renderedVisuals = null;
-        music.Close(); sound.Close();
+        CloseAudio();
+        sceneEffects?.Stop();
         ShowGameplay();
     }
 
@@ -221,7 +225,7 @@ public partial class GameWindow : Window
         DialoguePanel.Visibility = Visibility.Collapsed;
         GameControls.Visibility = Visibility.Collapsed;
         DebugOverlay.Visibility = Visibility.Collapsed;
-        music.Pause(); sound.Pause();
+        PauseAudio();
         ContinueButton.IsEnabled = saves.Exists("auto") || saves.Exists("quick");
         if (ready) ResumeButton.Focus(); else StartButton.Focus();
     }
@@ -229,11 +233,13 @@ public partial class GameWindow : Window
     private void ShowGameplay()
     {
         if (startupFailed) return;
+        lastSceneTick = System.Diagnostics.Stopwatch.GetTimestamp();
+        clockSuspended = false;
         activeScreen = null; screenHistory.Clear();
         MenuOverlay.Visibility = Visibility.Collapsed;
         DialoguePanel.Visibility = Visibility.Visible;
         GameControls.Visibility = Visibility.Visible;
-        if (runtime.Visuals.Music != null) music.Play();
+        ResumeAudio();
         NextButton.Focus();
     }
 
@@ -269,6 +275,7 @@ public partial class GameWindow : Window
     private async Task ExecuteAsync(Func<Task> action, bool starting = false, string operation = "Выполнение сценария")
     {
         if (closed || startupFailed || execution != null) return;
+        clockSuspended = false;
         execution = new CancellationTokenSource();
         string? operationNotice = null;
         StopButton.IsEnabled = true;
@@ -339,6 +346,7 @@ public partial class GameWindow : Window
 
     private void StopButton_Click(object sender, RoutedEventArgs e)
     {
+        clockSuspended = true; clockTickOperation?.Cancel();
         execution?.Cancel();
         StopButton.IsEnabled = false;
         StatusText.Text = "Остановка…";
@@ -425,10 +433,11 @@ public partial class GameWindow : Window
     private async void Window_Closed(object? sender, EventArgs e)
     {
         closed = true;
+        blockFlowLifetime.Cancel();
         renderTimer.Stop();
         FlushPreferences();
-        music.Close();
-        sound.Close();
+        CloseAudio();
+        sceneEffects?.Stop();
         execution?.Cancel();
         try { await runtime.DisposeAsync(); }
         catch (Exception ex) { System.Diagnostics.Trace.TraceError("Lua cleanup failed: {0}", ex); }
@@ -462,6 +471,7 @@ public partial class GameWindow : Window
         }
         RenderStory();
         RenderVisuals();
+        HandleSceneEnd(runtime.Story);
     }
 
     private void RenderConsole()
@@ -524,7 +534,7 @@ public partial class GameWindow : Window
         CharacterImage.HorizontalAlignment = scene.Position switch { "left" => HorizontalAlignment.Left, "right" => HorizontalAlignment.Right, _ => HorizontalAlignment.Center };
         try
         {
-            if (scene.MusicVersion != renderedVisuals?.MusicVersion)
+            if (!scene.AudioChannels.Any(c => c.Channel == "music") && scene.MusicVersion != renderedVisuals?.MusicVersion)
             {
                 music.Close();
                 if (scene.Music != null) { music.Open(new Uri(scene.Music)); music.Play(); }
@@ -533,12 +543,13 @@ public partial class GameWindow : Window
         catch (Exception ex) { QueueOutput("Ошибка музыки: " + ex.Message); }
         try
         {
-            if (scene.Sound != null && scene.SoundVersion != renderedVisuals?.SoundVersion)
+            if (!scene.AudioChannels.Any(c => c.Channel == "sfx") && scene.Sound != null && scene.SoundVersion != renderedVisuals?.SoundVersion)
             {
                 sound.Open(new Uri(scene.Sound)); sound.Play();
             }
         }
         catch (Exception ex) { QueueOutput("Ошибка звука: " + ex.Message); }
+        RenderBlockEffects(scene);
         renderedVisuals = scene;
     }
 

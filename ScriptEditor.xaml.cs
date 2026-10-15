@@ -26,6 +26,8 @@ public partial class ScriptEditor : UserControl
     public event EventHandler? PreviewRequested;
     public event EventHandler? ExternalEditorRequested;
     public event EventHandler? TestSceneRequested;
+    /// <summary>Requests the block library overlay in the owning main window.</summary>
+    public event EventHandler? BlockLibraryRequested;
 
     /// <summary>Captures unsaved edits for an isolated editor worker.</summary>
     public EditorSelection? CapturePreview() => CapturePreview(false);
@@ -69,9 +71,6 @@ public partial class ScriptEditor : UserControl
     public ScriptEditor()
     {
         InitializeComponent();
-        BlockType.ItemsSource =
-            Enum.GetValues<ScriptNodeKind>().Select(kind => new ScriptNode { Kind = kind }).ToArray();
-        BlockType.SelectedIndex = 1;
         ValueTypeInput.ItemsSource = new[]
         {
             new { Label = "Число", Value = ScriptValueKind.Number },
@@ -327,21 +326,7 @@ public partial class ScriptEditor : UserControl
     private void Add_Click(object sender, RoutedEventArgs e) => Guard(() =>
     {
         ApplyProperties();
-        if (Document?.Graph is not { } model || BlockType.SelectedItem is not ScriptNode type) return;
-        if (model.Nodes.Count >= 500) throw new InvalidDataException("Допускается не более 500 блоков.");
-        if (type.Kind == ScriptNodeKind.Start && model.Nodes.Any(n => n.Kind == ScriptNodeKind.Start))
-            throw new InvalidOperationException("Блок «Начало» уже существует.");
-        Remember();
-        var node = new ScriptNode
-        {
-            Kind = type.Kind, X = (40 - CanvasPan.X) / ZoomSlider.Value,
-            Y = (180 - CanvasPan.Y) / ZoomSlider.Value + model.Nodes.Count % 6 * 25,
-            Text = type.Kind == ScriptNodeKind.Choice ? "Выберите вариант" : "Новая реплика"
-        };
-        if (node.Kind == ScriptNodeKind.Choice) node.Options = [new() { Text = "Да" }, new() { Text = "Нет" }];
-        model.Nodes.Add(node);
-        selectedId = node.Id;
-        Repaint();
+        if (Document?.Graph != null) BlockLibraryRequested?.Invoke(this, EventArgs.Empty);
     });
 
     private ScriptNode? Selected => Document?.Graph?.Nodes.FirstOrDefault(n => n.Id == selectedId);
@@ -360,6 +345,7 @@ public partial class ScriptEditor : UserControl
             PropertiesPanel.IsEnabled = true;
             SelectedTitle.Text = node?.Title ?? "Выберите блок";
             ApplyPropertiesButton.IsEnabled = DeleteBlockButton.IsEnabled = node != null;
+            UpdateExtendedProperties(node);
             if (node == null)
             {
                 foreach (var field in new UIElement[]
@@ -381,19 +367,21 @@ public partial class ScriptEditor : UserControl
             ValueTypeInput.SelectedValue = node.ValueKind;
             ComparisonInput.SelectedValue = node.Comparison;
             Visible(SpeakerField, node.Kind == ScriptNodeKind.Dialogue);
-            Visible(TextField, node.Kind is ScriptNodeKind.Dialogue or ScriptNodeKind.Choice);
-            Visible(OptionsField, node.Kind == ScriptNodeKind.Choice);
+            Visible(TextField, node.Kind is ScriptNodeKind.Dialogue or ScriptNodeKind.Choice or ScriptNodeKind.Comment or ScriptNodeKind.Title);
+            Visible(OptionsField, node.Kind is ScriptNodeKind.Choice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async);
+            OptionsLabel.Text = node.Kind == ScriptNodeKind.Switch ? "Значения case — по одному на строку" : node.Kind is ScriptNodeKind.Parallel or ScriptNodeKind.Async ? "Названия веток — по одному на строку" : "Ответы — по одному на строку";
             Visible(PathField,
                 node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music
-                    or ScriptNodeKind.Sound or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene);
+                    or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen);
             bool sceneTarget = node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene;
-            PathLabel.Text = sceneTarget ? "Имя функции" : "Путь от корня проекта";
+            PathLabel.Text = sceneTarget ? "Имя функции" : node.Kind == ScriptNodeKind.ForEach ? "Имя коллекции в state" : node.Kind == ScriptNodeKind.ShowScreen ? "ID экрана из оформления (пусто — скрыть)" : "Путь от корня проекта";
             BrowsePathButton.Content = sceneTarget ? "Выбрать сцену…" : "Выбрать ресурс…";
-            Visible(BrowsePathButton, !sceneTarget);
+            Visible(BrowsePathButton, !sceneTarget && node.Kind is not (ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen));
             Visible(PositionField, node.Kind == ScriptNodeKind.Character);
-            Visible(LoopInput, node.Kind == ScriptNodeKind.Music);
-            Visible(VariableField, node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable);
-            Visible(ComparisonField, node.Kind == ScriptNodeKind.Condition);
+            Visible(LoopInput, node.Kind is ScriptNodeKind.Music or ScriptNodeKind.AudioChannel);
+            LoopInput.Content = "Повторять аудио";
+            Visible(VariableField, node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable or ScriptNodeKind.Switch or ScriptNodeKind.While or ScriptNodeKind.ForEach or ScriptNodeKind.TryCatch or ScriptNodeKind.SetFlag or ScriptNodeKind.CheckFlag or ScriptNodeKind.Random or ScriptNodeKind.Async or ScriptNodeKind.Join or ScriptNodeKind.WaitCondition);
+            Visible(ComparisonField, node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.While or ScriptNodeKind.WaitCondition);
             Visible(TransitionHelp, sceneTarget);
             TransitionHelp.Text = node.Kind == ScriptNodeKind.CallScene
                 ? "call — вызвать функцию, затем продолжить со следующего блока этой ветки."
@@ -419,9 +407,10 @@ public partial class ScriptEditor : UserControl
         // Edit a copy first so invalid draft properties cannot damage the current document.
         var copy = VisualScript.Parse(model.Serialize());
         var changed = copy.Nodes.Single(n => n.Id == node.Id);
+        ApplyExtendedProperties(changed);
         if (node.Kind == ScriptNodeKind.Dialogue) changed.Speaker = SpeakerInput.Text;
-        if (node.Kind is ScriptNodeKind.Dialogue or ScriptNodeKind.Choice) changed.Text = SceneTextInput.Text;
-        if (node.Kind == ScriptNodeKind.Choice)
+        if (node.Kind is ScriptNodeKind.Dialogue or ScriptNodeKind.Choice or ScriptNodeKind.Comment or ScriptNodeKind.Title) changed.Text = SceneTextInput.Text;
+        if (node.Kind is ScriptNodeKind.Choice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async)
         {
             string[] labels = OptionsInput.Text.Replace("\r", "").TrimEnd('\n').Split('\n');
             changed.Options = labels.Select((label, i) => new ScriptOption
@@ -429,18 +418,18 @@ public partial class ScriptEditor : UserControl
         }
 
         if (node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music
-            or ScriptNodeKind.Sound or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene) changed.Path = PathInput.Text.Trim();
+            or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen) changed.Path = PathInput.Text.Trim();
         if (node.Kind == ScriptNodeKind.Character)
             changed.Position = (PositionInput.SelectedItem as ComboBoxItem)?.Content.ToString() ?? "center";
-        if (node.Kind == ScriptNodeKind.Music) changed.Loop = LoopInput.IsChecked == true;
-        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable)
+        if (node.Kind is ScriptNodeKind.Music or ScriptNodeKind.AudioChannel) changed.Loop = LoopInput.IsChecked == true;
+        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable or ScriptNodeKind.Switch or ScriptNodeKind.While or ScriptNodeKind.ForEach or ScriptNodeKind.TryCatch or ScriptNodeKind.SetFlag or ScriptNodeKind.CheckFlag or ScriptNodeKind.Random or ScriptNodeKind.Async or ScriptNodeKind.Join or ScriptNodeKind.WaitCondition)
         {
             changed.Variable = VariableInput.Text.Trim();
             changed.Value = ValueInput.Text;
             changed.ValueKind = ValueTypeInput.SelectedValue is ScriptValueKind value ? value : ScriptValueKind.Number;
         }
 
-        if (node.Kind == ScriptNodeKind.Condition && ComparisonInput.SelectedValue is ScriptComparison comparison)
+        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.While or ScriptNodeKind.WaitCondition && ComparisonInput.SelectedValue is ScriptComparison comparison)
             changed.Comparison = comparison;
         if (copy.Serialize() == model.Serialize())
         {
@@ -492,13 +481,12 @@ public partial class ScriptEditor : UserControl
             var contents = new StackPanel();
             var header = new Border
             {
-                Background = node.Kind == ScriptNodeKind.Start ? Brushes.DarkGreen :
-                    node.Kind == ScriptNodeKind.End ? Brushes.DimGray : Brushes.SteelBlue,
+                Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(BlockLibrary.ColorFor(node))),
                 Height = 30, Cursor = Cursors.SizeAll
             };
             header.Child = new TextBlock
             {
-                Text = node.Title, Foreground = Brushes.White, FontWeight = FontWeights.Bold,
+                Text = node.Title, Foreground = node.Kind == ScriptNodeKind.Start ? Brushes.Black : Brushes.White, FontWeight = FontWeights.Bold,
                 ToolTip = DescribeNodeIdentity(node),
                 Margin = new Thickness(8, 5, 8, 0)
             };
@@ -627,11 +615,31 @@ public partial class ScriptEditor : UserControl
     private static string Summary(ScriptNode node) => node.Kind switch
     {
         ScriptNodeKind.Dialogue => (node.Speaker.Length == 0 ? "" : node.Speaker + ": ") + node.Text,
-        ScriptNodeKind.Choice => node.Text,
+        ScriptNodeKind.Choice or ScriptNodeKind.Comment or ScriptNodeKind.Title => node.Text,
         ScriptNodeKind.Condition or ScriptNodeKind.SetVariable => "state." + node.Variable + " / " + node.Value,
         ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound =>
             node.Path.Length == 0 ? "Ресурс не выбран" : node.Path,
         ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene => node.Path.Length == 0 ? "Функция не выбрана" : node.Path,
+        ScriptNodeKind.Switch => "state." + node.Variable + " · " + node.Options.Count + " вариантов",
+        ScriptNodeKind.While or ScriptNodeKind.WaitCondition => "state." + node.Variable + " / " + node.Value,
+        ScriptNodeKind.ForEach => "state." + node.Path + " → " + node.Variable,
+        ScriptNodeKind.TryCatch => "Ошибка → state." + node.Variable,
+        ScriptNodeKind.SetFlag or ScriptNodeKind.CheckFlag => "state." + node.Variable + " = " + node.Value,
+        ScriptNodeKind.Random => "state." + node.Variable + " ← " + node.Minimum + " … " + node.Maximum,
+        ScriptNodeKind.Parallel or ScriptNodeKind.Async => node.Options.Count + " веток" + (node.Kind == ScriptNodeKind.Async ? " → " + node.Variable : ""),
+        ScriptNodeKind.Join => "Ожидать state." + node.Variable,
+        ScriptNodeKind.Timer or ScriptNodeKind.Pause => node.Duration + " с",
+        ScriptNodeKind.MoveBackground or ScriptNodeKind.MoveCharacter => $"X {node.OffsetX} · Y {node.OffsetY} · {node.Duration} с",
+        ScriptNodeKind.Animation => node.Target + " · " + node.Text,
+        ScriptNodeKind.Camera => $"Zoom {node.Amount} · X {node.OffsetX} · Y {node.OffsetY}",
+        ScriptNodeKind.Shake => "Сила " + node.Amount + " · " + node.Duration + " с",
+        ScriptNodeKind.Flash => node.Value + " · " + node.Duration + " с",
+        ScriptNodeKind.ShowScreen => node.Path.Length == 0 ? "Скрыть дополнительный экран" : node.Path,
+        ScriptNodeKind.AudioChannel => node.Channel + " · громкость " + node.Amount,
+        ScriptNodeKind.Voice => node.Path.Length == 0 ? "Озвучка не выбрана" : node.Path,
+        ScriptNodeKind.StopSound => "Канал " + node.Channel,
+        ScriptNodeKind.MasterVolume => "Громкость " + node.Amount,
+        ScriptNodeKind.End => node.EndAction switch { ScriptEndAction.Menu => "Главное меню", ScriptEndAction.Screen => "Экран: " + node.Path, ScriptEndAction.Exit => "Закрыть игру", _ => "Завершить ветку / вернуться" },
         _ => node.Kind == ScriptNodeKind.End ? "Завершение сцены" : "Команда сцены"
     };
 

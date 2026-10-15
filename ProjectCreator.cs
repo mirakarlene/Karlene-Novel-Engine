@@ -41,6 +41,7 @@ public static class ProjectCreator
             if (authoringMode == ProjectAuthoringMode.Visual)
             {
                 var graph = VisualScript.Create();
+                graph.Nodes.Single(node => node.Kind == ScriptNodeKind.End).EndAction = ScriptEndAction.Menu;
                 var introduction = graph.Nodes.Single(n => n.Kind == ScriptNodeKind.Dialogue);
                 introduction.Text = "Добро пожаловать! Это базовая сцена.";
                 introduction.Next = "continue";

@@ -1,0 +1,265 @@
+using System.Globalization;
+using System.IO;
+using System.Text;
+
+namespace KNE;
+
+public sealed partial class VisualScript
+{
+    private string CompileCore(bool editorPreview)
+    {
+        ValidateStructure();
+        var starts = Nodes.Where(n => n.Kind == ScriptNodeKind.Start).ToArray();
+        if (starts.Length != 1) throw new InvalidDataException("Нужен ровно один блок «Начало».");
+        var map = Nodes.ToDictionary(n => n.Id, StringComparer.Ordinal);
+        foreach (var node in Nodes)
+        {
+            ValidateCommand(node);
+            foreach (var (_, target) in node.Outputs())
+            {
+                if (node.Kind == ScriptNodeKind.Comment && target == null) continue;
+                if (string.IsNullOrEmpty(target) || !map.ContainsKey(target))
+                    Fail(node, "соедините все выходы с существующими блоками");
+                if (map[target!].Kind == ScriptNodeKind.Start) Fail(node, "нельзя соединять выход с блоком «Начало»");
+            }
+        }
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var active = new HashSet<string>(StringComparer.Ordinal);
+        void Visit(ScriptNode node)
+        {
+            if (active.Contains(node.Id)) Fail(node, "произвольные циклы не поддерживаются; используйте блок While или For Each");
+            if (!visited.Add(node.Id)) return;
+            active.Add(node.Id);
+            foreach (var (_, target) in node.Outputs())
+                if (target != null) Visit(map[target]);
+            active.Remove(node.Id);
+        }
+        Visit(starts[0]);
+        if (Nodes.Any(n => !visited.Contains(n.Id) && n.Kind != ScriptNodeKind.Comment))
+            throw new InvalidDataException("Есть блоки, недостижимые из «Начала». Соедините или удалите их.");
+
+        var code = new StringBuilder("-- Сгенерировано из блок-схемы KNE.\nfunction ").Append(FunctionName).Append("()\n");
+        code.Append("    local __kne_run\n    __kne_run = function(__kne_node, __kne_stop)\n")
+            .Append("        while __kne_node and __kne_node ~= __kne_stop do\n");
+        bool first = true;
+        foreach (var node in Nodes.OrderBy(n => n.Id, StringComparer.Ordinal))
+        {
+            code.Append(first ? "            if " : "            elseif ").Append("__kne_node == ").Append(Quote(node.Id)).Append(" then\n");
+            first = false;
+            void Line(string value) => code.Append("                ").Append(value).Append('\n');
+            Line($"if kne_runtime_node then kne_runtime_node({Quote(node.Id)}) end");
+            if (editorPreview) Line($"kne_editor_node({Quote(node.Id)})");
+            string command = Command(node);
+            if (command.Length > 0) Line(command);
+            if (editorPreview && node.Kind is ScriptNodeKind.Start or ScriptNodeKind.End or ScriptNodeKind.SetVariable or ScriptNodeKind.Condition or ScriptNodeKind.Comment or ScriptNodeKind.SetFlag)
+                Line("kne_editor_pause()");
+            switch (node.Kind)
+            {
+                case ScriptNodeKind.Choice:
+                    Line($"local answer = choice({Quote(node.Text)}, {{{string.Join(", ", node.Options.Select(o => Quote(o.Text)))}}})");
+                    Line($"__kne_node = ({{{string.Join(", ", node.Options.Select(o => Quote(o.Target!)))}}})[answer]");
+                    break;
+                case ScriptNodeKind.Condition:
+                case ScriptNodeKind.CheckFlag:
+                    Line($"if {Comparison(node)} then __kne_node = {Quote(node.True!)} else __kne_node = {Quote(node.False!)} end");
+                    break;
+                case ScriptNodeKind.Switch:
+                    for (int i = 0; i < node.Options.Count; i++)
+                    {
+                        var option = node.Options[i];
+                        Line($"{(i == 0 ? "if" : "elseif")} state[{Quote(node.Variable)}] == {CaseLiteral(node, option.Text)} then");
+                        Line($"    __kne_run({Quote(option.Target!)}, {Quote(node.Next!)})");
+                    }
+                    Line($"else __kne_run({Quote(node.False!)}, {Quote(node.Next!)}) end");
+                    Line($"__kne_node = {Quote(node.Next!)}");
+                    break;
+                case ScriptNodeKind.While:
+                    Line("local __kne_iterations = 0");
+                    Line("while true do");
+                    Line($"    if kne_runtime_node then kne_runtime_node({Quote(node.Id)}) end");
+                    Line($"    if not ({Comparison(node)}) then break end");
+                    Line("    __kne_iterations = __kne_iterations + 1");
+                    Line("    if __kne_iterations > 10000 then error('Цикл While превысил 10000 итераций') end");
+                    Line($"    __kne_run({Quote(node.True!)}, {Quote(node.Next!)})");
+                    Line("end");
+                    Line($"__kne_node = {Quote(node.Next!)}");
+                    break;
+                case ScriptNodeKind.ForEach:
+                    Line($"local __kne_collection = state[{Quote(node.Path)}]");
+                    Line("if type(__kne_collection) ~= 'table' then error('For Each требует массив в state') end");
+                    Line("local __kne_size = 0");
+                    Line("for __kne_key in pairs(__kne_collection) do");
+                    Line("    __kne_size = __kne_size + 1");
+                    Line("    if __kne_size > 10000 or type(__kne_key) ~= 'number' or __kne_key % 1 ~= 0 or __kne_key < 1 or __kne_key > 10000 then error('For Each требует массив с индексами от 1 до 10000') end");
+                    Line("end");
+                    Line("for __kne_index = 1, __kne_size do if __kne_collection[__kne_index] == nil then error('For Each не допускает пропущенных индексов') end end");
+                    Line("for __kne_index, __kne_value in ipairs(__kne_collection) do");
+                    Line($"    state[{Quote(node.Variable)}] = __kne_value; state[{Quote(node.IterationKey)}] = __kne_index");
+                    Line($"    __kne_run({Quote(node.True!)}, {Quote(node.Next!)})");
+                    Line("end");
+                    Line($"__kne_node = {Quote(node.Next!)}");
+                    break;
+                case ScriptNodeKind.TryCatch:
+                    Line($"local __kne_ok, __kne_error = pcall(function() __kne_run({Quote(node.True!)}, {Quote(node.Next!)}) end)");
+                    Line("if not __kne_ok then");
+                    Line($"    state[{Quote(node.Variable)}] = tostring(__kne_error)");
+                    Line($"    __kne_run({Quote(node.False!)}, {Quote(node.Next!)})");
+                    Line("end");
+                    Line($"__kne_node = {Quote(node.Next!)}");
+                    break;
+                case ScriptNodeKind.Parallel:
+                case ScriptNodeKind.Async:
+                    string branches = string.Join(", ", node.Options.Select(o => $"function() __kne_run({Quote(o.Target!)}, {Quote(node.Next!)}) end"));
+                    Line(node.Kind == ScriptNodeKind.Parallel ? $"kne_parallel({{{branches}}})" : $"state[{Quote(node.Variable)}] = kne_async({{{branches}}})");
+                    Line($"__kne_node = {Quote(node.Next!)}");
+                    break;
+                default:
+                    Line("__kne_node = " + (node.Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene || node.Next == null ? "nil" : Quote(node.Next)));
+                    break;
+            }
+        }
+        code.Append("            else\n                error('Неизвестный блок')\n            end\n        end\n    end\n")
+            .Append("    __kne_run(").Append(Quote(starts[0].Id)).Append(", nil)\nend\n");
+        return code.ToString();
+    }
+
+    private static string Number(double value) => value.ToString("R", CultureInfo.InvariantCulture);
+
+    private static string Command(ScriptNode node) => node.Kind switch
+    {
+        ScriptNodeKind.Dialogue => $"d({(node.Speaker.Length == 0 ? "nil" : Quote(node.Speaker))}, {Quote(node.Text)})",
+        ScriptNodeKind.SetVariable => $"state[{Quote(node.Variable)}] = {Literal(node)}",
+        ScriptNodeKind.SetFlag => $"state[{Quote(node.Variable)}] = {FlagLiteral(node)}",
+        ScriptNodeKind.Random => RandomCommand(node),
+        ScriptNodeKind.Background => $"background({(node.Path.Length == 0 ? "nil" : Quote(node.Path))})",
+        ScriptNodeKind.HideBackground => "hide_background()",
+        ScriptNodeKind.Character => $"show_character({Quote(node.Path)}, {Quote(node.Position)})",
+        ScriptNodeKind.HideCharacter => "hide_character()",
+        ScriptNodeKind.Music => $"play_audio({Quote(node.Channel)}, {Quote(node.Path)}, {(node.Loop ? "true" : "false")})",
+        ScriptNodeKind.StopMusic => "stop_music()",
+        ScriptNodeKind.Sound => $"play_audio({Quote(node.Channel == "music" && node.Category.Length == 0 ? "sfx" : node.Channel)}, {Quote(node.Path)}, false)",
+        ScriptNodeKind.StopSound => $"stop_audio({Quote(node.Channel)})",
+        ScriptNodeKind.Voice => $"play_audio('voice', {Quote(node.Path)}, false)",
+        ScriptNodeKind.AudioChannel => $"set_audio_channel({Quote(node.Channel)}, {Number(node.Amount)}, {(node.Loop ? "true" : "false")})",
+        ScriptNodeKind.MasterVolume => $"set_master_volume({Number(node.Amount)})",
+        ScriptNodeKind.GotoScene => $"goto_scene({Quote(node.Path)})",
+        ScriptNodeKind.CallScene => $"call_scene({Quote(node.Path)})",
+        ScriptNodeKind.Title => $"show_title({Quote(node.Text)})",
+        ScriptNodeKind.MoveBackground => $"move_visual('background', {Number(node.OffsetX)}, {Number(node.OffsetY)}, {Number(node.Duration)})",
+        ScriptNodeKind.MoveCharacter => $"move_visual('sprite', {Number(node.OffsetX)}, {Number(node.OffsetY)}, {Number(node.Duration)})",
+        ScriptNodeKind.Animation => $"animate_visual({Quote(node.Target)}, {Quote(node.Text)}, {Number(node.Duration)}, {Number(node.Amount)})",
+        ScriptNodeKind.Shake => $"screen_shake({Number(node.Amount)}, {Number(node.Duration)})",
+        ScriptNodeKind.Flash => $"screen_flash({Quote(node.Value)}, {Number(node.Duration)})",
+        ScriptNodeKind.Camera => $"camera({Number(node.Amount)}, {Number(node.OffsetX)}, {Number(node.OffsetY)}, {Number(node.Duration)})",
+        ScriptNodeKind.ShowScreen => $"show_screen({Quote(node.Path)})",
+        ScriptNodeKind.Join => $"kne_join(state[{Quote(node.Variable)}])",
+        ScriptNodeKind.Timer or ScriptNodeKind.Pause => $"kne_pause({Number(node.Duration)})",
+        ScriptNodeKind.WaitCondition => $"kne_wait_condition(function() return {Comparison(node)} end, {Number(node.Duration)})",
+        ScriptNodeKind.End when node.EndAction != ScriptEndAction.Return => $"kne_end({Quote(node.EndAction.ToString().ToLowerInvariant())}, {Quote(node.Path)})",
+        _ => ""
+    };
+
+    private static string Comparison(ScriptNode node)
+    {
+        string op = node.Comparison switch
+        {
+            ScriptComparison.Equal => "==", ScriptComparison.NotEqual => "~=", ScriptComparison.Greater => ">",
+            ScriptComparison.Less => "<", ScriptComparison.GreaterOrEqual => ">=", _ => "<="
+        };
+        return $"state[{Quote(node.Variable)}] {op} {(node.Kind == ScriptNodeKind.CheckFlag ? FlagLiteral(node) : Literal(node))}";
+    }
+
+    private static string RandomCommand(ScriptNode node)
+    {
+        string low = Number(node.Minimum), high = Number(node.Maximum);
+        if (node.Minimum == node.Maximum) return $"state[{Quote(node.Variable)}] = {low}";
+        if (Math.Truncate(node.Minimum) == node.Minimum && Math.Truncate(node.Maximum) == node.Maximum &&
+            Math.Abs(node.Minimum) <= 9007199254740991 && Math.Abs(node.Maximum) <= 9007199254740991)
+            return $"state[{Quote(node.Variable)}] = math.random({low}, {high})";
+        // Weighted interpolation stays finite even when high-low overflows a double.
+        return $"local __kne_random = math.random(); state[{Quote(node.Variable)}] = {low} * (1 - __kne_random) + {high} * __kne_random";
+    }
+
+    private static string FlagLiteral(ScriptNode node)
+    {
+        if (bool.TryParse(node.Value, out bool value)) return value ? "true" : "false";
+        Fail(node, "значение флага должно быть true/false");
+        return "false";
+    }
+
+    private static string CaseLiteral(ScriptNode node, string value) => Literal(new ScriptNode
+        { Id = node.Id, Kind = node.Kind, ValueKind = node.ValueKind, Value = value });
+
+    private static void RequireKey(ScriptNode node, string value)
+    {
+        if (value.Length is < 1 or > 80 || !value.All(c => char.IsAsciiLetterOrDigit(c) || c == '_') || char.IsAsciiDigit(value[0]))
+            Fail(node, "имя переменной: латинские буквы, цифры и _, без цифры в начале");
+    }
+
+    private static void ValidateCommand(ScriptNode node)
+    {
+        if (node.Kind is ScriptNodeKind.Choice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async &&
+            (node.Options.Count == 0 || node.Options.Any(o => string.IsNullOrWhiteSpace(o.Text))))
+            Fail(node, "укажите от 1 до 20 непустых вариантов выбора или ветвей");
+        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable or ScriptNodeKind.Switch or ScriptNodeKind.While or
+            ScriptNodeKind.ForEach or ScriptNodeKind.TryCatch or ScriptNodeKind.SetFlag or ScriptNodeKind.CheckFlag or ScriptNodeKind.Random or
+            ScriptNodeKind.Async or ScriptNodeKind.Join or ScriptNodeKind.WaitCondition) RequireKey(node, node.Variable);
+        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable or ScriptNodeKind.While or ScriptNodeKind.WaitCondition)
+        {
+            _ = Literal(node);
+            if (node.Kind != ScriptNodeKind.SetVariable && node.Comparison is not (ScriptComparison.Equal or ScriptComparison.NotEqual) && node.ValueKind != ScriptValueKind.Number)
+                Fail(node, "сравнения >, <, >=, <= требуют числового значения");
+        }
+        if (node.Kind is ScriptNodeKind.SetFlag or ScriptNodeKind.CheckFlag) _ = FlagLiteral(node);
+        if (node.Kind == ScriptNodeKind.CheckFlag && node.Comparison is not (ScriptComparison.Equal or ScriptComparison.NotEqual))
+            Fail(node, "флаги поддерживают только равенство и неравенство");
+        if (node.Kind == ScriptNodeKind.Switch)
+        {
+            var values = node.Options.Select(o => CaseLiteral(node, o.Text)).ToArray();
+            if (values.Distinct(StringComparer.Ordinal).Count() != values.Length) Fail(node, "значения Case должны быть уникальны");
+        }
+        if (node.Kind == ScriptNodeKind.ForEach)
+        {
+            RequireKey(node, node.Path); RequireKey(node, node.IterationKey);
+            if (node.Variable == node.IterationKey || node.Variable == node.Path || node.IterationKey == node.Path)
+                Fail(node, "массив, элемент и индекс For Each требуют разных имён");
+        }
+        if (node.Kind == ScriptNodeKind.Random && node.Minimum > node.Maximum) Fail(node, "минимум случайного диапазона не должен превышать максимум");
+        if (node.Duration is < 0 or > 3600) Fail(node, "длительность должна быть от 0 до 3600 секунд");
+        if (node.Kind is ScriptNodeKind.AudioChannel or ScriptNodeKind.StopSound or ScriptNodeKind.Sound or ScriptNodeKind.Music && node.Channel is not ("music" or "sfx" or "voice" or "ambient"))
+            Fail(node, "канал аудио: music, sfx, voice или ambient");
+        if (node.Kind is ScriptNodeKind.MasterVolume or ScriptNodeKind.AudioChannel && node.Amount is < 0 or > 1)
+            Fail(node, "громкость должна быть от 0 до 1");
+        if (node.Kind == ScriptNodeKind.Camera && node.Amount is < .05 or > 20) Fail(node, "масштаб камеры должен быть от 0.05 до 20");
+        if (node.Kind == ScriptNodeKind.Shake && node.Amount is < 0 or > 500) Fail(node, "сила тряски должна быть от 0 до 500");
+        if (node.Kind is ScriptNodeKind.Shake or ScriptNodeKind.Flash && node.Duration > 60) Fail(node, "длительность вспышки или тряски должна быть не больше 60 секунд");
+        if (node.Kind is ScriptNodeKind.MoveBackground or ScriptNodeKind.MoveCharacter or ScriptNodeKind.Camera &&
+            (Math.Abs(node.OffsetX) > 100000 || Math.Abs(node.OffsetY) > 100000)) Fail(node, "смещения должны быть от −100000 до 100000");
+        if (node.Kind == ScriptNodeKind.Animation && node.Amount is < 0 or > 360) Fail(node, "сила анимации должна быть от 0 до 360");
+        if (node.Kind == ScriptNodeKind.Title && node.Text.Length > 10000) Fail(node, "титр допускает не больше 10000 символов");
+        if (node.Kind == ScriptNodeKind.Flash)
+        {
+            try
+            {
+                if (System.Windows.Media.ColorConverter.ConvertFromString(node.Value) is not System.Windows.Media.Color)
+                    Fail(node, "укажите корректный цвет вспышки, например #FFFFFF");
+            }
+            catch (Exception error) when (error is FormatException or NotSupportedException or ArgumentException)
+            { Fail(node, "укажите корректный цвет вспышки, например #FFFFFF"); }
+        }
+        if (node.Kind == ScriptNodeKind.Animation && node.Target is not ("background" or "sprite")) Fail(node, "цель анимации: background или sprite");
+        if (node.Kind == ScriptNodeKind.Animation && node.Text is not ("fade_in" or "fade_out" or "pulse" or "rotate" or "none"))
+            Fail(node, "анимация: fade_in, fade_out, pulse, rotate или none");
+        if (node.Kind is ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound or ScriptNodeKind.Voice && string.IsNullOrWhiteSpace(node.Path))
+            Fail(node, "укажите путь к ресурсу");
+        if (node.Kind == ScriptNodeKind.End && node.EndAction == ScriptEndAction.Screen)
+            if (string.IsNullOrWhiteSpace(node.Path)) Fail(node, "укажите идентификатор экрана");
+        if (node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene)
+        {
+            if (string.IsNullOrWhiteSpace(node.Path)) Fail(node, "укажите имя функции");
+            if (!LuaSource.IsIdentifier(node.Path)) Fail(node, "цель перехода должна быть именем функции, например chapter, без пути к файлу");
+        }
+        if (node.Kind == ScriptNodeKind.GotoScene && node.Next != null) Fail(node, "у постоянного перехода нет продолжения в этой сцене");
+        if (node.Kind == ScriptNodeKind.Character && node.Position is not ("left" or "center" or "right")) Fail(node, "позиция персонажа: left, center или right");
+    }
+}

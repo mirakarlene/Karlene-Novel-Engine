@@ -101,7 +101,7 @@ public static class ProjectAnalyzer
                     functions.Add(new(visual.FunctionName, path, 1, []));
                     foreach (var node in visual.Nodes)
                     {
-                        if (node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound && !string.IsNullOrWhiteSpace(node.Path))
+                        if (node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound or ScriptNodeKind.Voice && !string.IsNullOrWhiteSpace(node.Path))
                             CheckResource(root, path, null, node.Path, findings, node.Id);
                         if (node.Kind is ScriptNodeKind.CallScene or ScriptNodeKind.GotoScene)
                             references.Add(new(node.Path, path, 1, node.Id));
@@ -237,6 +237,11 @@ public static class ProjectAnalyzer
             int argument = i + 2;
             bool simple = argument + 1 < tokens.Count && tokens[argument + 1].Text is "," or ")";
             if (!simple) continue;
+            if (name == "play_audio" && tokens[argument + 1].Text == "," && argument + 3 < tokens.Count && tokens[argument + 3].Text is "," or ")")
+            {
+                string? audio = Literal(tokens[argument + 2]);
+                if (!string.IsNullOrEmpty(audio)) CheckResource(root, source.Path, tokens[i].Line, audio, findings);
+            }
             if (name is "call" or "call_scene" or "goto" or "goto_scene" or "jump")
             {
                 string? target = Literal(tokens[argument]);
@@ -258,7 +263,10 @@ public static class ProjectAnalyzer
         {
             "d" or "choice" => [1], "set_window_size" => [0, 1],
             "show_character" or "play_music" or "play_sound" or "call" or "call_scene" or "goto" or "goto_scene" or
-                "set_window_title" or "set_bg_color" => [0], _ => []
+                "set_window_title" or "set_bg_color" or "show_title" or "show_screen" or "stop_audio" or
+                "set_master_volume" or "kne_pause" or "kne_timer" or "kne_parallel" or "kne_async" or "kne_join" or "kne_wait_condition" or "kne_end" => [0],
+            "play_audio" or "set_audio_channel" => [0, 1], "move_visual" or "animate_visual" or "camera" => [0, 1, 2, 3],
+            "screen_shake" or "screen_flash" => [0, 1], _ => []
         };
         if (required.Length == 0) return;
         int start = call + 2, depth = 0, argument = 0;
@@ -312,7 +320,7 @@ public static class ProjectAnalyzer
         var map = graph.Nodes.ToDictionary(n => n.Id, StringComparer.Ordinal);
         foreach (var node in graph.Nodes)
             foreach (var (_, target) in node.Outputs())
-                if (target == null || !map.ContainsKey(target))
+                if ((target == null && node.Kind != ScriptNodeKind.Comment) || (target != null && !map.ContainsKey(target)))
                     findings.Add(new(ProjectDiagnosticSeverity.Error, "KNE103", path, null, "Выход блока не соединён с существующим блоком: " + (target ?? "(нет цели)"), node.Id));
         var starts = graph.Nodes.Where(n => n.Kind == ScriptNodeKind.Start).ToArray();
         if (starts.Length != 1) return;
@@ -322,7 +330,7 @@ public static class ProjectAnalyzer
             if (visited.Add(id))
                 foreach (var (_, next) in map[id].Outputs())
                     if (next != null && map.ContainsKey(next)) pending.Push(next);
-        foreach (var node in graph.Nodes.Where(n => !visited.Contains(n.Id)))
+        foreach (var node in graph.Nodes.Where(n => n.Kind != ScriptNodeKind.Comment && !visited.Contains(n.Id)))
             findings.Add(new(ProjectDiagnosticSeverity.Warning, "KNE304", path, null, "Блок недостижим из «Начала».", node.Id));
     }
 

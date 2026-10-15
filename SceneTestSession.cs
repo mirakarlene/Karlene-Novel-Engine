@@ -8,14 +8,15 @@ public sealed class SceneTestSession : IAsyncDisposable
 {
     private readonly ProjectInfo project;
     private readonly EditorSelection selection;
-    private readonly List<int> history = [];
+    private sealed record TestAction(string Kind, string BeforeKind, int Option = 0, double Seconds = 0);
+    private readonly List<TestAction> history = [];
     private readonly int seed = Random.Shared.Next(1, int.MaxValue);
     private string? sourceSignature;
     private ProcessGameSession? session;
     public StoryFrame Story => session?.Story ?? StoryFrame.Empty;
     public SceneVisuals Visuals => session?.Visuals ?? SceneVisuals.Empty;
     public RuntimeWindowSettings Window => session?.WindowSettings ?? project.Engine.RuntimeDefaults(project.Title);
-    public bool CanGoBack => history.Count > 0;
+    public bool CanGoBack => history.Any(action => action.BeforeKind is "dialogue" or "choice");
     public bool Completed => Story.Completed;
     public SceneTestSession(ProjectInfo project, EditorSelection selection) { this.project = project; this.selection = selection; }
 
@@ -26,25 +27,36 @@ public sealed class SceneTestSession : IAsyncDisposable
     public async Task AdvanceAsync(CancellationToken token = default)
     {
         if (session == null || Story.Kind != "dialogue") throw new InvalidOperationException("Нет фрейма для продолжения.");
-        await session.AdvanceAsync(token).ConfigureAwait(false); history.Add(0);
+        string before = Story.Kind;
+        await session.AdvanceAsync(token).ConfigureAwait(false); history.Add(new("advance", before));
     }
     public async Task ChooseAsync(int option, CancellationToken token = default)
     {
         if (session == null || Story.Kind != "choice") throw new InvalidOperationException("Нет выбора для продолжения.");
-        await session.ChooseAsync(option, token).ConfigureAwait(false); history.Add(option);
+        string before = Story.Kind;
+        await session.ChooseAsync(option, token).ConfigureAwait(false); history.Add(new("choose", before, option));
+    }
+    /// <summary>Advances logical timers and background branches without consuming the visible frame.</summary>
+    public async Task TickAsync(double seconds, CancellationToken token = default)
+    {
+        if (session == null || !Story.NeedsTick) return;
+        string before = Story.Kind;
+        await session.TickAsync(seconds, token).ConfigureAwait(false); history.Add(new("tick", before, Seconds: seconds));
     }
     public async Task BackAsync(CancellationToken token = default)
     {
         if (!CanGoBack) throw new InvalidOperationException("Предыдущего фрейма нет.");
         if (sourceSignature != await ReadSourceSignatureAsync(token).ConfigureAwait(false))
             throw new InvalidOperationException("Сценарии изменились во время тестирования. Начните сцену заново для безопасного возврата.");
-        history.RemoveAt(history.Count - 1);
-        int[] actions = history.ToArray(); await StartFreshAsync(token).ConfigureAwait(false);
-        foreach (int option in actions)
+        int previousFrame = history.FindLastIndex(action => action.BeforeKind is "dialogue" or "choice");
+        history.RemoveRange(previousFrame, history.Count - previousFrame);
+        TestAction[] actions = history.ToArray(); await StartFreshAsync(token).ConfigureAwait(false);
+        foreach (var action in actions)
         {
             token.ThrowIfCancellationRequested();
-            if (option == 0) await session!.AdvanceAsync(token).ConfigureAwait(false);
-            else await session!.ChooseAsync(option, token).ConfigureAwait(false);
+            if (action.Kind == "tick") await session!.TickAsync(action.Seconds, token).ConfigureAwait(false);
+            else if (action.Kind == "advance") await session!.AdvanceAsync(token).ConfigureAwait(false);
+            else await session!.ChooseAsync(action.Option, token).ConfigureAwait(false);
         }
     }
     private async Task StartFreshAsync(CancellationToken token)
