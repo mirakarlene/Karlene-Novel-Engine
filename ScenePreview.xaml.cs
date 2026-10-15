@@ -21,6 +21,15 @@ public partial class ScenePreview : UserControl
     private bool resetChoices;
     private bool captureSelection;
     public Func<EditorSelection?>? SelectionProvider { get; set; }
+    public event EventHandler<int>? SceneChoiceRequested;
+    private bool standalone;
+    public void DisplayScene(ProjectInfo value, RuntimeWindowSettings window, SceneVisuals visuals, StoryFrame story, bool animate, bool allowChoices)
+    {
+        standalone = true; PreviewToolbar.Visibility = PreviewStatus.Visibility = Visibility.Collapsed;
+        if (!ReferenceEquals(project, value)) { project = value; ApplyTheme(); }
+        RenderScene(window, visuals, story, animate);
+        ChoicePanel.IsHitTestVisible = allowChoices;
+    }
 
     public ScenePreview()
     {
@@ -152,11 +161,18 @@ public partial class ScenePreview : UserControl
 
     private void RenderSnapshot(EditorPreview value, bool animate)
     {
+        RenderScene(value.Window, value.Visuals, value.Story, animate);
+        PreviewStatus.Text = value.Status; PreviewStatus.ToolTip = null;
+        StepButton.IsEnabled = !value.NeedsChoice && !value.Story.Completed;
+    }
+
+    private void RenderScene(RuntimeWindowSettings window, SceneVisuals visuals, StoryFrame story, bool animate)
+    {
         if (project == null) return;
-        var visuals = value.Visuals; var story = value.Story; var theme = project.Engine.Theme;
-        SceneArea.Width = value.Window.Width; SceneArea.Height = value.Window.Height;
-        SceneArea.Background = Brush(value.Window.Background);
-        DefaultBackground.Visibility = value.Window.Background == theme.BackgroundColor ? Visibility.Visible : Visibility.Collapsed;
+        var theme = project.Engine.Theme;
+        SceneArea.Width = window.Width; SceneArea.Height = window.Height;
+        SceneArea.Background = Brush(window.Background);
+        DefaultBackground.Visibility = window.Background == theme.BackgroundColor ? Visibility.Visible : Visibility.Collapsed;
         DefaultBackgroundImage.Visibility = DefaultBackground.Visibility;
         BackgroundImage.Source = LoadImage(visuals.Background); CharacterImage.Source = LoadImage(visuals.Character);
         AnimatedBackdrop.Visibility = visuals.Background == null && theme.BackgroundImage == null && DefaultBackground.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
@@ -172,12 +188,13 @@ public partial class ScenePreview : UserControl
                 FontSize = 16, Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 0, 0, 8),
                 Foreground = Brush(theme.TextColor), Background = Brush(theme.ButtonColor), BorderBrush = Brush(theme.AccentColor),
                 HorizontalContentAlignment = HorizontalAlignment.Stretch };
-            button.Click += async (_, _) => await RunAsync(reset: false, choice: option);
+            button.Click += async (_, _) =>
+            {
+                if (standalone) SceneChoiceRequested?.Invoke(this, option);
+                else await RunAsync(reset: false, choice: option);
+            };
             ChoicePanel.Children.Add(button);
         }
-        PreviewStatus.Text = value.Status;
-        PreviewStatus.ToolTip = null;
-        StepButton.IsEnabled = !value.NeedsChoice && !story.Completed;
     }
 
     private static Brush Brush(string color) => new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));

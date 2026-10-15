@@ -24,10 +24,13 @@ public partial class MainWindow : Window
     private bool closeApproved;
     private bool checkingClose;
 
-    public MainWindow()
+    public MainWindow() : this(null, null) { }
+
+    internal MainWindow(Action<Window>? showTestingWindow, Action<string>? openAnalysisReport)
     {
         InitializeComponent();
-        EmbeddedPreview.SelectionProvider = SceneEditor.CapturePreview;
+        presentTestingWindow = showTestingWindow ?? (window => { window.Owner = this; window.Show(); });
+        presentAnalysisReport = openAnalysisReport ?? (path => { using (Process.Start(EditorLauncher.CreateStartInfo(settings.EditorPath, path))) { } });
     }
 
     private async void Window_Closing(object? sender, CancelEventArgs e)
@@ -65,7 +68,6 @@ public partial class MainWindow : Window
         closed = true;
         lifetime.Cancel();
         monitor?.Dispose();
-        EmbeddedPreview.Stop();
     }
 
     private async Task RunOperationAsync(Func<Task> operation, string status)
@@ -107,12 +109,15 @@ public partial class MainWindow : Window
     {
         var loaded = await ProjectLoader.LoadProjectAsync(path, lifetime.Token);
         if (closed) return;
+        string? identityWarning = null;
+        try { await FrameCatalog.SynchronizeAsync(loaded, lifetime.Token); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception error) { identityWarning = " Не удалось обновить ID фреймов: " + error.Message; }
         if (currentProject != null && !currentProject.Path.Equals(loaded.Path, StringComparison.OrdinalIgnoreCase))
         {
             if (!await SceneEditor.CanLeaveAsync()) return;
             SceneEditor.Clear();
             EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Collapsed;
-            EmbeddedPreview.Stop();
             FilesDataGrid.Visibility = Visibility.Visible;
         }
         currentProject = loaded;
@@ -123,6 +128,7 @@ public partial class MainWindow : Window
         ShowPanel(ProjectPanel);
         OperationStatus.Text = loaded.Warnings.Count == 0 ? "Файлов: " + loaded.Files.Count :
             $"Файлов: {loaded.Files.Count}. " + string.Join(Environment.NewLine, loaded.Warnings.Take(5));
+        OperationStatus.Text += identityWarning;
         if (remember)
         {
             settings.RememberProject(loaded.Path);
@@ -164,7 +170,6 @@ public partial class MainWindow : Window
         if (!await SceneEditor.CanLeaveAsync()) return;
         SceneEditor.Clear();
         EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Collapsed;
-        EmbeddedPreview.Stop();
         FilesDataGrid.Visibility = Visibility.Visible;
         currentProject = null;
         FilesDataGrid.ItemsSource = null;
@@ -396,7 +401,6 @@ public partial class MainWindow : Window
     private async Task OpenScriptAsync(string path)
     {
         if (currentProject == null || !await SceneEditor.CanLeaveAsync()) return;
-        EmbeddedPreview.Open(currentProject);
         await SceneEditor.OpenAsync(currentProject.Path, path);
         FilesDataGrid.Visibility = Visibility.Collapsed;
         EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Visible;
@@ -443,7 +447,6 @@ public partial class MainWindow : Window
     {
         FilesDataGrid.Visibility = Visibility.Visible;
         EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Collapsed;
-        EmbeddedPreview.Stop();
     }
 
     private async void BtnNewVisualScene_Click(object sender, RoutedEventArgs e)
@@ -465,14 +468,8 @@ public partial class MainWindow : Window
         }, "Создание блок-схемы…");
     }
 
-    private void SceneEditor_RunRequested(object? sender, EventArgs e) => SceneEditor_PreviewRequested(sender, e);
-
-    private void SceneEditor_PreviewRequested(object? sender, EventArgs e)
-    {
-        if (closed || currentProject == null) return;
-        try { EmbeddedPreview.RequestSelection(); }
-        catch (Exception error) { OperationStatus.Text = "Предпросмотр: " + error.Message; }
-    }
+    private void SceneEditor_RunRequested(object? sender, EventArgs e) => OpenTestingWindow(sceneTest: false);
+    private void SceneEditor_TestSceneRequested(object? sender, EventArgs e) => OpenTestingWindow(sceneTest: true);
 
     private async void SceneEditor_ExternalEditorRequested(object? sender, EventArgs e)
     {
@@ -519,7 +516,6 @@ public partial class MainWindow : Window
         if (!await SceneEditor.CanLeaveAsync()) return;
         SceneEditor.Clear();
         EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Collapsed;
-        EmbeddedPreview.Stop();
         FilesDataGrid.Visibility = Visibility.Visible;
     }, "Закрытие сценария…");
 }

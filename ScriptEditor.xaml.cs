@@ -25,21 +25,24 @@ public partial class ScriptEditor : UserControl
 
     public event EventHandler? PreviewRequested;
     public event EventHandler? ExternalEditorRequested;
+    public event EventHandler? TestSceneRequested;
 
     /// <summary>Captures unsaved edits for an isolated editor worker.</summary>
-    public EditorSelection? CapturePreview()
+    public EditorSelection? CapturePreview() => CapturePreview(false);
+    public EditorSelection? CapturePreview(bool sceneTest)
     {
         if (Document == null) return null;
         ApplyProperties();
         var graph = Document.Graph;
         if (graph != null)
-            return new(Document.FilePath, graph.Compile(editorPreview: true), 1,
+            return new(Document.FilePath, graph.Compile(editorPreview: !sceneTest), 1,
                 Selected?.Id ?? graph.Nodes.Single(n => n.Kind == ScriptNodeKind.Start).Id,
                 Selected?.PreviewAnimation == true, graph.FunctionName);
         int line = 1;
         for (int index = 0; index < Math.Min(CodeEditor.CaretIndex, Document.Code.Length); index++)
             if (Document.Code[index] == '\n') line++;
-        string? function = LuaSource.Functions(Document.Code).LastOrDefault(f => f.Line <= line)?.Name;
+        var functions = LuaSource.Functions(Document.Code);
+        string? function = functions.LastOrDefault(f => f.Line <= line)?.Name ?? functions.FirstOrDefault()?.Name;
         return new(Document.FilePath, Document.Code, line, null, false, function);
     }
 
@@ -50,14 +53,8 @@ public partial class ScriptEditor : UserControl
 
     private void ExternalEditor_Click(object sender, RoutedEventArgs e) => ExternalEditorRequested?.Invoke(this, EventArgs.Empty);
 
-    private void PreviewAnimation_Changed(object sender, RoutedEventArgs e)
-    {
-        if (updating || Selected == null) return;
-        TrackProperties();
-        Guard(() => { ApplyProperties(); PreviewRequested?.Invoke(this, EventArgs.Empty); });
-    }
-
     private string projectRoot = "";
+    private FrameCatalog? frameCatalog;
     private bool updating;
     private bool saving;
     private bool propertyDraft;
@@ -108,10 +105,18 @@ public partial class ScriptEditor : UserControl
         var document = await ScriptDocument.OpenAsync(root, path);
         projectRoot = root;
         Document = document;
+        frameCatalog = null;
+        try
+        {
+            var project = await ProjectLoader.LoadProjectAsync(root);
+            frameCatalog = await Task.Run(() => FrameCatalog.Load(project));
+        }
+        catch (Exception) { /* Invalid drafts must remain editable; runtime and analysis report details. */ }
         undo.Clear();
         redo.Clear();
         selectedId = null;
         pendingConnection = null;
+        CanvasPan.X = CanvasPan.Y = 0;
         updating = true;
         CodeEditor.Text = document.IsVisual ? "" : document.Code;
         CodeEditor.IsReadOnly = document.IsVisual;
@@ -121,7 +126,7 @@ public partial class ScriptEditor : UserControl
             ? null
             : "Произвольный Lua/KRL не преобразуется в блоки. Создайте визуальную сцену.";
         ExportButton.IsEnabled = document.IsVisual;
-        SaveButton.IsEnabled = RunButton.IsEnabled = MainSceneButton.IsEnabled = CloseDocumentButton.IsEnabled = true;
+        SaveButton.IsEnabled = RunButton.IsEnabled = TestSceneButton.IsEnabled = MainSceneButton.IsEnabled = CloseDocumentButton.IsEnabled = true;
         if (document.IsVisual)
         {
             GraphMode.IsChecked = true;
@@ -149,6 +154,7 @@ public partial class ScriptEditor : UserControl
     {
         updating = true;
         Document = null;
+        frameCatalog = null;
         selectedId = null;
         pendingConnection = null;
         propertyDraft = false;
@@ -159,7 +165,7 @@ public partial class ScriptEditor : UserControl
         cards.Clear();
         links.Clear();
         CodeMode.IsEnabled = GraphMode.IsEnabled = SaveButton.IsEnabled = RunButton.IsEnabled =
-            MainSceneButton.IsEnabled = ExportButton.IsEnabled = CloseDocumentButton.IsEnabled = false;
+            TestSceneButton.IsEnabled = MainSceneButton.IsEnabled = ExportButton.IsEnabled = CloseDocumentButton.IsEnabled = false;
         CodeMode.IsChecked = GraphMode.IsChecked = false;
         CodeEditor.Visibility = GraphPanel.Visibility = Visibility.Collapsed;
         ExternalEditorButton.Visibility = Visibility.Collapsed;
@@ -198,6 +204,12 @@ public partial class ScriptEditor : UserControl
             await Document.SaveAsync();
             UpdateTitle();
             EditorStatus.Text = "Сценарий сохранён.";
+            try
+            {
+                frameCatalog = await FrameCatalog.SynchronizeAsync(await ProjectLoader.LoadProjectAsync(projectRoot));
+                RenderGraph(); UpdateProperties();
+            }
+            catch (Exception error) { EditorStatus.Text += " ID будут обновлены после исправления проекта: " + error.Message; }
         }
         finally
         {
@@ -322,8 +334,8 @@ public partial class ScriptEditor : UserControl
         Remember();
         var node = new ScriptNode
         {
-            Kind = type.Kind, X = Math.Clamp(GraphScroll.HorizontalOffset / ZoomSlider.Value + 40, 0, 10000),
-            Y = Math.Clamp(GraphScroll.VerticalOffset / ZoomSlider.Value + 180 + model.Nodes.Count % 6 * 25, 0, 10000),
+            Kind = type.Kind, X = (40 - CanvasPan.X) / ZoomSlider.Value,
+            Y = (180 - CanvasPan.Y) / ZoomSlider.Value + model.Nodes.Count % 6 * 25,
             Text = type.Kind == ScriptNodeKind.Choice ? "Выберите вариант" : "Новая реплика"
         };
         if (node.Kind == ScriptNodeKind.Choice) node.Options = [new() { Text = "Да" }, new() { Text = "Нет" }];
@@ -353,7 +365,7 @@ public partial class ScriptEditor : UserControl
                 foreach (var field in new UIElement[]
                          {
                              SpeakerField, TextField, OptionsField, PathField, PositionField, LoopInput, VariableField,
-                             ComparisonField, PreviewAnimationInput, TransitionHelp
+                             ComparisonField, TransitionHelp
                          }) Visible(field, false);
                 return;
             }
@@ -364,8 +376,6 @@ public partial class ScriptEditor : UserControl
             OptionsInput.Text = string.Join(Environment.NewLine, node.Options.Select(o => o.Text));
             PositionInput.SelectedIndex = Array.IndexOf(new[] { "left", "center", "right" }, node.Position);
             LoopInput.IsChecked = node.Loop;
-            PreviewAnimationInput.IsChecked = node.PreviewAnimation;
-            Visible(PreviewAnimationInput, true);
             VariableInput.Text = node.Variable;
             ValueInput.Text = node.Value;
             ValueTypeInput.SelectedValue = node.ValueKind;
@@ -409,7 +419,6 @@ public partial class ScriptEditor : UserControl
         // Edit a copy first so invalid draft properties cannot damage the current document.
         var copy = VisualScript.Parse(model.Serialize());
         var changed = copy.Nodes.Single(n => n.Id == node.Id);
-        changed.PreviewAnimation = PreviewAnimationInput.IsChecked == true;
         if (node.Kind == ScriptNodeKind.Dialogue) changed.Speaker = SpeakerInput.Text;
         if (node.Kind is ScriptNodeKind.Dialogue or ScriptNodeKind.Choice) changed.Text = SceneTextInput.Text;
         if (node.Kind == ScriptNodeKind.Choice)
@@ -477,9 +486,7 @@ public partial class ScriptEditor : UserControl
         cards.Clear();
         links.Clear();
         if (Document?.Graph is not { } graph) return;
-        GraphCanvas.Width = Math.Max(1600, graph.Nodes.Select(n => n.X + 350).DefaultIfEmpty(0).Max());
-        GraphCanvas.Height = Math.Max(1000,
-            graph.Nodes.Select(n => n.Y + 150 + n.Outputs().Count() * 28).DefaultIfEmpty(0).Max());
+        UpdateGraphExtent();
         foreach (var node in graph.Nodes)
         {
             var contents = new StackPanel();
@@ -492,6 +499,7 @@ public partial class ScriptEditor : UserControl
             header.Child = new TextBlock
             {
                 Text = node.Title, Foreground = Brushes.White, FontWeight = FontWeights.Bold,
+                ToolTip = DescribeNodeIdentity(node),
                 Margin = new Thickness(8, 5, 8, 0)
             };
             contents.Children.Add(header);
@@ -558,7 +566,7 @@ public partial class ScriptEditor : UserControl
                 SelectNode(node.Id, repaint: false);
                 var current = Document!.Graph!.Nodes.Single(n => n.Id == node.Id);
                 before = Document.Graph.Serialize();
-                start = args.GetPosition(GraphCanvas);
+                start = args.GetPosition(GraphScroll);
                 originX = current.X;
                 originY = current.Y;
                 dragged = false;
@@ -568,13 +576,14 @@ public partial class ScriptEditor : UserControl
             header.MouseMove += (_, args) =>
             {
                 if (!header.IsMouseCaptured || args.LeftButton != MouseButtonState.Pressed) return;
-                Point currentPoint = args.GetPosition(GraphCanvas);
+                Point currentPoint = args.GetPosition(GraphScroll);
                 var current = Document!.Graph!.Nodes.Single(n => n.Id == node.Id);
-                current.X = Math.Clamp(originX + currentPoint.X - start.X, 0, 10000);
-                current.Y = Math.Clamp(originY + currentPoint.Y - start.Y, 0, 10000);
+                current.X = originX + (currentPoint.X - start.X) / ZoomSlider.Value;
+                current.Y = originY + (currentPoint.Y - start.Y) / ZoomSlider.Value;
                 dragged |= current.X != originX || current.Y != originY;
                 Canvas.SetLeft(card, current.X);
                 Canvas.SetTop(card, current.Y);
+                UpdateGraphExtent();
                 RenderLinks();
             };
             header.MouseLeftButtonUp += (_, args) =>
@@ -728,6 +737,12 @@ public partial class ScriptEditor : UserControl
         ApplyProperties();
         _ = Document?.Graph?.Compile();
         RunRequested?.Invoke(this, EventArgs.Empty);
+    });
+
+    private void TestScene_Click(object sender, RoutedEventArgs e) => Guard(() =>
+    {
+        ApplyProperties(); _ = Document?.Graph?.Compile();
+        TestSceneRequested?.Invoke(this, EventArgs.Empty);
     });
 
     private void MainScene_Click(object sender, RoutedEventArgs e) => Guard(() =>

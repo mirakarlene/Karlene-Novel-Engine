@@ -9,7 +9,8 @@
             <TextBlock x:Name="DocumentTitle" Text="Выберите сценарий в дереве и нажмите «Открыть сценарий»." TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,6"/>
             <WrapPanel>
                 <Button x:Name="SaveButton" Content="Сохранить" Padding="8,5" Margin="0,0,5,4" Click="Save_Click" IsEnabled="False"/>
-                <Button x:Name="RunButton" Content="Предпросмотр сегмента" Padding="8,5" Margin="0,0,5,4" Click="Run_Click" IsEnabled="False"/>
+                <Button x:Name="RunButton" Content="Предпросмотр фрейма" Padding="8,5" Margin="0,0,5,4" Click="Run_Click" IsEnabled="False"/>
+                <Button x:Name="TestSceneButton" Content="Тестировать сцену" Padding="8,5" Margin="0,0,5,4" Click="TestScene_Click" IsEnabled="False"/>
                 <Button x:Name="ExternalEditorButton" Content="Внешний редактор" Padding="8,5" Margin="0,0,5,4" Click="ExternalEditor_Click" Visibility="Collapsed"/>
                 <Button x:Name="MainSceneButton" Content="Сделать главной" Padding="8,5" Margin="0,0,5,4" Click="MainScene_Click" IsEnabled="False"/>
                 <Button x:Name="ExportButton" Content="Копия как KRL…" Padding="8,5" Margin="0,0,5,4" Click="Export_Click" IsEnabled="False"/>
@@ -31,13 +32,17 @@
                     <ComboBox x:Name="BlockType" Width="140" Margin="0,0,5,4" DisplayMemberPath="Title"/>
                     <Button x:Name="AddBlockButton" Content="+ Блок" Padding="8,4" Margin="0,0,8,4" Click="Add_Click"/>
                     <TextBlock Text="Масштаб" VerticalAlignment="Center" Margin="0,0,5,4"/>
+                    <Button x:Name="ZoomOutButton" Content="−" Width="26" Margin="0,0,4,4" Click="ZoomOut_Click" ToolTip="Уменьшить на один шаг"/>
                     <Slider x:Name="ZoomSlider" Minimum="0.4" Maximum="1.5" Value="1" Width="75" ValueChanged="Zoom_Changed" Margin="0,0,0,4"/>
+                    <Button x:Name="ZoomInButton" Content="+" Width="26" Margin="4,0,0,4" Click="ZoomIn_Click" ToolTip="Увеличить на один шаг"/>
                 </WrapPanel>
-                <ScrollViewer x:Name="GraphScroll" Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#FFF0F3F7">
-                    <Canvas x:Name="GraphCanvas" Width="1600" Height="1000" Background="Transparent" PreviewMouseWheel="Canvas_MouseWheel">
-                        <Canvas.LayoutTransform><ScaleTransform x:Name="CanvasScale"/></Canvas.LayoutTransform>
+                <Border x:Name="GraphScroll" Grid.Row="1" ClipToBounds="True" Background="#FFF0F3F7"
+                        PreviewMouseRightButtonDown="GraphPan_Start" PreviewMouseRightButtonUp="GraphPan_End"
+                        PreviewMouseMove="GraphPan_Move" LostMouseCapture="GraphPan_LostCapture" PreviewMouseWheel="Canvas_MouseWheel">
+                    <Canvas x:Name="GraphCanvas" Width="1600" Height="1000" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top">
+                        <Canvas.RenderTransform><TransformGroup><ScaleTransform x:Name="CanvasScale"/><TranslateTransform x:Name="CanvasPan"/></TransformGroup></Canvas.RenderTransform>
                     </Canvas>
-                </ScrollViewer>
+                </Border>
             </Grid>
             <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
             <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
@@ -49,13 +54,12 @@
                     <StackPanel x:Name="PathField"><TextBlock x:Name="PathLabel" Text="Путь от корня проекта"/><TextBox x:Name="PathInput" Margin="0,3,0,8"/><Button x:Name="BrowsePathButton" Content="Выбрать ресурс…" Click="BrowseResource_Click" Margin="0,0,0,8"/></StackPanel>
                     <StackPanel x:Name="PositionField"><TextBlock Text="Позиция"/><ComboBox x:Name="PositionInput" Margin="0,3,0,8"><ComboBoxItem Content="left"/><ComboBoxItem Content="center"/><ComboBoxItem Content="right"/></ComboBox></StackPanel>
                     <CheckBox x:Name="LoopInput" Content="Повторять музыку" Margin="0,0,0,8"/>
-                    <CheckBox x:Name="PreviewAnimationInput" Content="Анимация при выделении блока" ToolTip="Проигрывать анимацию фона проекта в предпросмотре. Без флажка кадр неподвижен." Margin="0,0,0,8" Checked="PreviewAnimation_Changed" Unchecked="PreviewAnimation_Changed"/>
                     <TextBlock x:Name="TransitionHelp" Foreground="#FF536174" TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed"/>
                     <StackPanel x:Name="VariableField"><TextBlock Text="Переменная state"/><TextBox x:Name="VariableInput" Margin="0,3,0,8"/><TextBlock Text="Тип значения"/><ComboBox x:Name="ValueTypeInput" Margin="0,3,0,8" DisplayMemberPath="Label" SelectedValuePath="Value"/><TextBlock Text="Значение"/><TextBox x:Name="ValueInput" Margin="0,3,0,8"/></StackPanel>
                     <StackPanel x:Name="ComparisonField"><TextBlock Text="Сравнение"/><ComboBox x:Name="ComparisonInput" Margin="0,3,0,8" DisplayMemberPath="Label" SelectedValuePath="Value"/></StackPanel>
                     <Button x:Name="ApplyPropertiesButton" Content="Применить свойства" Click="Apply_Click" Padding="8,5" Margin="0,0,0,6"/>
                     <Button x:Name="DeleteBlockButton" Content="Удалить блок" Click="Delete_Click" Padding="8,5" Margin="0,0,0,8"/>
-                    <TextBlock Text="Связь: нажмите выход блока, затем вход другого. Правая кнопка по выходу удаляет связь. Заголовок блока можно перетаскивать. Ctrl+колесо меняет масштаб." Foreground="#FF536174" TextWrapping="Wrap"/>
+                    <TextBlock Text="Правая кнопка мыши — перемещать обзор. Ctrl+колесо или +/− — масштаб. Связь: выход → вход; правая кнопка по выходу удаляет связь. Заголовок блока можно перетаскивать." Foreground="#FF536174" TextWrapping="Wrap"/>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

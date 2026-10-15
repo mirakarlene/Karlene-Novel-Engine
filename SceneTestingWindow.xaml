@@ -1,0 +1,28 @@
+<Window x:Class="KNE.SceneTestingWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:KNE"
+        Title="Тестирование" Width="1280" Height="800" MinWidth="640" MinHeight="480"
+        Background="#FF201134" Loaded="Testing_Loaded" Closed="Testing_Closed">
+    <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <local:ScenePreview x:Name="SceneSurface" SceneChoiceRequested="Choice_Requested"/>
+        <DockPanel Grid.Row="1" Margin="16,8">
+            <Button x:Name="NextFrameButton" DockPanel.Dock="Right" Content="Следующий фрейм ›" Click="Next_Click" Padding="14,8"/>
+            <TextBlock x:Name="TestingStatus" Foreground="White" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"/>
+        </DockPanel>
+        <Border x:Name="SceneEndOverlay" Visibility="Collapsed" Background="#CB160D24">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24">
+                <TextBlock Text="Вы достигли конца сцены" Foreground="White" FontSize="30" TextAlignment="Center" TextWrapping="Wrap"/>
+                <WrapPanel HorizontalAlignment="Center" Margin="0,24,0,0">
+                    <Button x:Name="BackFrameButton" Content="Вернуться" Click="Back_Click" Padding="20,10" Margin="0,0,12,8"/>
+                    <Button x:Name="RestartSceneButton" Content="Начать заново" Click="Restart_Click" Padding="20,10" Margin="0,0,0,8"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+        <Border x:Name="TestingErrorOverlay" Visibility="Collapsed" Background="#FF201134" Padding="24">
+            <DockPanel>
+                <Button DockPanel.Dock="Bottom" Content="Закрыть" Click="Close_Click" HorizontalAlignment="Left" Padding="20,10" Margin="0,16,0,0"/>
+                <TextBox x:Name="TestingErrorText" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Background="#FF201134" Foreground="White" FontFamily="Consolas"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

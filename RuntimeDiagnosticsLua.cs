@@ -4,7 +4,7 @@ internal static class RuntimeDiagnosticsLua
 {
     public const string Source = """
         do
-            local baseline, nodes = {}, setmetatable({}, {__mode = "k"})
+            local baseline, nodes, calls = {}, setmetatable({}, {__mode = "k"}), setmetatable({}, {__mode = "k"})
             local inspect, getlocal, getupvalue, next_value, value_type = debug.getinfo, debug.getlocal, debug.getupvalue, next, type
             local text_value, each, running, infinity = tostring, ipairs, coroutine.running, math.huge
             function kne_diagnostics_baseline()
@@ -92,14 +92,36 @@ internal static class RuntimeDiagnosticsLua
                 end
                 return "", 0, 0
             end
+            function kne_runtime_node(id)
+                if kne_scene_owned and kne_scene_owned(running()) then
+                    local file, line, functionline = location()
+                    nodes[running()] = {id = text_value(id), file = file, functionline = functionline}
+                end
+            end
             function kne_editor_node(id)
                 if kne_editor and kne_scene_owned and kne_scene_owned(running()) then
-                    nodes[running()] = text_value(id)
+                    kne_runtime_node(id)
                 end
+            end
+            function kne_frame_call(key, entry, ...)
+                local thread, previous = running(), calls[running()]
+                calls[thread] = key
+                local result = table.pack(entry(...))
+                calls[thread] = previous
+                return table.unpack(result, 1, result.n)
+            end
+            function kne_error_context(thread, info)
+                local current = thread or running()
+                local node = nodes[current]
+                local file = info.source:sub(2)
+                if node and (node.file ~= file or node.functionline ~= info.linedefined) then node = nil end
+                kne_record_script_context(file, info.currentline, info.linedefined, node and node.id or "", calls[current] or "")
             end
             function kne_event_location(event)
                 local file, line, functionline = location()
-                event.file, event.line, event.functionline, event.node = file, line, functionline, nodes[running()]
+                local node = nodes[running()]
+                if node and (node.file ~= file or node.functionline ~= functionline) then node = nil end
+                event.file, event.line, event.functionline, event.node, event.key = file, line, functionline, node and node.id, calls[running()]
                 return event
             end
             function kne_editor_pause()
