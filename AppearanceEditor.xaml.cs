@@ -214,7 +214,9 @@ public partial class AppearanceEditor : UserControl
     private void AddScreen_Click(object sender, RoutedEventArgs e)
     {
         string? added = null;
-        if (Commit(() => added = Document!.Layout.AddScreen("Новый экран").Id)) { Refresh(added); ScreenName.Focus(); ScreenName.SelectAll(); }
+        string name = "Новый экран"; int suffix = 2;
+        while (Document!.Layout.Screens.Any(item => item.Name.Trim().Equals(name, StringComparison.OrdinalIgnoreCase))) name = "Новый экран " + suffix++;
+        if (Commit(() => added = Document!.Layout.AddScreen(name).Id)) { Refresh(added); ScreenName.Focus(); ScreenName.SelectAll(); }
     }
     private void RenameScreen_Click(object sender, RoutedEventArgs e) => Commit(() => { if (screen != null) screen.Name = ScreenName.Text; });
     private void DeleteScreen_Click(object sender, RoutedEventArgs e) => Commit(() => { if (screen != null) Document!.Layout.RemoveScreen(screen.Id); });

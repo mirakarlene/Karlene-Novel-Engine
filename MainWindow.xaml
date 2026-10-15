@@ -118,10 +118,12 @@
     </DockPanel>
         <Border x:Name="BlockLibraryOverlay" Visibility="Collapsed" Background="#B9181420" Padding="36" MouseDown="BlockLibraryBackdrop_Click"
                 KeyboardNavigation.TabNavigation="Cycle">
-            <Border Background="#FFF9F8FC" CornerRadius="12" Padding="24" MaxWidth="1120" MaxHeight="760" VerticalAlignment="Center" HorizontalAlignment="Stretch"
-                    MouseDown="BlockLibraryPanel_Click">
-                <local:BlockLibraryView x:Name="LibraryView" BlockSelected="Library_BlockSelected" CloseRequested="Library_CloseRequested"/>
-            </Border>
+            <ScrollViewer x:Name="BlockLibraryScroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                <Border Background="#FFF9F8FC" CornerRadius="12" Padding="24" Width="1250" Height="700" VerticalAlignment="Center" HorizontalAlignment="Center"
+                        MouseDown="BlockLibraryPanel_Click">
+                    <local:BlockLibraryView x:Name="LibraryView" BlockSelected="Library_BlockSelected" CloseRequested="Library_CloseRequested"/>
+                </Border>
+            </ScrollViewer>
         </Border>
     </Grid>
 </Window>

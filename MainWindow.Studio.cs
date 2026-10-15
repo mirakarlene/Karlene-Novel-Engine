@@ -25,7 +25,7 @@ public partial class MainWindow
     private async void BtnSaveAllExit_Click(object sender, RoutedEventArgs e)
     {
         bool saved = false;
-        await RunOperationAsync(async () => { await SceneEditor.SaveAsync(); saved = true; }, "Сохранение проекта…");
+        await RunOperationAsync(async () => { await SceneEditor.SaveAsync(); await LibraryView.FlushPendingPreferencesAsync(); saved = true; }, "Сохранение проекта…");
         if (saved && !closed) { closeApproved = true; Close(); }
     }
 

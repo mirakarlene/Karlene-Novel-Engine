@@ -69,7 +69,18 @@ public partial class ScriptEditor
             var combo = new ComboBox { Name = "EndActionInput", Margin = new Thickness(0, 3, 0, 8), ItemsSource = modes.Select(mode => mode.Item1).ToArray(), SelectedIndex = Array.FindIndex(modes, mode => mode.Item2 == node.EndAction) };
             Add("После конца сцены", combo); combo.SelectionChanged += (_, _) => TrackProperties();
             extendedEdits.Add(value => value.EndAction = modes[Math.Max(0, combo.SelectedIndex)].Item2);
-            Text("EndScreenInput", "ID специального экрана (для выбранного действия)", node.Path, (value, text) => value.Path = text);
+            Text("EndScreenInput", "Название специального экрана (для выбранного действия)", node.Path, (value, text) => value.Path = text);
+        }
+        if (node.Kind == ScriptNodeKind.ShowScreen)
+        {
+            Number("ScreenOpacityInput", "Прозрачность экрана (0–1)", node.Opacity, (value, number) => value.Opacity = number);
+            Choice("ScreenLayerInput", "Слой", node.ScreenLayer, ["main", "overlay"], (value, text) => value.ScreenLayer = text);
+        }
+        if (node.Kind is ScriptNodeKind.ConfigureDialogue or ScriptNodeKind.ConfigureButton) AddUiConfigurationFields(node);
+        if (node.Kind == ScriptNodeKind.Script)
+        {
+            var edit = new Button { Name = "EditProjectScriptButton", Content = "Создать / редактировать скрипт…", Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(0, 0, 0, 10) };
+            edit.Click += (_, _) => Guard(() => { ApplyProperties(); ProjectScriptRequested?.Invoke(this, EventArgs.Empty); }); ExtendedProperties.Children.Add(edit);
         }
         if (node.Kind is ScriptNodeKind.While or ScriptNodeKind.ForEach or ScriptNodeKind.Switch or ScriptNodeKind.TryCatch or ScriptNodeKind.Parallel or ScriptNodeKind.Async)
             ExtendedProperties.Children.Add(new TextBlock { Text = "Внутреннюю ветку подключите к выходу «Далее» блока или завершите через «Конец → Завершить ветку / вернуться». Циклы задаются блоком, обратную связь рисовать не нужно.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 10), Foreground = System.Windows.Media.Brushes.DimGray });

@@ -35,8 +35,12 @@ public partial class GameWindow
         if (scene.ScreenVersion != renderedVisuals?.ScreenVersion || scene.OverlayScreen != renderedVisuals?.OverlayScreen)
         {
             ScriptScreenCanvas.Children.Clear();
+            MainScriptScreenCanvas.Children.Clear();
             var layout = project.Engine.Screens.Screens.FirstOrDefault(item => item.Id == scene.OverlayScreen);
-            ScriptScreenViewbox.Visibility = layout == null ? Visibility.Collapsed : Visibility.Visible;
+            ScriptScreenViewbox.Visibility = layout != null && scene.ScreenLayer == "overlay" ? Visibility.Visible : Visibility.Collapsed;
+            MainScriptScreenViewbox.Visibility = layout != null && scene.ScreenLayer == "main" ? Visibility.Visible : Visibility.Collapsed;
+            ScriptScreenViewbox.Opacity = MainScriptScreenViewbox.Opacity = scene.ScreenOpacity;
+            var targetCanvas = scene.ScreenLayer == "main" ? MainScriptScreenCanvas : ScriptScreenCanvas;
             if (layout != null)
                 foreach (var element in layout.Elements)
                 {
@@ -47,10 +51,10 @@ public partial class GameWindow
                     view.Width = element.Width; view.Height = element.Height; Canvas.SetLeft(view, element.X); Canvas.SetTop(view, element.Y);
                     if (view is Button button) button.Click += async (_, _) =>
                     {
-                        if (element.Action is "back" or "resume") ScriptScreenViewbox.Visibility = Visibility.Collapsed;
+                        if (element.Action is "back" or "resume") ScriptScreenViewbox.Visibility = MainScriptScreenViewbox.Visibility = Visibility.Collapsed;
                         else await DispatchScreenActionAsync(element);
                     };
-                    ScriptScreenCanvas.Children.Add(view);
+                    targetCanvas.Children.Add(view);
                     ScreenRenderer.Animate(view, element, preferences.Animate && project.Engine.Theme.AnimationEnabled);
                 }
         }
@@ -93,7 +97,7 @@ public partial class GameWindow
         switch (frame.EndAction)
         {
             case "menu": ready = false; ShowMenu(); break;
-            case "screen": ready = false; ShowLayout(frame.EndScreen!); break;
+            case "screen": ready = false; ShowLayout(project.Engine.Screens.ResolveReference(frame.EndScreen!).Id); break;
             case "exit": Close(); break;
         }
     }

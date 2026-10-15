@@ -13,9 +13,9 @@ namespace KNE.Tests;
 public sealed class BlockLibraryTests
 {
     [Fact]
-    public void Catalog_ContainsAllOldAndNewCommandsInSixOrderedGroups_AndPreservesConditionCategoryColors()
+    public void Catalog_ContainsAllOldAndNewCommandsInOrderedGroups_AndPreservesConditionCategoryColors()
     {
-        Assert.Equal(new[] { "Начало и конец", "Нарратив", "Логика", "Визуал", "Звук", "Асинхронность" }, BlockLibrary.Groups.Select(group => group.Title));
+        Assert.Equal(new[] { "Начало и конец", "Нарратив", "Логика", "Визуал", "Звук", "Асинхронность", "Конфигурации", "Плагины" }, BlockLibrary.Groups.Select(group => group.Title));
         Assert.Equal(Enum.GetValues<ScriptNodeKind>().Order(), BlockLibrary.Definitions.Select(entry => entry.Kind).Distinct().Order());
         Assert.Equal(2, BlockLibrary.Definitions.Count(entry => entry.Kind == ScriptNodeKind.Condition));
         Assert.Equal("#FFFFFF", BlockLibrary.ColorFor(BlockLibrary.Create(ScriptNodeKind.Start)));
@@ -41,6 +41,7 @@ public sealed class BlockLibraryTests
             {
                 await Invoke(window, "OpenProjectAsync", fixture.ProjectPath, false); await Invoke(window, "OpenScriptAsync", path);
                 var editor = Find<ScriptEditor>(window, "SceneEditor"); Assert.Null(editor.FindName("BlockType"));
+                Find<BlockLibraryView>(window, "LibraryView").ConfigurePreferenceStore(new(Path.Combine(fixture.Root, "catalog.json")));
                 var content = (FrameworkElement)window.Content; Layout(content); editor.PanGraph(-280, 170); editor.ChangeZoom(-2);
                 string original = editor.Document!.Graph!.Serialize(); int count = editor.Document.Graph.Nodes.Count;
                 Click(editor, "AddBlockButton"); var overlay = Find<Border>(window, "BlockLibraryOverlay");
@@ -49,12 +50,14 @@ public sealed class BlockLibraryTests
                 Assert.False(Find<Grid>(window, "ProjectPanel").IsEnabled); Assert.Equal(count, editor.Document.Graph.Nodes.Count);
                 Click(library, "CloseLibraryButton"); Assert.Equal(Visibility.Collapsed, overlay.Visibility);
                 Assert.Equal(original, editor.Document.Graph.Serialize()); Assert.False(editor.Document.IsDirty);
-                Click(editor, "AddBlockButton"); Find<ListBox>(library, "BlockGroups").SelectedIndex = 2;
+                Click(editor, "AddBlockButton"); SelectGroup(library, "logic");
                 Layout(content); Capture(content, "block-library-logic.png");
                 var viewport = Find<Border>(editor, "GraphScroll"); double zoom = Find<Slider>(editor, "ZoomSlider").Value;
                 double expectedX = (viewport.ActualWidth / 2 + 280) / zoom, expectedY = (viewport.ActualHeight / 2 - 170) / zoom;
                 Card(library, ScriptNodeKind.Condition).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(content);
                 var added = editor.Document.Graph.Nodes.Last(); Assert.Equal(ScriptNodeKind.Condition, added.Kind); Assert.Equal("logic", added.Category);
+                await library.SavePreferencesAsync(); SelectGroup(library, "recent");
+                Assert.Equal(ScriptNodeKind.Condition, Assert.Single(Find<WrapPanel>(library, "BlockCards").Children.Cast<Button>()).Tag);
                 var card = Find<Canvas>(editor, "GraphCanvas").Children.OfType<Border>().Single(card => Equals(card.Tag, added.Id));
                 Assert.Equal(expectedX, added.X + card.ActualWidth / 2, 3); Assert.Equal(expectedY, added.Y + card.ActualHeight / 2, 3);
                 Assert.Equal(Visibility.Collapsed, overlay.Visibility); Assert.True(Find<Grid>(window, "ProjectPanel").IsEnabled);
@@ -75,9 +78,10 @@ public sealed class BlockLibraryTests
         {
             var editor = new ScriptEditor(); await editor.OpenAsync(fixture.ProjectPath, fixture.Write("game/scenes/map.knegraph", VisualScript.Create().Serialize()));
             var view = new BlockLibraryView(); int chosen = 0; view.BlockSelected += (_, _) => chosen++;
-            view.Open(editor.CanAddBlock); Find<ListBox>(view, "BlockGroups").SelectedIndex = 0;
-            Assert.False(Card(view, ScriptNodeKind.Start).IsEnabled); Assert.True(Card(view, ScriptNodeKind.End).IsEnabled);
-            Find<ListBox>(view, "BlockGroups").SelectedIndex = 4; Find<TextBox>(view, "BlockSearch").Text = "ambient";
+            view.Open(editor.CanAddBlock); SelectGroup(view, "terminals");
+            Card(view, ScriptNodeKind.Start).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(0, chosen); Assert.True(Card(view, ScriptNodeKind.End).IsEnabled);
+            SelectGroup(view, "audio"); Find<TextBox>(view, "BlockSearch").Text = "ambient";
             Assert.Single(Find<WrapPanel>(view, "BlockCards").Children.Cast<Button>());
             Assert.Equal(ScriptNodeKind.AudioChannel, Card(view, ScriptNodeKind.AudioChannel).Tag);
             Find<TextBox>(view, "BlockSearch").Text = "missing-type";
@@ -230,6 +234,10 @@ public sealed class BlockLibraryTests
     }
 
     private static T Find<T>(FrameworkElement owner, string name) => (T)owner.FindName(name);
+    private static void SelectGroup(BlockLibraryView view, string id)
+    {
+        var groups = Find<ListBox>(view, "BlockGroups"); groups.SelectedItem = groups.Items.Cast<BlockGroup>().Single(group => group.Id == id);
+    }
     private static Button Card(BlockLibraryView view, ScriptNodeKind kind) => Find<WrapPanel>(view, "BlockCards").Children.Cast<Button>().Single(button => Equals(button.Tag, kind));
     private static T Extended<T>(ScriptEditor view, string name) where T : FrameworkElement => Find<StackPanel>(view, "ExtendedProperties").Children.OfType<T>().Single(control => control.Name == name);
     private static void Click(FrameworkElement owner, string name) => Find<Button>(owner, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

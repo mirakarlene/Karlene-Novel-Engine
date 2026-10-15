@@ -13,7 +13,8 @@ public static class BlockLibrary
     public static IReadOnlyList<BlockGroup> Groups { get; } = [
         new("terminals", "Начало и конец", "#64748B"), new("narrative", "Нарратив", "#C65C16"),
         new("logic", "Логика", "#2563A6"), new("visual", "Визуал", "#8246B3"),
-        new("audio", "Звук", "#228052"), new("async", "Асинхронность", "#BA3846")];
+        new("audio", "Звук", "#228052"), new("async", "Асинхронность", "#BA3846"),
+        new("configurations", "Конфигурации", "#137C83"), new("plugins", "Плагины", "#6B7280")];
 
     /// <summary>All selectable entries. Conditions appear in both narrative and logic.</summary>
     public static IReadOnlyList<BlockDefinition> Definitions { get; } = Build();
@@ -65,6 +66,13 @@ public static class BlockLibrary
         Add("async", ScriptNodeKind.Timer, "Таймер", "Продолжить после заданного времени без блокировки окна.");
         Add("async", ScriptNodeKind.Pause, "Пауза", "Приостановить текущую ветку на указанное время.");
         Add("async", ScriptNodeKind.WaitCondition, "Ожидание условия", "Ждать сравнения переменной; время задаёт предел ожидания.");
+        Add("visual", ScriptNodeKind.ClearBackgrounds, "Удалить все фоны", "Убрать изображения, стандартный фон и их анимации.");
+        Add("visual", ScriptNodeKind.ClearSprites, "Удалить все спрайты", "Убрать все спрайты и сбросить их перемещения и анимации.");
+        Add("configurations", ScriptNodeKind.ConfigureDialogue, "Текстовое окно", "Положение, размеры, шрифт, цвета, прозрачность и текстура диалога.");
+        Add("configurations", ScriptNodeKind.ConfigureButton, "Кнопка", "Внешний вид и положение игровых кнопок и вариантов выбора.");
+        Add("plugins", ScriptNodeKind.IncludeLua, "Подключить .lua", "Подключить внешний Lua-файл один раз за игровую сессию.");
+        Add("plugins", ScriptNodeKind.IncludeCs, "Подключить .cs", "Скомпилировать и подключить C#-плагин проекта.");
+        Add("plugins", ScriptNodeKind.Script, "Скрипт", "Создать или открыть скрипт в настроенном внешнем редакторе; выполнять при входе в блок.");
         return entries.AsReadOnly();
     }
 
@@ -94,6 +102,11 @@ public static class BlockLibrary
         if (kind is ScriptNodeKind.Sound or ScriptNodeKind.StopSound) node.Channel = "sfx";
         if (kind == ScriptNodeKind.Voice) node.Channel = "voice";
         if (kind == ScriptNodeKind.End) node.EndAction = ScriptEndAction.Menu;
+        if (kind is ScriptNodeKind.ConfigureDialogue or ScriptNodeKind.ConfigureButton)
+        {
+            node.UiTarget = kind == ScriptNodeKind.ConfigureDialogue ? "dialogue" : "next";
+            node.Ui = GameplayUiStyle.ForTarget(node.UiTarget);
+        }
         return node;
     }
 

@@ -26,16 +26,22 @@ public partial class MainWindow : Window
 
     public MainWindow() : this(null, null) { }
 
-    internal MainWindow(Action<Window>? showTestingWindow, Action<string>? openAnalysisReport)
+    internal MainWindow(Action<Window>? showTestingWindow, Action<string>? openAnalysisReport) : this(showTestingWindow, openAnalysisReport, null, null) { }
+
+    internal MainWindow(Action<Window>? showTestingWindow, Action<string>? openAnalysisReport,
+        Func<Window, string, string?>? selectProjectScript, Action<ProcessStartInfo>? openProjectScript)
     {
         InitializeComponent();
+        SceneEditor.ProjectScriptRequested += SceneEditor_ProjectScriptRequested;
         presentTestingWindow = showTestingWindow ?? (window => { window.Owner = this; window.Show(); });
         presentAnalysisReport = openAnalysisReport ?? (path => { using (Process.Start(EditorLauncher.CreateStartInfo(settings.EditorPath, path))) { } });
+        chooseProjectScript = selectProjectScript ?? ShowProjectScriptDialog;
+        launchProjectScript = openProjectScript ?? (info => { using (Process.Start(info)) { } });
     }
 
     private async void Window_Closing(object? sender, CancelEventArgs e)
     {
-        if (closeApproved || (SceneEditor.Document == null && !busy)) return;
+        if (closeApproved || (SceneEditor.Document == null && !busy && !LibraryView.HasPendingPreferenceSave)) return;
         e.Cancel = true;
         if (checkingClose || busy) return;
         checkingClose = true;
@@ -43,6 +49,7 @@ public partial class MainWindow : Window
         {
             if (await SceneEditor.CanLeaveAsync())
             {
+                await LibraryView.FlushPendingPreferencesAsync();
                 closeApproved = true;
                 // Closing may complete synchronously; re-enter Close only after this event has returned.
                 _ = Dispatcher.BeginInvoke(new Action(Close));

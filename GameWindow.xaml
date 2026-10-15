@@ -44,6 +44,7 @@
             <Image x:Name="DefaultBackgroundImage" Stretch="UniformToFill"/>
             <Image x:Name="BackgroundImage" Stretch="UniformToFill"/>
             <Image x:Name="CharacterImage" Stretch="Uniform" Width="420" HorizontalAlignment="Center" VerticalAlignment="Bottom"/>
+            <Viewbox x:Name="MainScriptScreenViewbox" Stretch="Uniform" Visibility="Collapsed"><Canvas x:Name="MainScriptScreenCanvas" Width="1280" Height="720"/></Viewbox>
             </Grid>
             <TextBlock x:Name="SceneTitle" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" FontSize="36" Foreground="{DynamicResource GameTextBrush}" Margin="48" IsHitTestVisible="False" Visibility="Collapsed"/>
             <Border x:Name="DialoguePanel" VerticalAlignment="Bottom" Height="240"
@@ -62,7 +63,7 @@
                             Click="NextButton_Click" IsEnabled="False"/>
                 </Grid>
             </Border>
-            <Viewbox x:Name="ScriptScreenViewbox" Stretch="Uniform" Visibility="Collapsed"><Canvas x:Name="ScriptScreenCanvas" Width="1280" Height="720"/></Viewbox>
+            <Viewbox x:Name="ScriptScreenViewbox" Panel.ZIndex="20" Stretch="Uniform" Visibility="Collapsed"><Canvas x:Name="ScriptScreenCanvas" Width="1280" Height="720"/></Viewbox>
             <Border x:Name="SceneFlash" Background="White" Opacity="0" IsHitTestVisible="False"/>
         </Grid>
         <StackPanel x:Name="GameControls" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="24" Visibility="Collapsed">

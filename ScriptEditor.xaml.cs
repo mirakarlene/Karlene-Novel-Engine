@@ -28,6 +28,8 @@ public partial class ScriptEditor : UserControl
     public event EventHandler? TestSceneRequested;
     /// <summary>Requests the block library overlay in the owning main window.</summary>
     public event EventHandler? BlockLibraryRequested;
+    /// <summary>Requests creating or opening the selected project script in the configured external editor.</summary>
+    public event EventHandler? ProjectScriptRequested;
 
     /// <summary>Captures unsaved edits for an isolated editor worker.</summary>
     public EditorSelection? CapturePreview() => CapturePreview(false);
@@ -372,9 +374,9 @@ public partial class ScriptEditor : UserControl
             OptionsLabel.Text = node.Kind == ScriptNodeKind.Switch ? "Значения case — по одному на строку" : node.Kind is ScriptNodeKind.Parallel or ScriptNodeKind.Async ? "Названия веток — по одному на строку" : "Ответы — по одному на строку";
             Visible(PathField,
                 node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music
-                    or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen);
+                    or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script);
             bool sceneTarget = node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene;
-            PathLabel.Text = sceneTarget ? "Имя функции" : node.Kind == ScriptNodeKind.ForEach ? "Имя коллекции в state" : node.Kind == ScriptNodeKind.ShowScreen ? "ID экрана из оформления (пусто — скрыть)" : "Путь от корня проекта";
+            PathLabel.Text = sceneTarget ? "Имя функции" : node.Kind == ScriptNodeKind.ForEach ? "Имя коллекции в state" : node.Kind == ScriptNodeKind.ShowScreen ? "Название экрана (пусто — скрыть)" : "Путь от корня проекта";
             BrowsePathButton.Content = sceneTarget ? "Выбрать сцену…" : "Выбрать ресурс…";
             Visible(BrowsePathButton, !sceneTarget && node.Kind is not (ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen));
             Visible(PositionField, node.Kind == ScriptNodeKind.Character);
@@ -418,7 +420,7 @@ public partial class ScriptEditor : UserControl
         }
 
         if (node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music
-            or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen) changed.Path = PathInput.Text.Trim();
+            or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script) changed.Path = PathInput.Text.Trim();
         if (node.Kind == ScriptNodeKind.Character)
             changed.Position = (PositionInput.SelectedItem as ComboBoxItem)?.Content.ToString() ?? "center";
         if (node.Kind is ScriptNodeKind.Music or ScriptNodeKind.AudioChannel) changed.Loop = LoopInput.IsChecked == true;
@@ -497,7 +499,7 @@ public partial class ScriptEditor : UserControl
                 TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(8, 4, 8, 0)
             };
             contents.Children.Add(summary);
-            if (node.Kind != ScriptNodeKind.Start)
+            if (node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.Comment))
             {
                 var input = new Button
                 {
@@ -507,7 +509,7 @@ public partial class ScriptEditor : UserControl
                 input.Click += (_, _) => Guard(() => ConnectTo(node.Id));
                 contents.Children.Add(input);
             }
-            else contents.Children.Add(new Border { Height = 26 });
+            else if (node.Kind == ScriptNodeKind.Start) contents.Children.Add(new Border { Height = 26 });
 
             int port = 0;
             foreach (var output in node.Outputs())
@@ -635,6 +637,11 @@ public partial class ScriptEditor : UserControl
         ScriptNodeKind.Shake => "Сила " + node.Amount + " · " + node.Duration + " с",
         ScriptNodeKind.Flash => node.Value + " · " + node.Duration + " с",
         ScriptNodeKind.ShowScreen => node.Path.Length == 0 ? "Скрыть дополнительный экран" : node.Path,
+        ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script => node.Path.Length == 0 ? "Файл не выбран" : node.Path,
+        ScriptNodeKind.ConfigureDialogue => "Оформление диалога",
+        ScriptNodeKind.ConfigureButton => "Оформление: " + node.UiTarget,
+        ScriptNodeKind.ClearBackgrounds => "Убрать стандартный и загруженные фоны",
+        ScriptNodeKind.ClearSprites => "Убрать все спрайты и их анимации",
         ScriptNodeKind.AudioChannel => node.Channel + " · громкость " + node.Amount,
         ScriptNodeKind.Voice => node.Path.Length == 0 ? "Озвучка не выбрана" : node.Path,
         ScriptNodeKind.StopSound => "Канал " + node.Channel,
@@ -665,7 +672,7 @@ public partial class ScriptEditor : UserControl
         ApplyProperties();
         graph = Document.Graph!;
         var destination = graph.Nodes.Single(n => n.Id == target);
-        if (destination.Kind == ScriptNodeKind.Start || target == connection.Id)
+        if (destination.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment || target == connection.Id)
             throw new InvalidOperationException("Выберите другой блок, кроме «Начала».");
         Remember();
         graph.Nodes.Single(n => n.Id == connection.Id).SetOutput(connection.Port, target);

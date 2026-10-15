@@ -15,7 +15,7 @@ public sealed class ExtendedVisualScriptTests
         graph.Nodes.Add(new() { Id = "notes", Kind = ScriptNodeKind.Comment, Text = "error('must not execute')", X = -800 });
         var parsed = VisualScript.Parse(graph.Serialize());
         Assert.Equal("error('must not execute')", parsed.Nodes.Single(n => n.Id == "notes").Text);
-        Assert.Null(Assert.Single(parsed.Nodes.Single(n => n.Id == "notes").Outputs()).Target);
+        Assert.Empty(parsed.Nodes.Single(n => n.Id == "notes").Outputs());
         await using var runtime = new LuaRuntime(await VisualScriptTests.LoadGraphAsync(fixture, parsed), _ => { }, interactive: true);
         await runtime.StartAsync();
         Assert.Equal("Добро пожаловать!", runtime.Story.Text);

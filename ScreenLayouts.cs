@@ -29,6 +29,7 @@ public sealed class ScreenLayouts
     {
         if (Version != 1 || Screens == null || Screens.Count > 32) throw new InvalidDataException("Оформление поддерживает до 32 экранов (версия 1).");
         var ids = new HashSet<string>(StringComparer.Ordinal);
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var roles = new HashSet<string>(StringComparer.Ordinal);
         foreach (var screen in Screens)
         {
@@ -36,6 +37,7 @@ public sealed class ScreenLayouts
                 throw new InvalidDataException("Экраны должны иметь уникальные ID.");
             if (string.IsNullOrWhiteSpace(screen.Name) || screen.Name.Length > 100 || screen.Elements == null || screen.Elements.Count > 100)
                 throw new InvalidDataException("У экрана должно быть имя и не более 100 элементов.");
+            if (!names.Add(screen.Name.Trim())) throw new InvalidDataException("Названия экранов должны быть уникальными: " + screen.Name.Trim());
             if (screen.Kind is not ("main_menu" or "gameplay" or "pause" or "settings" or "saves" or "custom"))
                 throw new InvalidDataException("Неизвестный тип экрана.");
             if (screen.Kind == "custom" && screen.Id is "gameplay" or "saves") throw new InvalidDataException("Этот ID зарезервирован служебным экраном.");
@@ -75,11 +77,23 @@ public sealed class ScreenLayouts
     public GameScreen AddScreen(string name)
     {
         if (Screens.Count >= 32) throw new InvalidOperationException("Достигнут предел 32 экранов.");
-        var screen = new GameScreen { Id = Guid.NewGuid().ToString("N"), Name = name, Kind = "custom" };
+        if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 100) throw new ArgumentException("Укажите название экрана до 100 символов.", nameof(name));
+        if (Screens.Any(screen => screen.Name.Trim().Equals(name.Trim(), StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("Экран с таким названием уже существует: " + name.Trim());
+        var screen = new GameScreen { Id = Guid.NewGuid().ToString("N"), Name = name.Trim(), Kind = "custom" };
         screen.Elements.Add(new() { Text = name, Type = "text", X = 480, Y = 180, Width = 320, Height = 80, FontSize = 32 });
         screen.Elements.Add(new() { Text = "Назад", Action = "back", X = 480, Y = 440, Width = 320, Height = 48 });
         Screens.Add(screen);
         return screen;
+    }
+
+    /// <summary>Finds a user-visible name, retaining legacy IDs when no name matches.</summary>
+    public GameScreen ResolveReference(string nameOrLegacyId)
+    {
+        string name = nameOrLegacyId.Trim();
+        return Screens.FirstOrDefault(screen => screen.Name.Trim().Equals(name, StringComparison.OrdinalIgnoreCase))
+            ?? Screens.FirstOrDefault(screen => screen.Id == name)
+            ?? throw new ArgumentException("Экран не найден по названию: " + name);
     }
 
     public void RemoveScreen(string id)
