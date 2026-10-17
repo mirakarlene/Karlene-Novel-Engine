@@ -59,7 +59,7 @@
                     <StackPanel x:Name="ExtendedProperties"/>
                     <Button x:Name="ApplyPropertiesButton" Content="Применить свойства" Click="Apply_Click" Padding="8,5" Margin="0,0,0,6"/>
                     <Button x:Name="DeleteBlockButton" Content="Удалить блок" Click="Delete_Click" Padding="8,5" Margin="0,0,0,8"/>
-                    <TextBlock Text="Правая кнопка мыши — перемещать обзор. Ctrl+колесо или +/− — масштаб. Связь: выход → вход; правая кнопка по выходу удаляет связь. Заголовок блока можно перетаскивать." Foreground="#FF536174" TextWrapping="Wrap"/>
+                    <TextBlock Text="ПКМ — двигать обзор; Ctrl+колесо и +/− — масштаб. ЛКМ на пустом месте — область выделения; Ctrl/Shift — добавить блок. Тяните порт для связи, край — для размера, заголовок — для переноса. Ctrl+C/V/D — копировать/вставить/дублировать; Ctrl+Z/X — отменить/повторить." Foreground="#FF536174" TextWrapping="Wrap"/>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

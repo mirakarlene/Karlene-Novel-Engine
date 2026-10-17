@@ -30,7 +30,7 @@ public partial class ScriptEditor
             while (Document!.Graph!.Nodes.Any(item => item.Character?.Id == id)) id = "character_" + suffix++;
             node.Character = node.Character! with { Id = id };
         }
-        Remember(); Document!.Graph!.Nodes.Add(node); selectedId = node.Id; Repaint();
+        Remember(); Document!.Graph!.Nodes.Add(node); selectedIds.Clear(); selectedIds.Add(node.Id); selectedId = node.Id; Repaint();
         var card = cards[node.Id]; card.Measure(new Size(210, double.PositiveInfinity));
         node.Y = Math.Clamp(centerY - card.DesiredSize.Height / 2, -1_000_000_000, 1_000_000_000);
         Canvas.SetTop(card, node.Y); UpdateGraphExtent(); RenderLinks(); UpdateTitle();
@@ -43,6 +43,7 @@ public partial class ScriptEditor
         selectedSpeakerId = node?.SpeakerId ?? ""; UpdateSpeakerReference();
         if (node == null) return;
         AddNarrativeFields(node);
+        AddTextInputFields(node);
         bool literal = node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable or ScriptNodeKind.While or ScriptNodeKind.WaitCondition;
         foreach (var control in new UIElement[] { ValueTypeLabel, ValueTypeInput }) Visible(control, literal || node.Kind == ScriptNodeKind.Switch);
         foreach (var control in new UIElement[] { ValueLabel, ValueInput }) Visible(control, literal || node.Kind is ScriptNodeKind.CheckFlag or ScriptNodeKind.SetFlag);

@@ -10,6 +10,10 @@ public sealed record StoryFrame(string Kind, string Speaker, string Text, IReadO
     public bool NeedsTick => Kind == "wait" || HasBackgroundTasks || RemainingSeconds.HasValue;
     public CharacterProfile? Character { get; init; }
     public TextEffectSettings? TextEffect { get; init; }
+    /// <summary>Configuration of the currently pending player-input request.</summary>
+    public TextInputSettings? Input { get; init; }
+    /// <summary>Feedback for an invalid answer without an error continuation.</summary>
+    public string InputFeedback { get; init; } = "";
     public double? RemainingSeconds { get; init; }
     public bool IsSkippable { get; init; } = true;
     public double EraseProgress { get; init; }

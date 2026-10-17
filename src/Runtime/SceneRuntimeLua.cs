@@ -255,10 +255,11 @@ internal static class SceneRuntimeLua
                         root.ending = {kind = "completed", action = event.action, screen = event.screen,
                             file = event.file, line = event.line, node = event.node, key = event.key, functionline = event.functionline}
                         for _, current in ipairs(tasks) do close_task(current) end
-                    elseif event.kind == "dialogue" or event.kind == "choice" or event.kind == "text_pause" or event.kind == "clear_text" or (kne_editor and event.kind == "preview") then
+                    elseif event.kind == "dialogue" or event.kind == "choice" or event.kind == "input" or event.kind == "text_pause" or event.kind == "clear_text" or (kne_editor and event.kind == "preview") then
                         task.transitions = 0
                         if task.detached then
                             if event.kind == "choice" then return fail(task, "Выбор недоступен в фоновой асинхронной ветке; используйте Параллель") end
+                            if event.kind == "input" then return fail(task, "Ввод текста недоступен в фоновой асинхронной ветке; используйте Параллель") end
                             if event.kind == "dialogue" then print_to_ui(event.speaker == "" and event.text or event.speaker .. ": " .. event.text) end
                             if event.seconds and event.seconds > 0 then task.wake = clock + event.seconds end
                         else
@@ -310,12 +311,12 @@ internal static class SceneRuntimeLua
                     if visible and event.seconds ~= nil and not visible.event_deadline then
                         visible.event_started, visible.event_deadline = clock, clock + event.seconds
                     end
-                    if event.kind == "dialogue" or event.kind == "choice" then
+                    if event.kind == "dialogue" or event.kind == "choice" or event.kind == "input" then
                         if event.presentation_id == nil then
                             presentation_id = presentation_id + 1
                             event.presentation_id = presentation_id
                         end
-                        kne_remember_dialogue(event)
+                        if event.kind ~= "input" then kne_remember_dialogue(event) end
                     end
                     event.background = background
                     if not kne_interactive then

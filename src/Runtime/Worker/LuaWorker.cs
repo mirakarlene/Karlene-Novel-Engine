@@ -6,7 +6,7 @@ using System.Threading.Channels;
 namespace KNE;
 
 internal sealed record WorkerRequest(long Id, string Command, int Option = 0, string? Text = null, GameCheckpoint? Checkpoint = null,
-    EditorPreviewSource? EditorSource = null, double Seconds = 0);
+    EditorPreviewSource? EditorSource = null, double Seconds = 0, bool Cancel = false);
 internal sealed record SessionSnapshot(RuntimeWindowSettings Window, StoryFrame Story, SceneVisuals Visuals,
     PreviewLocation? Location = null, JsonElement Variables = default, bool TransitionInProgress = false);
 internal sealed record WorkerMessage(string Type, long Id = 0, string? Text = null, SessionSnapshot? Snapshot = null,
@@ -70,6 +70,7 @@ internal static class LuaWorker
                         case "start": await runtime.StartAsync().ConfigureAwait(false); break;
                         case "advance": await runtime.AdvanceAsync().ConfigureAwait(false); break;
                         case "choose": await runtime.ChooseAsync(request.Option).ConfigureAwait(false); break;
+                        case "input": await runtime.SubmitInputAsync(request.Text ?? "", request.Cancel).ConfigureAwait(false); break;
                         case "tick": await runtime.TickAsync(request.Seconds).ConfigureAwait(false); break;
                         case "command": await runtime.ProcessCommandAsync(request.Text!).ConfigureAwait(false); break;
                         case "restore": await runtime.RestoreAsync(request.Checkpoint!).ConfigureAwait(false); break;

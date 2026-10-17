@@ -8,7 +8,7 @@ public sealed class SceneTestSession : IAsyncDisposable
 {
     private readonly ProjectInfo project;
     private readonly EditorSelection selection;
-    private sealed record TestAction(string Kind, string BeforeKind, int Option = 0, double Seconds = 0, int FrameStart = 0);
+    private sealed record TestAction(string Kind, string BeforeKind, int Option = 0, double Seconds = 0, int FrameStart = 0, string Text = "", bool Cancel = false);
     private readonly List<TestAction> history = [];
     private readonly int seed = Random.Shared.Next(1, int.MaxValue);
     private string? sourceSignature;
@@ -37,6 +37,15 @@ public sealed class SceneTestSession : IAsyncDisposable
         string before = Story.Kind;
         await session.ChooseAsync(option, token).ConfigureAwait(false); history.Add(new("choose", before, option, FrameStart: frameStart)); frameStart = history.Count;
     }
+    public async Task SubmitInputAsync(string text, bool cancel = false, CancellationToken token = default)
+    {
+        if (session == null || Story.Kind != "input") throw new InvalidOperationException("Нет поля ввода для продолжения.");
+        long previous = Story.PresentationId;
+        await session.SubmitInputAsync(text, cancel, token).ConfigureAwait(false);
+        bool changed = Story.Kind != "input" || Story.PresentationId != previous;
+        history.Add(new("input", changed ? "input" : "", FrameStart: frameStart, Text: text, Cancel: cancel));
+        if (changed) frameStart = history.Count;
+    }
     /// <summary>Advances logical timers and background branches without consuming the visible frame.</summary>
     public async Task TickAsync(double seconds, CancellationToken token = default)
     {
@@ -60,11 +69,12 @@ public sealed class SceneTestSession : IAsyncDisposable
             token.ThrowIfCancellationRequested();
             if (action.Kind == "tick") await session!.TickAsync(action.Seconds, token).ConfigureAwait(false);
             else if (action.Kind == "advance") await session!.AdvanceAsync(token).ConfigureAwait(false);
+            else if (action.Kind == "input") await session!.SubmitInputAsync(action.Text, action.Cancel, token).ConfigureAwait(false);
             else await session!.ChooseAsync(action.Option, token).ConfigureAwait(false);
         }
         frameStart = history.FindLastIndex(action => action.BeforeKind.Length != 0) + 1;
     }
-    private static bool IsVisibleFrame(string kind) => kind is "dialogue" or "choice" or "text_pause";
+    private static bool IsVisibleFrame(string kind) => kind is "dialogue" or "choice" or "text_pause" or "input";
     private async Task StartFreshAsync(CancellationToken token)
     {
         if (session != null) await session.DisposeAsync().ConfigureAwait(false);

@@ -26,7 +26,7 @@ public static class LuaSyntax
         "show_title", "hide_background", "move_visual", "animate_visual", "screen_shake", "screen_flash", "camera", "show_screen",
         "set_audio_channel", "play_audio", "stop_audio", "set_master_volume", "kne_parallel", "kne_async", "kne_join", "kne_pause", "kne_timer", "kne_wait_condition", "kne_end",
         "include_lua", "include_cs", "run_script", "configure_ui", "clear_backgrounds", "clear_sprites",
-        "register_character", "kne_say", "text_pause", "clear_text", "console_write", "kne_random_branch"
+        "register_character", "kne_say", "text_pause", "clear_text", "console_write", "kne_random_branch", "text_input"
     };
 
     public static IReadOnlyList<LuaToken> Parse(string text)

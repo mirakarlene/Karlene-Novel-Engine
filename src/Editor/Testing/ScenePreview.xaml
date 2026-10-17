@@ -34,6 +34,7 @@
                                     <local:EffectTextPresenter x:Name="DialogueEffects"/>
                                 </Grid>
                                 <StackPanel x:Name="ChoicePanel" Margin="0,12,0,0"/>
+                                <local:TextInputPresenter x:Name="PlayerInput" Submitted="PlayerInput_Submitted"/>
                             </StackPanel>
                         </ScrollViewer>
                     </Border>

@@ -392,7 +392,7 @@ public static class ProjectAnalyzer
     }
 
     private static bool HasYield(IReadOnlyList<Lexeme> tokens) => tokens.Select((token, i) => (token, i))
-        .Any(pair => pair.token.Text is "d" or "choice" or "kne_say" && IsGlobalCall(tokens, pair.i));
+        .Any(pair => pair.token.Text is "d" or "choice" or "kne_say" or "text_input" && IsGlobalCall(tokens, pair.i));
 
     private static void AnalyzeLoops(Source source, List<ProjectDiagnostic> findings)
     {

@@ -245,7 +245,7 @@ public sealed class SceneTestingTests
             viewport.RaiseEvent(up); Assert.True(up.Handled); Assert.False(Field<bool>(editor, "panning"));
             Assert.False(editor.Document!.IsDirty);
             var start = Find<Canvas>(editor, "GraphCanvas").Children.OfType<Border>().Single(card => (string)card.Tag == "start");
-            var output = ((StackPanel)start.Child).Children.OfType<Button>().Single();
+            var output = ((StackPanel)start.Child).Children.OfType<Grid>().SelectMany(grid => grid.Children.OfType<Button>()).Single();
             down = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Right) { RoutedEvent = UIElement.PreviewMouseRightButtonDownEvent };
             output.RaiseEvent(down); Assert.False(down.Handled); Assert.False(Field<bool>(editor, "panning"));
             output.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Right) { RoutedEvent = UIElement.MouseRightButtonUpEvent });
