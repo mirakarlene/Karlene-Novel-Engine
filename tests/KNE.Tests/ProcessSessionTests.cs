@@ -116,7 +116,13 @@ public sealed class ProcessSessionTests
             await session.StartAsync();
             await Assert.ThrowsAsync<System.IO.IOException>(() => session.ProcessCommandAsync("exit"));
             var blocked = session.ProcessCommandAsync("hang");
-            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Task first = await Task.WhenAny(entered.Task, blocked).WaitAsync(TimeSpan.FromSeconds(10));
+            if (first == blocked)
+            {
+                await blocked; // Surface a command failure instead of hiding it behind the log timeout.
+                Assert.Fail("Команда завершилась до входа в проверяемый бесконечный цикл.");
+            }
+            await entered.Task;
             int worker = session.WorkerProcessId!.Value;
             await session.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => blocked);
