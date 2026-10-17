@@ -50,6 +50,12 @@ public sealed class ProcessGameSession : IGameSession
     public Task StartAsync(CancellationToken cancellationToken = default) => ExecuteAsync("start", cancellationToken);
     public Task AdvanceAsync(CancellationToken cancellationToken = default) => ExecuteAsync("advance", cancellationToken);
     public Task ChooseAsync(int option, CancellationToken cancellationToken = default) => ExecuteAsync("choose", cancellationToken, option: option);
+    public Task SubmitInputAsync(string text, bool cancel = false, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (text.Length > 8192) throw new ArgumentException("Ответ слишком длинный.", nameof(text));
+        return ExecuteAsync("input", cancellationToken, text: text, cancel: cancel);
+    }
     public Task TickAsync(double seconds, CancellationToken cancellationToken = default)
     {
         if (!double.IsFinite(seconds) || seconds <= 0 || seconds > 60) throw new ArgumentOutOfRangeException(nameof(seconds));
@@ -81,7 +87,7 @@ public sealed class ProcessGameSession : IGameSession
     }
 
     private async Task<WorkerMessage> ExecuteAsync(string command, CancellationToken token, int option = 0,
-        string? text = null, GameCheckpoint? checkpoint = null, double seconds = 0)
+        string? text = null, GameCheckpoint? checkpoint = null, double seconds = 0, bool cancel = false)
     {
         CancellationToken shutdown;
         lock (sync)
@@ -94,7 +100,7 @@ public sealed class ProcessGameSession : IGameSession
         try
         {
             token.ThrowIfCancellationRequested();
-            var exchange = ExchangeAsync(command, option, text, checkpoint, linked.Token, seconds);
+            var exchange = ExchangeAsync(command, option, text, checkpoint, linked.Token, seconds, cancel);
             WorkerMessage message;
             try { message = await exchange.WaitAsync(ExecutionLimit, linked.Token).ConfigureAwait(false); }
             catch
@@ -127,7 +133,7 @@ public sealed class ProcessGameSession : IGameSession
                 GameErrorReport.Attach(ex, GameErrorReport.Create(project, ex, command switch
                 {
                     "start" => "Запуск игры", "advance" => "Продолжение сценария", "choose" => "Выбор ответа",
-                    "command" => "Команда отладки", "restore" => "Загрузка сохранения", _ => "Связь с Lua-worker"
+                    "command" => "Команда отладки", "restore" => "Загрузка сохранения", "input" => "Ввод ответа игрока", _ => "Связь с Lua-worker"
                 }) with { TransitionFailure = transitionFailure });
             }
             KillWorker(); throw;
@@ -137,7 +143,7 @@ public sealed class ProcessGameSession : IGameSession
     }
 
     private async Task<WorkerMessage> ExchangeAsync(string command, int option, string? text,
-        GameCheckpoint? checkpoint, CancellationToken token, double seconds = 0)
+        GameCheckpoint? checkpoint, CancellationToken token, double seconds = 0, bool cancel = false)
     {
         Process process;
         bool restart;
@@ -181,7 +187,7 @@ public sealed class ProcessGameSession : IGameSession
         }
         if (restart && started && command is not ("start" or "restore"))
             await SendAsync(process, new(++requestId, "restore", Checkpoint: safePoint, EditorSource: editorSource), token).ConfigureAwait(false);
-        return await SendAsync(process, new(++requestId, command, option, text, checkpoint, editorSource, seconds), token).ConfigureAwait(false);
+        return await SendAsync(process, new(++requestId, command, option, text, checkpoint, editorSource, seconds, cancel), token).ConfigureAwait(false);
     }
 
     private async Task<WorkerMessage> SendAsync(Process process, WorkerRequest request, CancellationToken token)

@@ -55,7 +55,7 @@ public partial class ScriptEditor
         var nodes = Document?.Graph?.Nodes;
         double left = Math.Min(0, nodes?.Select(n => n.X).DefaultIfEmpty(0).Min() ?? 0);
         double top = Math.Min(0, nodes?.Select(n => n.Y).DefaultIfEmpty(0).Min() ?? 0);
-        GraphCanvas.Width = Math.Max(1600, (nodes?.Select(n => n.X + 410).DefaultIfEmpty(0).Max() ?? 0) - left);
-        GraphCanvas.Height = Math.Max(1000, (nodes?.Select(n => n.Y + 260 + n.Outputs().Count() * 28).DefaultIfEmpty(0).Max() ?? 0) - top);
+        GraphCanvas.Width = Math.Max(1600, (nodes?.Select(n => n.X + NodeWidth(n) + 200).DefaultIfEmpty(0).Max() ?? 0) - left);
+        GraphCanvas.Height = Math.Max(1000, (nodes?.Select(n => n.Y + NodeHeight(n) + 200).DefaultIfEmpty(0).Max() ?? 0) - top);
     }
 }

@@ -8,6 +8,9 @@ public partial class GameWindow
     {
         if (clockSuspended || closed || startupFailed || MenuOverlay.Visibility == Visibility.Visible) { DialogueEffects.Stop(); return; }
         bool animate = preferences.Animate && project.Engine.Theme.AnimationEnabled && ready;
+        DialogueText.Visibility = Visibility.Visible;
         NarrativePresentation.Apply(SpeakerText, DialogueText, DialogueEffects, runtime.Story, project.Engine.Theme, runtime.Visuals, animate);
+        PlayerInput.ApplyAppearance(DialogueText);
+        if (runtime.Story.Kind == "input") { DialogueText.Visibility = Visibility.Collapsed; DialogueEffects.Stop(); }
     }
 }

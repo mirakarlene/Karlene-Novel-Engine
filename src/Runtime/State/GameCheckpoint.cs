@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace KNE;
 
-public sealed record StoryAction(string Kind, string ExpectedFrame, int Option = 0, string? Command = null);
+public sealed record StoryAction(string Kind, string ExpectedFrame, int Option = 0, string? Command = null, bool Cancel = false);
 
 public sealed record GameCheckpoint(int Version, string ProjectPath, string Fingerprint, int Seed,
     IReadOnlyList<StoryAction> History, StoryFrame Frame, JsonElement State);
@@ -18,6 +18,8 @@ public interface IGameSession : IAsyncDisposable
     Task StartAsync(CancellationToken cancellationToken = default);
     Task AdvanceAsync(CancellationToken cancellationToken = default);
     Task ChooseAsync(int option, CancellationToken cancellationToken = default);
+    Task SubmitInputAsync(string text, bool cancel = false, CancellationToken cancellationToken = default) =>
+        Task.FromException(new InvalidOperationException("Сессия не поддерживает ввод текста."));
     Task TickAsync(double seconds, CancellationToken cancellationToken = default) => Task.CompletedTask;
     Task ProcessCommandAsync(string command, CancellationToken cancellationToken = default);
     Task<GameCheckpoint> GetCheckpointAsync(CancellationToken cancellationToken = default);

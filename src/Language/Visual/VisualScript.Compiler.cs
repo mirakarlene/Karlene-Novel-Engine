@@ -56,6 +56,10 @@ public sealed partial class VisualScript
                 Line("kne_editor_pause()");
             switch (node.Kind)
             {
+                case ScriptNodeKind.TextInput:
+                    Line($"local answer = text_input({Quote(System.Text.Json.JsonSerializer.Serialize(node.Input ?? new TextInputSettings(), EngineSettings.JsonOptions))})");
+                    Line($"if answer == 'error' then __kne_node = {(node.Input is { BranchOnResult: true, HasErrorOutput: true } ? Quote(node.True!) : Quote(node.Next!))} elseif answer == 'cancel' then __kne_node = {(node.Input is { BranchOnResult: true, HasCancelOutput: true } ? Quote(node.False!) : Quote(node.Next!))} else __kne_node = {Quote(node.Next!)} end");
+                    break;
                 case ScriptNodeKind.RandomBranch:
                     Line($"local answer = kne_random_branch({{{string.Join(", ", node.Options.Select(option => Number(option.Weight)))}}})");
                     Line($"__kne_node = ({{{string.Join(", ", node.Options.Select(option => Quote(option.Target!)))}}})[answer]");

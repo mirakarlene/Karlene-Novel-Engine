@@ -27,6 +27,7 @@ public static class BlockLibrary
         Add("terminals", ScriptNodeKind.Start, "Начало", "Точка входа схемы. В одной схеме может быть только одно начало.");
         Add("terminals", ScriptNodeKind.End, "Конец", "Главное меню, специальный экран, закрытие игры или возврат из вызова.");
         Add("narrative", ScriptNodeKind.Dialogue, "Реплика", "Текст в диалоговом окне с именем говорящего или от рассказчика.");
+        Add("narrative", ScriptNodeKind.TextInput, "Ввод текста", "Запросить ответ игрока, сохранить в переменную и выбрать ветку по результату.");
         Add("narrative", ScriptNodeKind.Choice, "Выбор", "Варианты ответа с отдельными выходами.");
         Add("narrative", ScriptNodeKind.Condition, "Условие", "Два продолжения в зависимости от значения переменной.");
         Add("narrative", ScriptNodeKind.Comment, "Комментарий", "Заметка автора. Не выполняется и может оставаться без связей.");
@@ -92,6 +93,7 @@ public static class BlockLibrary
         var node = new ScriptNode { Kind = kind };
         node.Category = category ?? Definitions.First(entry => entry.Kind == kind).Group;
         if (kind is ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue) node.Text = "Новая реплика";
+        if (kind == ScriptNodeKind.TextInput) node.Input = new TextInputSettings { Prompt = "Введите ответ:" };
         if (kind == ScriptNodeKind.RegisterCharacter) node.Character = new CharacterProfile { Id = "character", Name = "Персонаж" };
         if (kind == ScriptNodeKind.EffectDialogue) node.TextEffect = new TextEffectSettings();
         if (kind == ScriptNodeKind.ClearText) node.Duration = .5;

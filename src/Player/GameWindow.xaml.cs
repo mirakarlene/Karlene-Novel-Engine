@@ -336,7 +336,7 @@ public partial class GameWindow : Window
                 else if (ready && MenuOverlay.Visibility != Visibility.Visible)
                 {
                     if (runtime.Story.Kind == "choice" && ChoicePanel.Children.Count > 0) ChoicePanel.Children[0].Focus();
-                    else NextButton.Focus();
+                    else if (runtime.Story.Kind != "input") NextButton.Focus();
                 }
             }
             else if (!closed) RefreshErrorActions();
@@ -424,9 +424,12 @@ public partial class GameWindow : Window
         if (e.Key == Key.F3 && (project.Engine.Game.DebugEnabled || diagnosticConsole))
         {
             DebugOverlay.Visibility = DebugOverlay.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-            if (DebugOverlay.Visibility == Visibility.Visible) CommandInput.Focus(); else NextButton.Focus();
+            if (DebugOverlay.Visibility == Visibility.Visible) CommandInput.Focus();
+            else if (runtime.Story.Kind == "input") PlayerInput.FocusAnswer(); else NextButton.Focus();
             e.Handled = true; return;
         }
+        if (e.Key == Key.Escape && runtime.Story.Kind == "input" && MenuOverlay.Visibility != Visibility.Visible)
+        { PlayerInput.Cancel(); e.Handled = true; return; }
         if (e.Key == Key.Escape && ready && execution == null)
         {
             if (MenuOverlay.Visibility == Visibility.Visible) ShowGameplay(); else ShowMenu();
@@ -526,16 +529,20 @@ public partial class GameWindow : Window
                 ChoicePanel.Children.Add(button);
             }
         }
+        PlayerInput.Display(frame);
+        PlayerInput.SubmitButton.IsEnabled = PlayerInput.CancelButton.IsEnabled = execution == null;
         renderedStory = frame;
         NextButton.IsEnabled = execution == null && frame.CanAdvance;
+        NextButton.Visibility = frame.Kind == "input" ? Visibility.Collapsed : Visibility.Visible;
         ChoicePanel.IsEnabled = execution == null && frame.Kind == "choice";
+        ChoicePanel.Visibility = frame.Kind == "choice" ? Visibility.Visible : Visibility.Collapsed;
         SaveButton.IsEnabled = execution == null && ready;
         LoadButton.IsEnabled = execution == null && saves.Exists("quick");
         LoadAutoButton.IsEnabled = execution == null && saves.Exists("auto");
         ContinueButton.IsEnabled = execution == null && (saves.Exists("auto") || saves.Exists("quick"));
         UpdateScreenButtons();
         if (execution == null && ready)
-            StatusText.Text = frame.Kind switch { "dialogue" => "Ожидание продолжения", "choice" => "Выберите ответ", "completed" => "История завершена", _ => "Готово" };
+            StatusText.Text = frame.Kind switch { "dialogue" => "Ожидание продолжения", "choice" => "Выберите ответ", "input" => "Введите ответ", "completed" => "История завершена", _ => "Готово" };
     }
 
     private void RenderVisuals()

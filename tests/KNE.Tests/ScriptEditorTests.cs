@@ -131,7 +131,7 @@ public sealed class ScriptEditorTests
             added = editor.Document.Graph!.Nodes.Single(n => n.Kind == kind);
             Assert.Equal("chapter_N", added.Path);
             var canvas = (Canvas)editor.FindName("GraphCanvas");
-            Assert.Equal(outputCount, ((StackPanel)Card(canvas, added.Id).Child).Children.OfType<Button>().Count(b => !Equals(b.Content, "● Вход")));
+            Assert.Equal(outputCount, GraphPorts(Card(canvas, added.Id)).Count(b => !Equals(b.Content, "Вход")));
             await editor.SaveAsync(); await editor.OpenAsync(fixture.ProjectPath, path);
             Assert.Equal(added.Path, editor.Document.Graph!.Nodes.Single(n => n.Kind == kind).Path);
         });
@@ -312,11 +312,14 @@ public sealed class ScriptEditorTests
     private static void Connect(Canvas canvas, string source, int port, string target)
     {
         Select(canvas, source);
-        ((StackPanel)Card(canvas, source).Child).Children.OfType<Button>().Where(b => !Equals(b.Content, "● Вход"))
+        GraphPorts(Card(canvas, source)).Where(b => !Equals(b.Content, "Вход"))
             .ElementAt(port).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        ((StackPanel)Card(canvas, target).Child).Children.OfType<Button>().Single(b => Equals(b.Content, "● Вход"))
+        GraphPorts(Card(canvas, target)).Single(b => Equals(b.Content, "Вход"))
             .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     }
+
+    private static IEnumerable<Button> GraphPorts(Border card) => ((StackPanel)card.Child).Children.OfType<Grid>()
+        .SelectMany(grid => grid.Children.OfType<Button>()).Where(button => button.GetType().Name == "GraphPort");
 
     private static Task OnStaAsync(Func<Task> action)
     {

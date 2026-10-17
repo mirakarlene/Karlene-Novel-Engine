@@ -22,9 +22,11 @@ public partial class ScenePreview : UserControl
     private bool captureSelection;
     public Func<EditorSelection?>? SelectionProvider { get; set; }
     public event EventHandler<int>? SceneChoiceRequested;
+    public event EventHandler<TextInputSubmission>? SceneInputRequested;
     /// <summary>Resets presentation clocks before replaying or restarting a scene, without creating a worker.</summary>
     public void ResetPresentation()
     {
+        PlayerInput.Reset();
         ResetGameplayUi();
         DialogueEffects.Reset();
         sceneEffects?.Stop();
@@ -46,6 +48,7 @@ public partial class ScenePreview : UserControl
         if (!ReferenceEquals(project, value)) { project = value; ApplyTheme(); }
         RenderScene(window, visuals, story, animate);
         ChoicePanel.IsHitTestVisible = allowChoices;
+        PlayerInput.Display(story, allowChoices);
     }
 
     public ScenePreview()
@@ -102,7 +105,7 @@ public partial class ScenePreview : UserControl
         finally { gate.Release(); }
     }
 
-    private async Task RunAsync(bool reset, int? choice = null)
+    private async Task RunAsync(bool reset, int? choice = null, TextInputSubmission? input = null)
     {
         if (!active || preview == null || pendingSelection == null) return;
         var current = preview; var selected = pendingSelection with { FromMain = FromMainInput.IsChecked == true }; int version = revision;
@@ -119,6 +122,7 @@ public partial class ScenePreview : UserControl
                 await current.SeekAsync(selected, cancellation.Token);
             }
             else if (choice != null) await current.ChooseAsync(choice.Value, cancellation.Token);
+            else if (input != null) await current.SubmitInputAsync(input.Text, input.Cancel, cancellation.Token);
             else await current.StepAsync(cancellation.Token);
             if (version == revision && active) RenderSnapshot(current, selected.Animate);
         }
@@ -150,6 +154,7 @@ public partial class ScenePreview : UserControl
     {
         StepButton.IsEnabled = !value && preview != null && !preview.NeedsChoice && preview.Story.CanAdvance;
         ChoicePanel.IsEnabled = !value;
+        PlayerInput.IsEnabled = !value;
     }
 
     private void ApplyTheme()
@@ -181,6 +186,7 @@ public partial class ScenePreview : UserControl
         BackgroundImage.Source = CharacterImage.Source = null;
         renderedBackgroundPath = renderedCharacterPath = null;
         renderedBackdropAnimate = null; renderedSceneStory = null;
+        PlayerInput.Reset();
         DialoguePanel.Visibility = Visibility.Collapsed; ChoicePanel.Children.Clear();
         AnimatedBackdrop.Configure(project?.Engine.Theme ?? new(), false);
         StepButton.IsEnabled = false;
@@ -227,6 +233,8 @@ public partial class ScenePreview : UserControl
                 }
             renderedOverlay = visuals.OverlayScreen; renderedOverlayVersion = visuals.ScreenVersion;
         }
+        PlayerInput.Display(story, !standalone || PlayerInput.IsEnabled);
+        ChoicePanel.Visibility = story.Kind == "choice" ? Visibility.Visible : Visibility.Collapsed;
         if (renderedSceneStory is { } previousStory && previousStory.Kind == story.Kind && previousStory.Speaker == story.Speaker &&
             previousStory.Text == story.Text && previousStory.Options.SequenceEqual(story.Options))
         {
@@ -235,7 +243,7 @@ public partial class ScenePreview : UserControl
             return;
         }
         renderedSceneStory = story;
-        DialoguePanel.Visibility = story.Text.Length > 0 || story.Options.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        DialoguePanel.Visibility = story.Text.Length > 0 || story.Options.Count > 0 || story.Kind == "input" ? Visibility.Visible : Visibility.Collapsed;
         SpeakerText.Text = story.Speaker; SpeakerText.Visibility = story.Speaker.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         DialogueText.Text = story.Text; ChoicePanel.Children.Clear();
         for (int i = 0; i < story.Options.Count; i++)

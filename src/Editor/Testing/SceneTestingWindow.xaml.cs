@@ -88,8 +88,8 @@ public partial class SceneTestingWindow : Window
         }
         else if (frame != null)
         {
-            SceneSurface.DisplayScene(project, frame.Window, frame.Visuals, frame.Story, false, frame.NeedsChoice && !snapshotReady);
-            TestingStatus.Text = frame.NeedsChoice && !snapshotReady ? "Выберите ветку, чтобы построить снимок фрейма." :
+            SceneSurface.DisplayScene(project, frame.Window, frame.Visuals, frame.Story, false, (frame.NeedsChoice || frame.NeedsInput) && !snapshotReady);
+            TestingStatus.Text = (frame.NeedsChoice || frame.NeedsInput) && !snapshotReady ? "Выберите ветку или введите ответ, чтобы построить снимок фрейма." :
                 frame.Story.Completed ? "После выделенного сегмента нет текстового фрейма." : "Снимок фрейма · " + frame.Status + DescribeIdentity(frame.Story);
         }
     }
@@ -100,6 +100,15 @@ public partial class SceneTestingWindow : Window
         if (sceneMode) await scene!.ChooseAsync(option, lifetime.Token);
         else { await frame!.ChooseAsync(option, lifetime.Token); await SeekTextFrameAsync(); }
     });
+    private async void Input_Requested(object? sender, TextInputSubmission submission)
+    {
+        await ExecuteAsync(async () =>
+        {
+            if (sceneMode) await scene!.SubmitInputAsync(submission.Text, submission.Cancel, lifetime.Token);
+            else { await frame!.SubmitInputAsync(submission.Text, submission.Cancel, lifetime.Token); await SeekTextFrameAsync(); }
+        });
+        if (sceneMode && scene?.Story.Kind == "input" || !sceneMode && frame?.NeedsInput == true && !snapshotReady) SceneSurface.FocusPlayerInput();
+    }
     private async void Next_Click(object sender, RoutedEventArgs e)
     {
         if (scene?.Story.CanAdvance == true) await ExecuteAsync(() => scene.AdvanceAsync(lifetime.Token));

@@ -4,7 +4,7 @@
         Background="#FF201134" Loaded="Testing_Loaded" Closed="Testing_Closed">
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <local:ScenePreview x:Name="SceneSurface" SceneChoiceRequested="Choice_Requested"/>
+        <local:ScenePreview x:Name="SceneSurface" SceneChoiceRequested="Choice_Requested" SceneInputRequested="Input_Requested"/>
         <DockPanel Grid.Row="1" Margin="16,8">
             <Button x:Name="NextFrameButton" DockPanel.Dock="Right" Content="Следующий фрейм ›" Click="Next_Click" Padding="14,8"/>
             <TextBlock x:Name="TestingStatus" Foreground="White" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0"/>

@@ -73,6 +73,7 @@ public partial class ScriptEditor : UserControl
     public ScriptEditor()
     {
         InitializeComponent();
+        InitializeGraphSelection();
         ValueTypeInput.ItemsSource = new[]
         {
             new { Label = "Число", Value = ScriptValueKind.Number },
@@ -105,6 +106,8 @@ public partial class ScriptEditor : UserControl
     public async Task OpenAsync(string root, string path)
     {
         CloseCharacterPicker();
+        FinishMarquee();
+        ClearCanvasInteraction();
         var document = await ScriptDocument.OpenAsync(root, path);
         projectRoot = root;
         Document = document;
@@ -118,6 +121,7 @@ public partial class ScriptEditor : UserControl
         undo.Clear();
         redo.Clear();
         selectedId = null;
+        selectedIds.Clear();
         pendingConnection = null;
         CanvasPan.X = CanvasPan.Y = 0;
         updating = true;
@@ -156,10 +160,13 @@ public partial class ScriptEditor : UserControl
     public void Clear()
     {
         CloseCharacterPicker();
+        FinishMarquee();
+        ClearCanvasInteraction();
         updating = true;
         Document = null;
         frameCatalog = null;
         selectedId = null;
+        selectedIds.Clear();
         pendingConnection = null;
         propertyDraft = false;
         undo.Clear();
@@ -322,6 +329,7 @@ public partial class ScriptEditor : UserControl
     private void Repaint()
     {
         pendingConnection = null;
+        SynchronizeGraphSelection();
         RenderGraph();
         UpdateProperties();
         UpdateTitle();
@@ -460,163 +468,20 @@ public partial class ScriptEditor : UserControl
 
     private void Delete_Click(object sender, RoutedEventArgs e) => Guard(() =>
     {
-        if (Selected is not { } node || Document?.Graph is not { } model) return;
+        ApplyProperties();
+        if (Document?.Graph is not { } model) return;
+        SynchronizeGraphSelection();
+        if (selectedIds.Count == 0) return;
         Remember();
-        model.Nodes.Remove(node);
-        foreach (var other in model.Nodes)
-        {
-            var outputs = other.Outputs().ToArray();
-            for (int i = 0; i < outputs.Length; i++)
-                if (outputs[i].Target == node.Id)
-                    other.SetOutput(i, null);
-        }
+        model.Nodes.RemoveAll(node => selectedIds.Contains(node.Id));
+        DetachExternalConnections(model.Nodes, model.Nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal));
 
         selectedId = null;
+        selectedIds.Clear();
         Repaint();
     });
 
-    private void RenderGraph()
-    {
-        GraphCanvas.Children.Clear();
-        cards.Clear();
-        links.Clear();
-        if (Document?.Graph is not { } graph) return;
-        UpdateGraphExtent();
-        foreach (var node in graph.Nodes)
-        {
-            var contents = new StackPanel();
-            var header = new Border
-            {
-                Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(BlockLibrary.ColorFor(node))),
-                Height = 30, Cursor = Cursors.SizeAll
-            };
-            header.Child = new TextBlock
-            {
-                Text = node.Title, Foreground = node.Kind == ScriptNodeKind.Start ? Brushes.Black : Brushes.White, FontWeight = FontWeights.Bold,
-                ToolTip = DescribeNodeIdentity(node),
-                Margin = new Thickness(8, 5, 8, 0)
-            };
-            contents.Children.Add(header);
-            var summary = new TextBlock
-            {
-                Text = Summary(node), Height = 42, TextWrapping = TextWrapping.Wrap,
-                TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(8, 4, 8, 0)
-            };
-            contents.Children.Add(summary);
-            if (node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.Comment))
-            {
-                var input = new Button
-                {
-                    Content = "● Вход", HorizontalAlignment = HorizontalAlignment.Left, Height = 26,
-                    Padding = new Thickness(4, 0, 4, 0), ToolTip = "Соединить выбранный выход с этим блоком"
-                };
-                input.Click += (_, _) => Guard(() => ConnectTo(node.Id));
-                contents.Children.Add(input);
-            }
-            else if (node.Kind == ScriptNodeKind.Start) contents.Children.Add(new Border { Height = 26 });
-
-            int port = 0;
-            foreach (var output in node.Outputs())
-            {
-                int index = port++;
-                var button = new Button
-                {
-                    Content = output.Label + (string.IsNullOrEmpty(output.Target) ? " ○" : " ●"), Height = 28,
-                    HorizontalContentAlignment = HorizontalAlignment.Right, Padding = new Thickness(4, 0, 4, 0),
-                    ToolTip = "Нажмите, затем выберите вход другого блока. Правая кнопка — отсоединить."
-                };
-                button.Click += (_, _) => Guard(() =>
-                {
-                    ApplyProperties();
-                    pendingConnection = (node.Id, index);
-                    EditorStatus.Text = $"Выберите вход для «{node.Title}»: {output.Label}. Esc — отменить.";
-                });
-                button.MouseRightButtonUp += (_, args) => Guard(() =>
-                {
-                    ApplyProperties();
-                    Remember();
-                    Document!.Graph!.Nodes.Single(n => n.Id == node.Id).SetOutput(index, null);
-                    pendingConnection = null;
-                    RenderGraph();
-                    UpdateTitle();
-                    args.Handled = true;
-                });
-                contents.Children.Add(button);
-            }
-
-            var card = new Border
-            {
-                Width = 210, BorderThickness = new Thickness(2),
-                BorderBrush = node.Id == selectedId ? Brushes.DarkOrange : Brushes.LightSlateGray,
-                Background = Brushes.White, Child = contents, Tag = node.Id
-            };
-            card.MouseLeftButtonDown += (_, _) => Guard(() => SelectNode(node.Id));
-            Point start = default;
-            double originX = 0, originY = 0;
-            bool dragged = false;
-            string? before = null;
-            header.MouseLeftButtonDown += (_, args) => Guard(() =>
-            {
-                SelectNode(node.Id, repaint: false);
-                var current = Document!.Graph!.Nodes.Single(n => n.Id == node.Id);
-                before = Document.Graph.Serialize();
-                start = args.GetPosition(GraphScroll);
-                originX = current.X;
-                originY = current.Y;
-                dragged = false;
-                header.CaptureMouse();
-                args.Handled = true;
-            });
-            header.MouseMove += (_, args) =>
-            {
-                if (!header.IsMouseCaptured || args.LeftButton != MouseButtonState.Pressed) return;
-                Point currentPoint = args.GetPosition(GraphScroll);
-                var current = Document!.Graph!.Nodes.Single(n => n.Id == node.Id);
-                current.X = originX + (currentPoint.X - start.X) / ZoomSlider.Value;
-                current.Y = originY + (currentPoint.Y - start.Y) / ZoomSlider.Value;
-                dragged |= current.X != originX || current.Y != originY;
-                Canvas.SetLeft(card, current.X);
-                Canvas.SetTop(card, current.Y);
-                UpdateGraphExtent();
-                RenderLinks();
-            };
-            header.MouseLeftButtonUp += (_, args) =>
-            {
-                if (header.IsMouseCaptured)
-                {
-                    header.ReleaseMouseCapture();
-                    args.Handled = true;
-                }
-            };
-            header.LostMouseCapture += (_, _) =>
-            {
-                if (before != null)
-                {
-                    if (dragged)
-                    {
-                        undo.Push(before);
-                        TrimHistory(undo);
-                        redo.Clear();
-                    }
-
-                    before = null;
-                    dragged = false;
-                    Dispatcher.BeginInvoke(new Action(() =>
-                    {
-                        RenderGraph();
-                        UpdateTitle();
-                    }));
-                }
-            };
-            Canvas.SetLeft(card, node.X);
-            Canvas.SetTop(card, node.Y);
-            Panel.SetZIndex(card, 1);
-            GraphCanvas.Children.Add(card);
-            cards.Add(node.Id, card);
-        }
-
-        RenderLinks();
-    }
+    private void RenderGraph() => RenderCanvasGraph();
 
     private static string Summary(ScriptNode node) => node.Kind switch
     {
@@ -660,13 +525,10 @@ public partial class ScriptEditor : UserControl
 
     private void SelectNode(string id, bool repaint = true)
     {
-        if (selectedId == id) return;
-        ApplyProperties(repaint: false);
-        selectedId = id;
+        if (selectedId == id && selectedIds.Count == 1) return;
+        SelectGraphBlocks([id]);
         if (repaint) RenderGraph();
-        foreach (var (key, card) in cards) card.BorderBrush = key == id ? Brushes.DarkOrange : Brushes.LightSlateGray;
-        UpdateProperties();
-        PreviewRequested?.Invoke(this, EventArgs.Empty);
+        RefreshCardSelection();
     }
 
     private void ConnectTo(string target)
@@ -690,43 +552,7 @@ public partial class ScriptEditor : UserControl
         EditorStatus.Text = "Блоки соединены.";
     }
 
-    private void RenderLinks()
-    {
-        foreach (var link in links) GraphCanvas.Children.Remove(link);
-        links.Clear();
-        if (Document?.Graph is not { } graph) return;
-        var map = graph.Nodes.ToDictionary(n => n.Id);
-        foreach (var node in graph.Nodes)
-        {
-            int index = 0;
-            foreach (var (_, target) in node.Outputs())
-            {
-                int port = index++;
-                if (target == null || !map.TryGetValue(target, out var destination)) continue;
-                var start = new Point(node.X + 210, node.Y + 118 + port * 28);
-                var end = new Point(destination.X, destination.Y + 89);
-                double bend = Math.Max(70, Math.Abs(end.X - start.X) / 2);
-                var curve = new PathFigure { StartPoint = start };
-                curve.Segments.Add(new BezierSegment(new Point(start.X + bend, start.Y), new Point(end.X - bend, end.Y),
-                    end, true));
-                var path = new System.Windows.Shapes.Path
-                {
-                    Data = new PathGeometry([curve]), Stroke = Brushes.SlateGray, StrokeThickness = 2,
-                    IsHitTestVisible = false
-                };
-                var arrow = new Polygon
-                {
-                    Fill = Brushes.SlateGray,
-                    Points = new PointCollection { end, new(end.X - 9, end.Y - 5), new(end.X - 9, end.Y + 5) },
-                    IsHitTestVisible = false
-                };
-                GraphCanvas.Children.Add(path);
-                GraphCanvas.Children.Add(arrow);
-                links.Add(path);
-                links.Add(arrow);
-            }
-        }
-    }
+    private void RenderLinks() => RenderCanvasLinks();
 
     private void Zoom_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -801,8 +627,18 @@ public partial class ScriptEditor : UserControl
         }
         if (e.Key == Key.Escape)
         {
+            CancelPortDrag();
+            FinishMarquee();
             pendingConnection = null;
             EditorStatus.Text = "Соединение отменено.";
+            return;
+        }
+
+        if (Document?.IsVisual == true && GraphMode.IsChecked == true && !IsTextEditingSource(e.OriginalSource as DependencyObject) &&
+            Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && e.Key is Key.C or Key.V or Key.D or Key.Z or Key.X or Key.Y)
+        {
+            e.Handled = true;
+            Guard(() => HandleGraphShortcut(e.Key, Keyboard.Modifiers, e.OriginalSource as DependencyObject));
             return;
         }
 
@@ -811,17 +647,6 @@ public partial class ScriptEditor : UserControl
         {
             e.Handled = true;
             await GuardAsync(SaveAsync);
-        }
-        // Let text fields keep their own text undo. Graph undo is active on the canvas and toolbar.
-        else if (e.OriginalSource is not TextBox && e.Key == Key.Z)
-        {
-            e.Handled = true;
-            Undo_Click(this, e);
-        }
-        else if (e.OriginalSource is not TextBox && e.Key == Key.Y)
-        {
-            e.Handled = true;
-            Redo_Click(this, e);
         }
     }
 

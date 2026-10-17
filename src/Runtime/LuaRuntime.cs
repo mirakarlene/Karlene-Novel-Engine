@@ -158,6 +158,7 @@ public sealed partial class LuaRuntime : IGameSession
         lua.DoString("state = " + StateLiteral(project.Engine.InitialState), "KNE initial state");
         InitializePlugins();
         InitializeNarrative();
+        InitializeTextInput();
         string initPath = project.InitScriptPath;
         string scenePath = project.MainScenePath;
         string scriptModules = Path.GetDirectoryName(initPath)!.Replace('\\', '/') + "/?.lua";
@@ -288,7 +289,7 @@ public sealed partial class LuaRuntime : IGameSession
             using var value = result.Length > 1 ? result[1] as LuaTable : null;
             if (value == null) throw new InvalidDataException("Сцена приостановлена без реплики или выбора.");
             string kind = value["kind"] as string ?? "";
-            if (kind is not ("dialogue" or "choice" or "preview" or "wait" or "text_pause" or "clear_text")) throw new InvalidDataException("Неизвестное событие сцены: " + kind);
+            if (kind is not ("dialogue" or "choice" or "input" or "preview" or "wait" or "text_pause" or "clear_text")) throw new InvalidDataException("Неизвестное событие сцены: " + kind);
             lock (stateLock) location = new PreviewLocation(value["file"] as string ?? "", Convert.ToInt32(value["line"] ?? 0),
                 value["node"] as string, value["functionline"] == null ? null : Convert.ToInt32(value["functionline"]));
             var options = new List<string>();
@@ -300,6 +301,7 @@ public sealed partial class LuaRuntime : IGameSession
             frame = kind == "preview" ? Story with { Kind = "preview", Options = Array.Empty<string>() } :
                 new StoryFrame(kind, value["speaker"] as string ?? "", value["text"] as string ?? "", options.AsReadOnly());
             if (kind != "preview") frame = ReadNarrativeFrame(frame, value);
+            frame = ReadInputFrame(frame, value);
             frame = frame with { HasBackgroundTasks = value["background"] as bool? == true,
                 Identity = frames?.ResolveKey(value["key"] as string, Location!.File, Location.Line, Location.FunctionLine) ??
                 frames?.Resolve(Location!.File, Location.Line, Location.NodeId, Location.FunctionLine) };
@@ -346,6 +348,7 @@ public sealed partial class LuaRuntime : IGameSession
                 {
                     case "advance" when Story.CanAdvance: ResumeStory(null); break;
                     case "choose" when Story.Kind == "choice" && action.Option >= 1 && action.Option <= Story.Options.Count: ResumeStory(action.Option); break;
+                    case "input" when Story.Kind == "input" && action.Command != null: SubmitInputCore(action.Command, action.Cancel); break;
                     case "command" when !string.IsNullOrWhiteSpace(action.Command):
                         using (var command = lua!["kne_invoke_command"] as LuaFunction) command!.Call(action.Command);
                         break;
@@ -397,8 +400,9 @@ public sealed partial class LuaRuntime : IGameSession
     private static string FrameSignature(StoryFrame frame)
     {
         string original = JsonSerializer.Serialize(new { frame.Kind, frame.Speaker, frame.Text, frame.Options, frame.Completed });
-        if (frame.Character is null && frame.TextEffect is null && frame.RemainingSeconds is null && frame.IsSkippable && frame.EraseProgress == 0) return original;
-        return original + JsonSerializer.Serialize(new { frame.Character, frame.TextEffect, frame.RemainingSeconds, frame.IsSkippable, frame.EraseProgress });
+        if (frame.Character is null && frame.TextEffect is null && frame.RemainingSeconds is null && frame.IsSkippable && frame.EraseProgress == 0 && frame.Input is null) return original;
+        string narrative = original + JsonSerializer.Serialize(new { frame.Character, frame.TextEffect, frame.RemainingSeconds, frame.IsSkippable, frame.EraseProgress });
+        return frame.Input is null ? narrative : narrative + JsonSerializer.Serialize(new { frame.Input, frame.InputFeedback });
     }
 
     private static object ReadState(LuaTable table, int depth, bool allowArray = false)

@@ -84,6 +84,9 @@ public sealed partial class VisualScript
             if (!double.IsFinite(node.X) || !double.IsFinite(node.Y) || Math.Abs(node.X) > 1_000_000_000 ||
                 Math.Abs(node.Y) > 1_000_000_000)
                 throw new InvalidDataException("Координаты блока должны быть конечными числами от −1000000000 до 1000000000.");
+            if (!double.IsFinite(node.Width) || node.Width is < 160 or > 4096 ||
+                node.Height is { } height && (!double.IsFinite(height) || height is < 100 or > 4096))
+                Fail(node, "размер блока: ширина от 160 до 4096, высота от 100 до 4096");
             if (node.Options == null || node.Options.Count > 20 || node.Options.Any(o => o == null || o.Text == null))
                 throw new InvalidDataException("У выбора должно быть не более 20 вариантов.");
             if (node.Text == null || node.Speaker == null || node.Path == null || node.Variable == null ||
@@ -97,7 +100,7 @@ public sealed partial class VisualScript
                 throw new InvalidDataException("Свойство блока слишком длинное (максимум 16000 символов).");
             if (node.Options.Any(option => !double.IsFinite(option.Weight) || option.Weight < 0))
                 Fail(node, "вес ветки должен быть конечным неотрицательным числом");
-            try { node.Character?.Validate(); node.TextEffect?.Validate(); }
+            try { node.Character?.Validate(); node.TextEffect?.Validate(); node.Input?.Validate(); }
             catch (ArgumentException error) { Fail(node, error.Message); }
             if (node.SpeakerId.Length > 0 && (node.SpeakerId.Length > 128 || !LuaSource.IsIdentifier(node.SpeakerId)))
                 Fail(node, "ID персонажа: латинские буквы, цифры и _, без цифры в начале");
@@ -188,7 +191,7 @@ public enum ScriptNodeKind
     Comment, Title, Switch, While, ForEach, TryCatch, SetFlag, CheckFlag, Random,
     HideBackground, MoveBackground, MoveCharacter, Animation, Shake, Flash, Camera, ShowScreen,
     AudioChannel, StopSound, Voice, MasterVolume, Parallel, Async, Join, Timer, Pause, WaitCondition,
-    IncludeLua, IncludeCs, Script, ConfigureDialogue, ConfigureButton, ClearBackgrounds, ClearSprites, RegisterCharacter, TextPause, ClearText, AutoDialogue, ConsoleWrite, RandomBranch, EffectDialogue
+    IncludeLua, IncludeCs, Script, ConfigureDialogue, ConfigureButton, ClearBackgrounds, ClearSprites, RegisterCharacter, TextPause, ClearText, AutoDialogue, ConsoleWrite, RandomBranch, EffectDialogue, TextInput
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -231,6 +234,12 @@ public sealed class ScriptNode
     /// <summary>Vertical canvas position in unscaled device-independent pixels.</summary>
     public double Y { get; set; }
 
+    /// <summary>Authored card width in device-independent pixels; old graphs retain their original width.</summary>
+    public double Width { get; set; } = 210;
+
+    /// <summary>Authored card height, or null for a height fitted to the block's ports.</summary>
+    public double? Height { get; set; }
+
     /// <summary>Dialogue speaker; an empty string means narration.</summary>
     public string Speaker { get; set; } = "";
 
@@ -244,6 +253,9 @@ public sealed class ScriptNode
     public bool Animated { get; set; }
     /// <summary>Per-letter dialogue animation parameters.</summary>
     public TextEffectSettings? TextEffect { get; set; }
+
+    /// <summary>Player input configuration; null retains the new-block defaults.</summary>
+    public TextInputSettings? Input { get; set; }
 
     /// <summary>Dialogue text or the question displayed by a choice.</summary>
     public string Text { get; set; } = "";
@@ -339,7 +351,7 @@ public sealed class ScriptNode
         ScriptNodeKind.RegisterCharacter => "Персонаж", ScriptNodeKind.TextPause => "Пауза в тексте",
         ScriptNodeKind.ClearText => "Очистить текст", ScriptNodeKind.AutoDialogue => "Авто-пропуск",
         ScriptNodeKind.ConsoleWrite => "Запись в консоль", ScriptNodeKind.RandomBranch => "Случайная ветка",
-        ScriptNodeKind.EffectDialogue => "Реплика с эффектом", _ => "Конец"
+        ScriptNodeKind.EffectDialogue => "Реплика с эффектом", ScriptNodeKind.TextInput => "Ввод текста", _ => "Конец"
     };
 
     /// <summary>Returns ordered ports, including unconnected ports in an unfinished draft.</summary>
@@ -347,7 +359,13 @@ public sealed class ScriptNode
     public IEnumerable<(string Label, string? Target)> Outputs()
     {
         if (Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.Comment) yield break;
-        if (Kind is ScriptNodeKind.Choice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async or ScriptNodeKind.RandomBranch)
+        if (Kind == ScriptNodeKind.TextInput)
+        {
+            yield return (Input?.BranchOnResult == true ? "Успех" : "Далее", Next);
+            if (Input is { BranchOnResult: true, HasErrorOutput: true }) yield return ("Ошибка", True);
+            if (Input is { BranchOnResult: true, HasCancelOutput: true }) yield return ("Отмена", False);
+        }
+        else if (Kind is ScriptNodeKind.Choice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async or ScriptNodeKind.RandomBranch)
         {
             foreach (var option in Options) yield return (option.Text, option.Target);
             if (Kind == ScriptNodeKind.Switch) yield return ("По умолчанию", False);
@@ -373,7 +391,13 @@ public sealed class ScriptNode
     public void SetOutput(int index, string? target)
     {
         if (index < 0 || index >= Outputs().Count()) throw new ArgumentOutOfRangeException(nameof(index));
-        if (Kind is ScriptNodeKind.Choice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async or ScriptNodeKind.RandomBranch)
+        if (Kind == ScriptNodeKind.TextInput)
+        {
+            if (index == 0) Next = target;
+            else if (index == 1 && Input?.HasErrorOutput == true) True = target;
+            else False = target;
+        }
+        else if (Kind is ScriptNodeKind.Choice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async or ScriptNodeKind.RandomBranch)
         {
             if (index < Options.Count) Options[index].Target = target;
             else if (Kind == ScriptNodeKind.Switch && index == Options.Count) False = target;
