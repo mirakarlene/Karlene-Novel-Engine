@@ -1,6 +1,6 @@
 <UserControl x:Class="KNE.AppearanceEditor"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
- xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:KNE" Background="#FFF4F2F7" FontFamily="Segoe UI" FontSize="13">
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:KNE" Background="{DynamicResource Editor.Background}" FontFamily="Segoe UI" FontSize="13">
  <Grid Margin="12">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/><ColumnDefinition Width="270"/></Grid.ColumnDefinitions>
@@ -24,7 +24,7 @@
    <ListBox x:Name="ElementsList" Height="160" SelectionChanged="Elements_Changed"/>
    <ComboBox x:Name="NewElementType" SelectedIndex="0" Margin="0,8,0,6"><ComboBoxItem Content="Кнопка" Tag="button"/><ComboBoxItem Content="Текст" Tag="text"/><ComboBoxItem Content="Панель" Tag="panel"/><ComboBoxItem Content="Изображение" Tag="image"/><ComboBoxItem Content="Переключатель" Tag="toggle"/><ComboBoxItem Content="Ползунок" Tag="slider"/><ComboBoxItem Content="Список сохранений" Tag="save_list"/><ComboBoxItem Content="Имя слота" Tag="save_name"/></ComboBox>
    <WrapPanel><Button x:Name="AddAppearanceElementButton" Content="+ Элемент" Click="AddElement_Click"/><Button Content="−" Click="DeleteElement_Click" Margin="4,0"/><Button x:Name="RaiseLayerButton" Content="↑" Click="RaiseLayer_Click"/><Button Content="↓" Click="LowerLayer_Click" Margin="4,0"/></WrapPanel>
-   <TextBlock Text="Сцена игры управляется Lua и блоками. Здесь меняется оформление экранов вне геймплея." TextWrapping="Wrap" Foreground="Gray" Margin="0,14,0,0"/>
+   <TextBlock Text="Сцена игры управляется Lua и блоками. Здесь меняется оформление экранов вне геймплея." TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,14,0,0"/>
   </StackPanel>
   <Grid Grid.Row="1" Grid.Column="1" Margin="0,0,12,0">
    <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -36,7 +36,7 @@
        PreviewMouseLeftButtonDown="Canvas_Down" PreviewMouseMove="Canvas_Move" PreviewMouseLeftButtonUp="Canvas_Up" LostMouseCapture="Canvas_LostCapture"/>
     </Grid>
    </Viewbox>
-   <TextBlock Grid.Row="1" Text="Перетащите элемент. X/Y и вектор движения — в координатах холста 1280×720." TextWrapping="Wrap" Foreground="Gray" Margin="0,8,0,0"/>
+   <TextBlock Grid.Row="1" Text="Перетащите элемент. X/Y и вектор движения — в координатах холста 1280×720." TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,8,0,0"/>
   </Grid>
   <ScrollViewer Grid.Row="1" Grid.Column="2" VerticalScrollBarVisibility="Auto">
    <StackPanel>

@@ -32,6 +32,7 @@ public partial class MainWindow : Window
         Func<Window, string, string?>? selectProjectScript, Action<ProcessStartInfo>? openProjectScript)
     {
         InitializeComponent();
+        EditorTheme.Apply(this, settings.Theme);
         SceneEditor.ProjectScriptRequested += SceneEditor_ProjectScriptRequested;
         SceneEditor.SubsystemRequested += SceneEditor_SubsystemRequested;
         presentTestingWindow = showTestingWindow ?? (window => { window.Owner = this; window.Show(); });
@@ -71,6 +72,8 @@ public partial class MainWindow : Window
         settings = await settingsStore.LoadAsync();
         TxtEditorPath.Text = settings.EditorPath;
         TxtProjectsStorage.Text = settings.ProjectsStoragePath;
+        ThemeInput.SelectedValue = settings.Theme;
+        EditorTheme.Apply(this, settings.Theme);
         await RefreshStoredProjectsAsync();
         storageTimer.Start();
     }, "Загрузка настроек…");
@@ -169,6 +172,7 @@ public partial class MainWindow : Window
         string name = Interaction.InputBox("Введите имя нового проекта:", "Создание проекта", "");
         if (string.IsNullOrWhiteSpace(name)) return;
         var method = new ProjectCreationDialog { Owner = this };
+        EditorTheme.Apply(method, settings.Theme);
         if (method.ShowDialog() != true) return;
         await RunOperationAsync(async () =>
         {
@@ -182,6 +186,7 @@ public partial class MainWindow : Window
     private async void BtnBack_Click(object sender, RoutedEventArgs e) => await RunOperationAsync(async () =>
     {
         if (!await CanLeaveAllAsync()) return;
+        await LibraryView.FlushPendingPreferencesAsync();
         ClearEditorTabs();
         expandedTreePaths.Clear(); selectedTreePath = null;
         EditorWorkspace.Visibility = ActiveEditor.Visibility = Visibility.Collapsed;
@@ -192,6 +197,7 @@ public partial class MainWindow : Window
         monitor?.Dispose(); monitor = null; monitoredPath = null;
         pendingRefresh = false;
         OperationStatus.Text = "";
+        await RefreshStoredProjectsAsync();
         ShowPanel(WelcomePanel);
     }, "Закрытие проекта…");
 
@@ -199,6 +205,7 @@ public partial class MainWindow : Window
     {
         TxtEditorPath.Text = settings.EditorPath;
         TxtProjectsStorage.Text = settings.ProjectsStoragePath;
+        ThemeInput.SelectedValue = settings.Theme;
         ShowPanel(SettingsPanel);
     }
 
@@ -215,7 +222,7 @@ public partial class MainWindow : Window
             storage = PathSafety.NormalizeDirectory(storage); PathSafety.RejectLinks(storage);
             Directory.CreateDirectory(storage);
         }
-        var next = new UserSettings { EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects };
+        var next = new UserSettings { EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = (string?)ThemeInput.SelectedValue ?? "light" };
         await settingsStore.SaveAsync(next);
         settings = next;
         await RefreshStoredProjectsAsync();
@@ -316,22 +323,6 @@ public partial class MainWindow : Window
             if (pendingRefresh && !closed) { pendingRefresh = false; _ = RefreshChangedProjectAsync(); }
         }
     }
-
-    private void BtnHelp_Click(object sender, RoutedEventArgs e) => MessageBox.Show(this, """
-        1. Создайте проект или откройте папку с project.json.
-        2. Сценарий game/scenes/main.krl должен объявлять main().
-        3. Скрипт game/scripts/gamelogic.lua выполняется перед сценой.
-        4. В project.json можно изменить entry_points.main_scene и init_script.
-        5. d(имя или nil, текст) показывает реплику; «Далее» и пробел продолжают сцену.
-        6. choice(вопрос, {"Ответ 1", "Ответ 2"}) возвращает индекс выбора с 1.
-        7. background, show_character, play_music и play_sound используют пути от корня проекта.
-        8. Переменные для сохранения храните в таблице state; доступны ручной слот и автосохранение.
-        9. Поиск фильтрует дерево и таблицу; внешние изменения подхватываются автоматически.
-        10. Для команд внизу окна объявите process_command(command).
-        11. Lua работает в отдельном процессе. «Остановить» принудительно прерывает операцию;
-            лимит — 30 секунд. Далее игра восстанавливается с последнего успешного действия.
-        Примеры и ограничения сохранений описаны в README.md движка.
-        """, "Помощь KNE");
 
     private async void BtnRefresh_Click(object sender, RoutedEventArgs e)
     {
@@ -451,6 +442,7 @@ public partial class MainWindow : Window
             await editor.OpenAsync(currentProject);
             var window = new Window { Title = "Оформление · " + currentProject.Title, Content = editor, Owner = this,
                 Width = 1280, Height = 850, MinWidth = 1000, MinHeight = 650, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+            EditorTheme.Apply(window, settings.Theme);
             bool approved = false; bool checking = false;
             window.Closing += async (_, args) =>
             {

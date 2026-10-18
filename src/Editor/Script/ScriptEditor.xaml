@@ -2,7 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:KNE"
-             PreviewKeyDown="Editor_KeyDown" PreviewKeyUp="Editor_KeyUp" Background="White">
+             PreviewKeyDown="Editor_KeyDown" PreviewKeyUp="Editor_KeyUp" Background="{DynamicResource Editor.Surface}">
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <StackPanel Grid.Row="0" Margin="0,0,0,8">
@@ -35,7 +35,7 @@
                     <Slider x:Name="ZoomSlider" Minimum="0.4" Maximum="1.5" Value="1" Width="75" ValueChanged="Zoom_Changed" Margin="0,0,0,4"/>
                     <Button x:Name="ZoomInButton" Content="+" Width="26" Margin="4,0,0,4" Click="ZoomIn_Click" ToolTip="Увеличить на один шаг"/>
                 </WrapPanel>
-                <Border x:Name="GraphScroll" Grid.Row="1" Focusable="True" ClipToBounds="True" Background="#FFF0F3F7"
+                <Border x:Name="GraphScroll" Grid.Row="1" Focusable="True" ClipToBounds="True" Background="{DynamicResource Editor.Canvas}"
                         PreviewMouseRightButtonDown="GraphPan_Start" PreviewMouseRightButtonUp="GraphPan_End"
                         PreviewMouseMove="GraphPan_Move" LostMouseCapture="GraphPan_LostCapture" PreviewMouseWheel="Canvas_MouseWheel">
                     <Canvas x:Name="GraphCanvas" Width="1600" Height="1000" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top">
@@ -47,53 +47,53 @@
             <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
                 <StackPanel x:Name="PropertiesPanel" IsEnabled="False">
                     <TextBlock x:Name="SelectedTitle" Text="Свойства блока" FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                    <StackPanel x:Name="SpeakerField"><TextBlock Text="Говорящий (пусто — спикер по умолчанию / рассказчик)" TextWrapping="Wrap"/><TextBox x:Name="SpeakerInput" Margin="0,3,0,5"/><TextBlock x:Name="SpeakerReference" Foreground="#FF536174" TextWrapping="Wrap" Margin="0,0,0,5"/><Button x:Name="SelectCharacterButton" Content="Выбрать персонажа…" Click="SelectCharacter_Click" Margin="0,0,0,5"/><Button x:Name="NarratorButton" Content="Рассказчик / мысль" Click="Narrator_Click" Margin="0,0,0,8"/></StackPanel>
+                    <StackPanel x:Name="SpeakerField"><TextBlock Text="Говорящий (пусто — спикер по умолчанию / рассказчик)" TextWrapping="Wrap"/><TextBox x:Name="SpeakerInput" Margin="0,3,0,5"/><TextBlock x:Name="SpeakerReference" Foreground="{DynamicResource Editor.Muted}" TextWrapping="Wrap" Margin="0,0,0,5"/><Button x:Name="SelectCharacterButton" Content="Выбрать персонажа…" Click="SelectCharacter_Click" Margin="0,0,0,5"/><Button x:Name="NarratorButton" Content="Рассказчик / мысль" Click="Narrator_Click" Margin="0,0,0,8"/></StackPanel>
                     <StackPanel x:Name="TextField"><TextBlock Text="Текст / вопрос"/><TextBox x:Name="SceneTextInput" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" Margin="0,3,0,8"/></StackPanel>
                     <StackPanel x:Name="OptionsField"><TextBlock x:Name="OptionsLabel" Text="Ответы — по одному на строку" TextWrapping="Wrap"/><TextBox x:Name="OptionsInput" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" Margin="0,3,0,8"/></StackPanel>
                     <StackPanel x:Name="PathField"><TextBlock x:Name="PathLabel" Text="Путь от корня проекта"/><TextBox x:Name="PathInput" Margin="0,3,0,8"/><Button x:Name="BrowsePathButton" Content="Выбрать ресурс…" Click="BrowseResource_Click" Margin="0,0,0,8"/></StackPanel>
                     <StackPanel x:Name="PositionField"><TextBlock Text="Позиция"/><ComboBox x:Name="PositionInput" Margin="0,3,0,8"><ComboBoxItem Content="left"/><ComboBoxItem Content="center"/><ComboBoxItem Content="right"/></ComboBox></StackPanel>
                     <CheckBox x:Name="LoopInput" Content="Повторять музыку" Margin="0,0,0,8"/>
-                    <TextBlock x:Name="TransitionHelp" Foreground="#FF536174" TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed"/>
+                    <TextBlock x:Name="TransitionHelp" Foreground="{DynamicResource Editor.Muted}" TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed"/>
                     <StackPanel x:Name="VariableField"><TextBlock x:Name="VariableLabel" Text="Переменная state"/><TextBox x:Name="VariableInput" Margin="0,3,0,8"/><TextBlock x:Name="ValueTypeLabel" Text="Тип значения"/><ComboBox x:Name="ValueTypeInput" Margin="0,3,0,8" DisplayMemberPath="Label" SelectedValuePath="Value"/><TextBlock x:Name="ValueLabel" Text="Значение"/><TextBox x:Name="ValueInput" Margin="0,3,0,8"/></StackPanel>
                     <StackPanel x:Name="ComparisonField"><TextBlock Text="Сравнение"/><ComboBox x:Name="ComparisonInput" Margin="0,3,0,8" DisplayMemberPath="Label" SelectedValuePath="Value"/></StackPanel>
                     <StackPanel x:Name="ExtendedProperties"/>
                     <Button x:Name="ApplyPropertiesButton" Content="Применить свойства" Click="Apply_Click" Padding="8,5" Margin="0,0,0,6"/>
                     <Button x:Name="DeleteBlockButton" Content="Удалить блок" Click="Delete_Click" Padding="8,5" Margin="0,0,0,8"/>
-                    <TextBlock Text="ПКМ — двигать обзор; Ctrl+колесо и +/− — масштаб. ЛКМ на пустом месте — область выделения; Ctrl/Shift — добавить блок. Тяните порт для связи, край — для размера, заголовок — для переноса. Ctrl+C/V/D — копировать/вставить/дублировать; Ctrl+Z/X — отменить/повторить. Delete — удалить выделенные блоки." Foreground="#FF536174" TextWrapping="Wrap"/>
+                    <TextBlock Text="ПКМ — двигать обзор; Ctrl+колесо и +/− — масштаб. ЛКМ на пустом месте — область выделения; Ctrl/Shift — добавить блок. Тяните порт для связи, край — для размера, заголовок — для переноса. Ctrl+C/V/D — копировать/вставить/дублировать; Ctrl+Z/X — отменить/повторить. Delete — удалить выделенные блоки." Foreground="{DynamicResource Editor.Muted}" TextWrapping="Wrap"/>
                 </StackPanel>
             </ScrollViewer>
         </Grid>
         <Grid Grid.Row="2" Margin="0,8,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <TextBlock x:Name="EditorStatus" TextWrapping="Wrap" Foreground="#FF536174" Margin="0,0,8,0"/>
+            <TextBlock x:Name="EditorStatus" TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,0,8,0"/>
             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom">
                 <RadioButton x:Name="CodeMode" Content="Код" GroupName="EditorMode" Margin="8,0" Checked="Mode_Changed" IsEnabled="False"/>
                 <RadioButton x:Name="GraphMode" Content="Блок-схема" GroupName="EditorMode" Checked="Mode_Changed" IsEnabled="False"/>
             </StackPanel>
         </Grid>
         <Border x:Name="CharacterPickerOverlay" Grid.RowSpan="3" Panel.ZIndex="50" Background="#AA101827" Visibility="Collapsed">
-            <Border Width="430" MaxHeight="560" Background="White" CornerRadius="12" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Border Width="430" MaxHeight="560" Background="{DynamicResource Editor.Surface}" CornerRadius="12" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <TextBlock Text="Персонажи сценария" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
                     <ListBox x:Name="CharacterProfiles" Grid.Row="1" MinHeight="160" MaxHeight="330" DisplayMemberPath="Label"/>
-                    <TextBlock x:Name="CharacterPickerStatus" Grid.Row="2" TextWrapping="Wrap" Foreground="#FF536174" Margin="0,12,0,12"/>
+                    <TextBlock x:Name="CharacterPickerStatus" Grid.Row="2" TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,12,0,12"/>
                     <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right"><Button x:Name="ChooseCharacterButton" Content="Выбрать" Click="ChooseCharacter_Click" Padding="12,6" Margin="0,0,8,0"/><Button x:Name="CancelCharacterButton" Content="Отмена" Click="CancelCharacter_Click" Padding="12,6"/></StackPanel>
                 </Grid>
             </Border>
         </Border>
         <Border x:Name="KeyCaptureOverlay" Grid.RowSpan="3" Panel.ZIndex="70" Background="#B0101827" Visibility="Collapsed" Focusable="True" KeyboardNavigation.TabNavigation="Cycle">
-            <StackPanel Width="430" Background="White" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
+            <StackPanel Width="430" Background="{DynamicResource Editor.Surface}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
                 <TextBlock x:Name="KeyCaptureText" FontSize="20" TextWrapping="Wrap" Margin="20"/>
                 <Button Content="Отмена" Click="CancelKeyCapture_Click" Margin="20" Padding="12,6"/>
             </StackPanel>
         </Border>
         <Border x:Name="QuickSearchOverlay" Grid.RowSpan="3" Panel.ZIndex="60" Background="#90101827" Visibility="Collapsed" KeyboardNavigation.TabNavigation="Cycle" MouseDown="QuickSearchBackdrop_Click">
-            <Border Width="520" MaxHeight="520" Padding="18" Margin="20" Background="#FFF9F8FC" CornerRadius="12" VerticalAlignment="Top" HorizontalAlignment="Center" MouseDown="QuickSearchPanel_Click">
+            <Border Width="520" MaxHeight="520" Padding="18" Margin="20" Background="{DynamicResource Editor.Surface}" CornerRadius="12" VerticalAlignment="Top" HorizontalAlignment="Center" MouseDown="QuickSearchPanel_Click">
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Text="Найти блок в этой схеме" FontSize="19" FontWeight="Bold" Margin="0,0,0,10"/>
                     <TextBox x:Name="QuickSearchInput" DockPanel.Dock="Top" Padding="8" TextChanged="QuickSearch_TextChanged" ToolTip="Название, текст, ресурс или ID существующего блока"/>
                     <TextBlock x:Name="QuickSearchEmpty" DockPanel.Dock="Top" Text="Блоки не найдены" Margin="0,8" Visibility="Collapsed"/>
-                    <TextBlock DockPanel.Dock="Bottom" Text="↑/↓ — выбрать · Enter — перейти · Esc — закрыть" Foreground="#FF536174" Margin="0,10,0,0"/>
+                    <TextBlock DockPanel.Dock="Bottom" Text="↑/↓ — выбрать · Enter — перейти · Esc — закрыть" Foreground="{DynamicResource Editor.Muted}" Margin="0,10,0,0"/>
                     <ListBox x:Name="QuickSearchResults" MaxHeight="350" Margin="0,8,0,0" DisplayMemberPath="Label" MouseDoubleClick="QuickSearchResults_DoubleClick"/>
                 </DockPanel>
             </Border>

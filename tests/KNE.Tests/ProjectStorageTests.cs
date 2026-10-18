@@ -180,7 +180,7 @@ public sealed class ProjectStorageTests
         Assert.Equal(storage, reloaded.ProjectsStoragePath);
         Assert.Equal("", reloaded.EditorPath);
         Assert.Equal(new[] { latest, missing }, reloaded.RecentProjects);
-        Assert.Equal(new[] { new StoredProject(latest, true), new StoredProject(missing, false) }, await ProjectStorage.DiscoverAsync(reloaded));
+        Assert.Equal(new[] { new StoredProject(latest, true, reloaded.ProjectLastOpened[latest]), new StoredProject(missing, false) }, await ProjectStorage.DiscoverAsync(reloaded));
         Assert.Single(Directory.EnumerateFiles(Path.GetDirectoryName(store.SettingsPath)!));
     }
 

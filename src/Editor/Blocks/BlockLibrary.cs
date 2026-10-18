@@ -13,7 +13,7 @@ public static class BlockLibrary
     public static IReadOnlyList<BlockGroup> Groups { get; } = [
         new("terminals", "Начало и конец", "#64748B"), new("narrative", "Нарратив", "#C65C16"),
         new("logic", "Логика", "#2563A6"), new("visual", "Визуал", "#8246B3"),
-        new("audio", "Звук", "#228052"), new("flows", "Потоки", "#C44A88"), new("async", "Асинхронность", "#BA3846"), new("triggers", "Триггеры", "#8B5A35"),
+        new("audio", "Звук", "#228052"), new("flows", "Потоки", "#C44A88"), new("calculations", "Вычисления", "#83CFF0"), new("async", "Асинхронность", "#BA3846"), new("triggers", "Триггеры", "#8B5A35"),
         new("configurations", "Конфигурации", "#137C83"), new("plugins", "Плагины", "#6B7280")];
 
     /// <summary>All selectable entries with distinct narrative branching and logic comparisons.</summary>
@@ -36,6 +36,21 @@ public static class BlockLibrary
         Add("flows", ScriptNodeKind.GotoScene, "Перейти на сцену", "goto: перейти в другую функцию без возврата в эту ветку.");
         Add("flows", ScriptNodeKind.CallScene, "Вызвать сцену", "call: выполнить другую функцию и продолжить после вызова.");
         Add("flows", ScriptNodeKind.Subsystem, "Подсистема", "Вложенная блок-схема из файла: ждать завершения или продолжать параллельно. Двойной клик открывает / создаёт файл.");
+        foreach (var kind in Enum.GetValues<ScriptNodeKind>().Where(CalculationCompiler.IsCalculation))
+        {
+            string description = kind switch {
+                ScriptNodeKind.Arithmetic => "Сложить, вычесть, умножить или разделить два выражения.",
+                ScriptNodeKind.Modulo => "Остаток A % B; делитель не может быть нулём.",
+                ScriptNodeKind.Increment => "Увеличить число или переменную на 1.", ScriptNodeKind.Decrement => "Уменьшить число или переменную на 1.",
+                ScriptNodeKind.Pow => "Возвести A в степень B.", ScriptNodeKind.Sqrt => "Квадратный корень неотрицательного числа.",
+                ScriptNodeKind.Trigonometry => "Sin, Cos или Tan; угол задаётся в радианах.", ScriptNodeKind.Absolute => "Абсолютное значение: abs(−5) = 5.",
+                ScriptNodeKind.Clamp => "Ограничить число минимумом и максимумом.", ScriptNodeKind.Round => "Ближайшее целое; половины округляются от нуля.",
+                ScriptNodeKind.Floor => "Принудительно округлить вниз.", ScriptNodeKind.Ceil => "Принудительно округлить вверх.",
+                ScriptNodeKind.Lerp => "Смешать A и B с коэффициентом от 0 до 1.", ScriptNodeKind.Remap => "Перевести число из исходного диапазона в новый.",
+                ScriptNodeKind.WeightedRandom => "Выбрать числовое значение по таблице дробных относительных весов.",
+                ScriptNodeKind.Constant => "π, τ, e, φ, π/2 или √2.", _ => "Именованный набор шагов вычислений: сохранить и вставить в другой блок формулы." };
+            Add("calculations", kind, new ScriptNode { Kind = kind }.Title, description);
+        }
         Add("triggers", ScriptNodeKind.TriggerKey, "При клике на клавишу", "Независимая ветка по нажатию выбранной клавиши.");
         Add("triggers", ScriptNodeKind.TriggerButton, "При клике на кнопку", "Ветка по ID игровой кнопки или элемента дополнительного экрана.");
         Add("triggers", ScriptNodeKind.TriggerHotspot, "При клике на зону на экране", "Область в логических координатах игровой сцены.");
@@ -101,6 +116,13 @@ public static class BlockLibrary
         if (category != null && !Definitions.Any(entry => entry.Kind == kind && entry.Group == category))
             throw new ArgumentException("Блок недоступен в выбранной группе.", nameof(category));
         var node = new ScriptNode { Kind = kind };
+        if (CalculationCompiler.IsCalculation(kind))
+        {
+            node.Calculation = new CalculationSettings();
+            if (kind is ScriptNodeKind.Increment or ScriptNodeKind.Decrement) node.Calculation = node.Calculation with { A = node.Variable };
+            if (kind == ScriptNodeKind.Clamp) node.Calculation = node.Calculation with { B = "0", C = "100" };
+            if (kind == ScriptNodeKind.Remap) node.Calculation = node.Calculation with { B = "0", C = "1", D = "0", T = "100" };
+        }
         if (node.IsTrigger) node.Trigger = new TriggerSettings { Kind = kind switch { ScriptNodeKind.TriggerButton => "button", ScriptNodeKind.TriggerHotspot => "hotspot", ScriptNodeKind.TriggerTextClosed => "text_closed", _ => "key" }, Keys = kind == ScriptNodeKind.TriggerCombination ? "Ctrl+E" : "E" };
         node.Category = category ?? Definitions.First(entry => entry.Kind == kind).Group;
         if (kind is ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue) node.Text = "Новая реплика";

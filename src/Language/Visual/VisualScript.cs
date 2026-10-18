@@ -97,7 +97,7 @@ public sealed partial class VisualScript
             if (node.Text == null || node.Speaker == null || node.Path == null || node.Variable == null ||
                 node.Value == null || node.CompareVariable == null || node.Position == null || node.Channel == null || node.Target == null || node.IterationKey == null || node.Category == null || node.ScreenLayer == null || node.UiTarget == null || node.SpeakerId == null)
                 throw new InvalidDataException("Свойства блока не должны содержать null.");
-            if (node.Category is not ("" or "terminals" or "narrative" or "logic" or "visual" or "audio" or "flows" or "async" or "triggers" or "configurations" or "plugins"))
+            if (node.Category is not ("" or "terminals" or "narrative" or "logic" or "visual" or "audio" or "flows" or "calculations" or "async" or "triggers" or "configurations" or "plugins"))
                 throw new InvalidDataException("Неизвестная группа блока.");
             if (new[] { node.Duration, node.OffsetX, node.OffsetY, node.Amount, node.Minimum, node.Maximum, node.Opacity }.Any(v => !double.IsFinite(v)))
                 throw new InvalidDataException("Числовые свойства блока должны быть конечными.");
@@ -108,6 +108,7 @@ public sealed partial class VisualScript
             try
             {
                 node.Character?.Validate(); node.TextEffect?.Validate(); node.Input?.Validate(); node.Trigger?.Validate();
+                if (CalculationCompiler.IsCalculation(node.Kind)) _ = CalculationCompiler.Compile(node.Kind, node.Calculation ?? new CalculationSettings(), node.Variable);
                 node.ChoiceSettings?.Validate();
                 foreach (var option in node.Options) option.Lock?.Validate();
             }
@@ -203,7 +204,8 @@ public enum ScriptNodeKind
     AudioChannel, StopSound, Voice, MasterVolume, Parallel, Async, Join, Timer, Pause, WaitCondition,
     IncludeLua, IncludeCs, Script, ConfigureDialogue, ConfigureButton, ClearBackgrounds, ClearSprites, RegisterCharacter, TextPause, ClearText, AutoDialogue, ConsoleWrite, RandomBranch, EffectDialogue, TextInput,
     UpdateCharacter, SetSpeaker, ResetSpeakers, Branching, CompareVariables, TimedChoice,
-    Subsystem, TriggerKey, TriggerButton, TriggerHotspot, TriggerTextClosed, TriggerCombination
+    Subsystem, TriggerKey, TriggerButton, TriggerHotspot, TriggerTextClosed, TriggerCombination,
+    Arithmetic, Modulo, Increment, Decrement, Pow, Sqrt, Trigonometry, Absolute, Clamp, Round, Floor, Ceil, Lerp, Remap, WeightedRandom, Constant, Formula
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -231,7 +233,9 @@ public enum ScriptComparison
 /// <summary>An editable command and its explicitly ordered output ports.</summary>
 public sealed class ScriptNode
 {
-    /// <summary>Whether this block starts an independent event handler rather than accepting an incoming connection.</summary>
+    /// <summary>Operands, weighted rows, or reusable named formula steps.</summary>
+    public CalculationSettings? Calculation { get; set; }
+    /// <summary>Event block: connected blocks await the event; disconnected roots register an independent handler.</summary>
     [JsonIgnore] public bool IsTrigger => Kind is ScriptNodeKind.TriggerKey or ScriptNodeKind.TriggerButton or ScriptNodeKind.TriggerHotspot or ScriptNodeKind.TriggerTextClosed or ScriptNodeKind.TriggerCombination;
     /// <summary>Wait for a subsystem; false spawns it as a background task.</summary>
     public bool WaitForSubsystem { get; set; } = true;
@@ -380,7 +384,11 @@ public sealed class ScriptNode
         ScriptNodeKind.SetSpeaker => "Установить спикера", ScriptNodeKind.ResetSpeakers => "Сбросить спикеров", ScriptNodeKind.TextPause => "Пауза в тексте",
         ScriptNodeKind.ClearText => "Очистить текст", ScriptNodeKind.AutoDialogue => "Авто-пропуск",
         ScriptNodeKind.ConsoleWrite => "Запись в консоль", ScriptNodeKind.RandomBranch => "Случайная ветка",
-        ScriptNodeKind.EffectDialogue => "Реплика с эффектом", ScriptNodeKind.TextInput => "Ввод текста", _ => "Конец"
+        ScriptNodeKind.EffectDialogue => "Реплика с эффектом", ScriptNodeKind.TextInput => "Ввод текста",
+        ScriptNodeKind.Arithmetic => "Арифметика", ScriptNodeKind.Modulo => "Остаток от деления", ScriptNodeKind.Increment => "Инкремент", ScriptNodeKind.Decrement => "Декремент",
+        ScriptNodeKind.Pow => "Степень", ScriptNodeKind.Sqrt => "Корень", ScriptNodeKind.Trigonometry => "Тригонометрия", ScriptNodeKind.Absolute => "Модуль числа",
+        ScriptNodeKind.Clamp => "Ограничитель", ScriptNodeKind.Round => "Округление", ScriptNodeKind.Floor => "Floor", ScriptNodeKind.Ceil => "Ceil", ScriptNodeKind.Lerp => "Линейная интерполяция",
+        ScriptNodeKind.Remap => "Переназначение диапазона", ScriptNodeKind.WeightedRandom => "Продвинутая случайность", ScriptNodeKind.Constant => "Константа", ScriptNodeKind.Formula => "Формула", _ => "Конец"
     };
 
     /// <summary>Returns ordered ports, including unconnected ports in an unfinished draft.</summary>

@@ -3,9 +3,10 @@ using System.IO;
 namespace KNE;
 
 /// <summary>A remembered or discovered project, including missing entries.</summary>
-public sealed record StoredProject(string Path, bool IsAvailable)
+public sealed record StoredProject(string Path, bool IsAvailable, DateTimeOffset? LastOpened = null)
 {
     public string Label => System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(Path));
+    public string LastOpenedLabel => LastOpened is { } time ? "Последнее открытие: " + time.ToLocalTime().ToString("g") : "Ещё не открывался в KNE";
 }
 
 /// <summary>Discovers only immediate projects in the configured storage directory.</summary>
@@ -41,6 +42,8 @@ public static class ProjectStorage
     {
         string storage = settings.ProjectsStoragePath;
         string[] recent = settings.RecentProjects.ToArray();
+        var hidden = settings.HiddenProjects.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var opened = new Dictionary<string, DateTimeOffset>(settings.ProjectLastOpened, StringComparer.OrdinalIgnoreCase);
         return Task.Run<IReadOnlyList<StoredProject>>(() =>
         {
             var paths = new List<string>(recent);
@@ -55,7 +58,8 @@ public static class ProjectStorage
                     if (!System.IO.Path.GetFileName(path).StartsWith('.') && IsAvailable(settings, path)) paths.Add(path);
                 }
             }
-            return paths.Distinct(StringComparer.OrdinalIgnoreCase).Select(path => new StoredProject(path, IsAvailable(settings, path))).ToArray();
+            return paths.Distinct(StringComparer.OrdinalIgnoreCase).Where(path => !hidden.Contains(path))
+                .Select(path => new StoredProject(path, IsAvailable(settings, path), opened.TryGetValue(path, out var time) ? time : null)).ToArray();
         }, token);
     }
 }

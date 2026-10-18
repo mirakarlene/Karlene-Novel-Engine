@@ -47,8 +47,20 @@ public partial class MainWindow
         string name = Interaction.InputBox("Название папки хранилища проектов:", "Хранилище проектов", "projects");
         if (string.IsNullOrWhiteSpace(name)) return false;
         string storage = ProjectStorage.Create(parent.FolderName, name.Trim());
-        var next = new UserSettings { EditorPath = settings.EditorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects };
+        var next = new UserSettings { EditorPath = settings.EditorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = settings.Theme };
         await settingsStore.SaveAsync(next); settings = next; TxtProjectsStorage.Text = storage;
         return true;
+    }
+
+    private async void ForgetRecentProject_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is not System.Windows.Controls.Button { Tag: string path }) return;
+        await RunOperationAsync(async () =>
+        {
+            settings.ForgetProject(path);
+            await settingsStore.SaveAsync(settings);
+            await RefreshStoredProjectsAsync();
+        }, "Удаление записи из списка…");
     }
 }

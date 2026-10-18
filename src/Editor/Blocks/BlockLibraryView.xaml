@@ -5,11 +5,11 @@
         <DockPanel Margin="0,0,0,16">
             <Button x:Name="CloseLibraryButton" DockPanel.Dock="Right" Content="Закрыть · Esc" Click="Close_Click" Padding="12,7" VerticalAlignment="Top"/>
             <StackPanel><TextBlock Text="Добавить блок" FontSize="24" FontWeight="Bold"/>
-                <TextBlock Text="Выберите группу и команду. Блок появится в центре видимой области схемы." Foreground="#5A6273" TextWrapping="Wrap" Margin="0,6,16,0"/></StackPanel>
+                <TextBlock Text="Выберите группу и команду. Блок появится в центре видимой области схемы." Foreground="{DynamicResource Editor.Muted}" TextWrapping="Wrap" Margin="0,6,16,0"/></StackPanel>
         </DockPanel>
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="20"/><ColumnDefinition Width="992"/></Grid.ColumnDefinitions>
-            <ListBox x:Name="BlockGroups" SelectionChanged="Group_Changed" BorderThickness="0" Background="#F1F0F6" Padding="4" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox x:Name="BlockGroups" SelectionChanged="Group_Changed" BorderThickness="0" Background="{DynamicResource Editor.Background}" Padding="4" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate><DataTemplate><Border BorderBrush="{Binding Color}" BorderThickness="4,0,0,0" Padding="10,12"><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/></Border></DataTemplate></ListBox.ItemTemplate>
             </ListBox>
             <Grid Grid.Column="2">
@@ -18,7 +18,7 @@
                 <TextBlock x:Name="PluginWarning" Grid.Row="1" Text="Внешние файлы, особенно скачанные из интернета, могут иметь неожиданные последствия, работайте с этим на свой страх и риск" TextWrapping="Wrap" Foreground="#685620" Margin="0,0,12,8" Visibility="Hidden"/>
                 <Grid Grid.Row="2">
                     <WrapPanel x:Name="BlockCards" Width="992" Height="426" HorizontalAlignment="Left" VerticalAlignment="Top"/>
-                    <TextBlock x:Name="EmptyLibraryText" Text="В этой группе ничего не найдено." Foreground="#5A6273" Margin="8" Visibility="Collapsed" VerticalAlignment="Top"/>
+                    <TextBlock x:Name="EmptyLibraryText" Text="В этой группе ничего не найдено." Foreground="{DynamicResource Editor.Muted}" Margin="8" Visibility="Collapsed" VerticalAlignment="Top"/>
                 </Grid>
                 <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center">
                     <Button x:Name="PreviousPageButton" Content="← Назад" Click="PreviousPage_Click" Padding="12,5" MinWidth="100"/>
