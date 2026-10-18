@@ -55,6 +55,7 @@ public partial class MainWindow
             string prefix = "import_" + Guid.NewGuid().ToString("N")[..8];
             var conversion = await ScriptImportConverter.FromPathAsync(source.FileName, prefix, lifetime.Token);
             var review = new ImportReviewWindow(conversion, Path.GetFileName(source.FileName)) { Owner = this };
+            EditorTheme.Apply(review, settings.Theme);
             if (review.ShowDialog() != true) return;
             var destination = CreateFileDialog(Path.Combine(project.Path, "game", "scenes"), Path.GetFileNameWithoutExtension(source.FileName) + ".krl");
             destination.Filter = "KRL (*.krl)|*.krl"; destination.DefaultExt = ".krl";

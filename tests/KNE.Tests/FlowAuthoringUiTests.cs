@@ -45,8 +45,9 @@ public sealed class FlowAuthoringUiTests
                 recent.ItemsSource = new[] { new StoredProject(fixture.ProjectPath, true), new StoredProject(Path.Combine(fixture.Root, "missing"), false) };
                 var content = (FrameworkElement)window.Content; Layout(content);
                 var buttons = Descendants(recent).OfType<Button>().ToArray();
-                Assert.Equal(2, buttons.Length); Assert.Equal(1, buttons[0].Opacity); Assert.Equal(.4, buttons[1].Opacity);
-                Assert.True(buttons[1].IsEnabled); Assert.Equal(Path.Combine(fixture.Root, "missing"), buttons[1].Tag);
+                var projectButtons = buttons.Where(button => !Equals(button.Content, "×")).ToArray();
+                Assert.Equal(2, projectButtons.Length); Assert.Equal(1, projectButtons[0].Opacity); Assert.Equal(.4, projectButtons[1].Opacity);
+                Assert.True(projectButtons[1].IsEnabled); Assert.Equal(Path.Combine(fixture.Root, "missing"), projectButtons[1].Tag);
                 Capture(content, "projects-availability.png");
                 Find<StackPanel>(window, "WelcomePanel").Visibility = Visibility.Collapsed;
                 var settings = Find<StackPanel>(window, "SettingsPanel"); settings.Visibility = Visibility.Visible;
@@ -153,7 +154,7 @@ public sealed class FlowAuthoringUiTests
     [InlineData(ScriptNodeKind.TriggerHotspot)]
     [InlineData(ScriptNodeKind.TriggerTextClosed)]
     [InlineData(ScriptNodeKind.TriggerCombination)]
-    public async Task Editor_TriggerCardsHaveOnlyAnOutput_AndEventPropertiesSurviveSave(ScriptNodeKind kind)
+    public async Task Editor_TriggerCardsHaveInputAndOutput_AndEventPropertiesSurviveSave(ScriptNodeKind kind)
     {
         using var fixture = new FlowUiFixture();
         string path = fixture.Write("game/scenes/map.knegraph", VisualScript.Create().Serialize());
@@ -168,8 +169,10 @@ public sealed class FlowAuthoringUiTests
                 string id = editor.Document!.Graph!.Nodes.Last().Id;
                 var canvas = Find<Canvas>(editor, "GraphCanvas");
                 var card = canvas.Children.OfType<Border>().Single(card => Equals(card.Tag, id));
-                var port = Assert.Single(Descendants(card).OfType<GraphPort>());
-                Assert.True(port.IsOutput);
+                var ports = Descendants(card).OfType<GraphPort>().ToArray();
+                Assert.Equal(2, ports.Length);
+                Assert.Equal(id, Assert.Single(ports, port => !port.IsOutput).NodeId);
+                var port = Assert.Single(ports, port => port.IsOutput);
                 Assert.Equal(0, port.OutputIndex);
                 Assert.Equal(id, port.NodeId);
                 Extended<CheckBox>(editor, "TriggerOnceInput").IsChecked = true;

@@ -86,23 +86,24 @@ public partial class ScriptEditor
                 Background = brush, CornerRadius = new CornerRadius(9, 9, 0, 0), Height = 32,
                 Cursor = Cursors.SizeAll, Child = new TextBlock
                 {
-                    Text = node.Title, Foreground = node.Kind == ScriptNodeKind.Start ? Brushes.Black : Brushes.White,
+                    Text = node.Title, Foreground = node.Kind == ScriptNodeKind.Start || CalculationCompiler.IsCalculation(node.Kind) ? Brushes.Black : Brushes.White,
                     FontWeight = FontWeights.Bold, TextTrimming = TextTrimming.CharacterEllipsis,
                     Margin = new Thickness(12, 6, 12, 0), ToolTip = DescribeNodeIdentity(node)
                 }
             };
             contents.Children.Add(header);
-            contents.Children.Add(new TextBlock
+            var summary = new TextBlock
             {
                 Text = Summary(node), Height = 40, TextWrapping = TextWrapping.Wrap,
                 TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(14, 5, 14, 0),
                 Foreground = Brushes.DarkSlateGray
-            });
+            };
+            summary.SetResourceReference(TextBlock.ForegroundProperty, "Editor.Text"); contents.Children.Add(summary);
             var ports = new Grid { Height = Math.Max(20, NodeHeight(node) - 81), ClipToBounds = false };
             var outputs = node.Outputs().ToArray();
             int rows = Math.Max(1, outputs.Length);
             for (int i = 0; i < rows; i++) ports.RowDefinitions.Add(new RowDefinition());
-            if (!node.IsTrigger && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.Comment))
+            if (node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.Comment))
             {
                 var input = CreateGraphPort(node, null, portBrush, "Вход");
                 input.HorizontalAlignment = HorizontalAlignment.Left; input.Margin = new Thickness(-12, 0, 0, 0);
@@ -120,6 +121,7 @@ public partial class ScriptEditor
                     Margin = new Thickness(20, 0, 14, 0), TextTrimming = TextTrimming.CharacterEllipsis
                 };
                 Grid.SetRow(label, index); ports.Children.Add(label);
+                label.SetResourceReference(TextBlock.ForegroundProperty, "Editor.Muted");
             }
             contents.Children.Add(ports);
             var card = new Border
@@ -129,6 +131,7 @@ public partial class ScriptEditor
                 UseLayoutRounding = true, SnapsToDevicePixels = true,
                 Child = contents, Tag = node.Id
             };
+            card.SetResourceReference(Border.BackgroundProperty, "Editor.Surface");
             // Shader effects rasterize the entire subtree. Keep glyphs and ports outside that surface.
             var shadow = new Rectangle
             {
@@ -239,7 +242,7 @@ public partial class ScriptEditor
         int output = (firstOutput ?? secondOutput)!.Value;
         var from = graph.Nodes.FirstOrDefault(n => n.Id == source);
         var to = graph.Nodes.FirstOrDefault(n => n.Id == target);
-        if (from == null || to == null || to.IsTrigger || to.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment ||
+        if (from == null || to == null || to.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment ||
             output < 0 || output >= from.Outputs().Count()) return false;
         ApplyProperties(repaint: false);
         from = Document!.Graph!.Nodes.Single(n => n.Id == source);

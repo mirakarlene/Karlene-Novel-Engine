@@ -11,12 +11,26 @@ public sealed class UserSettings
     /// <summary>The single directory whose immediate children are KNE projects.</summary>
     public string ProjectsStoragePath { get; set; } = "";
     public List<string> RecentProjects { get; set; } = [];
+    public Dictionary<string, DateTimeOffset> ProjectLastOpened { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public List<string> HiddenProjects { get; set; } = [];
+    public string Theme { get; set; } = "light";
 
     public void RememberProject(string path)
     {
         string normalized = PathSafety.NormalizeDirectory(path);
+        HiddenProjects.RemoveAll(p => p.Equals(normalized, StringComparison.OrdinalIgnoreCase));
+        ProjectLastOpened[normalized] = DateTimeOffset.UtcNow;
         RecentProjects = (RecentProjects ?? []).Where(p => !string.IsNullOrWhiteSpace(p) && !p.Equals(normalized, StringComparison.OrdinalIgnoreCase))
             .Prepend(normalized).Distinct(StringComparer.OrdinalIgnoreCase).Take(8).ToList();
+    }
+
+    /// <summary>Hides a recent/discovered entry without deleting its project files.</summary>
+    public void ForgetProject(string path)
+    {
+        string normalized = PathSafety.NormalizeDirectory(path);
+        RecentProjects.RemoveAll(p => p.Equals(normalized, StringComparison.OrdinalIgnoreCase));
+        ProjectLastOpened.Remove(normalized);
+        if (!HiddenProjects.Contains(normalized, StringComparer.OrdinalIgnoreCase)) HiddenProjects.Add(normalized);
     }
 }
 
@@ -41,6 +55,9 @@ public sealed class UserSettingsStore
                     ?? throw new InvalidDataException("Файл настроек содержит null.");
                 settings.EditorPath ??= "";
                 settings.ProjectsStoragePath ??= "";
+                settings.Theme = settings.Theme == "dark" ? "dark" : "light";
+                settings.HiddenProjects = (settings.HiddenProjects ?? []).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                settings.ProjectLastOpened = new(settings.ProjectLastOpened ?? [], StringComparer.OrdinalIgnoreCase);
                 settings.RecentProjects = (settings.RecentProjects ?? []).Where(p => !string.IsNullOrWhiteSpace(p))
                     .Distinct(StringComparer.OrdinalIgnoreCase).Take(8).ToList();
                 return settings;

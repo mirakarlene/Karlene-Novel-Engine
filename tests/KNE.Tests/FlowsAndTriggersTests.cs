@@ -8,7 +8,7 @@ public sealed class FlowsAndTriggersTests
     [Fact]
     public void Catalog_FlowsAndTriggersFollowAudioAndAsync_AndLegacyTransitionsMigrateWithPreferences()
     {
-        Assert.Equal(new[] { "audio", "flows", "async", "triggers", "configurations" }, BlockLibrary.Groups.Skip(4).Take(5).Select(group => group.Id));
+        Assert.Equal(new[] { "audio", "flows", "calculations", "async", "triggers", "configurations" }, BlockLibrary.Groups.Skip(4).Take(6).Select(group => group.Id));
         Assert.Equal(new[] { ScriptNodeKind.GotoScene, ScriptNodeKind.CallScene, ScriptNodeKind.Subsystem }, BlockLibrary.Definitions.Where(entry => entry.Group == "flows").Select(entry => entry.Kind));
         Assert.Equal(new[] { ScriptNodeKind.TriggerKey, ScriptNodeKind.TriggerButton, ScriptNodeKind.TriggerHotspot, ScriptNodeKind.TriggerTextClosed, ScriptNodeKind.TriggerCombination }, BlockLibrary.Definitions.Where(entry => entry.Group == "triggers").Select(entry => entry.Kind));
         foreach (var kind in new[] { ScriptNodeKind.GotoScene, ScriptNodeKind.CallScene })
@@ -91,7 +91,7 @@ public sealed class FlowsAndTriggersTests
     [InlineData(ScriptNodeKind.TriggerHotspot)]
     [InlineData(ScriptNodeKind.TriggerTextClosed)]
     [InlineData(ScriptNodeKind.TriggerCombination)]
-    public void Graph_TriggerRootsCompileIndependently_AndRequireOutputWithoutIncomingLinks(ScriptNodeKind kind)
+    public void Graph_TriggerRootsCompileIndependently_AndConnectedTriggersCompileAsWaits(ScriptNodeKind kind)
     {
         var graph = VisualScript.Create();
         var trigger = BlockLibrary.Create(kind); trigger.Id = "trigger"; trigger.Next = "handler";
@@ -110,7 +110,11 @@ public sealed class FlowsAndTriggersTests
         Assert.Contains("соедините", Assert.Throws<InvalidDataException>(() => graph.Compile()).Message);
         trigger.SetOutput(0, "handler");
         graph.Nodes.Single(node => node.Id == "dialogue").Next = "trigger";
-        Assert.Contains("триггер не принимает входящие", Assert.Throws<InvalidDataException>(() => graph.Compile()).Message);
+        graph.Nodes.Single(node => node.Id == "handler").Next = "end";
+        graph.Nodes.RemoveAll(node => node.Id == "handlerend");
+        string connected = graph.Compile();
+        Assert.Contains("kne_await_event(", connected);
+        Assert.DoesNotContain("    kne_on_event(", connected);
     }
 
     [Fact]

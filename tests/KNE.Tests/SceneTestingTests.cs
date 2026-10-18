@@ -160,7 +160,7 @@ public sealed class SceneTestingTests
                     Assert.Null(Field<SceneTestSession?>(testing, "scene")); Assert.Null(Field<EditorPreview?>(testing, "frame"));
                     Assert.Contains("unsaved", Field<EditorSelection>(testing, "selection").Source);
                 }
-                Assert.Equal(new[] { "Выйти", "Сохранить всё и выйти" }, Labels(window, "ExitActionsGroup"));
+                Assert.Equal(new[] { "Главный экран", "Сохранить всё и выйти" }, Labels(window, "ExitActionsGroup"));
                 Assert.Equal(new[] { "Создать файл", "Импорт файла", "Новая блок-схема", "Импорт .rpy", "Импорт .docx" }, Labels(window, "ImportActionsGroup"));
                 Assert.Equal(new[] { "Список файлов", "Обновить" }, Labels(window, "FileViewActionsGroup"));
                 Assert.Equal(new[] { "Анализ проекта", "Запустить проект" }, Labels(window, "RunActionsGroup"));

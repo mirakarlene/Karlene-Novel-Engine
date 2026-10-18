@@ -454,6 +454,7 @@ public partial class ScriptEditor : UserControl
         }
 
         ApplyExtendedProperties(changed);
+        if (CalculationCompiler.IsCalculation(changed.Kind)) _ = CalculationCompiler.Compile(changed.Kind, changed.Calculation ?? new CalculationSettings(), changed.Variable);
         if (node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music
             or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script) changed.Path = PathInput.Text.Trim();
         if (node.Kind == ScriptNodeKind.Character)
@@ -508,6 +509,7 @@ public partial class ScriptEditor : UserControl
 
     private static string Summary(ScriptNode node) => node.Kind switch
     {
+        _ when CalculationCompiler.IsCalculation(node.Kind) => "state." + node.Variable + " ← " + (node.Kind == ScriptNodeKind.Formula ? node.Calculation?.FormulaName : node.Calculation?.A),
         ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue => (node.Speaker.Length == 0 ? "" : node.Speaker + ": ") + node.Text,
         ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.Comment or ScriptNodeKind.Title or ScriptNodeKind.ConsoleWrite => node.Text,
         ScriptNodeKind.RegisterCharacter or ScriptNodeKind.UpdateCharacter => node.Character == null ? "Профиль не настроен" : node.Character.Name + " · " + node.Character.Id,
@@ -573,7 +575,7 @@ public partial class ScriptEditor : UserControl
         ApplyProperties();
         graph = Document.Graph!;
         var destination = graph.Nodes.Single(n => n.Id == target);
-        if (destination.IsTrigger || destination.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment || target == connection.Id)
+        if (destination.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment || target == connection.Id)
             throw new InvalidOperationException("Выберите другой блок, кроме «Начала».");
         Remember();
         graph.Nodes.Single(n => n.Id == connection.Id).SetOutput(connection.Port, target);

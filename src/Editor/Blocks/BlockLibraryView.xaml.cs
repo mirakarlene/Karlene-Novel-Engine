@@ -129,7 +129,8 @@ public partial class BlockLibraryView : UserControl
         var color = (Color)ColorConverter.ConvertFromString(entry.Color);
         var text = new StackPanel();
         text.Children.Add(new TextBlock { Text = entry.Title, FontSize = 16, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 25, 8), MaxHeight = 43 });
-        text.Children.Add(new TextBlock { Text = entry.Description, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 50, Foreground = Brushes.DimGray });
+        var description = new TextBlock { Text = entry.Description, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 50, Foreground = Brushes.DimGray };
+        description.SetResourceReference(TextBlock.ForegroundProperty, "Editor.Muted"); text.Children.Add(description);
         var content = new Grid(); content.Children.Add(text);
         string key = BlockLibraryPreferences.Key(entry); bool favorite = preferences.Favorites.Contains(key, StringComparer.Ordinal);
         var star = new Button { Content = favorite ? "★" : "☆", Tag = key, Width = 26, Height = 26, Padding = new Thickness(0),
@@ -145,6 +146,7 @@ public partial class BlockLibraryView : UserControl
         var button = new Button { Tag = entry.Kind, Content = content, Width = 236, Height = 130, Margin = new Thickness(0, 0, 12, 12),
             Padding = new Thickness(14), Background = Brushes.White, BorderBrush = new SolidColorBrush(color), BorderThickness = new Thickness(0, 5, 0, 1),
             HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top };
+        button.SetResourceReference(BackgroundProperty, "Editor.Surface");
         // Keep starring available even when the command cannot currently be inserted.
         bool available = canAdd(entry.Kind);
         if (!available) { text.Opacity = .5; button.ToolTip = entry.Kind == ScriptNodeKind.Start ? "В схеме уже есть начало." : "Достигнут предел в 500 блоков."; }

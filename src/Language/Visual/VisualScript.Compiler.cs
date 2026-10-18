@@ -22,9 +22,10 @@ public sealed partial class VisualScript
                     Fail(node, "соедините все выходы с существующими блоками");
                 if (map[target!].Kind == ScriptNodeKind.Start) Fail(node, "нельзя соединять выход с блоком «Начало»");
                 if (map[target!].Kind == ScriptNodeKind.Comment) Fail(node, "комментарии не имеют портов и не подключаются к схеме");
-                if (map[target!].IsTrigger) Fail(node, "триггер не принимает входящие связи");
             }
         }
+        var connectedTriggers = Nodes.SelectMany(node => node.Outputs()).Where(port => port.Target != null)
+            .Select(port => port.Target!).ToHashSet(StringComparer.Ordinal);
         var visited = new HashSet<string>(StringComparer.Ordinal);
         var active = new HashSet<string>(StringComparer.Ordinal);
         void Visit(ScriptNode node)
@@ -59,6 +60,14 @@ public sealed partial class VisualScript
                 Line("kne_editor_pause()");
             switch (node.Kind)
             {
+                case ScriptNodeKind.TriggerKey:
+                case ScriptNodeKind.TriggerButton:
+                case ScriptNodeKind.TriggerHotspot:
+                case ScriptNodeKind.TriggerTextClosed:
+                case ScriptNodeKind.TriggerCombination:
+                    Line($"kne_await_event({Quote(System.Text.Json.JsonSerializer.Serialize(node.Trigger, EngineSettings.JsonOptions))})");
+                    Line($"__kne_node = {Quote(node.Next!)}");
+                    break;
                 case ScriptNodeKind.TextInput:
                     Line($"local answer = text_input({Quote(System.Text.Json.JsonSerializer.Serialize(node.Input ?? new TextInputSettings(), EngineSettings.JsonOptions))})");
                     Line($"if answer == 'error' then __kne_node = {(node.Input is { BranchOnResult: true, HasErrorOutput: true } ? Quote(node.True!) : Quote(node.Next!))} elseif answer == 'cancel' then __kne_node = {(node.Input is { BranchOnResult: true, HasCancelOutput: true } ? Quote(node.False!) : Quote(node.Next!))} else __kne_node = {Quote(node.Next!)} end");
@@ -141,7 +150,7 @@ public sealed partial class VisualScript
             }
         }
         code.Append("            else\n                error('Неизвестный блок')\n            end\n        end\n    end\n");
-        foreach (var trigger in Nodes.Where(node => node.IsTrigger))
+        foreach (var trigger in Nodes.Where(node => node.IsTrigger && !connectedTriggers.Contains(node.Id)))
             code.Append("    kne_on_event(").Append(Quote(System.Text.Json.JsonSerializer.Serialize(trigger.Trigger, EngineSettings.JsonOptions)))
                 .Append(", function() __kne_run(").Append(Quote(trigger.Next!)).Append(", nil) end)\n");
         code.Append("    __kne_run(").Append(Quote(starts[0].Id)).Append(", nil)\nend\n");
@@ -152,6 +161,7 @@ public sealed partial class VisualScript
 
     private static string Command(ScriptNode node) => node.Kind switch
     {
+        _ when CalculationCompiler.IsCalculation(node.Kind) => CalculationCompiler.Compile(node.Kind, node.Calculation ?? new CalculationSettings(), node.Variable),
         ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue => DialogueCommand(node),
         ScriptNodeKind.RegisterCharacter => $"register_character({Quote(System.Text.Json.JsonSerializer.Serialize(node.Character ?? new CharacterProfile(), EngineSettings.JsonOptions))})",
         ScriptNodeKind.UpdateCharacter => $"update_character({Quote(System.Text.Json.JsonSerializer.Serialize(node.Character ?? new CharacterProfile(), EngineSettings.JsonOptions))})",
@@ -247,6 +257,11 @@ public sealed partial class VisualScript
 
     private static void ValidateCommand(ScriptNode node)
     {
+        if (CalculationCompiler.IsCalculation(node.Kind))
+        {
+            try { _ = CalculationCompiler.Compile(node.Kind, node.Calculation ?? new CalculationSettings(), node.Variable); }
+            catch (ArgumentException error) { Fail(node, error.Message); }
+        }
         if (node.Kind == ScriptNodeKind.Subsystem && (string.IsNullOrWhiteSpace(node.Path) || !ScriptDocument.IsVisualPath(node.Path))) Fail(node, "подсистема должна ссылаться на файл .knegraph");
         if (node.IsTrigger)
         {

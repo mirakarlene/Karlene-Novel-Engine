@@ -10,6 +10,8 @@ namespace KNE;
 /// <summary>Lua/KRL source editor with syntax colors, bracket pairing and space-based indentation.</summary>
 public sealed class KrlCodeEditor : TextEditor
 {
+    public static readonly DependencyProperty EditorThemeNameProperty = DependencyProperty.Register("EditorThemeName", typeof(string), typeof(KrlCodeEditor), new PropertyMetadata("dark", (view, _) => ((KrlCodeEditor)view).ApplyEditorPalette()));
+    public string EditorThemeName { get => (string)GetValue(EditorThemeNameProperty); set => SetValue(EditorThemeNameProperty, value); }
     private string? analyzedText;
     private IReadOnlyList<LuaToken> tokens = [];
     private static readonly Brush PairFill = Frozen("#264F78");
@@ -47,6 +49,7 @@ public sealed class KrlCodeEditor : TextEditor
         {
             if (args.Text.Length == 1 && InsertPairedCharacter(args.Text[0])) args.Handled = true;
         };
+        SetResourceReference(EditorThemeNameProperty, "Editor.ThemeName");
     }
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
@@ -174,6 +177,17 @@ public sealed class KrlCodeEditor : TextEditor
     }];
     private static readonly Brush[] Palette = [Frozen("#569CD6"), Frozen("#C586C0"), Frozen("#DCDCAA"), Frozen("#9CDCFE"),
         Frozen("#B5CEA8"), Frozen("#CE9178"), Frozen("#6A9955"), Frozen("#FFD700"), Frozen("#DA70D6"), Frozen("#179FFF"), Frozen("#F44747"), Frozen("#D4D4D4")];
+    private static readonly Brush[] LightPalette = [Frozen("#0000A0"), Frozen("#8F008F"), Frozen("#795E26"), Frozen("#005A83"), Frozen("#096B52"), Frozen("#A31515"), Frozen("#008000"), Frozen("#886000"), Frozen("#8F008F"), Frozen("#005A83"), Frozen("#CC0000"), Frozen("#202733")];
+    private Brush BrushFor(LuaToken token) => EditorThemeName == "dark" ? TokenBrush(token) : LightPalette[Array.IndexOf(Palette, TokenBrush(token))];
+    private void ApplyEditorPalette()
+    {
+        bool dark = EditorThemeName == "dark";
+        Background = Frozen(dark ? "#1E1E1E" : "#FFFFFF"); Foreground = Frozen(dark ? "#D4D4D4" : "#202733");
+        LineNumbersForeground = Frozen(dark ? "#858585" : "#637083");
+        TextArea.TextView.CurrentLineBackground = Frozen(dark ? "#202020" : "#F0F3F7");
+        TextArea.TextView.CurrentLineBorder = new Pen(Frozen(dark ? "#333333" : "#D9E0EB"), 1);
+        TextArea.SelectionBrush = Frozen(dark ? "#264F78" : "#CCDEF9"); TextArea.TextView.Redraw();
+    }
     private static Brush Frozen(string color)
     { var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)); brush.Freeze(); return brush; }
     private static Pen FrozenPen(string color)
@@ -190,7 +204,7 @@ public sealed class KrlCodeEditor : TextEditor
             {
                 var token = tokens[i];
                 ChangeLinePart(Math.Max(token.Start, line.Offset), Math.Min(token.End, line.EndOffset),
-                    element => element.TextRunProperties.SetForegroundBrush(TokenBrush(token)));
+                    element => element.TextRunProperties.SetForegroundBrush(editor.BrushFor(token)));
             }
         }
     }

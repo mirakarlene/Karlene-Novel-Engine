@@ -165,6 +165,11 @@ internal static class SceneRuntimeLua
             function kne_notify_text_closed()
                 if owned[coroutine.running()] then return flow({kind = "signal", signal = '{"kind":"text_closed"}'}) end
             end
+            function kne_await_event(specification)
+                local problem = kne_validate_trigger(specification)
+                if problem ~= "" then error(problem, 2) end
+                return flow({kind = "await_event", specification = specification})
+            end
             function kne_join(handle)
                 if type(handle) ~= "number" or handle % 1 ~= 0 then error("Join требует идентификатор асинхронной ветки", 2) end
                 local ok, problem = flow({kind = "join", handle = handle})
@@ -240,11 +245,16 @@ internal static class SceneRuntimeLua
                     for _, subscription in ipairs(subscriptions) do
                         if not subscription.owner.done and coroutine.status(subscription.thread) ~= "dead" and not subscription.used and
                             (not subscription.active or subscription.active.done) and kne_trigger_matches(subscription.specification, signal) then
+                            if subscription.waiter then
+                                subscription.waiter.wait_event = nil
+                                subscription.used = true
+                            else
                             local count = 0; for _, current in ipairs(tasks) do if not current.done then count = count + 1 end end
                             if count >= 128 then fail(subscription.owner, "Одновременно разрешено не более 128 веток") end
                             local child = create(subscription.entry, false, nil, subscription.thread)
                             child.trigger = true; subscription.active = child
                             subscription.used = kne_trigger_once(subscription.specification)
+                            end
                         end
                     end
                     visible = nil
@@ -294,10 +304,11 @@ internal static class SceneRuntimeLua
                         groups[event.handle].awaited = true
                         if completed and groups[event.handle].failure then task.input = table.pack(false, groups[event.handle].failure)
                         elseif not completed then task.join = event.handle end
-                    elseif event.kind == "subscribe" then
+                    elseif event.kind == "subscribe" or event.kind == "await_event" then
                         prune_subscriptions()
                         if #subscriptions >= 512 then return fail(task, "Не более 512 триггеров в активной сцене") end
-                        subscriptions[#subscriptions + 1] = {specification = event.specification, entry = event.entry, thread = thread, owner = task}
+                        subscriptions[#subscriptions + 1] = {specification = event.specification, entry = event.entry, thread = thread, owner = task, waiter = event.kind == "await_event" and task or nil}
+                        if event.kind == "await_event" then task.wait_event = true end
                     elseif event.kind == "signal" then
                         dispatch(event.signal)
                     elseif event.kind == "pause" then
@@ -350,7 +361,7 @@ internal static class SceneRuntimeLua
                                     task.input = table.pack(not (task.poll_timeout > 0 and clock - task.poll_started + 0.0000001 >= task.poll_timeout))
                                 end
                             end
-                            if not task.done and not task.event and not task.join and not task.wake then
+                            if not task.done and not task.event and not task.join and not task.wake and not task.wait_event then
                                 step(task); progressed = true; passes = passes + 1
                                 if passes > 10000 then fail(task, "Больше 10000 команд без остановки; добавьте паузу") end
                             end
