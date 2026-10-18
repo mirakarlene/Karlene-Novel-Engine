@@ -33,10 +33,12 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         SceneEditor.ProjectScriptRequested += SceneEditor_ProjectScriptRequested;
+        SceneEditor.SubsystemRequested += SceneEditor_SubsystemRequested;
         presentTestingWindow = showTestingWindow ?? (window => { window.Owner = this; window.Show(); });
         presentAnalysisReport = openAnalysisReport ?? (path => { using (Process.Start(EditorLauncher.CreateStartInfo(settings.EditorPath, path))) { } });
         chooseProjectScript = selectProjectScript ?? ShowProjectScriptDialog;
         launchProjectScript = openProjectScript ?? (info => { using (Process.Start(info)) { } });
+        storageTimer.Tick += async (_, _) => { if (WelcomePanel.Visibility == Visibility.Visible) await RefreshStoredProjectsAsync(); };
     }
 
     private async void Window_Closing(object? sender, CancelEventArgs e)
@@ -68,12 +70,15 @@ public partial class MainWindow : Window
     {
         settings = await settingsStore.LoadAsync();
         TxtEditorPath.Text = settings.EditorPath;
-        RecentProjectsList.ItemsSource = settings.RecentProjects;
+        TxtProjectsStorage.Text = settings.ProjectsStoragePath;
+        await RefreshStoredProjectsAsync();
+        storageTimer.Start();
     }, "Загрузка настроек…");
 
     private void Window_Closed(object? sender, EventArgs e)
     {
         closed = true;
+        storageTimer.Stop();
         lifetime.Cancel();
         monitor?.Dispose();
     }
@@ -145,7 +150,7 @@ public partial class MainWindow : Window
         if (remember)
         {
             settings.RememberProject(loaded.Path);
-            RecentProjectsList.ItemsSource = settings.RecentProjects;
+            await RefreshStoredProjectsAsync();
             try { await settingsStore.SaveAsync(settings); }
             catch (Exception ex) { OperationStatus.Text += " Не удалось сохранить список проектов: " + ex.Message; }
         }
@@ -165,15 +170,10 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(name)) return;
         var method = new ProjectCreationDialog { Owner = this };
         if (method.ShowDialog() != true) return;
-        var dialog = new OpenFolderDialog
-        {
-            Title = "Выберите папку для нового проекта",
-            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-        };
-        if (dialog.ShowDialog(this) != true) return;
         await RunOperationAsync(async () =>
         {
-            string path = await ProjectCreator.CreateProjectAsync(name, dialog.FolderName, method.AuthoringMode, lifetime.Token);
+            if (!await EnsureProjectStorageAsync()) return;
+            string path = await ProjectCreator.CreateProjectAsync(name, settings.ProjectsStoragePath, method.AuthoringMode, lifetime.Token);
             if (!await OpenProjectAsync(path, remember: true)) return;
             if (currentProject != null) await OpenScriptAsync(currentProject.MainScenePath);
         }, "Создание проекта…");
@@ -198,6 +198,7 @@ public partial class MainWindow : Window
     private void BtnSettings_Click(object sender, RoutedEventArgs e)
     {
         TxtEditorPath.Text = settings.EditorPath;
+        TxtProjectsStorage.Text = settings.ProjectsStoragePath;
         ShowPanel(SettingsPanel);
     }
 
@@ -207,9 +208,17 @@ public partial class MainWindow : Window
         if (editorPath.Length > 0 && (!Path.IsPathFullyQualified(editorPath) ||
             !File.Exists(editorPath) || !Path.GetExtension(editorPath).Equals(".exe", StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("Укажите полный путь к существующему .exe редактора или оставьте поле пустым.");
-        var next = new UserSettings { EditorPath = editorPath, RecentProjects = settings.RecentProjects };
+        string storage = TxtProjectsStorage.Text.Trim().Trim('"');
+        if (storage.Length > 0)
+        {
+            if (!Path.IsPathFullyQualified(storage)) throw new ArgumentException("Укажите полный путь хранилища проектов.");
+            storage = PathSafety.NormalizeDirectory(storage); PathSafety.RejectLinks(storage);
+            Directory.CreateDirectory(storage);
+        }
+        var next = new UserSettings { EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects };
         await settingsStore.SaveAsync(next);
         settings = next;
+        await RefreshStoredProjectsAsync();
         OperationStatus.Text = "Настройки сохранены.";
     }
 
@@ -230,8 +239,16 @@ public partial class MainWindow : Window
 
     private async void OpenRecentProject_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string path })
-            await RunOperationAsync(() => OpenProjectAsync(path, remember: true), "Открытие проекта…");
+        if (sender is not Button { Tag: string path }) return;
+        if (!ProjectStorage.IsAvailable(settings, path))
+        {
+            await RefreshStoredProjectsAsync();
+            const string message = "Проект не был обнаружен. Возможно, он перемещён или удалён. Проверьте путь «Хранилище проектов» в настройках.";
+            if (MissingProjectWarning != null) MissingProjectWarning(message);
+            else MessageBox.Show(this, message, "Проект не найден", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        await RunOperationAsync(() => OpenProjectAsync(path, remember: true), "Открытие проекта…");
     }
 
     private async void FileSearch_TextChanged(object sender, TextChangedEventArgs e)

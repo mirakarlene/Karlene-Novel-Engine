@@ -72,6 +72,7 @@ internal static class LuaWorker
                         case "choose": await runtime.ChooseAsync(request.Option).ConfigureAwait(false); break;
                         case "input": await runtime.SubmitInputAsync(request.Text ?? "", request.Cancel).ConfigureAwait(false); break;
                         case "tick": await runtime.TickAsync(request.Seconds).ConfigureAwait(false); break;
+                        case "trigger": await runtime.TriggerAsync(JsonSerializer.Deserialize<TriggerSignal>(request.Text!, EngineSettings.JsonOptions)!).ConfigureAwait(false); break;
                         case "command": await runtime.ProcessCommandAsync(request.Text!).ConfigureAwait(false); break;
                         case "restore": await runtime.RestoreAsync(request.Checkpoint!).ConfigureAwait(false); break;
                         case "checkpoint": break;

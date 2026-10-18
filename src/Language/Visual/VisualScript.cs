@@ -52,6 +52,7 @@ public sealed partial class VisualScript
             var script = JsonSerializer.Deserialize<VisualScript>(json, JsonOptions)
                          ?? throw new InvalidDataException("Блок-схема не должна содержать null.");
             script.DetachLegacyComments();
+            foreach (var node in script.Nodes?.Where(node => node != null && node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene) ?? []) node.Category = "flows";
             // Both legacy categories compared a state value to a literal. Preserve the operation,
             // ports and IDs while moving it to the current narrative branching command.
             foreach (var node in script.Nodes?.Where(node => node != null && node.Kind == ScriptNodeKind.Condition) ?? [])
@@ -96,7 +97,7 @@ public sealed partial class VisualScript
             if (node.Text == null || node.Speaker == null || node.Path == null || node.Variable == null ||
                 node.Value == null || node.CompareVariable == null || node.Position == null || node.Channel == null || node.Target == null || node.IterationKey == null || node.Category == null || node.ScreenLayer == null || node.UiTarget == null || node.SpeakerId == null)
                 throw new InvalidDataException("Свойства блока не должны содержать null.");
-            if (node.Category is not ("" or "terminals" or "narrative" or "logic" or "visual" or "audio" or "async" or "configurations" or "plugins"))
+            if (node.Category is not ("" or "terminals" or "narrative" or "logic" or "visual" or "audio" or "flows" or "async" or "triggers" or "configurations" or "plugins"))
                 throw new InvalidDataException("Неизвестная группа блока.");
             if (new[] { node.Duration, node.OffsetX, node.OffsetY, node.Amount, node.Minimum, node.Maximum, node.Opacity }.Any(v => !double.IsFinite(v)))
                 throw new InvalidDataException("Числовые свойства блока должны быть конечными.");
@@ -106,7 +107,7 @@ public sealed partial class VisualScript
                 Fail(node, "вес ветки должен быть конечным неотрицательным числом");
             try
             {
-                node.Character?.Validate(); node.TextEffect?.Validate(); node.Input?.Validate();
+                node.Character?.Validate(); node.TextEffect?.Validate(); node.Input?.Validate(); node.Trigger?.Validate();
                 node.ChoiceSettings?.Validate();
                 foreach (var option in node.Options) option.Lock?.Validate();
             }
@@ -125,7 +126,7 @@ public sealed partial class VisualScript
 
     /// <summary>Validates the graph and generates its named Lua function using the KNE API.</summary>
     /// <returns>Lua source for a complete, acyclic scene.</returns>
-    public string Compile(bool editorPreview = false) => CompileCore(editorPreview);
+    public string Compile(bool editorPreview = false, bool subsystem = false) => CompileCore(editorPreview, subsystem);
 
     private void DetachLegacyComments()
     {
@@ -201,7 +202,8 @@ public enum ScriptNodeKind
     HideBackground, MoveBackground, MoveCharacter, Animation, Shake, Flash, Camera, ShowScreen,
     AudioChannel, StopSound, Voice, MasterVolume, Parallel, Async, Join, Timer, Pause, WaitCondition,
     IncludeLua, IncludeCs, Script, ConfigureDialogue, ConfigureButton, ClearBackgrounds, ClearSprites, RegisterCharacter, TextPause, ClearText, AutoDialogue, ConsoleWrite, RandomBranch, EffectDialogue, TextInput,
-    UpdateCharacter, SetSpeaker, ResetSpeakers, Branching, CompareVariables, TimedChoice
+    UpdateCharacter, SetSpeaker, ResetSpeakers, Branching, CompareVariables, TimedChoice,
+    Subsystem, TriggerKey, TriggerButton, TriggerHotspot, TriggerTextClosed, TriggerCombination
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -229,6 +231,12 @@ public enum ScriptComparison
 /// <summary>An editable command and its explicitly ordered output ports.</summary>
 public sealed class ScriptNode
 {
+    /// <summary>Whether this block starts an independent event handler rather than accepting an incoming connection.</summary>
+    [JsonIgnore] public bool IsTrigger => Kind is ScriptNodeKind.TriggerKey or ScriptNodeKind.TriggerButton or ScriptNodeKind.TriggerHotspot or ScriptNodeKind.TriggerTextClosed or ScriptNodeKind.TriggerCombination;
+    /// <summary>Wait for a subsystem; false spawns it as a background task.</summary>
+    public bool WaitForSubsystem { get; set; } = true;
+    /// <summary>Event subscription parameters for trigger roots.</summary>
+    public TriggerSettings? Trigger { get; set; }
     /// <summary>Stable document-local identifier used by connections and generated Lua.</summary>
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
 
@@ -348,6 +356,9 @@ public sealed class ScriptNode
     {
         ScriptNodeKind.Start => "Начало", ScriptNodeKind.Dialogue => "Реплика", ScriptNodeKind.Choice => "Выбор", ScriptNodeKind.TimedChoice => "Выбор с таймером",
         ScriptNodeKind.Condition => "Условие (значение, прежний формат)", ScriptNodeKind.Branching => "Ветвление", ScriptNodeKind.CompareVariables => "Условие", ScriptNodeKind.SetVariable => "Переменная",
+        ScriptNodeKind.Subsystem => Path.Length == 0 ? "Подсистема" : System.IO.Path.GetFileName(Path),
+        ScriptNodeKind.TriggerKey => "При клике на клавишу", ScriptNodeKind.TriggerButton => "При клике на кнопку",
+        ScriptNodeKind.TriggerHotspot => "При клике на зону на экране", ScriptNodeKind.TriggerTextClosed => "При закрытии текстового окна", ScriptNodeKind.TriggerCombination => "При комбинации нажатий",
         ScriptNodeKind.Background => "Фон",
         ScriptNodeKind.Character => "Спрайт", ScriptNodeKind.HideCharacter => "Скрыть спрайт",
         ScriptNodeKind.Music => "Музыка",

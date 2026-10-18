@@ -102,7 +102,7 @@ public partial class ScriptEditor
             var outputs = node.Outputs().ToArray();
             int rows = Math.Max(1, outputs.Length);
             for (int i = 0; i < rows; i++) ports.RowDefinitions.Add(new RowDefinition());
-            if (node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.Comment))
+            if (!node.IsTrigger && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.Comment))
             {
                 var input = CreateGraphPort(node, null, portBrush, "Вход");
                 input.HorizontalAlignment = HorizontalAlignment.Left; input.Margin = new Thickness(-12, 0, 0, 0);
@@ -138,6 +138,13 @@ public partial class ScriptEditor
             };
             Canvas.SetLeft(shadow, node.X); Canvas.SetTop(shadow, node.Y); Panel.SetZIndex(shadow, 0);
             GraphCanvas.Children.Add(shadow); cardShadows.Add(node.Id, shadow);
+            card.PreviewMouseLeftButtonDown += (_, args) =>
+            {
+                if (node.Kind != ScriptNodeKind.Subsystem || args.ClickCount != 2) return;
+                for (DependencyObject? target = args.OriginalSource as DependencyObject; target != null && target != card; target = VisualTreeHelper.GetParent(target))
+                    if (target is ButtonBase or Thumb) return;
+                args.Handled = true; OpenSubsystem(node.Id);
+            };
             HookCardSelectionAndMovement(card, header, node);
             Canvas.SetLeft(card, node.X); Canvas.SetTop(card, node.Y); Panel.SetZIndex(card, 1);
             GraphCanvas.Children.Add(card); cards.Add(node.Id, card);
@@ -232,7 +239,7 @@ public partial class ScriptEditor
         int output = (firstOutput ?? secondOutput)!.Value;
         var from = graph.Nodes.FirstOrDefault(n => n.Id == source);
         var to = graph.Nodes.FirstOrDefault(n => n.Id == target);
-        if (from == null || to == null || to.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment ||
+        if (from == null || to == null || to.IsTrigger || to.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment ||
             output < 0 || output >= from.Outputs().Count()) return false;
         ApplyProperties(repaint: false);
         from = Document!.Graph!.Nodes.Single(n => n.Id == source);

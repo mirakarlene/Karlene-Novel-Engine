@@ -21,12 +21,13 @@ public partial class SceneTestingWindow : Window
     {
         InitializeComponent(); this.project = project; this.selection = selection; sceneMode = sceneTest;
         Title = (sceneMode ? "Тестировать сцену · " : "Предпросмотр фрейма · ") + project.Title;
+        InitializeTestingTriggers();
         Width = project.Engine.Window.Width; Height = project.Engine.Window.Height + 70;
         SceneSurface.DisplayScene(project, project.Engine.RuntimeDefaults(project.Title), SceneVisuals.Empty, StoryFrame.Empty, false, false);
         NextFrameButton.Visibility = sceneMode ? Visibility.Visible : Visibility.Collapsed;
         SceneSurface.MouseLeftButtonUp += async (_, e) =>
         {
-            if (sceneMode && scene?.Story.CanAdvance == true && e.OriginalSource is not Button)
+            if (sceneMode && scene?.Story.CanAdvance == true && GameTriggerInput.FindButton(e.OriginalSource as DependencyObject) == null)
             { e.Handled = true; await ExecuteAsync(() => scene.AdvanceAsync(lifetime.Token)); }
         };
         PreviewKeyDown += async (_, e) =>
@@ -84,7 +85,7 @@ public partial class SceneTestingWindow : Window
             else SceneSurface.StopChoicePresentation();
             SceneEndOverlay.Visibility = scene.Completed ? Visibility.Visible : Visibility.Collapsed;
             BackFrameButton.IsEnabled = scene.CanGoBack;
-            NextFrameButton.IsEnabled = scene.Story.CanAdvance;
+            NextFrameButton.IsEnabled = scene.Story.CanAdvance || scene.Story.Triggers.Any(trigger => trigger.Matches(new("button", Button: "next")));
             TestingStatus.Text = "Изолированный тест сцены · " + (selection.Function ?? "сценарий") + DescribeIdentity(scene.Story);
         }
         else if (frame != null)
@@ -112,6 +113,9 @@ public partial class SceneTestingWindow : Window
     }
     private async void Next_Click(object sender, RoutedEventArgs e)
     {
+        var signal = new TriggerSignal("button", Button: "next");
+        if (sceneMode && scene?.Story.Triggers.Any(trigger => trigger.Matches(signal)) == true)
+        { await ExecuteAsync(() => scene.TriggerAsync(signal, lifetime.Token)); return; }
         if (scene?.Story.CanAdvance == true) await ExecuteAsync(() => scene.AdvanceAsync(lifetime.Token));
     }
     private async void Back_Click(object sender, RoutedEventArgs e) => await ExecuteAsync(async () =>

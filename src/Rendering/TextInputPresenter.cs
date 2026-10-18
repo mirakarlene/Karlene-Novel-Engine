@@ -13,8 +13,8 @@ public sealed class TextInputPresenter : StackPanel
 {
     public TextBox Answer { get; } = new() { Name = "PlayerAnswer", FontSize = 20, Padding = new Thickness(10, 7, 10, 7) };
     public PasswordBox Password { get; } = new() { Name = "PlayerPassword", FontSize = 20, Padding = new Thickness(10, 7, 10, 7) };
-    public Button SubmitButton { get; } = new() { Content = "Подтвердить", Padding = new Thickness(16, 7, 16, 7), Margin = new Thickness(0, 0, 8, 0) };
-    public Button CancelButton { get; } = new() { Content = "Назад", Padding = new Thickness(16, 7, 16, 7) };
+    public Button SubmitButton { get; } = new() { Name = "SubmitButton", Content = "Подтвердить", Padding = new Thickness(16, 7, 16, 7), Margin = new Thickness(0, 0, 8, 0) };
+    public Button CancelButton { get; } = new() { Name = "CancelButton", Content = "Назад", Padding = new Thickness(16, 7, 16, 7) };
     public TextBlock Placeholder { get; } = new() { Foreground = Brushes.Gray, Margin = new Thickness(12, 9, 12, 0), IsHitTestVisible = false };
     public TextBlock Feedback { get; } = new() { Foreground = Brushes.LightCoral, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 5, 0, 5) };
     private readonly TextBlock prompt = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };

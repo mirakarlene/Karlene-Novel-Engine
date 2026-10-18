@@ -13,7 +13,7 @@ public static class BlockLibrary
     public static IReadOnlyList<BlockGroup> Groups { get; } = [
         new("terminals", "Начало и конец", "#64748B"), new("narrative", "Нарратив", "#C65C16"),
         new("logic", "Логика", "#2563A6"), new("visual", "Визуал", "#8246B3"),
-        new("audio", "Звук", "#228052"), new("async", "Асинхронность", "#BA3846"),
+        new("audio", "Звук", "#228052"), new("flows", "Потоки", "#C44A88"), new("async", "Асинхронность", "#BA3846"), new("triggers", "Триггеры", "#8B5A35"),
         new("configurations", "Конфигурации", "#137C83"), new("plugins", "Плагины", "#6B7280")];
 
     /// <summary>All selectable entries with distinct narrative branching and logic comparisons.</summary>
@@ -33,8 +33,14 @@ public static class BlockLibrary
         Add("narrative", ScriptNodeKind.Branching, "Ветвление", "Выбрать ветку по переменной и заданному значению; не добавляет реплику.");
         Add("narrative", ScriptNodeKind.Comment, "Комментарий", "Заметка автора. Не выполняется и может оставаться без связей.");
         Add("narrative", ScriptNodeKind.Title, "Титр", "Текст поверх сцены вне диалогового окна. Пустой текст скрывает титр.");
-        Add("narrative", ScriptNodeKind.GotoScene, "Перейти на сцену", "goto: перейти в другую функцию без возврата в эту ветку.");
-        Add("narrative", ScriptNodeKind.CallScene, "Вызвать сцену", "call: выполнить другую функцию и продолжить после вызова.");
+        Add("flows", ScriptNodeKind.GotoScene, "Перейти на сцену", "goto: перейти в другую функцию без возврата в эту ветку.");
+        Add("flows", ScriptNodeKind.CallScene, "Вызвать сцену", "call: выполнить другую функцию и продолжить после вызова.");
+        Add("flows", ScriptNodeKind.Subsystem, "Подсистема", "Вложенная блок-схема из файла: ждать завершения или продолжать параллельно. Двойной клик открывает / создаёт файл.");
+        Add("triggers", ScriptNodeKind.TriggerKey, "При клике на клавишу", "Независимая ветка по нажатию выбранной клавиши.");
+        Add("triggers", ScriptNodeKind.TriggerButton, "При клике на кнопку", "Ветка по ID игровой кнопки или элемента дополнительного экрана.");
+        Add("triggers", ScriptNodeKind.TriggerHotspot, "При клике на зону на экране", "Область в логических координатах игровой сцены.");
+        Add("triggers", ScriptNodeKind.TriggerTextClosed, "При закрытии текстового окна", "Реакция на скрытие текстового окна или очистку текста.");
+        Add("triggers", ScriptNodeKind.TriggerCombination, "При комбинации нажатий", "Ветка по сочетанию клавиш, например Ctrl+Shift+E.");
         Add("narrative", ScriptNodeKind.RegisterCharacter, "Персонаж", "Зарегистрировать имя, цвет и типографику персонажа без отображения спрайта.");
         Add("narrative", ScriptNodeKind.UpdateCharacter, "Изменить персонажа", "Изменить имя и типографику уже зарегистрированного персонажа по его ID.");
         Add("narrative", ScriptNodeKind.SetSpeaker, "Установить спикера", "Назначить профиль следующим репликам с пустым говорящим в текущей ветке.");
@@ -95,6 +101,7 @@ public static class BlockLibrary
         if (category != null && !Definitions.Any(entry => entry.Kind == kind && entry.Group == category))
             throw new ArgumentException("Блок недоступен в выбранной группе.", nameof(category));
         var node = new ScriptNode { Kind = kind };
+        if (node.IsTrigger) node.Trigger = new TriggerSettings { Kind = kind switch { ScriptNodeKind.TriggerButton => "button", ScriptNodeKind.TriggerHotspot => "hotspot", ScriptNodeKind.TriggerTextClosed => "text_closed", _ => "key" }, Keys = kind == ScriptNodeKind.TriggerCombination ? "Ctrl+E" : "E" };
         node.Category = category ?? Definitions.First(entry => entry.Kind == kind).Group;
         if (kind is ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue) node.Text = "Новая реплика";
         if (kind == ScriptNodeKind.TextInput) node.Input = new TextInputSettings { Prompt = "Введите ответ:" };

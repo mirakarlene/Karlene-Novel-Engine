@@ -101,6 +101,10 @@ public sealed partial class LuaRuntime : IGameSession
         Register(nameof(ValidateEndAction), "kne_validate_end");
         Register(nameof(SuspendFlowError), "kne_suspend_flow_error");
         Register(nameof(RestoreFlowError), "kne_restore_flow_error");
+        Register(nameof(SubsystemCodeForLua), "kne_subsystem_code_result");
+        Register(nameof(ValidateTriggerForLua), "kne_validate_trigger");
+        Register(nameof(TriggerMatchesForLua), "kne_trigger_matches");
+        Register(nameof(TriggerOnceForLua), "kne_trigger_once");
         lua["project_dir"] = project.Path;
         lua["kne_interactive"] = interactive;
         lua["kne_editor"] = editorSource?.StepCommands == true;
@@ -147,8 +151,8 @@ public sealed partial class LuaRuntime : IGameSession
                 end
                 return coroutine.yield(kne_event_location({kind = "choice", text = tostring(prompt), options = labels}))
             end
-            function kne_resume(answer, seconds, tick)
-                local ok, event = coroutine.resume(kne_story, answer, seconds, tick)
+            function kne_resume(answer, seconds, tick, signal)
+                local ok, event = coroutine.resume(kne_story, answer, seconds, tick, signal)
                 if not ok then error(tostring(event), 0) end
                 return coroutine.status(kne_story), event
             end
@@ -277,10 +281,10 @@ public sealed partial class LuaRuntime : IGameSession
         }, cancellationToken, "Фоновая ветка сценария");
     }
 
-    private void ResumeStory(object? answer, double seconds = 0, bool tick = false)
+    private void ResumeStory(object? answer, double seconds = 0, bool tick = false, string? signal = null)
     {
         using var resume = (LuaFunction)lua!["kne_resume"];
-        object[] result = resume.Call(answer, seconds, tick);
+        object[] result = resume.Call(answer, seconds, tick, signal);
         StoryFrame frame;
         if ((string)result[0] == "dead")
         {
@@ -307,7 +311,7 @@ public sealed partial class LuaRuntime : IGameSession
             if (kind != "preview") frame = ReadNarrativeFrame(frame, value);
             frame = ReadInputFrame(frame, value);
             frame = ReadChoiceFrame(frame, value);
-            frame = frame with { HasBackgroundTasks = value["background"] as bool? == true,
+            frame = frame with { Triggers = ReadTriggers(value), HasBackgroundTasks = value["background"] as bool? == true,
                 Identity = frames?.ResolveKey(value["key"] as string, Location!.File, Location.Line, Location.FunctionLine) ??
                 frames?.Resolve(Location!.File, Location.Line, Location.NodeId, Location.FunctionLine) };
             if (kind is "dialogue" or "choice" && !tick) PrintToUI(frame.Speaker.Length == 0 ? frame.Text : frame.Speaker + ": " + frame.Text);
@@ -357,6 +361,11 @@ public sealed partial class LuaRuntime : IGameSession
                     case "command" when !string.IsNullOrWhiteSpace(action.Command):
                         using (var command = lua!["kne_invoke_command"] as LuaFunction) command!.Call(action.Command);
                         break;
+                    case "trigger" when action.Command != null:
+                        var signal = JsonSerializer.Deserialize<TriggerSignal>(action.Command, EngineSettings.JsonOptions) ?? throw new InvalidDataException("Пустое событие сохранения.");
+                        signal.Validate();
+                        if (!Story.Triggers.Any(trigger => trigger.Matches(signal))) throw new InvalidDataException("Сохранение содержит событие без активного триггера.");
+                        ResumeStory(null, signal: action.Command); break;
                     case "tick" when Story.NeedsTick && double.TryParse(action.Command, System.Globalization.NumberStyles.Float,
                         System.Globalization.CultureInfo.InvariantCulture, out double seconds) && double.IsFinite(seconds) && seconds > 0 && seconds <= 60:
                         ResumeStory(null, seconds, tick: true); break;

@@ -46,6 +46,17 @@ public sealed class SceneTestSession : IAsyncDisposable
         history.Add(new("input", changed ? "input" : "", FrameStart: frameStart, Text: text, Cancel: cancel));
         if (changed) frameStart = history.Count;
     }
+    /// <summary>Tests a scene-scoped input handler and includes its signal in one-frame replay.</summary>
+    public async Task TriggerAsync(TriggerSignal signal, CancellationToken token = default)
+    {
+        if (session == null) throw new InvalidOperationException("Сцена не запущена.");
+        if (!Story.Triggers.Any(trigger => trigger.Matches(signal))) return;
+        var before = Story;
+        await session.TriggerAsync(signal, token).ConfigureAwait(false);
+        bool changed = before.PresentationId != Story.PresentationId || before.Kind != Story.Kind;
+        history.Add(new("trigger", changed ? before.Kind : "", FrameStart: frameStart, Text: JsonSerializer.Serialize(signal, EngineSettings.JsonOptions)));
+        if (changed) frameStart = history.Count;
+    }
     /// <summary>Advances logical timers and background branches without consuming the visible frame.</summary>
     public async Task TickAsync(double seconds, CancellationToken token = default)
     {
@@ -68,6 +79,7 @@ public sealed class SceneTestSession : IAsyncDisposable
         {
             token.ThrowIfCancellationRequested();
             if (action.Kind == "tick") await session!.TickAsync(action.Seconds, token).ConfigureAwait(false);
+            else if (action.Kind == "trigger") await session!.TriggerAsync(JsonSerializer.Deserialize<TriggerSignal>(action.Text, EngineSettings.JsonOptions)!, token).ConfigureAwait(false);
             else if (action.Kind == "advance") await session!.AdvanceAsync(token).ConfigureAwait(false);
             else if (action.Kind == "input") await session!.SubmitInputAsync(action.Text, action.Cancel, token).ConfigureAwait(false);
             else await session!.ChooseAsync(action.Option, token).ConfigureAwait(false);

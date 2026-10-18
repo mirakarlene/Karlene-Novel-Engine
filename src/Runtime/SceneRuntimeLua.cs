@@ -6,6 +6,7 @@ internal static class SceneRuntimeLua
     public const string Source = """
         do
             local definitions, loaded = {}, {}
+            local subsystem_entries = {}
             local owned = setmetatable({}, {__mode = "k"})
             local transfer = {}
             local flow_failure = {}
@@ -141,6 +142,29 @@ internal static class SceneRuntimeLua
                 if ok == false then error(problem, 0) end
             end
             function kne_async(entries) return flow({kind = "spawn", entries = branches(entries), detached = true}) end
+            function kne_subsystem(path, wait)
+                if type(path) ~= "string" then error("Укажите путь к подсистеме", 2) end
+                local key = path:gsub("\\", "/"):upper()
+                local entry = subsystem_entries[key]
+                if not entry then
+                    local result = kne_subsystem_code_result(path)
+                    if result[1] ~= "" then error(result[1], 2) end
+                    local chunk, problem = load(result[0], "@" .. path, "t", _G)
+                    if not chunk then error(problem, 2) end
+                    entry = chunk(); subsystem_entries[key] = entry
+                end
+                if wait ~= false then return call_scene(entry) end
+                return kne_async({entry})
+            end
+            function kne_on_event(specification, entry)
+                if type(specification) ~= "string" or type(entry) ~= "function" then error("Триггер требует параметры события и функцию", 2) end
+                local problem = kne_validate_trigger(specification)
+                if problem ~= "" then error(problem, 2) end
+                return flow({kind = "subscribe", specification = specification, entry = entry})
+            end
+            function kne_notify_text_closed()
+                if owned[coroutine.running()] then return flow({kind = "signal", signal = '{"kind":"text_closed"}'}) end
+            end
             function kne_join(handle)
                 if type(handle) ~= "number" or handle % 1 ~= 0 then error("Join требует идентификатор асинхронной ветки", 2) end
                 local ok, problem = flow({kind = "join", handle = handle})
@@ -156,6 +180,7 @@ internal static class SceneRuntimeLua
             function kne_run_scene(entry)
                 local tasks, groups, clock, group_id, visible = {}, {}, 0, 0, nil
                 local presentation_id = 0
+                local subscriptions = {}
                 local function create(fn, detached, group, parent)
                     local task = {stack = {kne_scene_thread(fn, parent)}, input = table.pack(), detached = detached, group = group, transitions = 0}
                     tasks[#tasks + 1] = task
@@ -202,6 +227,28 @@ internal static class SceneRuntimeLua
                     for _, current in ipairs(tasks) do close_task(current) end
                     error(problem, 0)
                 end
+                local function prune_subscriptions()
+                    for index = #subscriptions, 1, -1 do
+                        local subscription = subscriptions[index]
+                        if subscription.owner.done or coroutine.status(subscription.thread) == "dead" or subscription.used then
+                            table.remove(subscriptions, index)
+                        end
+                    end
+                end
+                local function dispatch(signal)
+                    prune_subscriptions()
+                    for _, subscription in ipairs(subscriptions) do
+                        if not subscription.owner.done and coroutine.status(subscription.thread) ~= "dead" and not subscription.used and
+                            (not subscription.active or subscription.active.done) and kne_trigger_matches(subscription.specification, signal) then
+                            local count = 0; for _, current in ipairs(tasks) do if not current.done then count = count + 1 end end
+                            if count >= 128 then fail(subscription.owner, "Одновременно разрешено не более 128 веток") end
+                            local child = create(subscription.entry, false, nil, subscription.thread)
+                            child.trigger = true; subscription.active = child
+                            subscription.used = kne_trigger_once(subscription.specification)
+                        end
+                    end
+                    visible = nil
+                end
                 local function step(task)
                     local stack, thread = task.stack, task.stack[#task.stack]
                     owned[thread] = true
@@ -247,6 +294,12 @@ internal static class SceneRuntimeLua
                         groups[event.handle].awaited = true
                         if completed and groups[event.handle].failure then task.input = table.pack(false, groups[event.handle].failure)
                         elseif not completed then task.join = event.handle end
+                    elseif event.kind == "subscribe" then
+                        prune_subscriptions()
+                        if #subscriptions >= 512 then return fail(task, "Не более 512 триггеров в активной сцене") end
+                        subscriptions[#subscriptions + 1] = {specification = event.specification, entry = event.entry, thread = thread, owner = task}
+                    elseif event.kind == "signal" then
+                        dispatch(event.signal)
                     elseif event.kind == "pause" then
                         if event.seconds > 0 then task.wake = clock + event.seconds end
                     elseif event.kind == "poll" then
@@ -304,15 +357,23 @@ internal static class SceneRuntimeLua
                             if root.done then break end
                         end
                     end
+                    prune_subscriptions()
                     refresh_threads()
                     if root.done then close_others(); return root.ending end
+                    for index = #tasks, 2, -1 do if tasks[index].done then table.remove(tasks, index) end end
                     if not visible or visible.done or not visible.event then
                         visible = nil
-                        for _, task in ipairs(tasks) do if not task.done and task.event then visible = task; break end end
+                        for _, task in ipairs(tasks) do if task.trigger and not task.done and task.event then visible = task; break end end
+                        if not visible then for _, task in ipairs(tasks) do if not task.done and task.event then visible = task; break end end end
                     end
                     local background = false
                     for _, task in ipairs(tasks) do if not task.done and (task.detached or task.wake or task.join) then background = true; break end end
                     local event = visible and visible.event or {kind = "wait"}
+                    event.triggers = {}
+                    for _, subscription in ipairs(subscriptions) do
+                        if not subscription.owner.done and coroutine.status(subscription.thread) ~= "dead" and not subscription.used and
+                            (not subscription.active or subscription.active.done) then event.triggers[#event.triggers + 1] = subscription.specification end
+                    end
                     if visible and event.seconds ~= nil and not visible.event_deadline then
                         visible.event_started, visible.event_deadline = clock, clock + event.seconds
                     end
@@ -327,8 +388,10 @@ internal static class SceneRuntimeLua
                     if not kne_interactive then
                         clock = clock + 0.1
                     else
-                        local answer, seconds, tick = coroutine.yield(event)
-                        if tick then clock = clock + (seconds or 0)
+                        local answer, seconds, tick, signal = coroutine.yield(event)
+                        if signal then
+                            dispatch(signal)
+                        elseif tick then clock = clock + (seconds or 0)
                         elseif visible then visible.event, visible.event_deadline, visible.input = nil, nil, table.pack(answer); visible = nil end
                     end
                 end

@@ -44,6 +44,7 @@ public partial class GameWindow : Window
         ApplyEngineTheme();
         runtime = new ProcessGameSession(project, QueueOutput, preview: preview);
         InitializeBlockEffects();
+        InitializeTriggerInput();
         music.MediaEnded += (_, _) => { if (runtime.Visuals.AudioChannels.All(c => c.Channel != "music") && runtime.Visuals.LoopMusic) { music.Position = TimeSpan.Zero; music.Play(); } };
         music.MediaFailed += (_, e) => QueueOutput("Ошибка музыки: " + e.ErrorException.Message);
         sound.MediaFailed += (_, e) => QueueOutput("Ошибка звука: " + e.ErrorException.Message);
@@ -190,6 +191,7 @@ public partial class GameWindow : Window
         await runtime.DisposeAsync();
         if (closed) { await candidate.DisposeAsync(); return; }
         runtime = candidate;
+        triggerInput.Reset(); pendingTriggerSignals.Clear();
         gameplayUi?.Reset();
         DialogueEffects.Reset();
         choicePresentation?.Reset();
@@ -216,7 +218,7 @@ public partial class GameWindow : Window
         await LoadGameAsync(saves.Exists("auto") ? "auto" : "quick");
     }
 
-    private void PauseButton_Click(object sender, RoutedEventArgs e) { if (execution == null && ready) ShowMenu(); }
+    private async void PauseButton_Click(object sender, RoutedEventArgs e) { if (await TryButtonTriggerAsync(sender)) return; if (execution == null && ready) ShowMenu(); }
     private void ResumeButton_Click(object sender, RoutedEventArgs e) { if (execution == null && ready) ShowGameplay(); }
     private void ExitButton_Click(object sender, RoutedEventArgs e) => Close();
 
@@ -330,6 +332,7 @@ public partial class GameWindow : Window
         {
             execution.Dispose();
             execution = null;
+            _ = Dispatcher.BeginInvoke(new Action(async () => await DrainTriggerSignalsAsync()));
             if (!closed && !startupFailed)
             {
                 StopButton.IsEnabled = false;
@@ -367,6 +370,7 @@ public partial class GameWindow : Window
 
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
+        if (await TryButtonTriggerAsync(sender)) { e.Handled = true; return; }
         if (execution != null || !ready) return;
         bool saved = false;
         await ExecuteAsync(async () =>
@@ -380,6 +384,7 @@ public partial class GameWindow : Window
 
     private async void LoadButton_Click(object sender, RoutedEventArgs e)
     {
+        if (await TryButtonTriggerAsync(sender)) { e.Handled = true; return; }
         string slot = sender is Button { Tag: "auto" } ? "auto" : "quick";
         await LoadGameAsync(slot);
     }
@@ -400,6 +405,7 @@ public partial class GameWindow : Window
 
     private async void NextButton_Click(object sender, RoutedEventArgs e)
     {
+        if (await TryButtonTriggerAsync(sender)) { e.Handled = true; return; }
         if (NextButton.IsEnabled && MenuOverlay.Visibility != Visibility.Visible)
             await ExecuteAsync(() => runtime.AdvanceAsync(execution!.Token), operation: "Продолжение сценария");
         e.Handled = true;
@@ -407,6 +413,7 @@ public partial class GameWindow : Window
 
     private async void ChoiceButton_Click(object sender, RoutedEventArgs e)
     {
+        if (await TryButtonTriggerAsync(sender)) { e.Handled = true; return; }
         if (sender is Button { Tag: int index } && execution == null && MenuOverlay.Visibility != Visibility.Visible)
             await ExecuteAsync(() => runtime.ChooseAsync(index, execution!.Token), operation: "Выбор ответа");
         e.Handled = true;
@@ -417,13 +424,16 @@ public partial class GameWindow : Window
         if (e.OriginalSource is not Button && NextButton.IsEnabled) NextButton_Click(NextButton, e);
     }
 
-    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (startupFailed)
         {
             if (e.Key is Key.F3 or Key.Escape or Key.Space or Key.F11) e.Handled = true;
             return;
         }
+        var signal = triggerInput.KeyDown(e);
+        if (signal != null && runtime.Story.Triggers.Any(trigger => trigger.Matches(signal)) && ready && execution == null)
+        { e.Handled = true; await DispatchTriggerAsync(signal); return; }
         if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
         if (e.Key == Key.F3 && (project.Engine.Game.DebugEnabled || diagnosticConsole))
         {
@@ -531,13 +541,13 @@ public partial class GameWindow : Window
         PlayerInput.Display(frame);
         PlayerInput.SubmitButton.IsEnabled = PlayerInput.CancelButton.IsEnabled = execution == null;
         renderedStory = frame;
-        NextButton.IsEnabled = execution == null && frame.CanAdvance;
-        NextButton.Visibility = frame.Kind == "input" ? Visibility.Collapsed : Visibility.Visible;
+        NextButton.IsEnabled = execution == null && (frame.CanAdvance || HasButtonTrigger("next"));
+        NextButton.Visibility = frame.Kind == "input" && !HasButtonTrigger("next") ? Visibility.Collapsed : Visibility.Visible;
         ChoicePanel.IsEnabled = execution == null && frame.Kind == "choice";
         ChoicePanel.Visibility = frame.Kind == "choice" ? Visibility.Visible : Visibility.Collapsed;
         SaveButton.IsEnabled = execution == null && ready;
-        LoadButton.IsEnabled = execution == null && saves.Exists("quick");
-        LoadAutoButton.IsEnabled = execution == null && saves.Exists("auto");
+        LoadButton.IsEnabled = execution == null && (saves.Exists("quick") || HasButtonTrigger("load"));
+        LoadAutoButton.IsEnabled = execution == null && (saves.Exists("auto") || HasButtonTrigger("auto_save"));
         ContinueButton.IsEnabled = execution == null && (saves.Exists("auto") || saves.Exists("quick"));
         UpdateScreenButtons();
         if (execution == null && ready)

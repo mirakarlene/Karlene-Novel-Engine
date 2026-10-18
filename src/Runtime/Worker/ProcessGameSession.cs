@@ -76,6 +76,11 @@ public sealed class ProcessGameSession : IGameSession
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
         return ExecuteAsync("command", cancellationToken, text: command);
     }
+    public Task TriggerAsync(TriggerSignal signal, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(signal); signal.Validate();
+        return ExecuteAsync("trigger", cancellationToken, text: JsonSerializer.Serialize(signal, EngineSettings.JsonOptions));
+    }
     public async Task<GameCheckpoint> GetCheckpointAsync(CancellationToken cancellationToken = default) =>
         (await ExecuteAsync("checkpoint", cancellationToken).ConfigureAwait(false)).Checkpoint
         ?? throw new InvalidDataException("Состояние игры нельзя сохранить.");

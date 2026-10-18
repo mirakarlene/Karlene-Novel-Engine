@@ -8,6 +8,8 @@ namespace KNE;
 public sealed class UserSettings
 {
     public string EditorPath { get; set; } = "";
+    /// <summary>The single directory whose immediate children are KNE projects.</summary>
+    public string ProjectsStoragePath { get; set; } = "";
     public List<string> RecentProjects { get; set; } = [];
 
     public void RememberProject(string path)
@@ -38,6 +40,7 @@ public sealed class UserSettingsStore
                 var settings = JsonSerializer.Deserialize<UserSettings>(await File.ReadAllTextAsync(SettingsPath))
                     ?? throw new InvalidDataException("Файл настроек содержит null.");
                 settings.EditorPath ??= "";
+                settings.ProjectsStoragePath ??= "";
                 settings.RecentProjects = (settings.RecentProjects ?? []).Where(p => !string.IsNullOrWhiteSpace(p))
                     .Distinct(StringComparer.OrdinalIgnoreCase).Take(8).ToList();
                 return settings;

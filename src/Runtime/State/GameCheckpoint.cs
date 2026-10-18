@@ -21,6 +21,7 @@ public interface IGameSession : IAsyncDisposable
     Task SubmitInputAsync(string text, bool cancel = false, CancellationToken cancellationToken = default) =>
         Task.FromException(new InvalidOperationException("Сессия не поддерживает ввод текста."));
     Task TickAsync(double seconds, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    Task TriggerAsync(TriggerSignal signal, CancellationToken cancellationToken = default) => Task.CompletedTask;
     Task ProcessCommandAsync(string command, CancellationToken cancellationToken = default);
     Task<GameCheckpoint> GetCheckpointAsync(CancellationToken cancellationToken = default);
     Task RestoreAsync(GameCheckpoint checkpoint, CancellationToken cancellationToken = default);

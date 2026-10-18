@@ -22,7 +22,9 @@
                 <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="RecentProjectsList">
                         <ItemsControl.ItemTemplate><DataTemplate>
-                            <Button Content="{Binding}" Tag="{Binding}" HorizontalContentAlignment="Left" Padding="10,6" Margin="5,2" Click="OpenRecentProject_Click"/>
+                            <Button Content="{Binding Label}" Tag="{Binding Path}" ToolTip="{Binding Path}" HorizontalContentAlignment="Left" Padding="10,6" Margin="5,2" Click="OpenRecentProject_Click">
+                                <Button.Style><Style TargetType="Button"><Setter Property="Opacity" Value="1"/><Style.Triggers><DataTrigger Binding="{Binding IsAvailable}" Value="False"><Setter Property="Opacity" Value="0.4"/></DataTrigger></Style.Triggers></Style></Button.Style>
+                            </Button>
                         </DataTemplate></ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </ScrollViewer>
@@ -111,6 +113,9 @@
                     <TextBox x:Name="TxtEditorPath" Width="380" Padding="6" VerticalContentAlignment="Center"/>
                 </DockPanel>
                 <TextBlock Text="Укажите .exe. Пустое поле — стандартный Блокнот." Foreground="Gray" Margin="0,8,0,20"/>
+                <TextBlock Text="Хранилище проектов" FontSize="16" Margin="0,0,0,8"/>
+                <DockPanel><Button Content="Выбрать…" DockPanel.Dock="Right" Padding="12,6" Margin="10,0,0,0" Click="BtnSelectStorage_Click"/><TextBox x:Name="TxtProjectsStorage" Width="380" Padding="6"/></DockPanel>
+                <TextBlock Text="Проекты создаются и обнаруживаются непосредственно в этой папке." Foreground="Gray" Margin="0,8,0,20"/>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Сохранить" Padding="14,10" Margin="0,0,10,0" Click="BtnSaveSettings_Click"/>
                     <Button Content="Назад" Padding="14,10" Click="BtnSettingsBack_Click"/>

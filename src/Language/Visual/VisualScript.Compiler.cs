@@ -6,7 +6,7 @@ namespace KNE;
 
 public sealed partial class VisualScript
 {
-    private string CompileCore(bool editorPreview)
+    private string CompileCore(bool editorPreview, bool subsystem)
     {
         ValidateStructure();
         var starts = Nodes.Where(n => n.Kind == ScriptNodeKind.Start).ToArray();
@@ -14,7 +14,7 @@ public sealed partial class VisualScript
         var map = Nodes.ToDictionary(n => n.Id, StringComparer.Ordinal);
         foreach (var node in Nodes)
         {
-            ValidateCommand(node);
+            if (!(subsystem && node.Kind == ScriptNodeKind.End)) ValidateCommand(node);
             foreach (var (_, target) in node.Outputs())
             {
                 if (node.Kind == ScriptNodeKind.Comment && target == null) continue;
@@ -22,6 +22,7 @@ public sealed partial class VisualScript
                     Fail(node, "соедините все выходы с существующими блоками");
                 if (map[target!].Kind == ScriptNodeKind.Start) Fail(node, "нельзя соединять выход с блоком «Начало»");
                 if (map[target!].Kind == ScriptNodeKind.Comment) Fail(node, "комментарии не имеют портов и не подключаются к схеме");
+                if (map[target!].IsTrigger) Fail(node, "триггер не принимает входящие связи");
             }
         }
         var visited = new HashSet<string>(StringComparer.Ordinal);
@@ -36,6 +37,7 @@ public sealed partial class VisualScript
             active.Remove(node.Id);
         }
         Visit(starts[0]);
+        foreach (var trigger in Nodes.Where(node => node.IsTrigger)) Visit(trigger);
         if (Nodes.Any(n => !visited.Contains(n.Id) && n.Kind != ScriptNodeKind.Comment))
             throw new InvalidDataException("Есть блоки, недостижимые из «Начала». Соедините или удалите их.");
 
@@ -50,7 +52,8 @@ public sealed partial class VisualScript
             void Line(string value) => code.Append("                ").Append(value).Append('\n');
             Line($"if kne_runtime_node then kne_runtime_node({Quote(node.Id)}) end");
             if (editorPreview) Line($"kne_editor_node({Quote(node.Id)})");
-            string command = Command(node);
+            // Keep the generated line spans stable so subsystem failures use the same frame IDs.
+            string command = subsystem && node.Kind == ScriptNodeKind.End && node.EndAction != ScriptEndAction.Return ? "do end" : Command(node);
             if (command.Length > 0) Line(command);
             if (editorPreview && node.Kind is ScriptNodeKind.Start or ScriptNodeKind.End or ScriptNodeKind.SetVariable or ScriptNodeKind.Condition or ScriptNodeKind.Comment or ScriptNodeKind.SetFlag)
                 Line("kne_editor_pause()");
@@ -137,8 +140,11 @@ public sealed partial class VisualScript
                     break;
             }
         }
-        code.Append("            else\n                error('Неизвестный блок')\n            end\n        end\n    end\n")
-            .Append("    __kne_run(").Append(Quote(starts[0].Id)).Append(", nil)\nend\n");
+        code.Append("            else\n                error('Неизвестный блок')\n            end\n        end\n    end\n");
+        foreach (var trigger in Nodes.Where(node => node.IsTrigger))
+            code.Append("    kne_on_event(").Append(Quote(System.Text.Json.JsonSerializer.Serialize(trigger.Trigger, EngineSettings.JsonOptions)))
+                .Append(", function() __kne_run(").Append(Quote(trigger.Next!)).Append(", nil) end)\n");
+        code.Append("    __kne_run(").Append(Quote(starts[0].Id)).Append(", nil)\nend\n");
         return code.ToString();
     }
 
@@ -170,6 +176,7 @@ public sealed partial class VisualScript
         ScriptNodeKind.MasterVolume => $"set_master_volume({Number(node.Amount)})",
         ScriptNodeKind.GotoScene => $"goto_scene({Quote(node.Path)})",
         ScriptNodeKind.CallScene => $"call_scene({Quote(node.Path)})",
+        ScriptNodeKind.Subsystem => $"kne_subsystem({Quote(node.Path)}, {(node.WaitForSubsystem ? "true" : "false")})",
         ScriptNodeKind.Title => $"show_title({Quote(node.Text)})",
         ScriptNodeKind.MoveBackground => $"move_visual('background', {Number(node.OffsetX)}, {Number(node.OffsetY)}, {Number(node.Duration)})",
         ScriptNodeKind.MoveCharacter => $"move_visual('sprite', {Number(node.OffsetX)}, {Number(node.OffsetY)}, {Number(node.Duration)})",
@@ -240,6 +247,14 @@ public sealed partial class VisualScript
 
     private static void ValidateCommand(ScriptNode node)
     {
+        if (node.Kind == ScriptNodeKind.Subsystem && (string.IsNullOrWhiteSpace(node.Path) || !ScriptDocument.IsVisualPath(node.Path))) Fail(node, "подсистема должна ссылаться на файл .knegraph");
+        if (node.IsTrigger)
+        {
+            if (node.Trigger == null) Fail(node, "настройте событие триггера");
+            string expected = node.Kind switch { ScriptNodeKind.TriggerButton => "button", ScriptNodeKind.TriggerHotspot => "hotspot", ScriptNodeKind.TriggerTextClosed => "text_closed", _ => "key" };
+            if (node.Trigger!.Kind != expected) Fail(node, "тип события не соответствует блоку триггера");
+            if (node.Kind == ScriptNodeKind.TriggerKey && TriggerSettings.NormalizeKeys(node.Trigger.Keys).Contains('+')) Fail(node, "для сочетания используйте «При комбинации нажатий»");
+        }
         if (node.Kind == ScriptNodeKind.RegisterCharacter && node.Character == null) Fail(node, "задайте профиль персонажа");
         if (node.Kind == ScriptNodeKind.UpdateCharacter && node.Character == null) Fail(node, "задайте новый профиль с ID существующего персонажа");
         if (node.Kind == ScriptNodeKind.SetSpeaker && string.IsNullOrWhiteSpace(node.SpeakerId)) Fail(node, "выберите ID зарегистрированного персонажа");
