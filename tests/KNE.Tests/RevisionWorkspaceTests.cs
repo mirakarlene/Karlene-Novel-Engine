@@ -114,12 +114,12 @@ public sealed class RevisionWorkspaceTests
     [InlineData("{}")]
     [InlineData("{\"Theme\":null,\"HiddenProjects\":null,\"ProjectLastOpened\":null}")]
     [InlineData("{\"Theme\":\"unknown\"}")]
-    public async Task Settings_LegacyHistoryAndInvalidTheme_LoadSafeLightDefaults(string json)
+    public async Task Settings_LegacyHistoryAndInvalidTheme_LoadSafeKneDefaults(string json)
     {
         using var fixture = new Fixture();
         File.WriteAllText(fixture.Store.SettingsPath, json);
         var settings = await fixture.Store.LoadAsync();
-        Assert.Equal("light", settings.Theme);
+        Assert.Equal("kne", settings.Theme);
         Assert.Empty(settings.HiddenProjects); Assert.Empty(settings.ProjectLastOpened);
         var project = Assert.Single(await ProjectStorage.DiscoverAsync(new UserSettings { ProjectsStoragePath = fixture.Root }));
         Assert.Null(project.LastOpened); Assert.Equal("Ещё не открывался в KNE", project.LastOpenedLabel);
@@ -204,7 +204,10 @@ public sealed class RevisionWorkspaceTests
             Assert.Equal(dark, ((SolidColorBrush)first.Background).Color);
             Assert.Equal(light, ((SolidColorBrush)second.Background).Color);
             EditorTheme.Apply(first, "unsupported");
-            Assert.Equal(light, ((SolidColorBrush)first.Background).Color);
+            Color fallback = ((SolidColorBrush)first.Background).Color;
+            EditorTheme.Apply(first, "kne");
+            Assert.Equal(fallback, ((SolidColorBrush)first.Background).Color);
+            Assert.NotEqual(light, fallback);
         }
         finally { first.Close(); second.Close(); }
         return Task.CompletedTask;

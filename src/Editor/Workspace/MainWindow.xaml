@@ -3,18 +3,20 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:KNE"
         Title="Karlene Novel Engine" Height="950" Width="1500" MinHeight="700" MinWidth="1100" Background="{DynamicResource Editor.Background}"
-        Loaded="Window_Loaded" Closed="Window_Closed" Closing="Window_Closing" PreviewKeyDown="MainWindow_PreviewKeyDown">
-    <Window.Resources><ResourceDictionary><ResourceDictionary.MergedDictionaries><ResourceDictionary Source="../Themes/EditorStyles.xaml"/></ResourceDictionary.MergedDictionaries></ResourceDictionary></Window.Resources>
+        Loaded="Window_Loaded" Closed="Window_Closed" Closing="Window_Closing" PreviewKeyDown="MainWindow_PreviewKeyDown" PreviewMouseMove="WelcomePointer_Move" MouseLeave="WelcomePointer_Leave">
+    <Window.Resources><ResourceDictionary><ResourceDictionary.MergedDictionaries><ResourceDictionary Source="../Themes/Theme.xaml"/><ResourceDictionary Source="../Themes/EditorStyles.xaml"/></ResourceDictionary.MergedDictionaries></ResourceDictionary></Window.Resources>
     <Grid>
-    <DockPanel Margin="20" Background="{DynamicResource Editor.Background}">
+    <Grid x:Name="WelcomeBackdrop" IsHitTestVisible="False" Visibility="{Binding Visibility, ElementName=WelcomePanel}" Background="{DynamicResource Editor.WelcomeBackground}">
+        <local:WelcomeBubbles x:Name="WelcomeBubbleField" Ink="{DynamicResource KNE.PinkBrush}" Accent="{DynamicResource KNE.AccentBrush}"/>
+    </Grid>
+    <DockPanel Margin="20" Background="Transparent">
         <TextBlock x:Name="OperationStatus" DockPanel.Dock="Bottom" Margin="0,12,0,0" TextWrapping="Wrap"/>
         <Grid>
             <StackPanel x:Name="WelcomePanel" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="Добро пожаловать в KNE" FontSize="28" FontWeight="Bold" TextAlignment="Center"/>
-                <TextBlock Text="Karlene Novel Engine — создание визуальных новелл" FontSize="16"
-                           TextWrapping="Wrap" TextAlignment="Center" Margin="0,12,0,24"/>
+                <local:WatercolorLogo x:Name="WelcomeLogo" Height="125" Width="960" HorizontalAlignment="Center" StartColor="{DynamicResource KNE.AccentColor}" EndColor="{DynamicResource KNE.PinkColor}" Margin="0,0,0,12" AutomationProperties.Name="Karlene Novel Engine"/>
+                <TextBlock x:Name="WelcomeGreeting" Text="Добро пожаловать в KNE" FontSize="23" FontWeight="Medium" Foreground="{DynamicResource Editor.Subtitle}" TextAlignment="Center" Margin="0,0,0,24"/>
                 <WrapPanel HorizontalAlignment="Center">
-                    <Button Content="Создать проект" Padding="14,10" Margin="5" Click="BtnCreateProject_Click"/>
+                    <Button x:Name="CreateProjectButton" Content="Создать проект" Style="{StaticResource KNE.PrimaryButton}" Padding="20,12" Margin="5" Click="BtnCreateProject_Click"/>
                     <Button Content="Открыть проект" Padding="14,10" Margin="5" Click="BtnSelectProject_Click"/>
                     <Button Content="Настройки" Padding="14,10" Margin="5" Click="BtnSettings_Click"/>
                     <Button Content="Помощь" Padding="14,10" Margin="5" Click="BtnHelp_Click"/>
@@ -35,7 +37,7 @@
                 </ScrollViewer>
             </StackPanel>
 
-            <Grid x:Name="ProjectPanel" Visibility="Collapsed">
+            <Grid x:Name="ProjectPanel" Visibility="Collapsed" Background="{DynamicResource Editor.Background}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
@@ -112,6 +114,9 @@
 
             <StackPanel x:Name="SettingsPanel" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <TextBlock Text="Настройки" FontSize="28" FontWeight="Bold" Margin="0,0,0,20"/>
+                <TextBlock Text="Имя пользователя" FontSize="16" Margin="0,0,0,8"/>
+                <TextBox x:Name="TxtUserName" MaxLength="80" Padding="6" Margin="0,0,0,8"/>
+                <TextBlock Text="Необязательно. Будет показано в приветствии KNE." Foreground="{DynamicResource Editor.Muted}" Margin="0,0,0,20"/>
                 <TextBlock Text="Путь к текстовому редактору" FontSize="16" Margin="0,0,0,8"/>
                 <DockPanel>
                     <Button Content="Выбрать…" DockPanel.Dock="Right" Padding="12,6" Margin="10,0,0,0" Click="BtnSelectEditor_Click"/>
@@ -122,7 +127,7 @@
                 <DockPanel><Button Content="Выбрать…" DockPanel.Dock="Right" Padding="12,6" Margin="10,0,0,0" Click="BtnSelectStorage_Click"/><TextBox x:Name="TxtProjectsStorage" Width="380" Padding="6"/></DockPanel>
                 <TextBlock Text="Проекты создаются и обнаруживаются непосредственно в этой папке." Foreground="{DynamicResource Editor.Muted}" Margin="0,8,0,20"/>
                 <TextBlock Text="Тема оформления" FontSize="16" Margin="0,0,0,8"/>
-                <ComboBox x:Name="ThemeInput" SelectedValuePath="Tag" Margin="0,0,0,20" SelectionChanged="ThemeInput_SelectionChanged"><ComboBoxItem Content="Светлая" Tag="light"/><ComboBoxItem Content="Тёмная" Tag="dark"/></ComboBox>
+                <ComboBox x:Name="ThemeInput" DisplayMemberPath="Label" SelectedValuePath="Id" Margin="0,0,0,20" SelectionChanged="ThemeInput_SelectionChanged"/>
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Сохранить" Padding="14,10" Margin="0,0,10,0" Click="BtnSaveSettings_Click"/>
                     <Button Content="Назад" Padding="14,10" Click="BtnSettingsBack_Click"/>

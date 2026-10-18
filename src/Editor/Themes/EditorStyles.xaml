@@ -1,5 +1,4 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Editor.Text}"/></Style>
     <Style x:Key="Editor.Control" TargetType="Control">
         <Setter Property="Background" Value="{DynamicResource Editor.Surface}"/><Setter Property="Foreground" Value="{DynamicResource Editor.Text}"/><Setter Property="BorderBrush" Value="{DynamicResource Editor.Border}"/>
     </Style>
@@ -9,7 +8,7 @@
         <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
             <Grid>
                 <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="4"/>
-                <ContentPresenter x:Name="SelectedContent" Margin="8,4,28,4" VerticalAlignment="Center" IsHitTestVisible="False" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"/>
+                <ContentPresenter x:Name="SelectedContent" Margin="8,4,28,4" VerticalAlignment="Center" IsHitTestVisible="False" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}" ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}" RecognizesAccessKey="True"/>
                 <TextBox x:Name="PART_EditableTextBox" Margin="6,2,26,2" Visibility="Collapsed" Background="{TemplateBinding Background}" Foreground="{TemplateBinding Foreground}" BorderThickness="0" VerticalContentAlignment="Center"/>
                 <ToggleButton x:Name="DropDownToggle" Focusable="False" ClickMode="Press" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
                     <ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="Transparent"><Path Data="M 0,0 L 4,4 L 8,0" Stroke="{DynamicResource Editor.Text}" StrokeThickness="1.5" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"/></Border></ControlTemplate></ToggleButton.Template>
@@ -34,8 +33,28 @@
     <Style TargetType="ListBoxItem" BasedOn="{StaticResource Editor.Control}"/>
     <Style TargetType="TreeView" BasedOn="{StaticResource Editor.Control}"/>
     <Style TargetType="TreeViewItem" BasedOn="{StaticResource Editor.Control}"/>
-    <Style TargetType="TabControl" BasedOn="{StaticResource Editor.Control}"/>
-    <Style TargetType="TabItem" BasedOn="{StaticResource Editor.Control}"/>
+    <Style TargetType="TabControl" BasedOn="{StaticResource Editor.Control}">
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabControl">
+            <Grid KeyboardNavigation.TabNavigation="Local"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <TabPanel x:Name="HeaderPanel" IsItemsHost="True" KeyboardNavigation.TabIndex="1"/>
+                <Border Grid.Row="1" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="0,1,0,0"><ContentPresenter x:Name="PART_SelectedContentHost" ContentSource="SelectedContent" Margin="{TemplateBinding Padding}"/></Border>
+            </Grid>
+        </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style TargetType="TabItem" BasedOn="{StaticResource Editor.Control}">
+        <Setter Property="Background" Value="{DynamicResource Editor.Background}"/><Setter Property="Padding" Value="10,7"/>
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem">
+            <Border x:Name="TabSurface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="7,7,0,0" Padding="{TemplateBinding Padding}" Margin="0,0,3,0">
+                <ContentPresenter x:Name="HeaderContent" ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="TabSurface" Property="Background" Value="{DynamicResource Editor.Hover}"/></Trigger>
+                <Trigger Property="IsSelected" Value="True"><Setter TargetName="TabSurface" Property="Background" Value="{DynamicResource Editor.Selection}"/><Setter TargetName="TabSurface" Property="BorderBrush" Value="{DynamicResource KNE.AccentBrush}"/></Trigger>
+                <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="TabSurface" Property="BorderBrush" Value="{DynamicResource KNE.PinkBrush}"/></Trigger>
+                <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate></Setter.Value></Setter>
+    </Style>
     <Style TargetType="DataGrid" BasedOn="{StaticResource Editor.Control}"><Setter Property="RowBackground" Value="{DynamicResource Editor.Surface}"/><Setter Property="AlternatingRowBackground" Value="{DynamicResource Editor.Background}"/></Style>
     <Style TargetType="DataGridRow" BasedOn="{StaticResource Editor.Control}"/>
     <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource Editor.Control}"/>
@@ -43,15 +62,23 @@
     <Style TargetType="RadioButton"><Setter Property="Foreground" Value="{DynamicResource Editor.Text}"/></Style>
     <Style TargetType="Button" BasedOn="{StaticResource Editor.Control}">
         <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
-            <Border x:Name="Surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" Padding="{TemplateBinding Padding}">
-                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" RecognizesAccessKey="True"/>
+            <Border x:Name="Surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7">
+                <Grid>
+                    <Border x:Name="HoverSurface" CornerRadius="7" Background="{DynamicResource KNE.AccentBrush}"><Border.OpacityMask><SolidColorBrush Color="#00FFFFFF"/></Border.OpacityMask></Border>
+                    <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" RecognizesAccessKey="True"/>
+                </Grid>
             </Border>
             <ControlTemplate.Triggers>
-                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource Editor.Hover}"/></Trigger>
-                <Trigger Property="IsPressed" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource Editor.Selection}"/></Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="White"/><Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource KNE.PinkBrush}"/>
+                    <Trigger.EnterActions><BeginStoryboard x:Name="HoverIn"><Storyboard><ColorAnimation Storyboard.TargetName="HoverSurface" Storyboard.TargetProperty="(Border.OpacityMask).(SolidColorBrush.Color)" To="#FFFFFFFF" Duration="0:0:0.22"/></Storyboard></BeginStoryboard></Trigger.EnterActions>
+                    <Trigger.ExitActions><BeginStoryboard x:Name="HoverOut"><Storyboard><ColorAnimation Storyboard.TargetName="HoverSurface" Storyboard.TargetProperty="(Border.OpacityMask).(SolidColorBrush.Color)" To="#00FFFFFF" Duration="0:0:0.22"/></Storyboard></BeginStoryboard></Trigger.ExitActions>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True"><Setter TargetName="Surface" Property="Opacity" Value="0.82"/></Trigger>
                 <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
-                <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="#7AA3E0"/></Trigger>
+                <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource KNE.PinkBrush}"/></Trigger>
             </ControlTemplate.Triggers>
         </ControlTemplate></Setter.Value></Setter>
     </Style>
+    <Style x:Key="KNE.PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Background" Value="{DynamicResource KNE.AccentBrush}"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderBrush" Value="{DynamicResource KNE.AccentBrush}"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
 </ResourceDictionary>
