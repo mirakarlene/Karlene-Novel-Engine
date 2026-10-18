@@ -1,11 +1,38 @@
 using System.Windows;
+using System.Diagnostics;
+using System.IO;
+using System.Globalization;
 
 namespace KNE
 {
     public partial class App : Application
     {
+        private EngineDiagnostics? diagnostics;
+        private int recovering;
+
         protected override void OnStartup(StartupEventArgs e)
         {
+            if (e.Args.Contains("--disable-plugins", StringComparer.Ordinal))
+                Environment.SetEnvironmentVariable(EngineLaunch.PluginsEnvironment, "1");
+            if (e.Args.Length == 4 && e.Args[0] == "--engine-watchdog")
+            {
+                ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                try { EngineLaunch.WatchAsync(int.Parse(e.Args[1], CultureInfo.InvariantCulture), long.Parse(e.Args[2], CultureInfo.InvariantCulture), e.Args[3]).GetAwaiter().GetResult(); }
+                catch (Exception error) { System.Diagnostics.Trace.TraceError("Engine watchdog: {0}", error); }
+                Shutdown(); return;
+            }
+            if (e.Args.Length == 2 && e.Args[0] == "--engine-recovery")
+            {
+                ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                try
+                {
+                    var journal = EngineDiagnostics.Read(e.Args[1]);
+                    var report = journal.Failure ?? EngineDiagnostics.RecordUnexpectedExit(e.Args[1], -1)!;
+                    ShowRecovery(report, Path.ChangeExtension(e.Args[1], ".txt"));
+                }
+                catch (Exception error) { MessageBox.Show("Не удалось прочитать отчёт о сбое движка. " + error.Message, "Ошибка диагностики"); Shutdown(1); }
+                return;
+            }
             if (e.Args.Length == 1 && e.Args[0] == "--analyze-syntax")
             {
                 int exitCode = Task.Run(SyntaxCheckWorker.RunAsync).GetAwaiter().GetResult();
@@ -17,9 +44,80 @@ namespace KNE
                 Shutdown(exitCode);
                 return;
             }
-            base.OnStartup(e);
-            MainWindow = new MainWindow();
-            MainWindow.Show();
+            DispatcherUnhandledException += (_, problem) =>
+            {
+                problem.Handled = true;
+                PresentFailure(problem.Exception, "Необработанная ошибка интерфейса");
+            };
+            AppDomain.CurrentDomain.UnhandledException += (_, problem) =>
+            {
+                // The CLR will terminate this process. Persist now; the separate helper presents the report.
+                diagnostics?.Report(problem.ExceptionObject as Exception ?? new Exception("Неизвестная ошибка фонового потока"), "Необработанная ошибка фонового потока");
+            };
+            TaskScheduler.UnobservedTaskException += (_, problem) =>
+            {
+                problem.SetObserved();
+                if (!Dispatcher.HasShutdownStarted)
+                    Dispatcher.BeginInvoke(new Action(() => PresentFailure(problem.Exception, "Необработанная ошибка задачи")));
+            };
+            try
+            {
+                using var process = Process.GetCurrentProcess();
+                string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KNE", "diagnostics");
+                diagnostics = new(Path.Combine(directory, $"engine-{process.Id}-{Guid.NewGuid():N}.json"), process.Id, process.StartTime.ToUniversalTime().Ticks, !EngineLaunch.PluginsEnabled);
+                EngineDiagnostics.Current = diagnostics;
+                try
+                {
+                    using (Process.Start(EngineLaunch.CreateStartInfo("--engine-watchdog", process.Id.ToString(CultureInfo.InvariantCulture), process.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture), diagnostics.SessionPath))) { }
+                }
+                catch (Exception helperError) { diagnostics.Record("Наблюдатель недоступен", helperError.Message); }
+                base.OnStartup(e);
+                MainWindow = new MainWindow();
+                if (!EngineLaunch.PluginsEnabled) MainWindow.Title += " · Без плагинов";
+                MainWindow.Show();
+                diagnostics.Record("Интерфейс готов");
+            }
+            catch (Exception error) { PresentFailure(error, "Ошибка запуска движка"); }
+        }
+
+        private void PresentFailure(Exception error, string kind)
+        {
+            if (Interlocked.Exchange(ref recovering, 1) != 0) { diagnostics?.Report(error, "Повторный сбой окна восстановления"); Shutdown(1); return; }
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var report = diagnostics?.Report(error, kind) ?? new EngineFailureReport(DateTimeOffset.UtcNow, kind, error.Message, error.GetType().FullName ?? "", error.ToString(),
+                System.Runtime.InteropServices.RuntimeInformation.OSDescription, System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription, Environment.ProcessId, !EngineLaunch.PluginsEnabled, "Не открыт", GC.GetTotalMemory(false), []);
+            if (diagnostics != null && diagnostics.PersistenceError == null)
+            {
+                try
+                {
+                    // Leave the damaged dispatcher and its timers/workers behind before presenting recovery.
+                    using var recoveryProcess = Process.Start(EngineLaunch.RecoveryInfo(diagnostics.SessionPath))
+                        ?? throw new IOException("Не удалось запустить окно восстановления.");
+                    Shutdown(1); return;
+                }
+                catch (Exception launchError) { diagnostics.Record("Запуск окна восстановления недоступен", launchError.Message); }
+            }
+            foreach (Window window in Windows) { window.IsEnabled = false; window.Hide(); }
+            ShowRecovery(report, diagnostics?.PersistenceError is { } persistenceError ? "Отчёт не сохранён: " + persistenceError : diagnostics?.ReportPath ?? "Отчёт не удалось сохранить");
+        }
+
+        private void ShowRecovery(EngineFailureReport report, string reportPath)
+        {
+            var recovery = new EngineRecoveryWindow(report, reportPath, action =>
+            {
+                if (action != EngineRecoveryAction.Close)
+                    using (Process.Start(EngineLaunch.RestartInfo(action == EngineRecoveryAction.RestartWithoutPlugins))) { }
+                Shutdown();
+            });
+            MainWindow = recovery;
+            recovery.Show();
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            diagnostics?.Complete();
+            EngineDiagnostics.Current = null;
+            base.OnExit(e);
         }
     }
 }

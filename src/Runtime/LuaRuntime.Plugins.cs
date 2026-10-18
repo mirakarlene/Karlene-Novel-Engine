@@ -12,13 +12,24 @@ public sealed partial class LuaRuntime
     private void InitializePlugins()
     {
         DisposePlugins();
-        pluginCompiler = new();
+        if (pluginsEnabled) pluginCompiler = new();
+        lua!["kne_plugins_enabled"] = pluginsEnabled;
         Register(nameof(ReadPluginForLua), "kne_plugin_source");
         Register(nameof(ExecuteCSharpPlugin), "kne_plugin_csharp");
         lua!.DoString("""
             do
+                if not kne_plugins_enabled then
+                    local function disabled() error("Внешние Lua-модули отключены в режиме без плагинов", 2) end
+                    require, dofile, loadfile = disabled, disabled, disabled
+                    package.loadlib = disabled
+                    package.cpath = ""
+                end
                 local loaded, loading = {}, {}
                 local function execute(path, kind, once)
+                    if not kne_plugins_enabled then
+                        print_to_ui("Плагин отключён в безопасном режиме: " .. tostring(path))
+                        return
+                    end
                     for level = 2, 32 do
                         local info = debug.getinfo(level, "Sl")
                         if not info then break end
@@ -70,6 +81,8 @@ public sealed partial class LuaRuntime
     {
         try
         {
+            if (!pluginsEnabled) return ["", "", "Сторонние плагины отключены в этом запуске движка."];
+            EngineDiagnostics.Trace("Чтение плагина", relative);
             string full = PathSafety.ResolveRelative(project.Path, relative);
             string extension = Path.GetExtension(full).ToLowerInvariant();
             bool allowed = kind switch { "lua" => extension == ".lua", "cs" => extension == ".cs", "script" => extension is ".lua" or ".krl" or ".cs", _ => false };
@@ -90,6 +103,8 @@ public sealed partial class LuaRuntime
     /// <returns>An empty string on success or a script-safe failure message.</returns>
     public string ExecuteCSharpPlugin(string relative, string source)
     {
+        if (!pluginsEnabled) return "Сторонние плагины отключены в этом запуске движка.";
+        EngineDiagnostics.Trace("Выполнение C#-плагина", relative);
         using var context = new PluginContext(this);
         try
         {

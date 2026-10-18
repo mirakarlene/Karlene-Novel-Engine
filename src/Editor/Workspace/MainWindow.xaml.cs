@@ -41,6 +41,7 @@ public partial class MainWindow : Window
 
     private async void Window_Closing(object? sender, CancelEventArgs e)
     {
+        if (EngineDiagnostics.Current?.Snapshot.Failure != null) { closeApproved = true; return; }
         if (closeApproved || (SceneEditor.Document == null && !busy && !LibraryView.HasPendingPreferenceSave)) return;
         e.Cancel = true;
         if (checkingClose || busy) return;
@@ -83,6 +84,7 @@ public partial class MainWindow : Window
         busy = true;
         WelcomePanel.IsEnabled = ProjectPanel.IsEnabled = SettingsPanel.IsEnabled = false;
         OperationStatus.Text = status;
+        EngineDiagnostics.Trace("Операция редактора", status);
         try
         {
             await operation();
@@ -128,6 +130,7 @@ public partial class MainWindow : Window
             FilesDataGrid.Visibility = Visibility.Visible;
         }
         currentProject = loaded;
+        EngineDiagnostics.Current?.SetProject(loaded.Title, loaded.Path);
         ProjectTitleTextBlock.Text = loaded.Name;
         await UpdateFileViewAsync();
         if (closed) return;

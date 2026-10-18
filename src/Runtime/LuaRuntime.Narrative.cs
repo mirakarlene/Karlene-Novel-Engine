@@ -11,6 +11,8 @@ public sealed partial class LuaRuntime
     {
         characters.Clear();
         Register(nameof(RegisterCharacterForLua), "kne_register_character");
+        Register(nameof(UpdateCharacterForLua), "kne_update_character");
+        Register(nameof(CheckCharacterForLua), "kne_check_character");
         Register(nameof(PrepareDialogueForLua), "kne_prepare_dialogue");
         Register(nameof(ClearNarrativeText), "kne_clear_remembered_text");
         lua!.DoString(NarrativeRuntimeLua.Source, "KNE narrative");
@@ -36,6 +38,24 @@ public sealed partial class LuaRuntime
         }
         catch (Exception error) when (error is ArgumentException or JsonException) { return "register_character: " + error.Message; }
     }
+
+    /// <summary>Replaces an existing character's presentation without changing its identity.</summary>
+    public string UpdateCharacterForLua(string json)
+    {
+        try
+        {
+            var character = ReadNarrative<CharacterProfile>(json);
+            character.Validate();
+            if (!characters.ContainsKey(character.Id)) throw new ArgumentException("Персонаж не зарегистрирован: " + character.Id);
+            characters[character.Id] = character;
+            return "";
+        }
+        catch (Exception error) when (error is ArgumentException or JsonException) { return "update_character: " + error.Message; }
+    }
+
+    /// <summary>Checks that a default speaker references a registered character.</summary>
+    public string CheckCharacterForLua(string id) => id is not null && characters.ContainsKey(id)
+        ? "" : "Персонаж не зарегистрирован: " + id;
 
     /// <summary>Returns resolved speaker, immutable profile JSON, effect JSON and an error string.</summary>
     public string[] PrepareDialogueForLua(string speaker, string? characterId, string? effectJson)

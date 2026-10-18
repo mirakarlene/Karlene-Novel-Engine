@@ -185,7 +185,7 @@ public sealed class GameplayUiTests
                     Assert.Equal(TextAlignment.Right, text.TextAlignment); Assert.Equal(Color.FromRgb(32, 192, 128), Assert.IsType<SolidColorBrush>(text.Foreground).Color);
                     var choices = Find<StackPanel>(owner, "ChoicePanel");
                     Assert.IsType<Grid>(choices.Parent); Assert.Equal(new Thickness(70, 280, 0, 0), choices.Margin);
-                    var first = Assert.IsType<Button>(choices.Children[0]); first.ApplyTemplate();
+                    var first = Assert.IsAssignableFrom<Button>(choices.Children[0]); first.ApplyTemplate();
                     Assert.Equal(310, first.Width); Assert.Equal(50, first.Height); Assert.Equal(FontWeights.SemiBold, first.FontWeight);
                     Assert.Equal(new CornerRadius(15), ((Border)first.Template.FindName("ConfiguredButtonBorder", first)).CornerRadius);
                     Assert.Equal(TextAlignment.Right, VisualText(first)!.TextAlignment);
@@ -197,7 +197,7 @@ public sealed class GameplayUiTests
                 var previewSave = previewScene.Children.OfType<Button>().Single(button => Equals(button.Content, "Сохранить"));
                 Assert.Equal(gameSave.Width, previewSave.Width); Assert.Equal(gameSave.Margin, previewSave.Margin); Assert.False(previewSave.IsHitTestVisible);
                 int selected = 0; preview.SceneChoiceRequested += (_, option) => selected = option;
-                var previewChoices = Find<StackPanel>(preview, "ChoicePanel"); var existing = Assert.IsType<Button>(previewChoices.Children[1]);
+                var previewChoices = Find<StackPanel>(preview, "ChoicePanel"); var existing = Assert.IsAssignableFrom<Button>(previewChoices.Children[1]);
                 var existingTemplate = existing.Template;
                 existing.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Equal(2, selected);
                 preview.DisplayScene(project, runtime.WindowSettings, runtime.Visuals with
@@ -206,7 +206,7 @@ public sealed class GameplayUiTests
                 }, runtime.Story, false, true);
                 Assert.Same(existing, previewChoices.Children[1]);
                 Assert.Same(existingTemplate, existing.Template);
-                var actualChoice = Assert.IsType<Button>(Find<StackPanel>(game, "ChoicePanel").Children[1]);
+                var actualChoice = Assert.IsAssignableFrom<Button>(Find<StackPanel>(game, "ChoicePanel").Children[1]);
                 actualChoice.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 await Until(() => runtime.Story.Text == "chosen:2" && Field(game, "execution") is null);
                 Assert.Equal("chosen:2", Find<TextBlock>(game, "DialogueText").Text);

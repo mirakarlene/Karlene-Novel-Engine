@@ -47,7 +47,7 @@
             <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
                 <StackPanel x:Name="PropertiesPanel" IsEnabled="False">
                     <TextBlock x:Name="SelectedTitle" Text="Свойства блока" FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                    <StackPanel x:Name="SpeakerField"><TextBlock Text="Говорящий (пусто — рассказчик)" TextWrapping="Wrap"/><TextBox x:Name="SpeakerInput" Margin="0,3,0,5"/><TextBlock x:Name="SpeakerReference" Foreground="#FF536174" TextWrapping="Wrap" Margin="0,0,0,5"/><Button x:Name="SelectCharacterButton" Content="Выбрать персонажа…" Click="SelectCharacter_Click" Margin="0,0,0,5"/><Button x:Name="NarratorButton" Content="Рассказчик / мысль" Click="Narrator_Click" Margin="0,0,0,8"/></StackPanel>
+                    <StackPanel x:Name="SpeakerField"><TextBlock Text="Говорящий (пусто — спикер по умолчанию / рассказчик)" TextWrapping="Wrap"/><TextBox x:Name="SpeakerInput" Margin="0,3,0,5"/><TextBlock x:Name="SpeakerReference" Foreground="#FF536174" TextWrapping="Wrap" Margin="0,0,0,5"/><Button x:Name="SelectCharacterButton" Content="Выбрать персонажа…" Click="SelectCharacter_Click" Margin="0,0,0,5"/><Button x:Name="NarratorButton" Content="Рассказчик / мысль" Click="Narrator_Click" Margin="0,0,0,8"/></StackPanel>
                     <StackPanel x:Name="TextField"><TextBlock Text="Текст / вопрос"/><TextBox x:Name="SceneTextInput" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" Margin="0,3,0,8"/></StackPanel>
                     <StackPanel x:Name="OptionsField"><TextBlock x:Name="OptionsLabel" Text="Ответы — по одному на строку" TextWrapping="Wrap"/><TextBox x:Name="OptionsInput" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" Margin="0,3,0,8"/></StackPanel>
                     <StackPanel x:Name="PathField"><TextBlock x:Name="PathLabel" Text="Путь от корня проекта"/><TextBox x:Name="PathInput" Margin="0,3,0,8"/><Button x:Name="BrowsePathButton" Content="Выбрать ресурс…" Click="BrowseResource_Click" Margin="0,0,0,8"/></StackPanel>
@@ -59,7 +59,7 @@
                     <StackPanel x:Name="ExtendedProperties"/>
                     <Button x:Name="ApplyPropertiesButton" Content="Применить свойства" Click="Apply_Click" Padding="8,5" Margin="0,0,0,6"/>
                     <Button x:Name="DeleteBlockButton" Content="Удалить блок" Click="Delete_Click" Padding="8,5" Margin="0,0,0,8"/>
-                    <TextBlock Text="ПКМ — двигать обзор; Ctrl+колесо и +/− — масштаб. ЛКМ на пустом месте — область выделения; Ctrl/Shift — добавить блок. Тяните порт для связи, край — для размера, заголовок — для переноса. Ctrl+C/V/D — копировать/вставить/дублировать; Ctrl+Z/X — отменить/повторить." Foreground="#FF536174" TextWrapping="Wrap"/>
+                    <TextBlock Text="ПКМ — двигать обзор; Ctrl+колесо и +/− — масштаб. ЛКМ на пустом месте — область выделения; Ctrl/Shift — добавить блок. Тяните порт для связи, край — для размера, заголовок — для переноса. Ctrl+C/V/D — копировать/вставить/дублировать; Ctrl+Z/X — отменить/повторить. Delete — удалить выделенные блоки." Foreground="#FF536174" TextWrapping="Wrap"/>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

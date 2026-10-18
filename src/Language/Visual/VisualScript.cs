@@ -52,6 +52,10 @@ public sealed partial class VisualScript
             var script = JsonSerializer.Deserialize<VisualScript>(json, JsonOptions)
                          ?? throw new InvalidDataException("Блок-схема не должна содержать null.");
             script.DetachLegacyComments();
+            // Narrative conditions already compared a state value to a literal. Retain that behavior
+            // under the new name; old logic conditions stay literal comparisons until explicitly replaced.
+            foreach (var node in script.Nodes?.Where(node => node != null && node.Kind == ScriptNodeKind.Condition && node.Category == "narrative") ?? [])
+                node.Kind = ScriptNodeKind.Branching;
             script.ValidateStructure();
             return script;
         }
@@ -90,7 +94,7 @@ public sealed partial class VisualScript
             if (node.Options == null || node.Options.Count > 20 || node.Options.Any(o => o == null || o.Text == null))
                 throw new InvalidDataException("У выбора должно быть не более 20 вариантов.");
             if (node.Text == null || node.Speaker == null || node.Path == null || node.Variable == null ||
-                node.Value == null || node.Position == null || node.Channel == null || node.Target == null || node.IterationKey == null || node.Category == null || node.ScreenLayer == null || node.UiTarget == null || node.SpeakerId == null)
+                node.Value == null || node.CompareVariable == null || node.Position == null || node.Channel == null || node.Target == null || node.IterationKey == null || node.Category == null || node.ScreenLayer == null || node.UiTarget == null || node.SpeakerId == null)
                 throw new InvalidDataException("Свойства блока не должны содержать null.");
             if (node.Category is not ("" or "terminals" or "narrative" or "logic" or "visual" or "audio" or "async" or "configurations" or "plugins"))
                 throw new InvalidDataException("Неизвестная группа блока.");
@@ -100,7 +104,12 @@ public sealed partial class VisualScript
                 throw new InvalidDataException("Свойство блока слишком длинное (максимум 16000 символов).");
             if (node.Options.Any(option => !double.IsFinite(option.Weight) || option.Weight < 0))
                 Fail(node, "вес ветки должен быть конечным неотрицательным числом");
-            try { node.Character?.Validate(); node.TextEffect?.Validate(); node.Input?.Validate(); }
+            try
+            {
+                node.Character?.Validate(); node.TextEffect?.Validate(); node.Input?.Validate();
+                node.ChoiceSettings?.Validate();
+                foreach (var option in node.Options) option.Lock?.Validate();
+            }
             catch (ArgumentException error) { Fail(node, error.Message); }
             if (node.SpeakerId.Length > 0 && (node.SpeakerId.Length > 128 || !LuaSource.IsIdentifier(node.SpeakerId)))
                 Fail(node, "ID персонажа: латинские буквы, цифры и _, без цифры в начале");
@@ -191,7 +200,8 @@ public enum ScriptNodeKind
     Comment, Title, Switch, While, ForEach, TryCatch, SetFlag, CheckFlag, Random,
     HideBackground, MoveBackground, MoveCharacter, Animation, Shake, Flash, Camera, ShowScreen,
     AudioChannel, StopSound, Voice, MasterVolume, Parallel, Async, Join, Timer, Pause, WaitCondition,
-    IncludeLua, IncludeCs, Script, ConfigureDialogue, ConfigureButton, ClearBackgrounds, ClearSprites, RegisterCharacter, TextPause, ClearText, AutoDialogue, ConsoleWrite, RandomBranch, EffectDialogue, TextInput
+    IncludeLua, IncludeCs, Script, ConfigureDialogue, ConfigureButton, ClearBackgrounds, ClearSprites, RegisterCharacter, TextPause, ClearText, AutoDialogue, ConsoleWrite, RandomBranch, EffectDialogue, TextInput,
+    UpdateCharacter, SetSpeaker, ResetSpeakers, Branching, CompareVariables, TimedChoice
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -245,6 +255,8 @@ public sealed class ScriptNode
 
     /// <summary>Explicit character profile reference; empty uses the manual speaker.</summary>
     public string SpeakerId { get; set; } = "";
+    /// <summary>Explicit narration bypasses an inherited default speaker.</summary>
+    public bool Narration { get; set; }
     /// <summary>Registration parameters; registration does not display a sprite.</summary>
     public CharacterProfile? Character { get; set; }
     /// <summary>Whether the player may skip a timed dialogue or text pause.</summary>
@@ -256,6 +268,9 @@ public sealed class ScriptNode
 
     /// <summary>Player input configuration; null retains the new-block defaults.</summary>
     public TextInputSettings? Input { get; set; }
+
+    /// <summary>Countdown configuration for a timed choice.</summary>
+    public ChoiceSettings? ChoiceSettings { get; set; }
 
     /// <summary>Dialogue text or the question displayed by a choice.</summary>
     public string Text { get; set; } = "";
@@ -274,6 +289,8 @@ public sealed class ScriptNode
 
     /// <summary>Flat key in the runtime state table.</summary>
     public string Variable { get; set; } = "score";
+    /// <summary>Second state key used by a variable-to-variable logic condition.</summary>
+    public string CompareVariable { get; set; } = "other";
 
     /// <summary>Literal text, interpreted according to ValueKind.</summary>
     public string Value { get; set; } = "0";
@@ -329,8 +346,8 @@ public sealed class ScriptNode
     [JsonIgnore]
     public string Title => Kind switch
     {
-        ScriptNodeKind.Start => "Начало", ScriptNodeKind.Dialogue => "Реплика", ScriptNodeKind.Choice => "Выбор",
-        ScriptNodeKind.Condition => "Условие", ScriptNodeKind.SetVariable => "Переменная",
+        ScriptNodeKind.Start => "Начало", ScriptNodeKind.Dialogue => "Реплика", ScriptNodeKind.Choice => "Выбор", ScriptNodeKind.TimedChoice => "Выбор с таймером",
+        ScriptNodeKind.Condition => "Условие (значение, прежний формат)", ScriptNodeKind.Branching => "Ветвление", ScriptNodeKind.CompareVariables => "Условие", ScriptNodeKind.SetVariable => "Переменная",
         ScriptNodeKind.Background => "Фон",
         ScriptNodeKind.Character => "Спрайт", ScriptNodeKind.HideCharacter => "Скрыть спрайт",
         ScriptNodeKind.Music => "Музыка",
@@ -348,7 +365,8 @@ public sealed class ScriptNode
         ScriptNodeKind.IncludeLua => "Подключить .lua", ScriptNodeKind.IncludeCs => "Подключить .cs", ScriptNodeKind.Script => "Скрипт",
         ScriptNodeKind.ConfigureDialogue => "Настроить текстовое окно", ScriptNodeKind.ConfigureButton => "Настроить кнопку",
         ScriptNodeKind.ClearBackgrounds => "Удалить все фоны", ScriptNodeKind.ClearSprites => "Удалить все спрайты",
-        ScriptNodeKind.RegisterCharacter => "Персонаж", ScriptNodeKind.TextPause => "Пауза в тексте",
+        ScriptNodeKind.RegisterCharacter => "Персонаж", ScriptNodeKind.UpdateCharacter => "Изменить персонажа",
+        ScriptNodeKind.SetSpeaker => "Установить спикера", ScriptNodeKind.ResetSpeakers => "Сбросить спикеров", ScriptNodeKind.TextPause => "Пауза в тексте",
         ScriptNodeKind.ClearText => "Очистить текст", ScriptNodeKind.AutoDialogue => "Авто-пропуск",
         ScriptNodeKind.ConsoleWrite => "Запись в консоль", ScriptNodeKind.RandomBranch => "Случайная ветка",
         ScriptNodeKind.EffectDialogue => "Реплика с эффектом", ScriptNodeKind.TextInput => "Ввод текста", _ => "Конец"
@@ -365,13 +383,13 @@ public sealed class ScriptNode
             if (Input is { BranchOnResult: true, HasErrorOutput: true }) yield return ("Ошибка", True);
             if (Input is { BranchOnResult: true, HasCancelOutput: true }) yield return ("Отмена", False);
         }
-        else if (Kind is ScriptNodeKind.Choice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async or ScriptNodeKind.RandomBranch)
+        else if (Kind is ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async or ScriptNodeKind.RandomBranch)
         {
             foreach (var option in Options) yield return (option.Text, option.Target);
             if (Kind == ScriptNodeKind.Switch) yield return ("По умолчанию", False);
-            if (Kind is not (ScriptNodeKind.Choice or ScriptNodeKind.RandomBranch)) yield return ("Далее", Next);
+            if (Kind is not (ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.RandomBranch)) yield return ("Далее", Next);
         }
-        else if (Kind is ScriptNodeKind.Condition or ScriptNodeKind.CheckFlag)
+        else if (Kind is ScriptNodeKind.Condition or ScriptNodeKind.Branching or ScriptNodeKind.CompareVariables or ScriptNodeKind.CheckFlag)
         {
             yield return ("Да", True);
             yield return ("Нет", False);
@@ -397,13 +415,13 @@ public sealed class ScriptNode
             else if (index == 1 && Input?.HasErrorOutput == true) True = target;
             else False = target;
         }
-        else if (Kind is ScriptNodeKind.Choice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async or ScriptNodeKind.RandomBranch)
+        else if (Kind is ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async or ScriptNodeKind.RandomBranch)
         {
             if (index < Options.Count) Options[index].Target = target;
             else if (Kind == ScriptNodeKind.Switch && index == Options.Count) False = target;
             else Next = target;
         }
-        else if (Kind is ScriptNodeKind.Condition or ScriptNodeKind.CheckFlag)
+        else if (Kind is ScriptNodeKind.Condition or ScriptNodeKind.Branching or ScriptNodeKind.CompareVariables or ScriptNodeKind.CheckFlag)
         {
             if (index == 0) True = target;
             else False = target;
@@ -421,6 +439,8 @@ public sealed class ScriptNode
 /// <summary>A choice label and the destination for its one-based runtime answer.</summary>
 public sealed class ScriptOption
 {
+    /// <summary>Optional state predicate and disabled-option presentation.</summary>
+    public OptionLockSettings? Lock { get; set; }
     /// <summary>Answer shown to the player.</summary>
     public string Text { get; set; } = "";
 

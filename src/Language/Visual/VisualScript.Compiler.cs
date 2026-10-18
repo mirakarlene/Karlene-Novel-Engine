@@ -65,10 +65,20 @@ public sealed partial class VisualScript
                     Line($"__kne_node = ({{{string.Join(", ", node.Options.Select(option => Quote(option.Target!)))}}})[answer]");
                     break;
                 case ScriptNodeKind.Choice:
-                    Line($"local answer = choice({Quote(node.Text)}, {{{string.Join(", ", node.Options.Select(o => Quote(o.Text)))}}})");
+                case ScriptNodeKind.TimedChoice:
+                    if (node.Kind == ScriptNodeKind.Choice && node.Options.All(o => o.Lock == null))
+                        Line($"local answer = choice({Quote(node.Text)}, {{{string.Join(", ", node.Options.Select(o => Quote(o.Text)))}}})");
+                    else
+                    {
+                        var request = new ChoiceRequest { Prompt = node.Text, Options = node.Options.Select(o => new ChoiceRequestOption(o.Text, o.Lock)).ToArray(),
+                            Timer = node.Kind == ScriptNodeKind.TimedChoice ? node.ChoiceSettings ?? new ChoiceSettings() : null };
+                        Line($"local answer = kne_choice({Quote(System.Text.Json.JsonSerializer.Serialize(request, EngineSettings.JsonOptions))})");
+                    }
                     Line($"__kne_node = ({{{string.Join(", ", node.Options.Select(o => Quote(o.Target!)))}}})[answer]");
                     break;
                 case ScriptNodeKind.Condition:
+                case ScriptNodeKind.Branching:
+                case ScriptNodeKind.CompareVariables:
                 case ScriptNodeKind.CheckFlag:
                     Line($"if {Comparison(node)} then __kne_node = {Quote(node.True!)} else __kne_node = {Quote(node.False!)} end");
                     break;
@@ -138,6 +148,9 @@ public sealed partial class VisualScript
     {
         ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue => DialogueCommand(node),
         ScriptNodeKind.RegisterCharacter => $"register_character({Quote(System.Text.Json.JsonSerializer.Serialize(node.Character ?? new CharacterProfile(), EngineSettings.JsonOptions))})",
+        ScriptNodeKind.UpdateCharacter => $"update_character({Quote(System.Text.Json.JsonSerializer.Serialize(node.Character ?? new CharacterProfile(), EngineSettings.JsonOptions))})",
+        ScriptNodeKind.SetSpeaker => $"set_speaker({Quote(node.SpeakerId)})",
+        ScriptNodeKind.ResetSpeakers => "reset_speakers()",
         ScriptNodeKind.TextPause => $"text_pause({Number(node.Duration)}, {(node.Skippable ? "true" : "false")})",
         ScriptNodeKind.ClearText => $"clear_text({(node.Animated ? "true" : "false")}, {Number(node.Duration)})",
         ScriptNodeKind.ConsoleWrite => $"console_write({Quote(node.Text)})",
@@ -181,11 +194,11 @@ public sealed partial class VisualScript
     private static string DialogueCommand(ScriptNode node)
     {
         string speaker = node.Speaker.Length == 0 ? "nil" : Quote(node.Speaker);
-        if (node.Kind == ScriptNodeKind.Dialogue && node.SpeakerId.Length == 0) return $"d({speaker}, {Quote(node.Text)})";
+        if (node.Kind == ScriptNodeKind.Dialogue && node.SpeakerId.Length == 0 && !node.Narration) return $"d({speaker}, {Quote(node.Text)})";
         string profile = node.SpeakerId.Length == 0 ? "nil" : Quote(node.SpeakerId);
         string effect = node.Kind == ScriptNodeKind.EffectDialogue
             ? Quote(System.Text.Json.JsonSerializer.Serialize(node.TextEffect ?? new TextEffectSettings(), EngineSettings.JsonOptions)) : "nil";
-        return $"kne_say({speaker}, {Quote(node.Text)}, {profile}, {effect}, {(node.Kind == ScriptNodeKind.AutoDialogue ? Number(node.Duration) : "nil")}, {(node.Skippable ? "true" : "false")})";
+        return $"kne_say({speaker}, {Quote(node.Text)}, {profile}, {effect}, {(node.Kind == ScriptNodeKind.AutoDialogue ? Number(node.Duration) : "nil")}, {(node.Skippable ? "true" : "false")}{(node.Narration ? ", true" : "")})";
     }
 
     private static string Comparison(ScriptNode node)
@@ -195,7 +208,7 @@ public sealed partial class VisualScript
             ScriptComparison.Equal => "==", ScriptComparison.NotEqual => "~=", ScriptComparison.Greater => ">",
             ScriptComparison.Less => "<", ScriptComparison.GreaterOrEqual => ">=", _ => "<="
         };
-        return $"state[{Quote(node.Variable)}] {op} {(node.Kind == ScriptNodeKind.CheckFlag ? FlagLiteral(node) : Literal(node))}";
+        return $"state[{Quote(node.Variable)}] {op} {(node.Kind == ScriptNodeKind.CompareVariables ? $"state[{Quote(node.CompareVariable)}]" : node.Kind == ScriptNodeKind.CheckFlag ? FlagLiteral(node) : Literal(node))}";
     }
 
     private static string RandomCommand(ScriptNode node)
@@ -228,6 +241,9 @@ public sealed partial class VisualScript
     private static void ValidateCommand(ScriptNode node)
     {
         if (node.Kind == ScriptNodeKind.RegisterCharacter && node.Character == null) Fail(node, "задайте профиль персонажа");
+        if (node.Kind == ScriptNodeKind.UpdateCharacter && node.Character == null) Fail(node, "задайте новый профиль с ID существующего персонажа");
+        if (node.Kind == ScriptNodeKind.SetSpeaker && string.IsNullOrWhiteSpace(node.SpeakerId)) Fail(node, "выберите ID зарегистрированного персонажа");
+        if (node.Kind == ScriptNodeKind.CompareVariables) RequireKey(node, node.CompareVariable);
         if (node.Kind == ScriptNodeKind.RandomBranch && node.Next != null) Fail(node, "у случайной ветки нет общего продолжения: соедините каждый выход отдельно");
         if (node.Kind == ScriptNodeKind.ConfigureButton && (node.UiTarget == "dialogue" || !GameplayUiStyle.IsTarget(node.UiTarget)))
             Fail(node, "выберите игровую кнопку: choice, next, save, load, auto_save или pause");
@@ -241,13 +257,18 @@ public sealed partial class VisualScript
                 (node.Kind == ScriptNodeKind.Script && extension is not (".lua" or ".krl" or ".cs")))
                 Fail(node, "выберите файл .lua / .cs, для скрипта также доступен .krl");
         }
-        if (node.Kind is ScriptNodeKind.Choice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async or ScriptNodeKind.RandomBranch &&
+        if (node.Kind is ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async or ScriptNodeKind.RandomBranch &&
             (node.Options.Count == 0 || node.Options.Any(o => string.IsNullOrWhiteSpace(o.Text))))
             Fail(node, "укажите от 1 до 20 непустых вариантов выбора или ветвей");
-        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable or ScriptNodeKind.Switch or ScriptNodeKind.While or
+        if (node.Kind == ScriptNodeKind.TimedChoice)
+        {
+            try { (node.ChoiceSettings ?? new ChoiceSettings()).Validate(node.Options.Count); }
+            catch (ArgumentException error) { Fail(node, error.Message); }
+        }
+        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.Branching or ScriptNodeKind.CompareVariables or ScriptNodeKind.SetVariable or ScriptNodeKind.Switch or ScriptNodeKind.While or
             ScriptNodeKind.ForEach or ScriptNodeKind.TryCatch or ScriptNodeKind.SetFlag or ScriptNodeKind.CheckFlag or ScriptNodeKind.Random or
             ScriptNodeKind.Async or ScriptNodeKind.Join or ScriptNodeKind.WaitCondition) RequireKey(node, node.Variable);
-        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable or ScriptNodeKind.While or ScriptNodeKind.WaitCondition)
+        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.Branching or ScriptNodeKind.SetVariable or ScriptNodeKind.While or ScriptNodeKind.WaitCondition)
         {
             _ = Literal(node);
             if (node.Kind != ScriptNodeKind.SetVariable && node.Comparison is not (ScriptComparison.Equal or ScriptComparison.NotEqual) && node.ValueKind != ScriptValueKind.Number)

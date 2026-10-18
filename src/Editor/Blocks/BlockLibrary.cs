@@ -16,7 +16,7 @@ public static class BlockLibrary
         new("audio", "Звук", "#228052"), new("async", "Асинхронность", "#BA3846"),
         new("configurations", "Конфигурации", "#137C83"), new("plugins", "Плагины", "#6B7280")];
 
-    /// <summary>All selectable entries. Conditions appear in both narrative and logic.</summary>
+    /// <summary>All selectable entries with distinct narrative branching and logic comparisons.</summary>
     public static IReadOnlyList<BlockDefinition> Definitions { get; } = Build();
 
     private static IReadOnlyList<BlockDefinition> Build()
@@ -28,20 +28,25 @@ public static class BlockLibrary
         Add("terminals", ScriptNodeKind.End, "Конец", "Главное меню, специальный экран, закрытие игры или возврат из вызова.");
         Add("narrative", ScriptNodeKind.Dialogue, "Реплика", "Текст в диалоговом окне с именем говорящего или от рассказчика.");
         Add("narrative", ScriptNodeKind.TextInput, "Ввод текста", "Запросить ответ игрока, сохранить в переменную и выбрать ветку по результату.");
-        Add("narrative", ScriptNodeKind.Choice, "Выбор", "Варианты ответа с отдельными выходами.");
-        Add("narrative", ScriptNodeKind.Condition, "Условие", "Два продолжения в зависимости от значения переменной.");
+        Add("narrative", ScriptNodeKind.Choice, "Выбор", "Варианты ответа с отдельными выходами и условной блокировкой.");
+        Add("narrative", ScriptNodeKind.TimedChoice, "Выбор с таймером", "Автоматический выбор по истечении времени; полоса или числовой таймер.");
+        Add("narrative", ScriptNodeKind.Branching, "Ветвление", "Выбрать ветку по переменной и заданному значению; не добавляет реплику.");
         Add("narrative", ScriptNodeKind.Comment, "Комментарий", "Заметка автора. Не выполняется и может оставаться без связей.");
         Add("narrative", ScriptNodeKind.Title, "Титр", "Текст поверх сцены вне диалогового окна. Пустой текст скрывает титр.");
         Add("narrative", ScriptNodeKind.GotoScene, "Перейти на сцену", "goto: перейти в другую функцию без возврата в эту ветку.");
         Add("narrative", ScriptNodeKind.CallScene, "Вызвать сцену", "call: выполнить другую функцию и продолжить после вызова.");
         Add("narrative", ScriptNodeKind.RegisterCharacter, "Персонаж", "Зарегистрировать имя, цвет и типографику персонажа без отображения спрайта.");
+        Add("narrative", ScriptNodeKind.UpdateCharacter, "Изменить персонажа", "Изменить имя и типографику уже зарегистрированного персонажа по его ID.");
+        Add("narrative", ScriptNodeKind.SetSpeaker, "Установить спикера", "Назначить профиль следующим репликам с пустым говорящим в текущей ветке.");
+        Add("narrative", ScriptNodeKind.ResetSpeakers, "Сбросить спикеров", "Сбросить говорящего по умолчанию в текущей ветке; пустые реплики снова становятся рассказчиком.");
         Add("narrative", ScriptNodeKind.TextPause, "Пауза в тексте", "Ждать между репликами; разрешить или запретить пропуск кликом.");
         Add("narrative", ScriptNodeKind.ClearText, "Очистить текст", "Очистить текстовое окно мгновенно или с анимацией стирания.");
         Add("narrative", ScriptNodeKind.AutoDialogue, "Авто-пропуск", "Реплика с автоматическим переходом через заданное время.");
         Add("narrative", ScriptNodeKind.ConsoleWrite, "Запись в консоль", "Вывести текст в консоль как команда print().");
         Add("narrative", ScriptNodeKind.RandomBranch, "Случайная ветка", "Выбрать один выход с заданными относительными вероятностями.");
         Add("narrative", ScriptNodeKind.EffectDialogue, "Реплика с эффектом", "Анимация каждой буквы: волна, дрожание, радуга и другие эффекты.");
-        Add("logic", ScriptNodeKind.Condition, "Условие", "Сравнить переменную с числом, строкой или логическим значением.");
+        Add("logic", ScriptNodeKind.CompareVariables, "Условие", "Сравнить две переменные state без реплики или остановки игры.");
+        Add("logic", ScriptNodeKind.Condition, "Условие (значение, прежний формат)", "Совместимость старых схем: сравнение переменной с постоянным значением. Для новых схем используйте «Ветвление».");
         Add("logic", ScriptNodeKind.SetVariable, "Переменная", "Записать значение в state.");
         Add("logic", ScriptNodeKind.Switch, "Switch / Case", "Сравнить переменную с вариантами; предусмотрен выход по умолчанию.");
         Add("logic", ScriptNodeKind.While, "Цикл While", "Повторять тело, пока условие истинно. Конец тела возвращает к проверке.");
@@ -95,6 +100,8 @@ public static class BlockLibrary
         if (kind is ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue) node.Text = "Новая реплика";
         if (kind == ScriptNodeKind.TextInput) node.Input = new TextInputSettings { Prompt = "Введите ответ:" };
         if (kind == ScriptNodeKind.RegisterCharacter) node.Character = new CharacterProfile { Id = "character", Name = "Персонаж" };
+        if (kind == ScriptNodeKind.UpdateCharacter) node.Character = new CharacterProfile { Id = "character", Name = "Персонаж" };
+        if (kind == ScriptNodeKind.SetSpeaker) node.SpeakerId = "character";
         if (kind == ScriptNodeKind.EffectDialogue) node.TextEffect = new TextEffectSettings();
         if (kind == ScriptNodeKind.ClearText) node.Duration = .5;
         if (kind == ScriptNodeKind.AutoDialogue) node.Duration = 2;
@@ -102,7 +109,8 @@ public static class BlockLibrary
         if (kind == ScriptNodeKind.RandomBranch) node.Options = [new() { Text = "Ветка 1", Weight = 60 }, new() { Text = "Ветка 2", Weight = 40 }];
         if (kind == ScriptNodeKind.Comment) node.Text = "Комментарий автора";
         if (kind == ScriptNodeKind.Title) node.Text = "Новый титр";
-        if (kind == ScriptNodeKind.Choice) { node.Text = "Выберите вариант"; node.Options = [new() { Text = "Да" }, new() { Text = "Нет" }]; }
+        if (kind == ScriptNodeKind.TimedChoice) node.ChoiceSettings = new ChoiceSettings();
+        if (kind is ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice) { node.Text = "Выберите вариант"; node.Options = [new() { Text = "Да" }, new() { Text = "Нет" }]; }
         if (kind == ScriptNodeKind.Switch) node.Options = [new() { Text = "0" }, new() { Text = "1" }];
         if (kind is ScriptNodeKind.Parallel or ScriptNodeKind.Async) { node.Options = [new() { Text = "Ветка 1" }, new() { Text = "Ветка 2" }]; node.Variable = "task"; }
         if (kind == ScriptNodeKind.Join) node.Variable = "task";

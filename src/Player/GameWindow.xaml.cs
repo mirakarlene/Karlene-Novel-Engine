@@ -22,6 +22,7 @@ public partial class GameWindow : Window
     private int textLength;
     private RuntimeWindowSettings? renderedSettings;
     private StoryFrame? renderedStory;
+    private ChoicePresentation? choicePresentation;
     private SceneVisuals? renderedVisuals;
     private readonly MediaPlayer music = new();
     private readonly MediaPlayer sound = new();
@@ -148,6 +149,7 @@ public partial class GameWindow : Window
         AnimatedBackdrop.Configure(project.Engine.Theme, false);
         renderTimer.Stop();
         DialogueEffects.Stop();
+        choicePresentation?.Stop();
         CloseAudio();
         sceneEffects?.Stop();
         currentErrorReport = GameErrorReport.Create(project, error, operation);
@@ -190,6 +192,7 @@ public partial class GameWindow : Window
         runtime = candidate;
         gameplayUi?.Reset();
         DialogueEffects.Reset();
+        choicePresentation?.Reset();
         clockSuspended = false;
         lastSceneTick = System.Diagnostics.Stopwatch.GetTimestamp();
         ready = true;
@@ -235,6 +238,7 @@ public partial class GameWindow : Window
         DebugOverlay.Visibility = Visibility.Collapsed;
         PauseAudio();
         DialogueEffects.Stop();
+        choicePresentation?.Stop();
         ContinueButton.IsEnabled = saves.Exists("auto") || saves.Exists("quick");
         if (ready) ResumeButton.Focus(); else StartButton.Focus();
     }
@@ -335,7 +339,7 @@ public partial class GameWindow : Window
                 if (DebugOverlay.Visibility == Visibility.Visible && ready) CommandInput.Focus();
                 else if (ready && MenuOverlay.Visibility != Visibility.Visible)
                 {
-                    if (runtime.Story.Kind == "choice" && ChoicePanel.Children.Count > 0) ChoicePanel.Children[0].Focus();
+                    if (runtime.Story.Kind == "choice") ChoicePanel.Children.OfType<Button>().FirstOrDefault(button => button.IsEnabled)?.Focus();
                     else if (runtime.Story.Kind != "input") NextButton.Focus();
                 }
             }
@@ -452,6 +456,7 @@ public partial class GameWindow : Window
         sceneEffects?.Stop();
         execution?.Cancel();
         DialogueEffects.Stop();
+        choicePresentation?.Stop();
         try { await runtime.DisposeAsync(); }
         catch (Exception ex) { System.Diagnostics.Trace.TraceError("Lua cleanup failed: {0}", ex); }
     }
@@ -519,16 +524,10 @@ public partial class GameWindow : Window
             SpeakerText.Text = frame.Speaker;
             SpeakerText.Visibility = frame.Speaker.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
             DialogueText.Text = frame.Text;
-            ChoicePanel.Children.Clear();
-            for (int i = 0; i < frame.Options.Count; i++)
-            {
-                var button = new Button { Content = frame.Options[i], Tag = i + 1, Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 0, 0, 8) };
-                button.ContentTemplate = (DataTemplate)FindResource("ChoiceLabelTemplate");
-                button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-                button.Click += ChoiceButton_Click;
-                ChoicePanel.Children.Add(button);
-            }
         }
+        choicePresentation ??= new(ChoicePanel, ChoiceTimer, button => button.Style = (Style)FindResource(typeof(Button)), ChoiceButton_Click);
+        choicePresentation.Display(frame, preferences.Animate && project.Engine.Theme.AnimationEnabled && !clockSuspended &&
+            MenuOverlay.Visibility != Visibility.Visible, Brush(project.Engine.Theme.AccentColor));
         PlayerInput.Display(frame);
         PlayerInput.SubmitButton.IsEnabled = PlayerInput.CancelButton.IsEnabled = execution == null;
         renderedStory = frame;

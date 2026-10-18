@@ -170,7 +170,7 @@ public sealed class FrameCatalog
         for (int index = 0; index + 1 < tokens.Length; index++)
         {
             var token = tokens[index];
-            if (token.Kind != LuaTokenKind.Function || source.Substring(token.Start, token.Length) is not ("d" or "choice" or "kne_say" or "text_input") ||
+            if (token.Kind != LuaTokenKind.Function || source.Substring(token.Start, token.Length) is not ("d" or "choice" or "kne_choice" or "kne_say" or "text_input") ||
                 index > 0 && (source.AsSpan(tokens[index - 1].Start, tokens[index - 1].Length).SequenceEqual("function") ||
                     source[tokens[index - 1].Start] is '.' or ':') || source[tokens[index + 1].Start] != '(' ||
                 tokens[index + 1].Partner is not { } closing || !byOffset.TryGetValue(closing, out var close)) continue;
@@ -227,7 +227,7 @@ public sealed class FrameCatalog
                 catch (InvalidDataException) { }
                 foreach (var node in file.Graph.Nodes)
                     yield return new(Key(file.Path, file.Graph.FunctionName, "node:" + node.Id), file.Path, file.Graph.FunctionName,
-                        2, lines.GetValueOrDefault(node.Id, 1), node.Id, node.Kind is ScriptNodeKind.Dialogue or ScriptNodeKind.Choice or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue or ScriptNodeKind.TextInput);
+                        2, lines.GetValueOrDefault(node.Id, 1), node.Id, node.Kind is ScriptNodeKind.Dialogue or ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue or ScriptNodeKind.TextInput);
                 continue;
             }
             if (ScriptDocument.IsVisualPath(file.Path) && file.Source.StartsWith("-- Сгенерировано из блок-схемы KNE.", StringComparison.Ordinal))

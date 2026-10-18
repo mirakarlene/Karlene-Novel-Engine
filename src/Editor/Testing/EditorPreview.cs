@@ -10,7 +10,7 @@ public sealed class EditorPreview : IAsyncDisposable
 {
     private readonly ProjectInfo project;
     private readonly Action<string> output;
-    private sealed record PreviewChoice(PreviewLocation? Location, string[] Options, int Answer);
+    private sealed record PreviewChoice(PreviewLocation? Location, string[] Options, ChoiceOptionState[]? States, int Answer);
     private readonly List<PreviewChoice> choices = [];
     private sealed record PreviewInput(PreviewLocation? Location, TextInputSettings Settings, string Text, bool Cancel);
     private readonly List<PreviewInput> inputs = [];
@@ -57,8 +57,9 @@ public sealed class EditorPreview : IAsyncDisposable
     {
         if (session == null || !NeedsChoice) throw new InvalidOperationException("Предпросмотр не ожидает выбора.");
         if (option < 1 || option > Story.Options.Count) throw new ArgumentOutOfRangeException(nameof(option));
+        if (Story.ChoiceOptions is { } options && !options[option - 1].IsEnabled) throw new InvalidOperationException("Вариант ответа заблокирован.");
         if (choiceIndex < choices.Count) choices.RemoveRange(choiceIndex, choices.Count - choiceIndex);
-        choices.Add(new(Location, Story.Options.ToArray(), option)); choiceIndex++;
+        choices.Add(new(Location, Story.Options.ToArray(), Story.ChoiceOptions?.ToArray(), option)); choiceIndex++;
         await session.ChooseAsync(option, token).ConfigureAwait(false);
         await ReachAsync(token).ConfigureAwait(false);
     }
@@ -101,7 +102,8 @@ public sealed class EditorPreview : IAsyncDisposable
             {
                 if (choiceIndex >= choices.Count) { Status = "Выберите ответ в предпросмотре, чтобы продолжить к выделенному сегменту."; return; }
                 var remembered = choices[choiceIndex];
-                if (remembered.Location != Location || !remembered.Options.SequenceEqual(Story.Options))
+                if (remembered.Location != Location || !remembered.Options.SequenceEqual(Story.Options) ||
+                    !(remembered.States is null && Story.ChoiceOptions is null || remembered.States is not null && Story.ChoiceOptions is not null && remembered.States.SequenceEqual(Story.ChoiceOptions)))
                 {
                     choices.RemoveRange(choiceIndex, choices.Count - choiceIndex);
                     Status = "Развилка изменилась. Выберите ответ заново."; return;

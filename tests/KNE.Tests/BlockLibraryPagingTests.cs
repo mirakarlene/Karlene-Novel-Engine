@@ -78,16 +78,31 @@ public sealed class BlockLibraryPagingTests
         {
             var view = await View(fixture); int insertions = 0; view.BlockSelected += (_, _) => insertions++;
             Assert.Throws<InvalidOperationException>(() => view.ConfigurePreferenceStore(Store(fixture)));
-            Select(view, "narrative"); Star(Cards(view).Single(card => Equals(card.Tag, ScriptNodeKind.Condition))).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Select(view, "narrative"); Star(Cards(view).Single(card => Equals(card.Tag, ScriptNodeKind.Branching))).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await view.SavePreferencesAsync();
-            Select(view, "logic"); Star(Cards(view).Single(card => Equals(card.Tag, ScriptNodeKind.Condition))).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Select(view, "logic"); Star(Cards(view).Single(card => Equals(card.Tag, ScriptNodeKind.CompareVariables))).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await view.SavePreferencesAsync(); Assert.Equal(0, insertions);
             var reopened = await View(fixture); Select(reopened, "favorites");
-            Assert.Equal(new[] { "narrative/Condition", "logic/Condition" }, Cards(reopened).Select(card => (string)Star(card).Tag));
+            Assert.Equal(new[] { "narrative/Branching", "logic/CompareVariables" }, Cards(reopened).Select(card => (string)Star(card).Tag));
             Star(Cards(reopened)[0]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await reopened.SavePreferencesAsync();
-            Assert.Equal("logic/Condition", (string)Star(Assert.Single(Cards(reopened))).Tag);
-            var third = await View(fixture); Select(third, "favorites"); Assert.Equal("logic/Condition", (string)Star(Assert.Single(Cards(third))).Tag);
+            Assert.Equal("logic/CompareVariables", (string)Star(Assert.Single(Cards(reopened))).Tag);
+            var third = await View(fixture); Select(third, "favorites"); Assert.Equal("logic/CompareVariables", (string)Star(Assert.Single(Cards(third))).Tag);
         });
+    }
+
+    [Fact]
+    public void Preferences_MigrateLegacyConditionFavoritesAndRecent_WithoutConflatingGroupsOrDuplicatingEntries()
+    {
+        var preferences = new BlockLibraryPreferences
+        {
+            Favorites = ["narrative/Condition", "logic/Condition", "narrative/Branching", "logic/CompareVariables", "removed/Unknown"],
+            Recent = ["logic/Condition", "narrative/Condition", "logic/CompareVariables"]
+        };
+        preferences.Normalize();
+        Assert.Equal(new[] { "narrative/Branching", "logic/Condition", "logic/CompareVariables" }, preferences.Favorites);
+        Assert.Equal(new[] { "logic/Condition", "narrative/Branching", "logic/CompareVariables" }, preferences.Recent);
+        preferences.Normalize();
+        Assert.Equal(3, preferences.Favorites.Count); Assert.Equal(3, preferences.Recent.Count);
     }
 
     [Theory]

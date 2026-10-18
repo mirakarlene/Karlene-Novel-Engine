@@ -52,7 +52,7 @@ public sealed class SceneTestSession : IAsyncDisposable
         if (session == null || !Story.NeedsTick) return;
         var before = Story;
         await session.TickAsync(seconds, token).ConfigureAwait(false);
-        bool changed = before.Identity != Story.Identity || before.Kind != Story.Kind || before.Text != Story.Text || before.Speaker != Story.Speaker || !before.Options.SequenceEqual(Story.Options);
+        bool changed = before.PresentationId != Story.PresentationId || before.Identity != Story.Identity || before.Kind != Story.Kind || before.Text != Story.Text || before.Speaker != Story.Speaker || !before.Options.SequenceEqual(Story.Options);
         history.Add(new("tick", changed ? before.Kind : "", Seconds: seconds, FrameStart: frameStart));
         if (changed) frameStart = history.Count;
     }

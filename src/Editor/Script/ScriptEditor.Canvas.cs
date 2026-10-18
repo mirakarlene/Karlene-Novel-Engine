@@ -57,6 +57,7 @@ internal sealed class GraphResizeThumb : Thumb
 public partial class ScriptEditor
 {
     private readonly Dictionary<(string NodeId, int? Output), GraphPort> graphPorts = [];
+    private readonly Dictionary<string, Rectangle> cardShadows = [];
     private readonly List<(Thumb Handle, string NodeId, int Horizontal, int Vertical)> resizeHandles = [];
     private GraphPort? draggingPort;
     private Point portDragOrigin;
@@ -69,7 +70,9 @@ public partial class ScriptEditor
 
     private void RenderCanvasGraph()
     {
-        GraphCanvas.Children.Clear(); cards.Clear(); links.Clear(); graphPorts.Clear(); resizeHandles.Clear();
+        GraphCanvas.Children.Clear(); cards.Clear(); links.Clear(); graphPorts.Clear(); resizeHandles.Clear(); cardShadows.Clear();
+        TextOptions.SetTextFormattingMode(GraphCanvas, TextFormattingMode.Display);
+        TextOptions.SetTextRenderingMode(GraphCanvas, TextRenderingMode.ClearType);
         if (Document?.Graph is not { } graph) return;
         UpdateGraphExtent();
         foreach (var node in graph.Nodes)
@@ -123,9 +126,18 @@ public partial class ScriptEditor
             {
                 Width = NodeWidth(node), Height = NodeHeight(node), BorderThickness = new Thickness(1.5),
                 CornerRadius = new CornerRadius(11), BorderBrush = brush, Background = Brushes.White,
-                Effect = new DropShadowEffect { Color = color, BlurRadius = 14, ShadowDepth = 2, Opacity = .23 },
+                UseLayoutRounding = true, SnapsToDevicePixels = true,
                 Child = contents, Tag = node.Id
             };
+            // Shader effects rasterize the entire subtree. Keep glyphs and ports outside that surface.
+            var shadow = new Rectangle
+            {
+                Width = NodeWidth(node), Height = NodeHeight(node), RadiusX = 11, RadiusY = 11,
+                Fill = Brushes.White, IsHitTestVisible = false,
+                Effect = new DropShadowEffect { Color = color, BlurRadius = 14, ShadowDepth = 2, Opacity = .23 }
+            };
+            Canvas.SetLeft(shadow, node.X); Canvas.SetTop(shadow, node.Y); Panel.SetZIndex(shadow, 0);
+            GraphCanvas.Children.Add(shadow); cardShadows.Add(node.Id, shadow);
             HookCardSelectionAndMovement(card, header, node);
             Canvas.SetLeft(card, node.X); Canvas.SetTop(card, node.Y); Panel.SetZIndex(card, 1);
             GraphCanvas.Children.Add(card); cards.Add(node.Id, card);
@@ -314,6 +326,12 @@ public partial class ScriptEditor
             }
         }
         PositionResizeHandles();
+        foreach (var node in graph.Nodes)
+            if (cardShadows.TryGetValue(node.Id, out var shadow))
+            {
+                shadow.Width = NodeWidth(node); shadow.Height = NodeHeight(node);
+                Canvas.SetLeft(shadow, node.X); Canvas.SetTop(shadow, node.Y);
+            }
     }
 
     private void RefreshCardSelection()

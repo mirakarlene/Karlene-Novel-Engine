@@ -126,6 +126,8 @@ public partial class ScriptEditor
             node.X = Math.Clamp(node.X + dx, -1_000_000_000, 1_000_000_000);
             node.Y = Math.Clamp(node.Y + dy, -1_000_000_000, 1_000_000_000);
             if (characterRemap.TryGetValue(node.SpeakerId, out string? speaker)) node.SpeakerId = speaker;
+            if (node.Kind == ScriptNodeKind.UpdateCharacter && node.Character is { } update && characterRemap.TryGetValue(update.Id, out string? updatedId))
+                node.Character = update with { Id = updatedId };
         }
         // Validate the complete candidate before changing the live graph or undo history.
         var candidate = VisualScript.Parse(graph.Serialize());
@@ -142,7 +144,13 @@ public partial class ScriptEditor
 
     internal bool HandleGraphShortcut(Key key, ModifierKeys modifiers, DependencyObject? source)
     {
-        if (!modifiers.HasFlag(ModifierKeys.Control) || Document?.IsVisual != true || GraphMode.IsChecked != true || IsTextEditingSource(source)) return false;
+        if (Document?.IsVisual != true || GraphMode.IsChecked != true || IsTextEditingSource(source)) return false;
+        if (key == Key.Delete && modifiers == ModifierKeys.None)
+        {
+            Delete_Click(this, new RoutedEventArgs());
+            return true;
+        }
+        if (!modifiers.HasFlag(ModifierKeys.Control)) return false;
         switch (key)
         {
             case Key.C: CopyGraphSelection(); break;
