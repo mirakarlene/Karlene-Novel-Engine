@@ -23,6 +23,7 @@ public sealed class ProcessGameSession : IGameSession
     private readonly EditorPreviewSource? editorSource;
     private bool canReturnAfterError;
     private long requestId;
+    private readonly bool pluginsEnabled;
     public TimeSpan ExecutionLimit { get; }
     public int? WorkerProcessId { get { lock (sync) return worker?.Id; } }
     public RuntimeWindowSettings WindowSettings { get { lock (sync) return snapshot.Window; } }
@@ -34,10 +35,11 @@ public sealed class ProcessGameSession : IGameSession
     public bool CanReturnAfterError { get { lock (sync) return canReturnAfterError && recovery != null; } }
 
     public ProcessGameSession(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool preview = false,
-        EditorPreviewSource? editorSource = null)
+        EditorPreviewSource? editorSource = null, bool? pluginsEnabled = null)
     {
         this.project = project ?? throw new ArgumentNullException(nameof(project));
         this.preview = preview;
+        this.pluginsEnabled = pluginsEnabled ?? EngineLaunch.PluginsEnabled;
         this.editorSource = editorSource;
         this.output = output ?? throw new ArgumentNullException(nameof(output));
         ExecutionLimit = executionLimit ?? TimeSpan.FromSeconds(project.Engine.Game.ExecutionTimeoutSeconds);
@@ -49,7 +51,15 @@ public sealed class ProcessGameSession : IGameSession
 
     public Task StartAsync(CancellationToken cancellationToken = default) => ExecuteAsync("start", cancellationToken);
     public Task AdvanceAsync(CancellationToken cancellationToken = default) => ExecuteAsync("advance", cancellationToken);
-    public Task ChooseAsync(int option, CancellationToken cancellationToken = default) => ExecuteAsync("choose", cancellationToken, option: option);
+    public Task ChooseAsync(int option, CancellationToken cancellationToken = default)
+    {
+        var frame = Story;
+        if (frame.Kind != "choice") throw new InvalidOperationException("Сценарий не ожидает выбора.");
+        if (option < 1 || option > frame.Options.Count) throw new ArgumentOutOfRangeException(nameof(option));
+        if (frame.ChoiceOptions != null && !frame.ChoiceOptions[option - 1].IsEnabled)
+            throw new InvalidOperationException("Этот вариант выбора заблокирован.");
+        return ExecuteAsync("choose", cancellationToken, option: option);
+    }
     public Task SubmitInputAsync(string text, bool cancel = false, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -99,6 +109,7 @@ public sealed class ProcessGameSession : IGameSession
         await gate.WaitAsync(linked.Token).ConfigureAwait(false);
         try
         {
+            if (command is not ("tick" or "checkpoint")) EngineDiagnostics.Trace("Игровой рабочий процесс", command + " · " + project.Title);
             token.ThrowIfCancellationRequested();
             var exchange = ExchangeAsync(command, option, text, checkpoint, linked.Token, seconds, cancel);
             WorkerMessage message;
@@ -172,6 +183,7 @@ public sealed class ProcessGameSession : IGameSession
                     WorkingDirectory = Path.GetDirectoryName(assembly)!
                 };
                 if (!File.Exists(executable)) info.ArgumentList.Add(assembly);
+                info.Environment[EngineLaunch.PluginsEnvironment] = pluginsEnabled ? "0" : "1";
                 info.ArgumentList.Add("--lua-worker");
                 info.ArgumentList.Add(project.Path);
                 info.ArgumentList.Add(Path.GetRelativePath(project.Path, project.MainScenePath));

@@ -42,12 +42,14 @@ internal static class SceneRuntimeLua
                 local ok, problem = xpcall(process_command, handle_error, command)
                 if not ok then error(problem, 0) end
             end
-            function kne_scene_thread(entry)
+            function kne_scene_thread(entry, parent)
+                parent = parent or coroutine.running()
                 local thread = coroutine.create(function(...)
                     local result = table.pack(xpcall(entry, handle_error, ...))
                     if not result[1] then error(result[2], 0) end
                     return table.unpack(result, 2, result.n)
                 end)
+                if kne_inherit_speaker then kne_inherit_speaker(parent, thread) end
                 local hook, mask, count = debug.gethook()
                 if type(hook) == "function" then debug.sethook(thread, hook, mask, count) end
                 return thread
@@ -154,8 +156,8 @@ internal static class SceneRuntimeLua
             function kne_run_scene(entry)
                 local tasks, groups, clock, group_id, visible = {}, {}, 0, 0, nil
                 local presentation_id = 0
-                local function create(fn, detached, group)
-                    local task = {stack = {kne_scene_thread(fn)}, input = table.pack(), detached = detached, group = group, transitions = 0}
+                local function create(fn, detached, group, parent)
+                    local task = {stack = {kne_scene_thread(fn, parent)}, input = table.pack(), detached = detached, group = group, transitions = 0}
                     tasks[#tasks + 1] = task
                     return task
                 end
@@ -228,7 +230,7 @@ internal static class SceneRuntimeLua
                             if scene_test then close_task(root); return end
                         end
                         if event.kind == "goto" then owned[thread] = nil; table.remove(stack); pcall(coroutine.close, thread) end
-                        stack[#stack + 1], task.input = kne_scene_thread(next_entry), event.args
+                        stack[#stack + 1], task.input = kne_scene_thread(next_entry, thread), event.args
                     elseif event.kind == "spawn" then
                         local count = 0
                         for _, current in ipairs(tasks) do if not current.done then count = count + 1 end end
@@ -236,7 +238,7 @@ internal static class SceneRuntimeLua
                         group_id = group_id + 1
                         if group_id > 10000 then return fail(task, "Больше 10000 групп параллельных веток") end
                         local group = {owner = task, awaited = not event.detached}; groups[group_id] = group
-                        for _, fn in ipairs(event.entries) do group[#group + 1] = create(fn, task.detached or event.detached, group_id) end
+                        for _, fn in ipairs(event.entries) do group[#group + 1] = create(fn, task.detached or event.detached, group_id, thread) end
                         if event.detached then task.input = table.pack(group_id) else task.join = group_id end
                     elseif event.kind == "join" then
                         if task.group == event.handle then return fail(task, "Ветка не может ожидать завершения собственной группы") end
@@ -280,7 +282,10 @@ internal static class SceneRuntimeLua
                             if task.event and task.event_deadline then
                                 task.event.remaining = math.max(0, task.event_deadline - clock)
                                 if task.event.kind == "clear_text" then task.event.erase_progress = math.min(1, (clock - task.event_started) / task.event.seconds) end
-                                if clock + 0.0000001 >= task.event_deadline then task.event, task.event_deadline = nil, nil end
+                                if clock + 0.0000001 >= task.event_deadline then
+                                    if task.event.kind == "choice" then task.input = table.pack(task.event.default_option) end
+                                    task.event, task.event_deadline = nil, nil
+                                end
                             end
                             if not task.done and task.join and group_done(task.join) then
                                 if groups[task.join].failure then task.input = table.pack(false, groups[task.join].failure) end

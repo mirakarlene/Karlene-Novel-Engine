@@ -7,7 +7,11 @@ public sealed record StoryFrame(string Kind, string Speaker, string Text, IReadO
     /// <summary>Deterministic occurrence of the displayed dialogue, independent of its source block identity.</summary>
     public long PresentationId { get; init; }
     public bool HasBackgroundTasks { get; init; }
-    public bool NeedsTick => Kind == "wait" || HasBackgroundTasks || RemainingSeconds.HasValue;
+    public bool NeedsTick => Kind == "wait" || HasBackgroundTasks || RemainingSeconds.HasValue || ChoiceTimer != null;
+    /// <summary>Original-index resolved option states; null keeps the legacy enabled-choice behavior.</summary>
+    public IReadOnlyList<ChoiceOptionState>? ChoiceOptions { get; init; }
+    /// <summary>Authoritative countdown of the visible timed choice.</summary>
+    public ChoiceTimerState? ChoiceTimer { get; init; }
     public CharacterProfile? Character { get; init; }
     public TextEffectSettings? TextEffect { get; init; }
     /// <summary>Configuration of the currently pending player-input request.</summary>

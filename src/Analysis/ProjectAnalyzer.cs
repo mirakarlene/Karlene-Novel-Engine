@@ -263,7 +263,7 @@ public static class ProjectAnalyzer
         int[] required = tokens[call].Text switch
         {
             "d" or "choice" or "kne_say" => [1], "set_window_size" => [0, 1],
-            "register_character" or "text_pause" or "kne_random_branch" => [0],
+            "register_character" or "update_character" or "set_speaker" or "text_pause" or "kne_random_branch" => [0],
             "show_character" or "play_music" or "play_sound" or "call" or "call_scene" or "goto" or "goto_scene" or
                 "set_window_title" or "set_bg_color" or "show_title" or "show_screen" or "stop_audio" or
                 "set_master_volume" or "kne_pause" or "kne_timer" or "kne_parallel" or "kne_async" or "kne_join" or "kne_wait_condition" or "kne_end" => [0],
@@ -392,7 +392,7 @@ public static class ProjectAnalyzer
     }
 
     private static bool HasYield(IReadOnlyList<Lexeme> tokens) => tokens.Select((token, i) => (token, i))
-        .Any(pair => pair.token.Text is "d" or "choice" or "kne_say" or "text_input" && IsGlobalCall(tokens, pair.i));
+        .Any(pair => pair.token.Text is "d" or "choice" or "kne_choice" or "kne_say" or "text_input" && IsGlobalCall(tokens, pair.i));
 
     private static void AnalyzeLoops(Source source, List<ProjectDiagnostic> findings)
     {

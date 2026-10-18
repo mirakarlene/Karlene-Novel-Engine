@@ -81,6 +81,7 @@ public partial class SceneTestingWindow : Window
         if (sceneMode && scene != null)
         {
             if (!scene.Completed) SceneSurface.DisplayScene(project, scene.Window, scene.Visuals, scene.Story, true, true);
+            else SceneSurface.StopChoicePresentation();
             SceneEndOverlay.Visibility = scene.Completed ? Visibility.Visible : Visibility.Collapsed;
             BackFrameButton.IsEnabled = scene.CanGoBack;
             NextFrameButton.IsEnabled = scene.Story.CanAdvance;

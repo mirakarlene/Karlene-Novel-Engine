@@ -87,7 +87,16 @@ public partial class ScriptEditor : UserControl
             input.TextChanged += (_, _) => TrackProperties();
         foreach (var input in new[] { PositionInput, ValueTypeInput, ComparisonInput })
             input.SelectionChanged += (_, _) => TrackProperties();
-        SpeakerInput.TextChanged += (_, _) => { if (!updating) { selectedSpeakerId = ""; UpdateSpeakerReference(); } };
+        SpeakerInput.TextChanged += (_, _) =>
+        {
+            if (!updating)
+            {
+                selectedSpeakerId = "";
+                if (SpeakerInput.Text.Length > 0 && ExtendedProperties.Children.OfType<CheckBox>().FirstOrDefault(control => control.Name == "ExplicitNarratorInput") is { } narrator)
+                    narrator.IsChecked = false;
+                UpdateSpeakerReference();
+            }
+        };
         LoopInput.Checked += (_, _) => TrackProperties();
         LoopInput.Unchecked += (_, _) => TrackProperties();
     }
@@ -109,6 +118,7 @@ public partial class ScriptEditor : UserControl
         FinishMarquee();
         ClearCanvasInteraction();
         var document = await ScriptDocument.OpenAsync(root, path);
+        EngineDiagnostics.Trace("Открытие сценария", path);
         projectRoot = root;
         Document = document;
         frameCatalog = null;
@@ -213,6 +223,7 @@ public partial class ScriptEditor : UserControl
         {
             ApplyProperties();
             await Document.SaveAsync();
+            EngineDiagnostics.Trace("Сценарий сохранён", Document.FilePath);
             UpdateTitle();
             EditorStatus.Text = "Сценарий сохранён.";
             try
@@ -380,8 +391,8 @@ public partial class ScriptEditor : UserControl
             ValueTypeInput.SelectedValue = node.ValueKind;
             ComparisonInput.SelectedValue = node.Comparison;
             Visible(SpeakerField, IsDialogue(node.Kind));
-            Visible(TextField, IsDialogue(node.Kind) || node.Kind is ScriptNodeKind.Choice or ScriptNodeKind.Comment or ScriptNodeKind.Title or ScriptNodeKind.ConsoleWrite);
-            Visible(OptionsField, node.Kind is ScriptNodeKind.Choice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async or ScriptNodeKind.RandomBranch);
+            Visible(TextField, IsDialogue(node.Kind) || node.Kind is ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.Comment or ScriptNodeKind.Title or ScriptNodeKind.ConsoleWrite);
+            Visible(OptionsField, node.Kind is ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async or ScriptNodeKind.RandomBranch);
             OptionsLabel.Text = node.Kind == ScriptNodeKind.RandomBranch ? "Названия случайных веток — по одному на строку" : node.Kind == ScriptNodeKind.Switch ? "Значения case — по одному на строку" : node.Kind is ScriptNodeKind.Parallel or ScriptNodeKind.Async ? "Названия веток — по одному на строку" : "Ответы — по одному на строку";
             Visible(PathField,
                 node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music
@@ -422,12 +433,12 @@ public partial class ScriptEditor : UserControl
         var changed = copy.Nodes.Single(n => n.Id == node.Id);
 
         if (IsDialogue(node.Kind)) { changed.Speaker = SpeakerInput.Text; changed.SpeakerId = selectedSpeakerId; }
-        if (IsDialogue(node.Kind) || node.Kind is ScriptNodeKind.Choice or ScriptNodeKind.Comment or ScriptNodeKind.Title or ScriptNodeKind.ConsoleWrite) changed.Text = SceneTextInput.Text;
-        if (node.Kind is ScriptNodeKind.Choice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async or ScriptNodeKind.RandomBranch)
+        if (IsDialogue(node.Kind) || node.Kind is ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.Comment or ScriptNodeKind.Title or ScriptNodeKind.ConsoleWrite) changed.Text = SceneTextInput.Text;
+        if (node.Kind is ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.Switch or ScriptNodeKind.Parallel or ScriptNodeKind.Async or ScriptNodeKind.RandomBranch)
         {
             string[] labels = OptionsInput.Text.Replace("\r", "").TrimEnd('\n').Split('\n');
             changed.Options = labels.Select((label, i) => new ScriptOption
-                { Text = label, Target = i < node.Options.Count ? node.Options[i].Target : null, Weight = i < node.Options.Count ? node.Options[i].Weight : 1 }).ToList();
+                { Text = label, Target = i < node.Options.Count ? node.Options[i].Target : null, Weight = i < node.Options.Count ? node.Options[i].Weight : 1, Lock = i < node.Options.Count ? node.Options[i].Lock : null }).ToList();
         }
 
         ApplyExtendedProperties(changed);
@@ -486,8 +497,12 @@ public partial class ScriptEditor : UserControl
     private static string Summary(ScriptNode node) => node.Kind switch
     {
         ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue => (node.Speaker.Length == 0 ? "" : node.Speaker + ": ") + node.Text,
-        ScriptNodeKind.Choice or ScriptNodeKind.Comment or ScriptNodeKind.Title or ScriptNodeKind.ConsoleWrite => node.Text,
-        ScriptNodeKind.RegisterCharacter => node.Character == null ? "Профиль не настроен" : node.Character.Name + " · " + node.Character.Id,
+        ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.Comment or ScriptNodeKind.Title or ScriptNodeKind.ConsoleWrite => node.Text,
+        ScriptNodeKind.RegisterCharacter or ScriptNodeKind.UpdateCharacter => node.Character == null ? "Профиль не настроен" : node.Character.Name + " · " + node.Character.Id,
+        ScriptNodeKind.SetSpeaker => "Спикер по умолчанию: " + node.SpeakerId,
+        ScriptNodeKind.ResetSpeakers => "Сброс спикера в текущей ветке",
+        ScriptNodeKind.Branching => "state." + node.Variable + " / " + node.Value,
+        ScriptNodeKind.CompareVariables => "state." + node.Variable + " / state." + node.CompareVariable,
         ScriptNodeKind.RandomBranch => node.Options.Count + " случайных веток",
         ScriptNodeKind.TextPause => node.Duration + " с · " + (node.Skippable ? "можно пропустить" : "без пропуска"),
         ScriptNodeKind.ClearText => node.Animated ? "Стирание · " + node.Duration + " с" : "Мгновенная очистка",
@@ -635,7 +650,8 @@ public partial class ScriptEditor : UserControl
         }
 
         if (Document?.IsVisual == true && GraphMode.IsChecked == true && !IsTextEditingSource(e.OriginalSource as DependencyObject) &&
-            Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && e.Key is Key.C or Key.V or Key.D or Key.Z or Key.X or Key.Y)
+            ((e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.None) ||
+             (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && e.Key is Key.C or Key.V or Key.D or Key.Z or Key.X or Key.Y)))
         {
             e.Handled = true;
             Guard(() => HandleGraphShortcut(e.Key, Keyboard.Modifiers, e.OriginalSource as DependencyObject));

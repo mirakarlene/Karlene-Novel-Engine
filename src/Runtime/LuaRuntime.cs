@@ -23,6 +23,7 @@ public sealed partial class LuaRuntime : IGameSession
     private Task? disposal;
     private RuntimeWindowSettings windowSettings;
     private readonly bool interactive;
+    private readonly bool pluginsEnabled;
     private StoryFrame story = StoryFrame.Empty;
     private SceneVisuals visuals = SceneVisuals.Empty;
     private readonly List<StoryAction> history = [];
@@ -43,13 +44,14 @@ public sealed partial class LuaRuntime : IGameSession
     public TimeSpan ExecutionLimit { get; }
 
     public LuaRuntime(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool interactive = false, bool preview = false,
-        EditorPreviewSource? editorSource = null, Action<JsonElement>? variablesUpdated = null)
+        EditorPreviewSource? editorSource = null, Action<JsonElement>? variablesUpdated = null, bool? pluginsEnabled = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(output);
         this.project = project;
         this.output = output;
         this.interactive = interactive;
+        this.pluginsEnabled = pluginsEnabled ?? EngineLaunch.PluginsEnabled;
         this.preview = preview;
         this.editorSource = editorSource;
         if (editorSource?.Seed is { } previewSeed) seed = previewSeed;
@@ -80,7 +82,7 @@ public sealed partial class LuaRuntime : IGameSession
         transitionPending = false;
         nextVariablesAt = 0;
         lock (stateLock) location = null;
-        scripts = GameScripts.Load(project, editorSource);
+        scripts = GameScripts.Load(project, editorSource, pluginsEnabled);
         frames = FrameCatalog.Load(project, scripts, editorSource);
         lua?.Dispose();
         lua = new Lua();
@@ -159,6 +161,7 @@ public sealed partial class LuaRuntime : IGameSession
         InitializePlugins();
         InitializeNarrative();
         InitializeTextInput();
+        InitializeChoices();
         string initPath = project.InitScriptPath;
         string scenePath = project.MainScenePath;
         string scriptModules = Path.GetDirectoryName(initPath)!.Replace('\\', '/') + "/?.lua";
@@ -254,6 +257,7 @@ public sealed partial class LuaRuntime : IGameSession
     {
         if (!initialized || Story.Kind != "choice") throw new InvalidOperationException("Сценарий не ожидает выбора.");
         if (option < 1 || option > Story.Options.Count) throw new ArgumentOutOfRangeException(nameof(option));
+        if (!IsChoiceEnabled(Story, option)) throw new InvalidOperationException("Этот вариант выбора заблокирован.");
         InstallHook();
         string before = FrameSignature(Story);
         ResumeStory(option);
@@ -302,6 +306,7 @@ public sealed partial class LuaRuntime : IGameSession
                 new StoryFrame(kind, value["speaker"] as string ?? "", value["text"] as string ?? "", options.AsReadOnly());
             if (kind != "preview") frame = ReadNarrativeFrame(frame, value);
             frame = ReadInputFrame(frame, value);
+            frame = ReadChoiceFrame(frame, value);
             frame = frame with { HasBackgroundTasks = value["background"] as bool? == true,
                 Identity = frames?.ResolveKey(value["key"] as string, Location!.File, Location.Line, Location.FunctionLine) ??
                 frames?.Resolve(Location!.File, Location.Line, Location.NodeId, Location.FunctionLine) };
@@ -347,7 +352,7 @@ public sealed partial class LuaRuntime : IGameSession
                 switch (action.Kind)
                 {
                     case "advance" when Story.CanAdvance: ResumeStory(null); break;
-                    case "choose" when Story.Kind == "choice" && action.Option >= 1 && action.Option <= Story.Options.Count: ResumeStory(action.Option); break;
+                    case "choose" when Story.Kind == "choice" && action.Option >= 1 && action.Option <= Story.Options.Count && IsChoiceEnabled(Story, action.Option): ResumeStory(action.Option); break;
                     case "input" when Story.Kind == "input" && action.Command != null: SubmitInputCore(action.Command, action.Cancel); break;
                     case "command" when !string.IsNullOrWhiteSpace(action.Command):
                         using (var command = lua!["kne_invoke_command"] as LuaFunction) command!.Call(action.Command);
@@ -372,10 +377,11 @@ public sealed partial class LuaRuntime : IGameSession
 
     private string ComputeFingerprint(GameScripts? program = null)
     {
-        program ??= GameScripts.Load(project);
+        program ??= GameScripts.Load(project, pluginsEnabled: pluginsEnabled);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         string entry = preview ? program.PreviewFunction(Path.GetRelativePath(project.Path, project.MainScenePath)) : "main";
         hash.AppendData(Encoding.UTF8.GetBytes("functions-v1:" + entry));
+        if (!pluginsEnabled) hash.AppendData(Encoding.UTF8.GetBytes("plugins-disabled"));
         // Include the resolved scene identity: previewing another scene must not accept its sibling's saves.
         hash.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(project.Path, project.MainScenePath)));
         foreach (string relative in program.Files.Select(f => f.Path).Concat(ProjectLoader.EnumerateFiles(project.Path, CancellationToken.None).Files
@@ -400,9 +406,10 @@ public sealed partial class LuaRuntime : IGameSession
     private static string FrameSignature(StoryFrame frame)
     {
         string original = JsonSerializer.Serialize(new { frame.Kind, frame.Speaker, frame.Text, frame.Options, frame.Completed });
-        if (frame.Character is null && frame.TextEffect is null && frame.RemainingSeconds is null && frame.IsSkippable && frame.EraseProgress == 0 && frame.Input is null) return original;
+        if (frame.Character is null && frame.TextEffect is null && frame.RemainingSeconds is null && frame.IsSkippable && frame.EraseProgress == 0 && frame.Input is null && frame.ChoiceOptions is null && frame.ChoiceTimer is null) return original;
         string narrative = original + JsonSerializer.Serialize(new { frame.Character, frame.TextEffect, frame.RemainingSeconds, frame.IsSkippable, frame.EraseProgress });
-        return frame.Input is null ? narrative : narrative + JsonSerializer.Serialize(new { frame.Input, frame.InputFeedback });
+        if (frame.Input != null) narrative += JsonSerializer.Serialize(new { frame.Input, frame.InputFeedback });
+        return frame.ChoiceOptions is null && frame.ChoiceTimer is null ? narrative : narrative + JsonSerializer.Serialize(new { frame.ChoiceOptions, frame.ChoiceTimer });
     }
 
     private static object ReadState(LuaTable table, int depth, bool allowArray = false)

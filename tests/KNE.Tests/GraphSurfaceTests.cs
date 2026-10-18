@@ -66,7 +66,9 @@ public sealed class GraphSurfaceTests
         Layout(editor);
         var canvas = (Canvas)editor.FindName("GraphCanvas");
         var card = Cards(editor).Single(card => Equals(card.Tag, "dialogue"));
-        var shadow = Assert.IsType<DropShadowEffect>(card.Effect);
+        Assert.Null(card.Effect);
+        var shadows = (Dictionary<string, Rectangle>)typeof(ScriptEditor).GetField("cardShadows", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(editor)!;
+        var shadow = Assert.IsType<DropShadowEffect>(shadows["dialogue"].Effect);
         Assert.Equal(((SolidColorBrush)card.BorderBrush).Color, shadow.Color);
         Assert.True(card.CornerRadius.TopLeft > 0); Assert.InRange(shadow.Opacity, .01, .35);
         var ports = Ports(card).ToArray(); Assert.Equal(2, ports.Length);

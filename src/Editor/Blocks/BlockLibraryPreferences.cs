@@ -16,9 +16,14 @@ public sealed class BlockLibraryPreferences
     public void Normalize()
     {
         var known = BlockLibrary.Definitions.Select(Key).ToHashSet(StringComparer.Ordinal);
-        Favorites = (Favorites ?? []).Where(known.Contains).Distinct(StringComparer.Ordinal).ToList();
-        Recent = (Recent ?? []).Where(known.Contains).Distinct(StringComparer.Ordinal).Take(BlockLibraryView.PageSize).ToList();
+        Favorites = (Favorites ?? []).Select(MigrateKey).Where(known.Contains).Distinct(StringComparer.Ordinal).ToList();
+        Recent = (Recent ?? []).Select(MigrateKey).Where(known.Contains).Distinct(StringComparer.Ordinal).Take(BlockLibraryView.PageSize).ToList();
     }
+    private static string MigrateKey(string key) => key switch
+    {
+        "narrative/Condition" => "narrative/Branching",
+        _ => key
+    };
     /// <summary>Adds a successfully inserted entry to the head of the recent list.</summary>
     public void RecordUse(BlockDefinition entry)
     {

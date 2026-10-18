@@ -21,12 +21,12 @@ public static class LuaSyntax
     {
         "assert", "collectgarbage", "dofile", "error", "getmetatable", "ipairs", "load", "loadfile", "next", "pairs", "pcall",
         "print", "rawequal", "rawget", "rawlen", "rawset", "require", "select", "setmetatable", "tonumber", "tostring", "type", "warn", "xpcall",
-        "init", "d", "choice", "scene", "call", "call_scene", "goto_scene", "jump", "print_to_ui", "set_window_title", "set_window_size", "set_bg_color",
+        "init", "d", "choice", "kne_choice", "scene", "call", "call_scene", "goto_scene", "jump", "print_to_ui", "set_window_title", "set_window_size", "set_bg_color",
         "background", "show_character", "hide_character", "play_music", "stop_music", "play_sound",
         "show_title", "hide_background", "move_visual", "animate_visual", "screen_shake", "screen_flash", "camera", "show_screen",
         "set_audio_channel", "play_audio", "stop_audio", "set_master_volume", "kne_parallel", "kne_async", "kne_join", "kne_pause", "kne_timer", "kne_wait_condition", "kne_end",
         "include_lua", "include_cs", "run_script", "configure_ui", "clear_backgrounds", "clear_sprites",
-        "register_character", "kne_say", "text_pause", "clear_text", "console_write", "kne_random_branch", "text_input"
+        "register_character", "update_character", "set_speaker", "reset_speakers", "kne_say", "text_pause", "clear_text", "console_write", "kne_random_branch", "text_input"
     };
 
     public static IReadOnlyList<LuaToken> Parse(string text)

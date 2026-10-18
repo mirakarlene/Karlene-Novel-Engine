@@ -235,7 +235,7 @@ public sealed class BlockEffectsTests
         {
             var view = new ScenePreview(); var story = new StoryFrame("choice", "", "Куда?", ["Лево", "Право"]);
             view.DisplayScene(project, project.Engine.RuntimeDefaults(project.Title), SceneVisuals.Empty, story, animate: true, allowChoices: true);
-            var choices = Find<StackPanel>(view, "ChoicePanel"); var firstButton = Assert.IsType<Button>(choices.Children[0]);
+            var choices = Find<StackPanel>(view, "ChoicePanel"); var firstButton = Assert.IsAssignableFrom<Button>(choices.Children[0]);
             var backdrop = Find<AnimatedBackground>(view, "AnimatedBackdrop"); Assert.True(backdrop.HasAnimatedProperties);
             backdrop.BeginAnimation(AnimatedBackground.PhaseProperty, null);
             view.DisplayScene(project, project.Engine.RuntimeDefaults(project.Title), SceneVisuals.Empty with { Title = "Ветка обновилась" },

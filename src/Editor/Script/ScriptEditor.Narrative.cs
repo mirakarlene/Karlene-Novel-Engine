@@ -13,17 +13,18 @@ public partial class ScriptEditor
     private int characterPickerGeneration;
 
     private static bool IsDialogue(ScriptNodeKind kind) => kind is ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue;
+    private static bool HasCharacterPicker(ScriptNodeKind kind) => IsDialogue(kind) || kind is ScriptNodeKind.SetSpeaker or ScriptNodeKind.UpdateCharacter;
 
     private void UpdateSpeakerReference()
     {
         if (SpeakerReference != null) SpeakerReference.Text = selectedSpeakerId.Length == 0
-            ? "Имя вручную; пустое поле — рассказчик."
+            ? "Пустое поле использует спикера по умолчанию, если он установлен. Кнопка «Рассказчик» явно отключает спикера для этой реплики."
             : "Профиль: " + selectedSpeakerId + ". Правка имени переключит на ручной ввод.";
     }
 
     private void AddNarrativeFields(ScriptNode node)
     {
-        if (node.Kind == ScriptNodeKind.RegisterCharacter)
+        if (node.Kind is ScriptNodeKind.RegisterCharacter or ScriptNodeKind.UpdateCharacter)
         {
             var profile = node.Character ?? new CharacterProfile();
             Text("CharacterIdInput", "ID (латиница, без пробелов)", profile.Id, (value, text) => value.Character = (value.Character ?? profile) with { Id = text.Trim() });
@@ -32,7 +33,37 @@ public partial class ScriptEditor
             Choice("CharacterAlignmentInput", "Выравнивание текста по умолчанию", profile.TextAlignment, ["left", "center", "right", "justify"], (value, text) => value.Character = (value.Character ?? profile) with { TextAlignment = text });
             Text("CharacterFontInput", "Семейство шрифта", profile.FontFamily, (value, text) => value.Character = (value.Character ?? profile) with { FontFamily = text.Trim() });
             Number("CharacterFontSizeInput", "Размер шрифта", profile.FontSize, (value, number) => value.Character = (value.Character ?? profile) with { FontSize = number });
-            Hint("Профиль задаёт только имя и типографику. Для изображения используйте блок «Отобразить спрайт». Регистрация должна выполниться до реплики с этим профилем.");
+            Hint(node.Kind == ScriptNodeKind.UpdateCharacter
+                ? "ID должен совпадать с уже зарегистрированным персонажем. Изменения применяются к следующим репликам, не изменяя уже показанный фрейм."
+                : "Профиль задаёт только имя и типографику. Для изображения используйте блок «Отобразить спрайт». Регистрация должна выполниться до реплики с этим профилем.");
+        }
+        if (HasCharacterPicker(node.Kind) && !IsDialogue(node.Kind))
+        {
+            if (node.Kind == ScriptNodeKind.SetSpeaker)
+            {
+                Text("DefaultSpeakerIdInput", "ID зарегистрированного персонажа", node.SpeakerId, (value, text) => value.SpeakerId = text.Trim());
+                Hint("Спикер применяется к следующим репликам с пустым именем. Вызванные и параллельные ветки наследуют его; изменения в них не затрагивают родителя или соседние ветки.");
+            }
+            var choose = new Button { Name = "SelectNarrativeCharacterButton", Content = "Выбрать профиль персонажа…", Margin = new Thickness(0, 3, 0, 8) };
+            choose.Click += SelectCharacter_Click; ExtendedProperties.Children.Add(choose);
+        }
+        if (IsDialogue(node.Kind))
+            Check("ExplicitNarratorInput", "Рассказчик: игнорировать спикера по умолчанию", node.Narration, (value, enabled) => value.Narration = enabled);
+        if (node.Kind is ScriptNodeKind.Branching or ScriptNodeKind.CompareVariables)
+        {
+            Text("BranchVariableInput", "Первая переменная state", node.Variable, (value, text) => { ValidateKey(text); value.Variable = text.Trim(); });
+            Choice("BranchComparisonInput", "Сравнение", node.Comparison.ToString(), Enum.GetNames<ScriptComparison>(), (value, text) => value.Comparison = Enum.Parse<ScriptComparison>(text));
+            if (node.Kind == ScriptNodeKind.CompareVariables)
+            {
+                Text("ComparedVariableInput", "Вторая переменная state", node.CompareVariable, (value, text) => { ValidateKey(text); value.CompareVariable = text.Trim(); });
+                Hint("Сравниваются текущие значения двух переменных. Блок не выводит реплики и не ожидает действий игрока. Для >, <, ≥, ≤ обе переменные должны быть числами.");
+            }
+            else
+            {
+                Text("BranchValueInput", "Значение для сравнения", node.Value, (value, text) => value.Value = text);
+                Choice("BranchValueTypeInput", "Тип значения", node.ValueKind.ToString(), Enum.GetNames<ScriptValueKind>(), (value, text) => value.ValueKind = Enum.Parse<ScriptValueKind>(text));
+                Hint("Выбирает ветку по переменной и постоянному значению. Выходы «Да» и «Нет» можно подключить к любым блокам.");
+            }
         }
         if (node.Kind is ScriptNodeKind.TextPause or ScriptNodeKind.ClearText or ScriptNodeKind.AutoDialogue)
             Number("NarrativeDurationInput", node.Kind == ScriptNodeKind.AutoDialogue ? "Через сколько секунд продолжить" : "Длительность, секунды", node.Duration, (value, number) => value.Duration = number);
@@ -72,6 +103,7 @@ public partial class ScriptEditor
         }
 
         void Add(string label, Control control) { ExtendedProperties.Children.Add(new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap }); ExtendedProperties.Children.Add(control); }
+        static void ValidateKey(string text) { if (!LuaSource.IsIdentifier(text.Trim()) || text.Trim().Length > 80) throw new InvalidDataException("Имя переменной: латиница, цифры и _, без цифры в начале и ключевых слов Lua."); }
         void Hint(string text) => ExtendedProperties.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0, 3, 0, 10) });
         void Text(string name, string label, string current, Action<ScriptNode, string> assign)
         {
@@ -111,7 +143,7 @@ public partial class ScriptEditor
         try
         {
             ApplyProperties();
-            if (Document?.Graph is not { } graph || Selected is not { } selected || !IsDialogue(selected.Kind)) return;
+            if (Document?.Graph is not { } graph || Selected is not { } selected || !HasCharacterPicker(selected.Kind)) return;
             characterPickerNode = selected.Id;
             CharacterPickerOverlay.Visibility = Visibility.Visible;
             CharacterProfiles.ItemsSource = null; ChooseCharacterButton.IsEnabled = false;
@@ -155,14 +187,16 @@ public partial class ScriptEditor
         SetDialogueSpeaker(entry.Profile.Id, entry.Profile.Name); CloseCharacterPicker();
     });
 
-    private void Narrator_Click(object sender, RoutedEventArgs e) => Guard(() => { ApplyProperties(); SetDialogueSpeaker("", ""); });
+    private void Narrator_Click(object sender, RoutedEventArgs e) => Guard(() => { ApplyProperties(); SetDialogueSpeaker("", "", narration: true); });
     private void CancelCharacter_Click(object sender, RoutedEventArgs e) => CloseCharacterPicker();
     private void CloseCharacterPicker() { characterPickerGeneration++; characterPickerNode = null; CharacterPickerOverlay.Visibility = Visibility.Collapsed; }
-    private void SetDialogueSpeaker(string id, string name)
+    private void SetDialogueSpeaker(string id, string name, bool narration = false)
     {
-        if (Document?.Graph is not { } graph || Selected is not { } selected || !IsDialogue(selected.Kind)) return;
-        if (selected.SpeakerId == id && selected.Speaker == name) return;
+        if (Document?.Graph is not { } graph || Selected is not { } selected || !HasCharacterPicker(selected.Kind)) return;
+        if (IsDialogue(selected.Kind) && selected.SpeakerId == id && selected.Speaker == name && selected.Narration == narration) return;
         var copy = VisualScript.Parse(graph.Serialize()); var node = copy.Nodes.Single(item => item.Id == selected.Id);
-        node.SpeakerId = id; node.Speaker = name; _ = copy.Serialize(); Remember(); Document.Graph = copy; Repaint();
+        if (node.Kind == ScriptNodeKind.UpdateCharacter && CharacterProfiles.SelectedItem is CharacterEntry entry) node.Character = entry.Profile;
+        else { node.SpeakerId = id; node.Speaker = node.Kind == ScriptNodeKind.SetSpeaker ? "" : name; node.Narration = narration; }
+        _ = copy.Serialize(); Remember(); Document.Graph = copy; Repaint();
     }
 }

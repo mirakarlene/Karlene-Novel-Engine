@@ -68,6 +68,7 @@
                 </Grid>
             </Border>
             <Viewbox x:Name="ScriptScreenViewbox" Panel.ZIndex="20" Stretch="Uniform" Visibility="Collapsed"><Canvas x:Name="ScriptScreenCanvas" Width="1280" Height="720"/></Viewbox>
+            <local:ChoiceTimerPresenter x:Name="ChoiceTimer" Panel.ZIndex="25"/>
             <Border x:Name="SceneFlash" Background="White" Opacity="0" IsHitTestVisible="False"/>
         </Grid>
         <StackPanel x:Name="GameControls" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="24" Visibility="Collapsed">

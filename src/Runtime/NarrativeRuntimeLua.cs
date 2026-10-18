@@ -6,6 +6,15 @@ internal static class NarrativeRuntimeLua
     public const string Source = """
         do
             local last = {speaker = "", text = ""}
+            local speakers = setmetatable({}, {__mode = "k"})
+            local main_speaker = ""
+            local function current_speaker()
+                local thread = coroutine.running()
+                return thread and speakers[thread] or main_speaker
+            end
+            function kne_inherit_speaker(parent, child)
+                speakers[child] = (parent and speakers[parent]) or main_speaker
+            end
             function kne_remember_dialogue(event) last = event end
             local function seconds(value)
                 if type(value) ~= "number" or value ~= value or value < 0 or value > 3600 then error("Время: от 0 до 3600 секунд", 3) end
@@ -21,13 +30,39 @@ internal static class NarrativeRuntimeLua
                 if problem ~= "" then error(problem, 2) end
                 kne_editor_pause()
             end
-            function kne_say(speaker, text, character, effect, auto_seconds, skippable)
+            function update_character(json)
+                if type(json) ~= "string" then error("update_character требует JSON-строку", 2) end
+                local problem = kne_update_character(json)
+                if problem ~= "" then error(problem, 2) end
+                kne_editor_pause()
+            end
+            function set_speaker(id)
+                if type(id) ~= "string" then error("set_speaker требует ID персонажа", 2) end
+                local problem = kne_check_character(id)
+                if problem ~= "" then error(problem, 2) end
+                local thread = coroutine.running()
+                if thread then speakers[thread] = id else main_speaker = id end
+                kne_editor_pause()
+            end
+            function reset_speakers()
+                local thread = coroutine.running()
+                if thread then speakers[thread] = "" else main_speaker = "" end
+                kne_editor_pause()
+            end
+            function kne_say(speaker, text, character, effect, auto_seconds, skippable, narration)
                 if character ~= nil and type(character) ~= "string" then error("ID персонажа должен быть строкой", 2) end
                 if effect ~= nil and type(effect) ~= "string" then error("Эффект должен быть JSON-строкой", 2) end
                 if skippable ~= nil and type(skippable) ~= "boolean" then error("Возможность пропуска должна быть логическим значением", 2) end
+                if narration ~= nil and type(narration) ~= "boolean" then error("Рассказчик должен быть логическим значением", 2) end
                 if auto_seconds ~= nil then seconds(auto_seconds) end
                 if skippable == false and auto_seconds == nil then error("Непропускаемая реплика требует время автоматического перехода", 2) end
-                local result = kne_prepare_dialogue(speaker == nil and "" or tostring(speaker), character, effect)
+                speaker = speaker == nil and "" or tostring(speaker)
+                if not narration and speaker == "" and (character == nil or character == "") then
+                    local inherited = current_speaker()
+                    if inherited and inherited ~= "" then character = inherited end
+                end
+                if narration then speaker, character = "", nil end
+                local result = kne_prepare_dialogue(speaker, character, effect)
                 if result[3] ~= "" then error(result[3], 2) end
                 local event = {kind = "dialogue", speaker = result[0], text = tostring(text),
                     character = result[1], effect = result[2], seconds = auto_seconds, skippable = skippable ~= false}

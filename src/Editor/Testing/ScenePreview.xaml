@@ -39,6 +39,7 @@
                         </ScrollViewer>
                     </Border>
                     <Viewbox x:Name="ScriptScreenViewbox" Panel.ZIndex="20" Stretch="Uniform" Visibility="Collapsed"><Canvas x:Name="ScriptScreenCanvas" Width="1280" Height="720" IsHitTestVisible="False"/></Viewbox>
+                    <local:ChoiceTimerPresenter x:Name="ChoiceTimer" Panel.ZIndex="25"/>
                     <Border x:Name="SceneFlash" Background="White" Opacity="0" IsHitTestVisible="False"/>
                 </Grid>
             </Viewbox>

@@ -17,11 +17,12 @@ public sealed class GameScripts
     }
 
     /// <summary>Validates all declarations before any project code runs; main must be globally unique.</summary>
-    public static GameScripts Load(ProjectInfo project, EditorPreviewSource? editorSource = null)
+    public static GameScripts Load(ProjectInfo project, EditorPreviewSource? editorSource = null, bool pluginsEnabled = true)
     {
         string init = project.InitScriptPath;
         var paths = ProjectLoader.EnumerateFiles(project.Path, CancellationToken.None).Files
             .Where(p => ScriptDocument.IsCodePath(p) || ScriptDocument.IsVisualPath(p))
+            .Where(p => pluginsEnabled || !EngineLaunch.IsPluginPath(Path.GetRelativePath(project.Path, p)))
             .Append(init).Append(project.MainScenePath).Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(p => Path.GetRelativePath(project.Path, p), StringComparer.Ordinal);
         var files = new List<GameScript>(); var functions = new List<GameFunction>();

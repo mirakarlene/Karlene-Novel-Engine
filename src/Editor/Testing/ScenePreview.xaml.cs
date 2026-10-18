@@ -23,10 +23,12 @@ public partial class ScenePreview : UserControl
     public Func<EditorSelection?>? SelectionProvider { get; set; }
     public event EventHandler<int>? SceneChoiceRequested;
     public event EventHandler<TextInputSubmission>? SceneInputRequested;
+    internal void StopChoicePresentation() { choicePresentation?.Stop(); ChoiceTimer.Visibility = Visibility.Collapsed; }
     /// <summary>Resets presentation clocks before replaying or restarting a scene, without creating a worker.</summary>
     public void ResetPresentation()
     {
         PlayerInput.Reset();
+        choicePresentation?.Reset();
         ResetGameplayUi();
         DialogueEffects.Reset();
         sceneEffects?.Stop();
@@ -42,6 +44,7 @@ public partial class ScenePreview : UserControl
     private string? renderedCharacterPath;
     private bool? renderedBackdropAnimate;
     private StoryFrame? renderedSceneStory;
+    private ChoicePresentation? choicePresentation;
     public void DisplayScene(ProjectInfo value, RuntimeWindowSettings window, SceneVisuals visuals, StoryFrame story, bool animate, bool allowChoices)
     {
         standalone = true; PreviewToolbar.Visibility = PreviewStatus.Visibility = Visibility.Collapsed;
@@ -180,6 +183,7 @@ public partial class ScenePreview : UserControl
     {
         ResetGameplayUi();
         DialogueEffects.Reset();
+        choicePresentation?.Reset();
         sceneEffects?.Stop();
         ScriptScreenCanvas.Children.Clear(); ScriptScreenViewbox.Visibility = Visibility.Collapsed;
         renderedOverlay = null; renderedOverlayVersion = -1;
@@ -187,6 +191,7 @@ public partial class ScenePreview : UserControl
         renderedBackgroundPath = renderedCharacterPath = null;
         renderedBackdropAnimate = null; renderedSceneStory = null;
         PlayerInput.Reset();
+        choicePresentation?.Reset();
         DialoguePanel.Visibility = Visibility.Collapsed; ChoicePanel.Children.Clear();
         AnimatedBackdrop.Configure(project?.Engine.Theme ?? new(), false);
         StepButton.IsEnabled = false;
@@ -234,7 +239,18 @@ public partial class ScenePreview : UserControl
             renderedOverlay = visuals.OverlayScreen; renderedOverlayVersion = visuals.ScreenVersion;
         }
         PlayerInput.Display(story, !standalone || PlayerInput.IsEnabled);
-        ChoicePanel.Visibility = story.Kind == "choice" ? Visibility.Visible : Visibility.Collapsed;
+        choicePresentation ??= new(ChoicePanel, ChoiceTimer, button =>
+        {
+            button.FontSize = 16;
+            button.Foreground = Brush(theme.TextColor); button.Background = Brush(theme.ButtonColor); button.BorderBrush = Brush(theme.AccentColor);
+        }, async (sender, args) =>
+        {
+            if (sender is not Button { Tag: int option }) return;
+            if (standalone) SceneChoiceRequested?.Invoke(this, option);
+            else await RunAsync(reset: false, choice: option);
+            args.Handled = true;
+        });
+        choicePresentation.Display(story, animate && theme.AnimationEnabled, Brush(theme.AccentColor));
         if (renderedSceneStory is { } previousStory && previousStory.Kind == story.Kind && previousStory.Speaker == story.Speaker &&
             previousStory.Text == story.Text && previousStory.Options.SequenceEqual(story.Options))
         {
@@ -245,21 +261,7 @@ public partial class ScenePreview : UserControl
         renderedSceneStory = story;
         DialoguePanel.Visibility = story.Text.Length > 0 || story.Options.Count > 0 || story.Kind == "input" ? Visibility.Visible : Visibility.Collapsed;
         SpeakerText.Text = story.Speaker; SpeakerText.Visibility = story.Speaker.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        DialogueText.Text = story.Text; ChoicePanel.Children.Clear();
-        for (int i = 0; i < story.Options.Count; i++)
-        {
-            int option = i + 1;
-            var button = new Button { Content = new TextBlock { Text = story.Options[i], TextWrapping = TextWrapping.Wrap },
-                FontSize = 16, Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 0, 0, 8),
-                Foreground = Brush(theme.TextColor), Background = Brush(theme.ButtonColor), BorderBrush = Brush(theme.AccentColor),
-                HorizontalContentAlignment = HorizontalAlignment.Stretch };
-            button.Click += async (_, _) =>
-            {
-                if (standalone) SceneChoiceRequested?.Invoke(this, option);
-                else await RunAsync(reset: false, choice: option);
-            };
-            ChoicePanel.Children.Add(button);
-        }
+        DialogueText.Text = story.Text;
         ApplyGameplayUi(visuals, story);
         RenderNarrative(story, visuals, animate);
     }

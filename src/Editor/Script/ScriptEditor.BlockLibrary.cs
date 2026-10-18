@@ -44,6 +44,7 @@ public partial class ScriptEditor
         if (node == null) return;
         AddNarrativeFields(node);
         AddTextInputFields(node);
+        AddChoiceFields(node);
         bool literal = node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable or ScriptNodeKind.While or ScriptNodeKind.WaitCondition;
         foreach (var control in new UIElement[] { ValueTypeLabel, ValueTypeInput }) Visible(control, literal || node.Kind == ScriptNodeKind.Switch);
         foreach (var control in new UIElement[] { ValueLabel, ValueInput }) Visible(control, literal || node.Kind is ScriptNodeKind.CheckFlag or ScriptNodeKind.SetFlag);

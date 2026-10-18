@@ -17,10 +17,11 @@ public sealed class BlockLibraryTests
     {
         Assert.Equal(new[] { "Начало и конец", "Нарратив", "Логика", "Визуал", "Звук", "Асинхронность", "Конфигурации", "Плагины" }, BlockLibrary.Groups.Select(group => group.Title));
         Assert.Equal(Enum.GetValues<ScriptNodeKind>().Order(), BlockLibrary.Definitions.Select(entry => entry.Kind).Distinct().Order());
-        Assert.Equal(2, BlockLibrary.Definitions.Count(entry => entry.Kind == ScriptNodeKind.Condition));
+        Assert.Single(BlockLibrary.Definitions, entry => entry.Kind == ScriptNodeKind.Branching && entry.Group == "narrative");
+        Assert.Single(BlockLibrary.Definitions, entry => entry.Kind == ScriptNodeKind.CompareVariables && entry.Group == "logic");
         Assert.Equal("#FFFFFF", BlockLibrary.ColorFor(BlockLibrary.Create(ScriptNodeKind.Start)));
         Assert.Equal("#000000", BlockLibrary.ColorFor(BlockLibrary.Create(ScriptNodeKind.End)));
-        var narrative = BlockLibrary.Create(ScriptNodeKind.Condition, "narrative"); var logic = BlockLibrary.Create(ScriptNodeKind.Condition, "logic");
+        var narrative = BlockLibrary.Create(ScriptNodeKind.Branching, "narrative"); var logic = BlockLibrary.Create(ScriptNodeKind.CompareVariables, "logic");
         Assert.Equal("#C65C16", BlockLibrary.ColorFor(narrative)); Assert.Equal("#2563A6", BlockLibrary.ColorFor(logic));
         var graph = VisualScript.Create(); graph.Nodes.Add(logic);
         Assert.Equal("#2563A6", BlockLibrary.ColorFor(VisualScript.Parse(graph.Serialize()).Nodes.Last()));
@@ -54,10 +55,10 @@ public sealed class BlockLibraryTests
                 Layout(content); Capture(content, "block-library-logic.png");
                 var viewport = Find<Border>(editor, "GraphScroll"); double zoom = Find<Slider>(editor, "ZoomSlider").Value;
                 double expectedX = (viewport.ActualWidth / 2 + 280) / zoom, expectedY = (viewport.ActualHeight / 2 - 170) / zoom;
-                Card(library, ScriptNodeKind.Condition).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(content);
-                var added = editor.Document.Graph.Nodes.Last(); Assert.Equal(ScriptNodeKind.Condition, added.Kind); Assert.Equal("logic", added.Category);
+                Card(library, ScriptNodeKind.CompareVariables).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(content);
+                var added = editor.Document.Graph.Nodes.Last(); Assert.Equal(ScriptNodeKind.CompareVariables, added.Kind); Assert.Equal("logic", added.Category);
                 await library.SavePreferencesAsync(); SelectGroup(library, "recent");
-                Assert.Equal(ScriptNodeKind.Condition, Assert.Single(Find<WrapPanel>(library, "BlockCards").Children.Cast<Button>()).Tag);
+                Assert.Equal(ScriptNodeKind.CompareVariables, Assert.Single(Find<WrapPanel>(library, "BlockCards").Children.Cast<Button>()).Tag);
                 var card = Find<Canvas>(editor, "GraphCanvas").Children.OfType<Border>().Single(card => Equals(card.Tag, added.Id));
                 Assert.Equal(expectedX, added.X + card.ActualWidth / 2, 3); Assert.Equal(expectedY, added.Y + card.ActualHeight / 2, 3);
                 Assert.Equal(Visibility.Collapsed, overlay.Visibility); Assert.True(Find<Grid>(window, "ProjectPanel").IsEnabled);

@@ -162,7 +162,7 @@ public sealed class WindowIntegrationTests
                 Assert.Equal(HorizontalAlignment.Left, character.HorizontalAlignment);
                 await ActAsync(() => Click("NextButton"));
                 var choices = ((StackPanel)window.FindName("ChoicePanel")).Children.OfType<Button>().ToArray();
-                Assert.Equal(new[] { "Домой", "В парк" }, choices.Select(button => button.Content));
+                Assert.Equal(new[] { "Домой", "В парк" }, choices.Select(button => Assert.IsType<TextBlock>(button.Content).Text));
                 await ActAsync(() => choices[1].RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
                 Assert.Equal("Выбор 2", ((TextBlock)window.FindName("DialogueText")).Text);
                 Assert.Null(character.Source);
