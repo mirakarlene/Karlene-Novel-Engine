@@ -50,7 +50,7 @@ public sealed class FlowAuthoringUiTests
                 Assert.True(projectButtons[1].IsEnabled); Assert.Equal(Path.Combine(fixture.Root, "missing"), projectButtons[1].Tag);
                 Capture(content, "projects-availability.png");
                 Find<StackPanel>(window, "WelcomePanel").Visibility = Visibility.Collapsed;
-                var settings = Find<StackPanel>(window, "SettingsPanel"); settings.Visibility = Visibility.Visible;
+                var settings = Find<FrameworkElement>(window, "SettingsPanel"); settings.Visibility = Visibility.Visible;
                 var editor = Find<TextBox>(window, "TxtEditorPath"); var storage = Find<TextBox>(window, "TxtProjectsStorage");
                 storage.Text = Path.Combine(fixture.Root, "projects"); Layout(content);
                 Assert.True(editor.TranslatePoint(new Point(), settings).Y < storage.TranslatePoint(new Point(), settings).Y);

@@ -14,22 +14,32 @@ public sealed class WatercolorLogo : WelcomeAnimation
     public Color StartColor { get => (Color)GetValue(StartColorProperty); set => SetValue(StartColorProperty, value); }
     public Color EndColor { get => (Color)GetValue(EndColorProperty); set => SetValue(EndColorProperty, value); }
     private readonly List<DrawingGroup> letters = [];
+    private readonly List<WelcomeArtCache> cachedLetters = [];
+    private double cachedScale;
+    internal int CacheBuilds { get; private set; }
     private double width, phase;
     internal double MotionPhase => phase;
     internal Vector OffsetFor(int index) => new(Math.Sin(phase * .7 + index * .8) * 1.4, Math.Sin(phase + index * .65) * 3);
     private static void Rebuild(DependencyObject view, DependencyPropertyChangedEventArgs args)
-    { var logo = (WatercolorLogo)view; logo.letters.Clear(); logo.InvalidateVisual(); }
+    { var logo = (WatercolorLogo)view; logo.letters.Clear(); logo.cachedLetters.Clear(); logo.InvalidateVisual(); }
     protected override void Advance(double seconds) => phase = (phase + seconds * .45) % (Math.Tau * 10);
     protected override void OnRender(DrawingContext dc)
     {
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
         if (letters.Count == 0) BuildLetters();
         double scale = Math.Min(ActualWidth / (width + 12), ActualHeight / 112);
+        double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX * Math.Max(1, scale);
+        if (cachedLetters.Count != letters.Count || Math.Abs(cachedScale - dpi) > .01)
+        {
+            cachedLetters.Clear(); foreach (var letter in letters) cachedLetters.Add(WelcomeArtCache.Create(letter, dpi));
+            cachedScale = dpi; CacheBuilds++;
+        }
         dc.PushTransform(new TranslateTransform((ActualWidth - width * scale) / 2, (ActualHeight - 100 * scale) / 2));
         dc.PushTransform(new ScaleTransform(scale, scale));
         for (int i = 0; i < letters.Count; i++)
         {
-            Vector offset = OffsetFor(i); dc.PushTransform(new TranslateTransform(offset.X, offset.Y)); dc.DrawDrawing(letters[i]); dc.Pop();
+            var art = cachedLetters[i]; if (art.Bounds.IsEmpty) continue;
+            Vector offset = OffsetFor(i); var bounds = art.Bounds; bounds.Offset(offset); dc.DrawImage(art.Image, bounds);
         }
         dc.Pop(); dc.Pop();
     }

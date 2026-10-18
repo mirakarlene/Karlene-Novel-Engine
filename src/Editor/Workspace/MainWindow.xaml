@@ -112,27 +112,51 @@
                 </DockPanel>
             </Grid>
 
-            <StackPanel x:Name="SettingsPanel" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="Настройки" FontSize="28" FontWeight="Bold" Margin="0,0,0,20"/>
-                <TextBlock Text="Имя пользователя" FontSize="16" Margin="0,0,0,8"/>
-                <TextBox x:Name="TxtUserName" MaxLength="80" Padding="6" Margin="0,0,0,8"/>
-                <TextBlock Text="Необязательно. Будет показано в приветствии KNE." Foreground="{DynamicResource Editor.Muted}" Margin="0,0,0,20"/>
-                <TextBlock Text="Путь к текстовому редактору" FontSize="16" Margin="0,0,0,8"/>
-                <DockPanel>
-                    <Button Content="Выбрать…" DockPanel.Dock="Right" Padding="12,6" Margin="10,0,0,0" Click="BtnSelectEditor_Click"/>
-                    <TextBox x:Name="TxtEditorPath" Width="380" Padding="6" VerticalContentAlignment="Center"/>
-                </DockPanel>
-                <TextBlock Text="Укажите .exe. Пустое поле — стандартный Блокнот." Foreground="{DynamicResource Editor.Muted}" Margin="0,8,0,20"/>
-                <TextBlock Text="Хранилище проектов" FontSize="16" Margin="0,0,0,8"/>
-                <DockPanel><Button Content="Выбрать…" DockPanel.Dock="Right" Padding="12,6" Margin="10,0,0,0" Click="BtnSelectStorage_Click"/><TextBox x:Name="TxtProjectsStorage" Width="380" Padding="6"/></DockPanel>
-                <TextBlock Text="Проекты создаются и обнаруживаются непосредственно в этой папке." Foreground="{DynamicResource Editor.Muted}" Margin="0,8,0,20"/>
-                <TextBlock Text="Тема оформления" FontSize="16" Margin="0,0,0,8"/>
-                <ComboBox x:Name="ThemeInput" DisplayMemberPath="Label" SelectedValuePath="Id" Margin="0,0,0,20" SelectionChanged="ThemeInput_SelectionChanged"/>
-                <StackPanel Orientation="Horizontal">
-                    <Button Content="Сохранить" Padding="14,10" Margin="0,0,10,0" Click="BtnSaveSettings_Click"/>
-                    <Button Content="Назад" Padding="14,10" Click="BtnSettingsBack_Click"/>
-                </StackPanel>
-            </StackPanel>
+            <Grid x:Name="SettingsPanel" Visibility="Collapsed" MaxWidth="1380" Margin="4">
+                <Grid.Resources><local:AccessibilitySelectedConverter x:Key="AccessibilitySelected"/></Grid.Resources>
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <TextBlock Text="Настройки" FontSize="28" FontWeight="Bold" Margin="0,0,0,16"/>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="0.9*" MinWidth="280"/><ColumnDefinition Width="18"/><ColumnDefinition Width="1.6*" MinWidth="610"/></Grid.ColumnDefinitions>
+                        <Border x:Name="ProjectsSettingsGroup" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18" VerticalAlignment="Top">
+                            <StackPanel>
+                                <TextBlock Text="Проекты" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,20"/>
+                                <TextBlock Text="Путь к текстовому редактору" Margin="0,0,0,7"/>
+                                <DockPanel><Button Content="Выбрать…" DockPanel.Dock="Right" Padding="10,6" Margin="8,0,0,0" Click="BtnSelectEditor_Click"/><TextBox x:Name="TxtEditorPath" MinWidth="120" Padding="6" VerticalContentAlignment="Center"/></DockPanel>
+                                <TextBlock Text="Укажите .exe. Пустое поле — стандартный Блокнот." TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,8,0,22"/>
+                                <TextBlock Text="Хранилище проектов" Margin="0,0,0,7"/>
+                                <DockPanel><Button Content="Выбрать…" DockPanel.Dock="Right" Padding="10,6" Margin="8,0,0,0" Click="BtnSelectStorage_Click"/><TextBox x:Name="TxtProjectsStorage" MinWidth="120" Padding="6"/></DockPanel>
+                                <TextBlock Text="Проекты создаются и обнаруживаются непосредственно в этой папке." TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="DesignSettingsGroup" Grid.Column="2" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18" VerticalAlignment="Top">
+                            <StackPanel>
+                                <TextBlock Text="Дизайн KNE" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,18"/>
+                                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <StackPanel><TextBlock Text="Имя пользователя" Margin="0,0,0,7"/><TextBox x:Name="TxtUserName" MaxLength="80" Padding="6" MinHeight="30"/><TextBlock Text="Необязательно. Для приветствия KNE." Foreground="{DynamicResource Editor.Muted}" TextWrapping="Wrap" Margin="0,6,0,12"/></StackPanel>
+                                    <StackPanel Grid.Column="2"><TextBlock Text="Тема оформления" Margin="0,0,0,7"/><ComboBox x:Name="ThemeInput" DisplayMemberPath="Label" SelectedValuePath="Id" SelectionChanged="ThemeInput_SelectionChanged"/></StackPanel>
+                                </Grid>
+                                <TextBlock Text="Летающие объекты главного экрана" Margin="0,0,0,7"/>
+                                <ComboBox x:Name="WelcomeObjectInput" DisplayMemberPath="Label" SelectedValuePath="Id" SelectionChanged="WelcomeObject_Changed" Margin="0,0,0,20"/>
+                                <TextBlock Text="Доступность блоков" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,7"/>
+                                <TextBlock Text="Миниатюры показывают различия восприятия. Режим меняет палитру категорий и добавляет значки; оформление игры остаётся прежним." TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,0,0,10"/>
+                                <ItemsControl x:Name="AccessibilityCards">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="3"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate><DataTemplate>
+                                        <RadioButton GroupName="AccessibilityMode" Tag="{Binding Id}" Checked="Accessibility_Checked" Margin="0,0,7,7" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                                            <RadioButton.IsChecked><MultiBinding Converter="{StaticResource AccessibilitySelected}" Mode="OneWay"><Binding Path="Id"/><Binding Path="(local:BlockAccessibility.Mode)" RelativeSource="{RelativeSource AncestorType={x:Type Window}}"/></MultiBinding></RadioButton.IsChecked>
+                                            <RadioButton.Template><ControlTemplate TargetType="RadioButton"><Border x:Name="ModeCard" BorderBrush="{DynamicResource Editor.Border}" Background="{DynamicResource Editor.Background}" BorderThickness="1" CornerRadius="7" Padding="8"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="ModeCard" Property="BorderBrush" Value="{DynamicResource KNE.AccentBrush}"/><Setter TargetName="ModeCard" Property="BorderThickness" Value="3"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ModeCard" Property="Background" Value="{DynamicResource Editor.Hover}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ModeCard" Property="BorderBrush" Value="{DynamicResource KNE.PinkBrush}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></RadioButton.Template>
+                                            <StackPanel><local:AccessibilityPreview Mode="{Binding Id}" Height="66" Margin="0,0,0,7"/><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{Binding Description}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,4,0,0"/></StackPanel>
+                                        </RadioButton>
+                                    </DataTemplate></ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </ScrollViewer>
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,16,0,0"><Button Content="Сохранить" Padding="18,10" Margin="0,0,10,0" Click="BtnSaveSettings_Click" Style="{StaticResource KNE.PrimaryButton}"/><Button Content="Назад" Padding="18,10" Click="BtnSettingsBack_Click"/></StackPanel>
+            </Grid>
         </Grid>
     </DockPanel>
         <Border x:Name="BlockLibraryOverlay" Visibility="Collapsed" Background="#B9181420" Padding="36" MouseDown="BlockLibraryBackdrop_Click"

@@ -132,6 +132,21 @@ public partial class ScriptEditor
                 Child = contents, Tag = node.Id
             };
             card.SetResourceReference(Border.BackgroundProperty, "Editor.Surface");
+            string category = node.Category.Length > 0 ? node.Category : BlockLibrary.Definitions.First(entry => entry.Kind == (node.Kind == ScriptNodeKind.Condition ? ScriptNodeKind.Branching : node.Kind)).Group;
+            var title = (TextBlock)header.Child;
+            header.Child = null;
+            var heading = new DockPanel(); var badge = new CategoryIcon { Group = category, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            heading.Children.Add(badge); heading.Children.Add(title); header.Child = heading;
+            BlockAccessibility.Decorate(card, category, presentation =>
+            {
+                bool adapted = BlockAccessibility.GetMode(card) != "normal";
+                var tint = adapted && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.End) ? new SolidColorBrush(presentation.Color) : brush;
+                header.Background = tint; UpdateCardOutline(node, card);
+                title.Foreground = node.Kind == ScriptNodeKind.Start ? Brushes.Black : node.Kind == ScriptNodeKind.End ? Brushes.White : adapted ? new SolidColorBrush(presentation.Foreground) : CalculationCompiler.IsCalculation(node.Kind) ? Brushes.Black : Brushes.White;
+                badge.Foreground = title.Foreground;
+                foreach (var port in ports.Children.OfType<GraphPort>()) port.Foreground = tint;
+                if (cardShadows.TryGetValue(node.Id, out var softBorder) && softBorder.Effect is DropShadowEffect effect) effect.Color = tint.Color;
+            });
             // Shader effects rasterize the entire subtree. Keep glyphs and ports outside that surface.
             var shadow = new Rectangle
             {
@@ -348,11 +363,19 @@ public partial class ScriptEditor
     {
         foreach (var (id, card) in cards)
         {
-            bool selected = selectedIds.Contains(id) || selectedId == id;
-            card.BorderThickness = new Thickness(selected ? 2.5 : 1.5);
-            card.BorderBrush = selected ? Brushes.DarkOrange : new SolidColorBrush((Color)ColorConverter.ConvertFromString(
-                BlockLibrary.ColorFor(Document!.Graph!.Nodes.Single(node => node.Id == id))));
+            UpdateCardOutline(Document!.Graph!.Nodes.Single(node => node.Id == id), card);
         }
+    }
+
+    private void UpdateCardOutline(ScriptNode node, Border card)
+    {
+        bool selected = selectedIds.Contains(node.Id) || selectedId == node.Id;
+        string mode = BlockAccessibility.GetMode(card);
+        string category = node.Category.Length > 0 ? node.Category : BlockLibrary.Definitions.First(entry => entry.Kind == (node.Kind == ScriptNodeKind.Condition ? ScriptNodeKind.Branching : node.Kind)).Group;
+        var presentation = BlockAccessibility.Presentation(category, mode);
+        Color color = mode != "normal" && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.End) ? presentation.Color : (Color)ColorConverter.ConvertFromString(BlockLibrary.ColorFor(node));
+        card.BorderBrush = selected ? Brushes.DarkOrange : new SolidColorBrush(color);
+        card.BorderThickness = new Thickness(presentation.BorderWidth + (selected ? 1 : 0));
     }
 
     private void CommitGraphGesture(string before)

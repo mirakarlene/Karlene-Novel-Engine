@@ -34,7 +34,10 @@ public partial class MainWindow : Window
         InitializeComponent();
         EditorTheme.Apply(this, settings.Theme);
         ThemeInput.ItemsSource = EditorTheme.Themes;
+        WelcomeObjectInput.ItemsSource = WelcomeBubbles.Objects;
+        AccessibilityCards.ItemsSource = BlockAccessibility.Modes;
         UpdateWelcomeGreeting();
+        UpdateDesignPreferences();
         SceneEditor.ProjectScriptRequested += SceneEditor_ProjectScriptRequested;
         SceneEditor.SubsystemRequested += SceneEditor_SubsystemRequested;
         presentTestingWindow = showTestingWindow ?? (window => { window.Owner = this; window.Show(); });
@@ -78,6 +81,7 @@ public partial class MainWindow : Window
         ThemeInput.SelectedValue = settings.Theme;
         EditorTheme.Apply(this, settings.Theme);
         UpdateWelcomeGreeting();
+        UpdateDesignPreferences();
         await RefreshStoredProjectsAsync();
         storageTimer.Start();
     }, "Загрузка настроек…");
@@ -211,6 +215,7 @@ public partial class MainWindow : Window
         TxtProjectsStorage.Text = settings.ProjectsStoragePath;
         TxtUserName.Text = settings.UserName;
         ThemeInput.SelectedValue = settings.Theme;
+        UpdateDesignPreferences();
         ShowPanel(SettingsPanel);
     }
 
@@ -229,7 +234,7 @@ public partial class MainWindow : Window
         }
         string userName = TxtUserName.Text.Trim();
         if (userName.Length > 80 || userName.Any(char.IsControl)) throw new ArgumentException("Имя пользователя: до 80 символов, без переносов строк и управляющих символов.");
-        var next = new UserSettings { EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = EditorTheme.Normalize((string?)ThemeInput.SelectedValue), UserName = userName };
+        var next = new UserSettings { EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = EditorTheme.Normalize((string?)ThemeInput.SelectedValue), UserName = userName, AccessibilityMode = BlockAccessibility.GetMode(this), WelcomeObjects = WelcomeBubbles.Normalize((string?)WelcomeObjectInput.SelectedValue) };
         await settingsStore.SaveAsync(next);
         settings = next;
         UpdateWelcomeGreeting();

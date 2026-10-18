@@ -16,6 +16,10 @@ public sealed class UserSettings
     public string Theme { get; set; } = "kne";
     /// <summary>Optional name displayed on the editor welcome screen.</summary>
     public string UserName { get; set; } = "";
+    /// <summary>Window-only block palette and category-symbol preference.</summary>
+    public string AccessibilityMode { get; set; } = "normal";
+    /// <summary>Decorative welcome-object shape; defaults to the original bubbles.</summary>
+    public string WelcomeObjects { get; set; } = "bubbles";
 
     public void RememberProject(string path)
     {
@@ -59,6 +63,8 @@ public sealed class UserSettingsStore
                 settings.ProjectsStoragePath ??= "";
                 settings.Theme = EditorTheme.Normalize(settings.Theme);
                 settings.UserName = (settings.UserName ?? "").Trim();
+                settings.AccessibilityMode = BlockAccessibility.Normalize(settings.AccessibilityMode);
+                settings.WelcomeObjects = WelcomeBubbles.Normalize(settings.WelcomeObjects);
                 settings.HiddenProjects = (settings.HiddenProjects ?? []).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 settings.ProjectLastOpened = new(settings.ProjectLastOpened ?? [], StringComparer.OrdinalIgnoreCase);
                 settings.RecentProjects = (settings.RecentProjects ?? []).Where(p => !string.IsNullOrWhiteSpace(p))
