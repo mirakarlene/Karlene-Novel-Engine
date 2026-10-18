@@ -13,7 +13,9 @@ public sealed class UserSettings
     public List<string> RecentProjects { get; set; } = [];
     public Dictionary<string, DateTimeOffset> ProjectLastOpened { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> HiddenProjects { get; set; } = [];
-    public string Theme { get; set; } = "light";
+    public string Theme { get; set; } = "kne";
+    /// <summary>Optional name displayed on the editor welcome screen.</summary>
+    public string UserName { get; set; } = "";
 
     public void RememberProject(string path)
     {
@@ -55,7 +57,8 @@ public sealed class UserSettingsStore
                     ?? throw new InvalidDataException("Файл настроек содержит null.");
                 settings.EditorPath ??= "";
                 settings.ProjectsStoragePath ??= "";
-                settings.Theme = settings.Theme == "dark" ? "dark" : "light";
+                settings.Theme = EditorTheme.Normalize(settings.Theme);
+                settings.UserName = (settings.UserName ?? "").Trim();
                 settings.HiddenProjects = (settings.HiddenProjects ?? []).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 settings.ProjectLastOpened = new(settings.ProjectLastOpened ?? [], StringComparer.OrdinalIgnoreCase);
                 settings.RecentProjects = (settings.RecentProjects ?? []).Where(p => !string.IsNullOrWhiteSpace(p))

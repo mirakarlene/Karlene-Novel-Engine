@@ -33,6 +33,8 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         EditorTheme.Apply(this, settings.Theme);
+        ThemeInput.ItemsSource = EditorTheme.Themes;
+        UpdateWelcomeGreeting();
         SceneEditor.ProjectScriptRequested += SceneEditor_ProjectScriptRequested;
         SceneEditor.SubsystemRequested += SceneEditor_SubsystemRequested;
         presentTestingWindow = showTestingWindow ?? (window => { window.Owner = this; window.Show(); });
@@ -72,8 +74,10 @@ public partial class MainWindow : Window
         settings = await settingsStore.LoadAsync();
         TxtEditorPath.Text = settings.EditorPath;
         TxtProjectsStorage.Text = settings.ProjectsStoragePath;
+        TxtUserName.Text = settings.UserName;
         ThemeInput.SelectedValue = settings.Theme;
         EditorTheme.Apply(this, settings.Theme);
+        UpdateWelcomeGreeting();
         await RefreshStoredProjectsAsync();
         storageTimer.Start();
     }, "Загрузка настроек…");
@@ -205,6 +209,7 @@ public partial class MainWindow : Window
     {
         TxtEditorPath.Text = settings.EditorPath;
         TxtProjectsStorage.Text = settings.ProjectsStoragePath;
+        TxtUserName.Text = settings.UserName;
         ThemeInput.SelectedValue = settings.Theme;
         ShowPanel(SettingsPanel);
     }
@@ -222,9 +227,12 @@ public partial class MainWindow : Window
             storage = PathSafety.NormalizeDirectory(storage); PathSafety.RejectLinks(storage);
             Directory.CreateDirectory(storage);
         }
-        var next = new UserSettings { EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = (string?)ThemeInput.SelectedValue ?? "light" };
+        string userName = TxtUserName.Text.Trim();
+        if (userName.Length > 80 || userName.Any(char.IsControl)) throw new ArgumentException("Имя пользователя: до 80 символов, без переносов строк и управляющих символов.");
+        var next = new UserSettings { EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = EditorTheme.Normalize((string?)ThemeInput.SelectedValue), UserName = userName };
         await settingsStore.SaveAsync(next);
         settings = next;
+        UpdateWelcomeGreeting();
         await RefreshStoredProjectsAsync();
         OperationStatus.Text = "Настройки сохранены.";
     }
