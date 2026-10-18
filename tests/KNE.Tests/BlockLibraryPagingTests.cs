@@ -99,10 +99,10 @@ public sealed class BlockLibraryPagingTests
             Recent = ["logic/Condition", "narrative/Condition", "logic/CompareVariables"]
         };
         preferences.Normalize();
-        Assert.Equal(new[] { "narrative/Branching", "logic/Condition", "logic/CompareVariables" }, preferences.Favorites);
-        Assert.Equal(new[] { "logic/Condition", "narrative/Branching", "logic/CompareVariables" }, preferences.Recent);
+        Assert.Equal(new[] { "narrative/Branching", "logic/CompareVariables" }, preferences.Favorites);
+        Assert.Equal(new[] { "narrative/Branching", "logic/CompareVariables" }, preferences.Recent);
         preferences.Normalize();
-        Assert.Equal(3, preferences.Favorites.Count); Assert.Equal(3, preferences.Recent.Count);
+        Assert.Equal(2, preferences.Favorites.Count); Assert.Equal(2, preferences.Recent.Count);
     }
 
     [Theory]
@@ -220,7 +220,7 @@ public sealed class BlockLibraryPagingTests
             await view.FlushPendingPreferencesAsync(); await use;
             Assert.False(view.HasPendingPreferenceSave);
             var persisted = await store.LoadAsync();
-            Assert.Equal(new[] { "logic/Condition", "narrative/Dialogue" }, persisted.Favorites);
+            Assert.Equal(new[] { "narrative/Branching", "narrative/Dialogue" }, persisted.Favorites);
             Assert.Equal(new[] { "logic/Random" }, persisted.Recent);
         });
     }

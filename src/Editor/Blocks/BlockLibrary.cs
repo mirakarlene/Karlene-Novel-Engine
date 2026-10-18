@@ -46,7 +46,6 @@ public static class BlockLibrary
         Add("narrative", ScriptNodeKind.RandomBranch, "Случайная ветка", "Выбрать один выход с заданными относительными вероятностями.");
         Add("narrative", ScriptNodeKind.EffectDialogue, "Реплика с эффектом", "Анимация каждой буквы: волна, дрожание, радуга и другие эффекты.");
         Add("logic", ScriptNodeKind.CompareVariables, "Условие", "Сравнить две переменные state без реплики или остановки игры.");
-        Add("logic", ScriptNodeKind.Condition, "Условие (значение, прежний формат)", "Совместимость старых схем: сравнение переменной с постоянным значением. Для новых схем используйте «Ветвление».");
         Add("logic", ScriptNodeKind.SetVariable, "Переменная", "Записать значение в state.");
         Add("logic", ScriptNodeKind.Switch, "Switch / Case", "Сравнить переменную с вариантами; предусмотрен выход по умолчанию.");
         Add("logic", ScriptNodeKind.While, "Цикл While", "Повторять тело, пока условие истинно. Конец тела возвращает к проверке.");
@@ -92,7 +91,7 @@ public static class BlockLibrary
     /// <summary>Creates a block with runnable argument defaults; its ports still need connections.</summary>
     public static ScriptNode Create(ScriptNodeKind kind, string? category = null)
     {
-        if (!Enum.IsDefined(kind)) throw new ArgumentOutOfRangeException(nameof(kind));
+        if (!Enum.IsDefined(kind) || kind == ScriptNodeKind.Condition) throw new ArgumentOutOfRangeException(nameof(kind), "Этот блок недоступен для создания.");
         if (category != null && !Definitions.Any(entry => entry.Kind == kind && entry.Group == category))
             throw new ArgumentException("Блок недоступен в выбранной группе.", nameof(category));
         var node = new ScriptNode { Kind = kind };
@@ -135,5 +134,5 @@ public static class BlockLibrary
 
     /// <summary>The header color for an existing block.</summary>
     public static string ColorFor(ScriptNode node) => node.Kind is ScriptNodeKind.Start or ScriptNodeKind.End || node.Category.Length == 0
-        ? Definitions.First(entry => entry.Kind == node.Kind).Color : Groups.Single(group => group.Id == node.Category).Color;
+        ? Definitions.First(entry => entry.Kind == (node.Kind == ScriptNodeKind.Condition ? ScriptNodeKind.Branching : node.Kind)).Color : Groups.Single(group => group.Id == node.Category).Color;
 }

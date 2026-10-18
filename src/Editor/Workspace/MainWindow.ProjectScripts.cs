@@ -22,7 +22,7 @@ public partial class MainWindow
         if (currentProject is not { } project) return;
         await RunOperationAsync(async () =>
         {
-            var source = SceneEditor.CaptureProjectScript(); if (source == null) return;
+            var source = ActiveEditor.CaptureProjectScript(); if (source == null) return;
             string file;
             if (string.IsNullOrWhiteSpace(source.Value.Path))
             {
@@ -31,8 +31,8 @@ public partial class MainWindow
             }
             else file = PathSafety.ResolveRelative(project.Path, source.Value.Path);
             string relative = await ProjectScriptFiles.EnsureAsync(project.Path, file, lifetime.Token);
-            SceneEditor.SetProjectScriptPath(source.Value.NodeId, relative);
-            await SceneEditor.SaveAsync();
+            ActiveEditor.SetProjectScriptPath(source.Value.NodeId, relative);
+            await ActiveEditor.SaveAsync();
             launchProjectScript(EditorLauncher.CreateStartInfo(settings.EditorPath, PathSafety.ResolveRelative(project.Path, relative)));
             OperationStatus.Text = "Скрипт открыт во внешнем редакторе: " + relative;
         }, "Открытие скрипта…");

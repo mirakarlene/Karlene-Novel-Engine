@@ -35,7 +35,7 @@
                     <Slider x:Name="ZoomSlider" Minimum="0.4" Maximum="1.5" Value="1" Width="75" ValueChanged="Zoom_Changed" Margin="0,0,0,4"/>
                     <Button x:Name="ZoomInButton" Content="+" Width="26" Margin="4,0,0,4" Click="ZoomIn_Click" ToolTip="Увеличить на один шаг"/>
                 </WrapPanel>
-                <Border x:Name="GraphScroll" Grid.Row="1" ClipToBounds="True" Background="#FFF0F3F7"
+                <Border x:Name="GraphScroll" Grid.Row="1" Focusable="True" ClipToBounds="True" Background="#FFF0F3F7"
                         PreviewMouseRightButtonDown="GraphPan_Start" PreviewMouseRightButtonUp="GraphPan_End"
                         PreviewMouseMove="GraphPan_Move" LostMouseCapture="GraphPan_LostCapture" PreviewMouseWheel="Canvas_MouseWheel">
                     <Canvas x:Name="GraphCanvas" Width="1600" Height="1000" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top">
@@ -79,6 +79,17 @@
                     <TextBlock x:Name="CharacterPickerStatus" Grid.Row="2" TextWrapping="Wrap" Foreground="#FF536174" Margin="0,12,0,12"/>
                     <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right"><Button x:Name="ChooseCharacterButton" Content="Выбрать" Click="ChooseCharacter_Click" Padding="12,6" Margin="0,0,8,0"/><Button x:Name="CancelCharacterButton" Content="Отмена" Click="CancelCharacter_Click" Padding="12,6"/></StackPanel>
                 </Grid>
+            </Border>
+        </Border>
+        <Border x:Name="QuickSearchOverlay" Grid.RowSpan="3" Panel.ZIndex="60" Background="#90101827" Visibility="Collapsed" KeyboardNavigation.TabNavigation="Cycle" MouseDown="QuickSearchBackdrop_Click">
+            <Border Width="520" MaxHeight="520" Padding="18" Margin="20" Background="#FFF9F8FC" CornerRadius="12" VerticalAlignment="Top" HorizontalAlignment="Center" MouseDown="QuickSearchPanel_Click">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Найти блок в этой схеме" FontSize="19" FontWeight="Bold" Margin="0,0,0,10"/>
+                    <TextBox x:Name="QuickSearchInput" DockPanel.Dock="Top" Padding="8" TextChanged="QuickSearch_TextChanged" ToolTip="Название, текст, ресурс или ID существующего блока"/>
+                    <TextBlock x:Name="QuickSearchEmpty" DockPanel.Dock="Top" Text="Блоки не найдены" Margin="0,8" Visibility="Collapsed"/>
+                    <TextBlock DockPanel.Dock="Bottom" Text="↑/↓ — выбрать · Enter — перейти · Esc — закрыть" Foreground="#FF536174" Margin="0,10,0,0"/>
+                    <ListBox x:Name="QuickSearchResults" MaxHeight="350" Margin="0,8,0,0" DisplayMemberPath="Label" MouseDoubleClick="QuickSearchResults_DoubleClick"/>
+                </DockPanel>
             </Border>
         </Border>
     </Grid>

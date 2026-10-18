@@ -42,13 +42,13 @@ public partial class MainWindow : Window
     private async void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (EngineDiagnostics.Current?.Snapshot.Failure != null) { closeApproved = true; return; }
-        if (closeApproved || (SceneEditor.Document == null && !busy && !LibraryView.HasPendingPreferenceSave)) return;
+        if (closeApproved || (ActiveEditor.Document == null && !busy && !LibraryView.HasPendingPreferenceSave)) return;
         e.Cancel = true;
         if (checkingClose || busy) return;
         checkingClose = true;
         try
         {
-            if (await SceneEditor.CanLeaveAsync())
+            if (await CanLeaveAllAsync())
             {
                 await LibraryView.FlushPendingPreferencesAsync();
                 closeApproved = true;
@@ -114,26 +114,29 @@ public partial class MainWindow : Window
         SettingsPanel.Visibility = panel == SettingsPanel ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private async Task OpenProjectAsync(string path, bool remember = false)
+    private async Task<bool> OpenProjectAsync(string path, bool remember = false)
     {
         var loaded = await ProjectLoader.LoadProjectAsync(path, lifetime.Token);
-        if (closed) return;
+        if (closed) return false;
+        if (!await CheckCompatibilityAsync(loaded)) return false;
         string? identityWarning = null;
         try { await FrameCatalog.SynchronizeAsync(loaded, lifetime.Token); }
         catch (OperationCanceledException) { throw; }
         catch (Exception error) { identityWarning = " Не удалось обновить ID фреймов: " + error.Message; }
         if (currentProject != null && !currentProject.Path.Equals(loaded.Path, StringComparison.OrdinalIgnoreCase))
         {
-            if (!await SceneEditor.CanLeaveAsync()) return;
-            SceneEditor.Clear();
-            EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Collapsed;
+            if (!await CanLeaveAllAsync()) return false;
+            ClearEditorTabs();
+            expandedTreePaths.Clear(); selectedTreePath = null;
+            ProjectFilesTree.ItemsSource = null;
+            EditorWorkspace.Visibility = ActiveEditor.Visibility = Visibility.Collapsed;
             FilesDataGrid.Visibility = Visibility.Visible;
         }
         currentProject = loaded;
         EngineDiagnostics.Current?.SetProject(loaded.Title, loaded.Path);
         ProjectTitleTextBlock.Text = loaded.Name;
         await UpdateFileViewAsync();
-        if (closed) return;
+        if (closed) return false;
         WatchProject(loaded.Path);
         ShowPanel(ProjectPanel);
         OperationStatus.Text = loaded.Warnings.Count == 0 ? "Файлов: " + loaded.Files.Count :
@@ -146,6 +149,7 @@ public partial class MainWindow : Window
             try { await settingsStore.SaveAsync(settings); }
             catch (Exception ex) { OperationStatus.Text += " Не удалось сохранить список проектов: " + ex.Message; }
         }
+        return true;
     }
 
     private async void BtnSelectProject_Click(object sender, RoutedEventArgs e)
@@ -170,16 +174,17 @@ public partial class MainWindow : Window
         await RunOperationAsync(async () =>
         {
             string path = await ProjectCreator.CreateProjectAsync(name, dialog.FolderName, method.AuthoringMode, lifetime.Token);
-            await OpenProjectAsync(path, remember: true);
+            if (!await OpenProjectAsync(path, remember: true)) return;
             if (currentProject != null) await OpenScriptAsync(currentProject.MainScenePath);
         }, "Создание проекта…");
     }
 
     private async void BtnBack_Click(object sender, RoutedEventArgs e) => await RunOperationAsync(async () =>
     {
-        if (!await SceneEditor.CanLeaveAsync()) return;
-        SceneEditor.Clear();
-        EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Collapsed;
+        if (!await CanLeaveAllAsync()) return;
+        ClearEditorTabs();
+        expandedTreePaths.Clear(); selectedTreePath = null;
+        EditorWorkspace.Visibility = ActiveEditor.Visibility = Visibility.Collapsed;
         FilesDataGrid.Visibility = Visibility.Visible;
         currentProject = null;
         FilesDataGrid.ItemsSource = null;
@@ -243,6 +248,12 @@ public partial class MainWindow : Window
         var files = project.Files.ToArray();
         var tree = await Task.Run(() => ProjectTree.Build(project.Path, files, query), lifetime.Token);
         if (revision != viewRevision || closed || currentProject != project) return;
+        RememberTreeState();
+        foreach (var node in FlattenTree(tree))
+        {
+            node.IsExpanded = expandedTreePaths.Contains(node.RelativePath);
+            node.IsSelected = node.RelativePath.Equals(selectedTreePath, StringComparison.OrdinalIgnoreCase);
+        }
         ProjectFilesTree.ItemsSource = tree;
         FilesDataGrid.ItemsSource = files.Where(f => Path.GetRelativePath(project.Path, f.FilePath).Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
     }
@@ -343,7 +354,7 @@ public partial class MainWindow : Window
                     using (Process.Start(EditorLauncher.CreateStartInfo(settings.EditorPath, source))) { }
                     break;
                 case "Переименовать":
-                    if (SceneEditor.Document?.FilePath.Equals(source, StringComparison.OrdinalIgnoreCase) == true)
+                    if (IsDocumentOpen(source))
                         throw new InvalidOperationException("Открытый сценарий нельзя переименовать. Сначала закройте его в редакторе.");
                     string name = Interaction.InputBox("Введите новое имя с расширением:", "Переименование", file.FileName);
                     if (name.Length == 0) return;
@@ -358,7 +369,7 @@ public partial class MainWindow : Window
                     await OpenProjectAsync(project.Path);
                     break;
                 case "Удалить":
-                    if (SceneEditor.Document?.FilePath.Equals(source, StringComparison.OrdinalIgnoreCase) == true)
+                    if (IsDocumentOpen(source))
                         throw new InvalidOperationException("Открытый сценарий нельзя удалить. Сначала закройте его в редакторе.");
                     if (MessageBox.Show(this, $"Удалить {file.FileName}? Действие необратимо.", "Удаление",
                         MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
@@ -397,23 +408,15 @@ public partial class MainWindow : Window
         if (currentProject is not { } project) return;
         await RunOperationAsync(async () =>
         {
-            await SceneEditor.SaveAsync();
+            await SaveAllEditorsAsync();
             // Re-read configuration and files changed by the external editor.
-            await OpenProjectAsync(project.Path);
+            if (!await OpenProjectAsync(project.Path)) return;
             if (closed || currentProject == null) return;
             _ = currentProject.MainScenePath;
             _ = currentProject.InitScriptPath;
             var game = new GameWindow(currentProject);
             game.Show();
         }, "Запуск проекта…");
-    }
-
-    private async Task OpenScriptAsync(string path)
-    {
-        if (currentProject == null || !await SceneEditor.CanLeaveAsync()) return;
-        await SceneEditor.OpenAsync(currentProject.Path, path);
-        FilesDataGrid.Visibility = Visibility.Collapsed;
-        EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Visible;
     }
 
     private async void BtnOpenScript_Click(object sender, RoutedEventArgs e)
@@ -456,7 +459,7 @@ public partial class MainWindow : Window
     private void BtnFileList_Click(object sender, RoutedEventArgs e)
     {
         FilesDataGrid.Visibility = Visibility.Visible;
-        EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Collapsed;
+        EditorWorkspace.Visibility = ActiveEditor.Visibility = Visibility.Collapsed;
     }
 
     private async void BtnNewVisualScene_Click(object sender, RoutedEventArgs e)
@@ -471,7 +474,6 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) != true) return;
         await RunOperationAsync(async () =>
         {
-            if (!await SceneEditor.CanLeaveAsync()) return;
             await ScriptDocument.CreateVisualAsync(project.Path, dialog.FileName, lifetime.Token);
             await OpenProjectAsync(project.Path);
             await OpenScriptAsync(dialog.FileName);
@@ -483,20 +485,20 @@ public partial class MainWindow : Window
 
     private async void SceneEditor_ExternalEditorRequested(object? sender, EventArgs e)
     {
-        if (SceneEditor.Document is not { IsVisual: false } document) return;
+        if (ActiveEditor.Document is not { IsVisual: false } document) return;
         await RunOperationAsync(async () =>
         {
-            await SceneEditor.SaveAsync();
+            await ActiveEditor.SaveAsync();
             using (Process.Start(EditorLauncher.CreateStartInfo(settings.EditorPath, document.FilePath))) { }
         }, "Открытие внешнего редактора…");
     }
 
     private async void SceneEditor_MainSceneRequested(object? sender, EventArgs e)
     {
-        if (currentProject is not { } project || SceneEditor.Document is not { } document) return;
+        if (currentProject is not { } project || ActiveEditor.Document is not { } document) return;
         await RunOperationAsync(async () =>
         {
-            await SceneEditor.SaveAsync();
+            await ActiveEditor.SaveAsync();
             var program = GameScripts.Load(project);
             string relative = Path.GetRelativePath(project.Path, document.FilePath).Replace('\\', '/');
             if (!program.Main.Path.Equals(relative, StringComparison.OrdinalIgnoreCase))
@@ -521,11 +523,6 @@ public partial class MainWindow : Window
         }, "Смена главной сцены…");
     }
 
-    private async void SceneEditor_CloseRequested(object? sender, EventArgs e) => await RunOperationAsync(async () =>
-    {
-        if (!await SceneEditor.CanLeaveAsync()) return;
-        SceneEditor.Clear();
-        EditorWorkspace.Visibility = SceneEditor.Visibility = Visibility.Collapsed;
-        FilesDataGrid.Visibility = Visibility.Visible;
-    }, "Закрытие сценария…");
+    private async void SceneEditor_CloseRequested(object? sender, EventArgs e) => await RunOperationAsync(
+        () => CloseEditorTabAsync(sender as ScriptEditor ?? ActiveEditor), "Закрытие сценария…");
 }

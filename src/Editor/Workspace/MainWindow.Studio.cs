@@ -14,7 +14,7 @@ public partial class MainWindow
         if (currentProject == null || closed) return;
         try
         {
-            var selection = SceneEditor.CapturePreview(sceneTest);
+            var selection = ActiveEditor.CapturePreview(sceneTest);
             if (selection == null) return;
             presentTestingWindow(new SceneTestingWindow(currentProject, selection with { FromMain = false }, sceneTest));
         }
@@ -25,7 +25,7 @@ public partial class MainWindow
     private async void BtnSaveAllExit_Click(object sender, RoutedEventArgs e)
     {
         bool saved = false;
-        await RunOperationAsync(async () => { await SceneEditor.SaveAsync(); await LibraryView.FlushPendingPreferencesAsync(); saved = true; }, "Сохранение проекта…");
+        await RunOperationAsync(async () => { await SaveAllEditorsAsync(); await LibraryView.FlushPendingPreferencesAsync(); saved = true; }, "Сохранение проекта…");
         if (saved && !closed) { closeApproved = true; Close(); }
     }
 
@@ -68,7 +68,7 @@ public partial class MainWindow
     public async Task<string?> AnalyzeCurrentProjectAsync()
     {
         if (currentProject == null) return null;
-        await SceneEditor.SaveAsync();
+        await SaveAllEditorsAsync();
         var result = await ProjectAnalyzer.AnalyzeAsync(currentProject.Path, lifetime.Token);
         string report = await ProjectAnalyzer.SaveReportAsync(currentProject.Path, result, lifetime.Token);
         presentAnalysisReport(report);

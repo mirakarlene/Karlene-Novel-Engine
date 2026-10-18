@@ -52,10 +52,10 @@ public sealed partial class VisualScript
             var script = JsonSerializer.Deserialize<VisualScript>(json, JsonOptions)
                          ?? throw new InvalidDataException("Блок-схема не должна содержать null.");
             script.DetachLegacyComments();
-            // Narrative conditions already compared a state value to a literal. Retain that behavior
-            // under the new name; old logic conditions stay literal comparisons until explicitly replaced.
-            foreach (var node in script.Nodes?.Where(node => node != null && node.Kind == ScriptNodeKind.Condition && node.Category == "narrative") ?? [])
-                node.Kind = ScriptNodeKind.Branching;
+            // Both legacy categories compared a state value to a literal. Preserve the operation,
+            // ports and IDs while moving it to the current narrative branching command.
+            foreach (var node in script.Nodes?.Where(node => node != null && node.Kind == ScriptNodeKind.Condition) ?? [])
+            { node.Kind = ScriptNodeKind.Branching; node.Category = "narrative"; }
             script.ValidateStructure();
             return script;
         }

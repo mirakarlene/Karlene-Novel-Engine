@@ -7,22 +7,22 @@ public partial class MainWindow
 {
     private void SceneEditor_BlockLibraryRequested(object? sender, EventArgs e)
     {
-        if (busy || closed || SceneEditor.Document?.Graph == null) return;
+        if (busy || closed || ActiveEditor.Document?.Graph == null) return;
         BlockLibraryOverlay.Visibility = Visibility.Visible; ProjectPanel.IsEnabled = false;
-        LibraryView.Open(SceneEditor.CanAddBlock);
+        LibraryView.Open(ActiveEditor.CanAddBlock);
     }
     private void CloseBlockLibrary()
     {
         BlockLibraryOverlay.Visibility = Visibility.Collapsed;
-        if (!closed) { ProjectPanel.IsEnabled = !busy; SceneEditor.FocusAddBlock(); }
+        if (!closed) { ProjectPanel.IsEnabled = !busy; ActiveEditor.FocusAddBlock(); }
     }
     private async void Library_BlockSelected(object? sender, BlockDefinition entry)
     {
         try
         {
-            SceneEditor.AddBlock(entry.Kind, entry.Group); CloseBlockLibrary();
+            ActiveEditor.AddBlock(entry.Kind, entry.Group); CloseBlockLibrary();
             Task recordUse = LibraryView.RecordUseAsync(entry);
-            if (entry.Kind == ScriptNodeKind.Script) SceneEditor_ProjectScriptRequested(SceneEditor, EventArgs.Empty);
+            if (entry.Kind == ScriptNodeKind.Script) SceneEditor_ProjectScriptRequested(ActiveEditor, EventArgs.Empty);
             await recordUse;
         }
         catch (Exception error) { OperationStatus.Text = "Блок не добавлен: " + error.Message; }

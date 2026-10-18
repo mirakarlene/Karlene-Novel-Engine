@@ -11,7 +11,7 @@ public partial class ScriptEditor
     internal void FocusAddBlock() => AddBlockButton.Focus();
 
     /// <summary>Checks the block limit and the unique entry-point rule without modifying the graph.</summary>
-    public bool CanAddBlock(ScriptNodeKind kind) => Document?.Graph is { } graph && Enum.IsDefined(kind) && graph.Nodes.Count < 500 &&
+    public bool CanAddBlock(ScriptNodeKind kind) => Document?.Graph is { } graph && BlockLibrary.Definitions.Any(entry => entry.Kind == kind) && graph.Nodes.Count < 500 &&
         (kind != ScriptNodeKind.Start || graph.Nodes.All(node => node.Kind != ScriptNodeKind.Start));
 
     /// <summary>Creates a command at the center of the visible canvas, retaining the viewport and undo history.</summary>

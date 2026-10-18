@@ -146,7 +146,7 @@ public sealed class NarrativeProfileEvolutionTests
         var graph = Chain(legacy); legacy.Next = null;
         var narrative = VisualScript.Parse(graph.Serialize()); Assert.Equal(ScriptNodeKind.Branching, narrative.Nodes.Single(node => node.Id == legacy.Id).Kind);
         Assert.Contains("state[\"score\"] == 17", narrative.Compile());
-        legacy.Category = "logic"; var logic = VisualScript.Parse(graph.Serialize()); Assert.Equal(ScriptNodeKind.Condition, logic.Nodes.Single(node => node.Id == legacy.Id).Kind);
+        legacy.Category = "logic"; var logic = VisualScript.Parse(graph.Serialize()); Assert.Equal(ScriptNodeKind.Branching, logic.Nodes.Single(node => node.Id == legacy.Id).Kind);
         Assert.Contains("state[\"score\"] == 17", logic.Compile());
         legacy.Kind = ScriptNodeKind.CompareVariables; legacy.CompareVariable = "not a key";
         Assert.Contains("имя переменной", Assert.Throws<InvalidDataException>(() => graph.Compile()).Message);
