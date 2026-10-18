@@ -221,7 +221,9 @@ public sealed class SceneTestingTests
                 Find<WrapPanel>(window, "ExitActionsGroup").Children.OfType<Button>().Last().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 await Until(() => Find<TextBlock>(window, "OperationStatus").Text.Contains("Операция не завершена"));
                 Assert.False(closed); Assert.True(editor.Document!.IsDirty); Assert.Contains("external", File.ReadAllText(path));
-                editor.Clear(); await InvokeAsync(window, "OpenScriptAsync", path);
+                editor.ConfirmSave = _ => MessageBoxResult.No;
+                await InvokeAsync(window, "CloseEditorTabAsync", editor);
+                await InvokeAsync(window, "OpenScriptAsync", path);
                 Find<KrlCodeEditor>(editor, "CodeEditor").Text = "function main() d(nil,'saved all') end";
                 Find<WrapPanel>(window, "ExitActionsGroup").Children.OfType<Button>().Last().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 await Until(() => closed); Assert.Contains("saved all", File.ReadAllText(path));

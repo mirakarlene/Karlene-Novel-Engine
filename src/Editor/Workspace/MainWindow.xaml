@@ -38,8 +38,10 @@
                 <Grid Grid.Row="1">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBox x:Name="FileSearch" Grid.ColumnSpan="3" Padding="8" Margin="0,0,0,10" ToolTip="Поиск по имени и относительному пути" TextChanged="FileSearch_TextChanged"/>
+                    <TextBox x:Name="FileSearch" Grid.Column="0" Padding="8" Margin="0,0,0,10" ToolTip="Поиск файлов по имени и относительному пути" TextChanged="FileSearch_TextChanged"/>
+                    <TabControl x:Name="DocumentTabs" Grid.Column="2" Margin="0,0,0,10" SelectionChanged="DocumentTabs_SelectionChanged" Visibility="Collapsed"/>
                     <TreeView x:Name="ProjectFilesTree" Grid.Row="1" SelectedItemChanged="ProjectFilesTree_SelectedItemChanged" MouseDoubleClick="OpenScript_DoubleClick">
+                        <TreeView.ItemContainerStyle><Style TargetType="TreeViewItem"><Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/><Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/></Style></TreeView.ItemContainerStyle>
                         <TreeView.ItemTemplate><HierarchicalDataTemplate ItemsSource="{Binding Children}">
                             <TextBlock Text="{Binding Name}" ToolTip="{Binding RelativePath}"/>
                         </HierarchicalDataTemplate></TreeView.ItemTemplate>

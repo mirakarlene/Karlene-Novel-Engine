@@ -7,6 +7,10 @@ public sealed class ProjectTreeNode
     public required string Name { get; init; }
     public required string RelativePath { get; init; }
     public ProjectFile? File { get; init; }
+    /// <summary>Folder expansion retained when refreshing the file tree.</summary>
+    public bool IsExpanded { get; set; }
+    /// <summary>Selection retained by relative path.</summary>
+    public bool IsSelected { get; set; }
     public List<ProjectTreeNode> Children { get; } = [];
 }
 

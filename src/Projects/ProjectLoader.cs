@@ -96,7 +96,9 @@ public static class ProjectLoader
             foreach (string entry in Directory.EnumerateFileSystemEntries(directory))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (directory.Equals(root, StringComparison.OrdinalIgnoreCase) && Path.GetFileName(entry).Equals("saves", StringComparison.OrdinalIgnoreCase)) continue;
+                if (directory.Equals(root, StringComparison.OrdinalIgnoreCase) &&
+                    (Path.GetFileName(entry).Equals("saves", StringComparison.OrdinalIgnoreCase) ||
+                     Path.GetFileName(entry).Equals(".kne-backups", StringComparison.OrdinalIgnoreCase))) continue;
                 FileAttributes attributes = File.GetAttributes(entry);
                 if ((attributes & FileAttributes.ReparsePoint) != 0)
                 {

@@ -114,6 +114,7 @@ public partial class ScriptEditor : UserControl
     /// <returns>A task that completes after both editing views are initialized.</returns>
     public async Task OpenAsync(string root, string path)
     {
+        CloseQuickSearch();
         CloseCharacterPicker();
         FinishMarquee();
         ClearCanvasInteraction();
@@ -169,6 +170,7 @@ public partial class ScriptEditor : UserControl
     /// <summary>Resets the editor when leaving a project, after checking unsaved changes.</summary>
     public void Clear()
     {
+        CloseQuickSearch();
         CloseCharacterPicker();
         FinishMarquee();
         ClearCanvasInteraction();
@@ -196,13 +198,17 @@ public partial class ScriptEditor : UserControl
         UpdateTitle();
     }
 
-    /// <summary>Prompts to save or discard edits when closing or switching documents.</summary>
+    internal Func<string, MessageBoxResult>? ConfirmSave { get; set; }
+    /// <summary>Includes both applied document edits and unapplied property drafts.</summary>
+    public bool HasUnsavedChanges => Document?.IsDirty == true || propertyDraft;
+
+    /// <summary>Prompts to save or discard edits before closing the document.</summary>
     /// <returns>True when the caller may leave; false when the user cancels.</returns>
     public async Task<bool> CanLeaveAsync()
     {
         if (saving) throw new InvalidOperationException("Дождитесь завершения сохранения.");
         if (Document == null || (!Document.IsDirty && !propertyDraft)) return true;
-        var answer = MessageBox.Show(Window.GetWindow(this), "Сохранить изменения в сценарии?",
+        var answer = ConfirmSave?.Invoke(Document.FilePath) ?? MessageBox.Show(Window.GetWindow(this), "Сохранить изменения в сценарии «" + System.IO.Path.GetFileName(Document.FilePath) + "»?",
             "Несохранённые изменения",
             MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
         if (answer == MessageBoxResult.Cancel) return false;
@@ -240,8 +246,12 @@ public partial class ScriptEditor : UserControl
         }
     }
 
+    /// <summary>Notifies workspace tabs when a draft or its saved baseline changes.</summary>
+    public event EventHandler? DocumentStateChanged;
+
     private void UpdateTitle()
     {
+        DocumentStateChanged?.Invoke(this, EventArgs.Empty);
         DocumentTitle.Text = Document == null
             ? "Выберите сценарий в дереве и нажмите «Открыть сценарий»."
             : System.IO.Path.GetRelativePath(projectRoot, Document.FilePath) +
@@ -635,6 +645,11 @@ public partial class ScriptEditor : UserControl
 
     private async void Editor_KeyDown(object sender, KeyEventArgs e)
     {
+        if (QuickSearchOverlay.Visibility == Visibility.Visible)
+        {
+            HandleQuickSearchKey(e);
+            return;
+        }
         if (CharacterPickerOverlay.Visibility == Visibility.Visible)
         {
             if (e.Key == Key.Escape) { CloseCharacterPicker(); e.Handled = true; }
@@ -646,6 +661,14 @@ public partial class ScriptEditor : UserControl
             FinishMarquee();
             pendingConnection = null;
             EditorStatus.Text = "Соединение отменено.";
+            return;
+        }
+
+        if (e.Key == Key.Tab && Keyboard.Modifiers == ModifierKeys.None && Document?.IsVisual == true &&
+            GraphMode.IsChecked == true && !IsTextEditingSource(e.OriginalSource as DependencyObject) && IsGraphSource(e.OriginalSource as DependencyObject))
+        {
+            e.Handled = true;
+            Guard(OpenQuickSearch);
             return;
         }
 

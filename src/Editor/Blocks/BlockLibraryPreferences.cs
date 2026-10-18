@@ -21,7 +21,7 @@ public sealed class BlockLibraryPreferences
     }
     private static string MigrateKey(string key) => key switch
     {
-        "narrative/Condition" => "narrative/Branching",
+        "narrative/Condition" or "logic/Condition" => "narrative/Branching",
         _ => key
     };
     /// <summary>Adds a successfully inserted entry to the head of the recent list.</summary>
