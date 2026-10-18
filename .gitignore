@@ -1,0 +1,44 @@
+# .NET build and publish output (including nested projects)
+[Bb]in/
+[Oo]bj/
+[Aa]rtifacts/
+[Pp]ublish/
+
+# Visual Studio and Rider local state
+.vs/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+# Tests, coverage, benchmarks, and build diagnostics
+[Tt]est[Rr]esults/
+coverage/
+coverage*.json
+coverage*.xml
+coverage*.info
+*.coverage
+*.coveragexml
+*.trx
+*.binlog
+BenchmarkDotNet.Artifacts/
+
+# Local NuGet packages and generated package archives
+[Pp]ackages/
+*.nupkg
+*.snupkg
+
+# Temporary files and OS metadata
+*.tmp
+*.temp
+*.orig
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Keep shared solution/project/build settings and authored resources versioned.
+# No blanket rules for *.dll, *.exe, *.json, .vscode, or *.DotSettings.
