@@ -3,15 +3,31 @@ using System.Windows.Media;
 
 namespace KNE;
 
+/// <summary>A persisted decorative-object choice for the welcome screen.</summary>
+/// <param name="Id">Stable settings discriminator.</param><param name="Label">User-facing object name.</param>
+public sealed record WelcomeObjectOption(string Id, string Label);
+
 /// <summary>Soft vector bubbles drifting behind the welcome UI, repelled by its pointer.</summary>
 public sealed class WelcomeBubbles : WelcomeAnimation
 {
+    /// <summary>Available shapes; all use the existing particle motion.</summary>
+    public static IReadOnlyList<WelcomeObjectOption> Objects { get; } = [new("bubbles", "Мыльные пузыри"), new("stars", "Звёзды"), new("petals", "Лепестки"), new("crystals", "Кристаллы"), new("fireflies", "Светлячки")];
+    /// <summary>Resolves a shape ID, falling back to the original bubbles.</summary>
+    /// <param name="value">Stored or selected shape.</param><returns>A supported shape ID.</returns>
+    public static string Normalize(string? value) => Objects.Any(option => option.Id == value) ? value! : "bubbles";
+    /// <summary>Identifies the decorative shape to render.</summary>
+    public static readonly DependencyProperty ObjectKindProperty = DependencyProperty.Register(nameof(ObjectKind), typeof(string), typeof(WelcomeBubbles), new FrameworkPropertyMetadata("bubbles", FrameworkPropertyMetadataOptions.AffectsRender));
+    /// <summary>Gets or sets the decorative shape without resetting particle positions.</summary>
+    public string ObjectKind { get => (string)GetValue(ObjectKindProperty); set => SetValue(ObjectKindProperty, value); }
     public static readonly DependencyProperty InkProperty = DependencyProperty.Register(nameof(Ink), typeof(Brush), typeof(WelcomeBubbles), new FrameworkPropertyMetadata(Brushes.Plum, FrameworkPropertyMetadataOptions.AffectsRender));
     public Brush Ink { get => (Brush)GetValue(InkProperty); set => SetValue(InkProperty, value); }
     public static readonly DependencyProperty AccentProperty = DependencyProperty.Register(nameof(Accent), typeof(Brush), typeof(WelcomeBubbles), new FrameworkPropertyMetadata(Brushes.MediumPurple, FrameworkPropertyMetadataOptions.AffectsRender));
     public Brush Accent { get => (Brush)GetValue(AccentProperty); set => SetValue(AccentProperty, value); }
     private readonly BubbleField field = new();
     private Point? pointer;
+    private readonly List<WelcomeArtCache> sprites = [];
+    private (Color Ink, Color Accent, string Kind, double Dpi) cachedKey;
+    internal int CacheBuilds { get; private set; }
     internal BubbleField Field => this.field;
     public void SetPointer(Point? point) => pointer = point is { } p && double.IsFinite(p.X) && double.IsFinite(p.Y) ? p : null;
     protected override void Advance(double seconds) => field.Step(seconds, RenderSize, pointer);
@@ -22,6 +38,23 @@ public sealed class WelcomeBubbles : WelcomeAnimation
         dc.PushClip(new RectangleGeometry(new Rect(RenderSize)));
         Color color = (Ink as SolidColorBrush)?.Color ?? Colors.Plum;
         Color accent = (Accent as SolidColorBrush)?.Color ?? Colors.MediumPurple;
+        var key = (color, accent, Normalize(ObjectKind), VisualTreeHelper.GetDpi(this).DpiScaleX);
+        if (sprites.Count != field.Bubbles.Count || cachedKey != key)
+        {
+            sprites.Clear();
+            foreach (var bubble in field.Bubbles) sprites.Add(WelcomeArtCache.Create(Artwork(bubble.Radius, key.Item3, color, accent), key.Item4));
+            cachedKey = key; CacheBuilds++;
+        }
+        for (int i = 0; i < field.Bubbles.Count; i++)
+        {
+            var bounds = sprites[i].Bounds; bounds.Offset(field.Bubbles[i].X, field.Bubbles[i].Y); dc.DrawImage(sprites[i].Image, bounds);
+        }
+        dc.Pop();
+    }
+    private static DrawingGroup Artwork(double radius, string kind, Color color, Color accent)
+    {
+        var art = new DrawingGroup(); using (var dc = art.Open())
+        {
         var fill = new RadialGradientBrush { Center = new Point(.4, .35), GradientOrigin = new Point(.3, .22), RadiusX = .65, RadiusY = .65 };
         fill.GradientStops.Add(new(Color.FromArgb(2, color.R, color.G, color.B), 0));
         fill.GradientStops.Add(new(Color.FromArgb(6, accent.R, accent.G, accent.B), .6));
@@ -29,12 +62,33 @@ public sealed class WelcomeBubbles : WelcomeAnimation
         fill.GradientStops.Add(new(Color.FromArgb(12, color.R, color.G, color.B), 1)); fill.Freeze();
         var edge = new Pen(new SolidColorBrush(Color.FromArgb(45, (byte)((accent.R + color.R) / 2), (byte)((accent.G + color.G) / 2), (byte)((accent.B + color.B) / 2))), 1); edge.Freeze();
         var shine = new Pen(new SolidColorBrush(Color.FromArgb(48, color.R, color.G, color.B)), 1.4); shine.Freeze();
-        foreach (var bubble in field.Bubbles)
+        if (kind == "bubbles")
         {
-            dc.DrawEllipse(fill, edge, new Point(bubble.X, bubble.Y), bubble.Radius, bubble.Radius);
-            dc.DrawEllipse(null, shine, new Point(bubble.X - bubble.Radius * .26, bubble.Y - bubble.Radius * .32), bubble.Radius * .32, bubble.Radius * .16);
+            dc.DrawEllipse(fill, edge, new Point(), radius, radius);
+            dc.DrawEllipse(null, shine, new Point(-radius * .26, -radius * .32), radius * .32, radius * .16);
         }
-        dc.Pop();
+        else if (kind == "fireflies")
+        {
+            dc.DrawEllipse(fill, null, new Point(), radius, radius);
+            dc.DrawEllipse(new SolidColorBrush(Color.FromArgb(120, color.R, color.G, color.B)), null, new Point(), 2.5, 2.5);
+        }
+        else
+        {
+            var geometry = new StreamGeometry(); using (var path = geometry.Open())
+            {
+                if (kind == "petals")
+                { path.BeginFigure(new Point(0, -radius), true, true); path.BezierTo(new Point(radius, -radius * .4), new Point(radius * .7, radius * .8), new Point(0, radius), true, false); path.BezierTo(new Point(-radius * .6, radius * .2), new Point(-radius * .3, -radius * .8), new Point(0, -radius), true, false); }
+                else
+                {
+                    int count = kind == "stars" ? 10 : 4;
+                    for (int i = 0; i < count; i++) { double angle = i * Math.Tau / count - Math.PI / 2, r = kind == "stars" && i % 2 == 1 ? radius * .44 : radius; var point = new Point(Math.Cos(angle) * r, Math.Sin(angle) * r); if (i == 0) path.BeginFigure(point, true, true); else path.LineTo(point, true, false); }
+                }
+            }
+            geometry.Freeze(); dc.DrawGeometry(fill, edge, geometry);
+            dc.DrawLine(shine, new Point(0, -radius * .6), new Point(0, radius * .6));
+        }
+        }
+        art.Freeze(); return art;
     }
 }
 

@@ -143,10 +143,18 @@ public partial class BlockLibraryView : UserControl
             await EditPreferencesAsync(() => { if (!preferences.Favorites.Remove(key)) preferences.Favorites.Add(key); });
         };
         content.Children.Add(star);
+        var icon = new CategoryIcon { Group = entry.Group, Margin = new Thickness(0, 0, 30, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
+        icon.SetResourceReference(CategoryIcon.ForegroundProperty, "Editor.Text"); content.Children.Add(icon);
         var button = new Button { Tag = entry.Kind, Content = content, Width = 236, Height = 130, Margin = new Thickness(0, 0, 12, 12),
             Padding = new Thickness(14), Background = Brushes.White, BorderBrush = new SolidColorBrush(color), BorderThickness = new Thickness(0, 5, 0, 1),
             HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top };
         button.SetResourceReference(BackgroundProperty, "Editor.Surface");
+        BlockAccessibility.Decorate(button, entry.Group, presentation =>
+        {
+            button.BorderBrush = new SolidColorBrush(entry.Kind == ScriptNodeKind.Start ? Colors.White : entry.Kind == ScriptNodeKind.End ? Colors.Black : presentation.Color);
+            button.BorderThickness = presentation.BorderWidth == 3 ? new Thickness(3, 5, 3, 3) : new Thickness(0, 5, 0, 1);
+            text.Children.OfType<TextBlock>().First().Margin = new Thickness(0, 0, presentation.Badges ? 52 : 25, 8);
+        });
         // Keep starring available even when the command cannot currently be inserted.
         bool available = canAdd(entry.Kind);
         if (!available) { text.Opacity = .5; button.ToolTip = entry.Kind == ScriptNodeKind.Start ? "В схеме уже есть начало." : "Достигнут предел в 500 блоков."; }

@@ -218,7 +218,7 @@ public sealed class ProjectStorageTests
                 Assert.Equal(storage, WorkspaceTabsTests.Find<TextBox>(window, "TxtProjectsStorage").Text);
                 // Restore the welcome view without firing Loaded (which reads the real user's settings).
                 WorkspaceTabsTests.Find<StackPanel>(window, "WelcomePanel").Visibility = Visibility.Visible;
-                WorkspaceTabsTests.Find<StackPanel>(window, "SettingsPanel").Visibility = Visibility.Collapsed;
+                WorkspaceTabsTests.Find<FrameworkElement>(window, "SettingsPanel").Visibility = Visibility.Collapsed;
                 typeof(MainWindow).GetMethod("OpenRecentProject_Click", BindingFlags.NonPublic | BindingFlags.Instance)!
                     .Invoke(window, [new Button { Tag = missing }, new RoutedEventArgs()]);
                 string message = await warning.Task.WaitAsync(TimeSpan.FromSeconds(10));

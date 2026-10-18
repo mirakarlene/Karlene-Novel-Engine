@@ -1,5 +1,5 @@
 <UserControl x:Class="KNE.BlockLibraryView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Background="Transparent" Width="1202" Height="652">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:KNE" Background="Transparent" Width="1202" Height="652">
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="76"/><RowDefinition Height="*"/></Grid.RowDefinitions>
         <DockPanel Margin="0,0,0,16">
@@ -10,7 +10,7 @@
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="20"/><ColumnDefinition Width="992"/></Grid.ColumnDefinitions>
             <ListBox x:Name="BlockGroups" SelectionChanged="Group_Changed" BorderThickness="0" Background="{DynamicResource Editor.Background}" Padding="4" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                <ListBox.ItemTemplate><DataTemplate><Border BorderBrush="{Binding Color}" BorderThickness="4,0,0,0" Padding="10,12"><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/></Border></DataTemplate></ListBox.ItemTemplate>
+                <ListBox.ItemTemplate><DataTemplate><Border BorderBrush="{Binding Color}" local:BlockAccessibility.Category="{Binding Id}" BorderThickness="4,0,0,0" Padding="10,12"><DockPanel><local:CategoryIcon Group="{Binding Id}" Foreground="{DynamicResource Editor.Text}" Margin="0,0,6,0"/><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/></DockPanel></Border></DataTemplate></ListBox.ItemTemplate>
             </ListBox>
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="58"/><RowDefinition Height="426"/><RowDefinition Height="42"/><RowDefinition Height="*"/></Grid.RowDefinitions>
