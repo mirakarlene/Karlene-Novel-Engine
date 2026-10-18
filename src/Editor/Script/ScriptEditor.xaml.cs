@@ -114,6 +114,7 @@ public partial class ScriptEditor : UserControl
     /// <returns>A task that completes after both editing views are initialized.</returns>
     public async Task OpenAsync(string root, string path)
     {
+        CloseKeyCapture();
         CloseQuickSearch();
         CloseCharacterPicker();
         FinishMarquee();
@@ -170,6 +171,7 @@ public partial class ScriptEditor : UserControl
     /// <summary>Resets the editor when leaving a project, after checking unsaved changes.</summary>
     public void Clear()
     {
+        CloseKeyCapture();
         CloseQuickSearch();
         CloseCharacterPicker();
         FinishMarquee();
@@ -519,6 +521,10 @@ public partial class ScriptEditor : UserControl
         ScriptNodeKind.Condition or ScriptNodeKind.SetVariable => "state." + node.Variable + " / " + node.Value,
         ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound =>
             node.Path.Length == 0 ? "Ресурс не выбран" : node.Path,
+        ScriptNodeKind.Subsystem => "Подсистема: " + node.Path + (node.WaitForSubsystem ? " · ждать завершения" : " · в фоне"),
+        ScriptNodeKind.TriggerKey or ScriptNodeKind.TriggerCombination => node.Trigger?.Keys ?? "Выберите клавиши",
+        ScriptNodeKind.TriggerButton => node.Trigger?.Button ?? "Выберите кнопку",
+        ScriptNodeKind.TriggerHotspot => $"Зона {node.Trigger?.X}, {node.Trigger?.Y} · {node.Trigger?.Width} × {node.Trigger?.Height}",
         ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene => node.Path.Length == 0 ? "Функция не выбрана" : node.Path,
         ScriptNodeKind.Switch => "state." + node.Variable + " · " + node.Options.Count + " вариантов",
         ScriptNodeKind.While or ScriptNodeKind.WaitCondition => "state." + node.Variable + " / " + node.Value,
@@ -567,7 +573,7 @@ public partial class ScriptEditor : UserControl
         ApplyProperties();
         graph = Document.Graph!;
         var destination = graph.Nodes.Single(n => n.Id == target);
-        if (destination.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment || target == connection.Id)
+        if (destination.IsTrigger || destination.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment || target == connection.Id)
             throw new InvalidOperationException("Выберите другой блок, кроме «Начала».");
         Remember();
         graph.Nodes.Single(n => n.Id == connection.Id).SetOutput(connection.Port, target);
@@ -645,6 +651,7 @@ public partial class ScriptEditor : UserControl
 
     private async void Editor_KeyDown(object sender, KeyEventArgs e)
     {
+        if (capturingKeys != null) { CaptureKeyDown(e); return; }
         if (QuickSearchOverlay.Visibility == Visibility.Visible)
         {
             HandleQuickSearchKey(e);

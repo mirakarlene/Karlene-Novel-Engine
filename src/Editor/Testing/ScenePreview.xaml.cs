@@ -51,6 +51,9 @@ public partial class ScenePreview : UserControl
         if (!ReferenceEquals(project, value)) { project = value; ApplyTheme(); }
         RenderScene(window, visuals, story, animate);
         ChoicePanel.IsHitTestVisible = allowChoices;
+        ScriptScreenCanvas.IsHitTestVisible = MainScriptScreenCanvas.IsHitTestVisible = allowChoices && story.Triggers.Any(trigger => trigger.Kind is "button" or "hotspot");
+        foreach (var entry in previewUiButtons)
+            entry.Value.IsHitTestVisible = allowChoices && story.Triggers.Any(trigger => trigger.Matches(new("button", Button: entry.Key)) || trigger.Kind == "hotspot");
         PlayerInput.Display(story, allowChoices);
     }
 
@@ -234,6 +237,7 @@ public partial class ScenePreview : UserControl
                         .Replace("{{subtitle}}", project.Engine.Game.Subtitle).Replace("{{start_label}}", project.Engine.Game.StartLabel)
                         .Replace("{{continue_label}}", project.Engine.Game.ContinueLabel).Replace("{{exit_label}}", project.Engine.Game.ExitLabel));
                     view.Width = element.Width; view.Height = element.Height; Canvas.SetLeft(view, element.X); Canvas.SetTop(view, element.Y);
+                    GameTriggerInput.SetButtonId(view, "screen:" + layout.Name + "/" + element.Id);
                     targetCanvas.Children.Add(view); ScreenRenderer.Animate(view, element, animate);
                 }
             renderedOverlay = visuals.OverlayScreen; renderedOverlayVersion = visuals.ScreenVersion;

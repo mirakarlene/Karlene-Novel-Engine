@@ -101,7 +101,7 @@ public static class ProjectAnalyzer
                     functions.Add(new(visual.FunctionName, path, 1, []));
                     foreach (var node in visual.Nodes)
                     {
-                        if (node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script && !string.IsNullOrWhiteSpace(node.Path))
+                        if (node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script or ScriptNodeKind.Subsystem && !string.IsNullOrWhiteSpace(node.Path))
                             CheckResource(root, path, null, node.Path, findings, node.Id);
                         if (node.Ui?.Texture is { Length: > 0 } texture) CheckResource(root, path, null, texture, findings, node.Id);
                         if (node.Kind is ScriptNodeKind.CallScene or ScriptNodeKind.GotoScene)
@@ -249,7 +249,7 @@ public static class ProjectAnalyzer
                 if (target == null && LuaSource.IsIdentifier(tokens[argument].Text)) target = tokens[argument].Text;
                 if (target != null) references.Add(new(target, source.Path, tokens[i].Line, Identifier: tokens[argument].Token.Kind != LuaTokenKind.String));
             }
-            if (name is "background" or "show_character" or "play_music" or "play_sound" or "include_lua" or "include_cs" or "run_script")
+            if (name is "background" or "show_character" or "play_music" or "play_sound" or "include_lua" or "include_cs" or "run_script" or "kne_subsystem")
             {
                 string? resource = Literal(tokens[argument]);
                 if (resource != null && resource.Length > 0) CheckResource(root, source.Path, tokens[i].Line, resource, findings);
@@ -328,6 +328,7 @@ public static class ProjectAnalyzer
         if (starts.Length != 1) return;
         var visited = new HashSet<string>(StringComparer.Ordinal);
         var pending = new Stack<string>(); pending.Push(starts[0].Id);
+        foreach (var trigger in graph.Nodes.Where(node => node.IsTrigger)) pending.Push(trigger.Id);
         while (pending.TryPop(out string? id))
             if (visited.Add(id))
                 foreach (var (_, next) in map[id].Outputs())

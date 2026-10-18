@@ -43,6 +43,7 @@ public partial class ScriptEditor
         selectedSpeakerId = node?.SpeakerId ?? ""; UpdateSpeakerReference();
         if (node == null) return;
         AddNarrativeFields(node);
+        AddFlowFields(node);
         AddTextInputFields(node);
         AddChoiceFields(node);
         bool literal = node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable or ScriptNodeKind.While or ScriptNodeKind.WaitCondition;

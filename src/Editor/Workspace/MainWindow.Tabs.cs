@@ -54,6 +54,7 @@ public partial class MainWindow
         editor.MainSceneRequested += SceneEditor_MainSceneRequested;
         editor.CloseRequested += SceneEditor_CloseRequested;
         editor.ProjectScriptRequested += SceneEditor_ProjectScriptRequested;
+        editor.SubsystemRequested += SceneEditor_SubsystemRequested;
         EditorWorkspace.Children.Add(editor);
         return editor;
     }

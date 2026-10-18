@@ -4,6 +4,8 @@ namespace KNE;
 public sealed record StoryFrame(string Kind, string Speaker, string Text, IReadOnlyList<string> Options)
 {
     public FrameIdentity? Identity { get; init; }
+    /// <summary>Currently armed, scene-scoped input subscriptions.</summary>
+    public IReadOnlyList<TriggerSettings> Triggers { get; init; } = [];
     /// <summary>Deterministic occurrence of the displayed dialogue, independent of its source block identity.</summary>
     public long PresentationId { get; init; }
     public bool HasBackgroundTasks { get; init; }

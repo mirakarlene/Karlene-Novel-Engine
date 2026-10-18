@@ -87,10 +87,11 @@ internal static class NarrativeRuntimeLua
                 local previous = last
                 last = {speaker = "", text = "", presentation_id = previous.presentation_id}
                 if animated and duration > 0 and previous.text ~= "" then
-                    return emit({kind = "clear_text", speaker = previous.speaker, text = previous.text, character = previous.character,
+                    emit({kind = "clear_text", speaker = previous.speaker, text = previous.text, character = previous.character,
                         effect = previous.effect, seconds = duration, skippable = false, presentation_id = previous.presentation_id})
                 end
                 kne_clear_remembered_text()
+                kne_notify_text_closed()
                 kne_editor_pause()
             end
             function console_write(text) print(text); kne_editor_pause() end

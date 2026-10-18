@@ -20,14 +20,14 @@ public partial class ScenePreview
                 var button = new Button
                 {
                     Content = target switch { "next" => "Далее  ›", "save" => "Сохранить", "load" => "Загрузить", "auto_save" => "Автосохранение", _ => "Меню" },
-                    IsHitTestVisible = false, Focusable = false
+                    IsHitTestVisible = false, Focusable = false, Tag = target
                 };
                 button.BorderBrush = Brush(project.Engine.Theme.AccentColor);
                 previewUiButtons.Add(target, button);
                 SceneArea.Children.Add(button);
             }
             if (previewUiButtons.TryGetValue(target, out var existing))
-                existing.Visibility = configured && (target != "next" || story.CanAdvance) ? Visibility.Visible : Visibility.Collapsed;
+                existing.Visibility = configured && (target != "next" || story.CanAdvance || story.Triggers.Any(trigger => trigger.Matches(new("button", Button: "next")))) ? Visibility.Visible : Visibility.Collapsed;
         }
         gameplayUi.Apply(visuals);
     }

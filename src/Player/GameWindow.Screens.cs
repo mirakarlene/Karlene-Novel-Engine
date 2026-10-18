@@ -126,6 +126,8 @@ public partial class GameWindow
 
     private async Task DispatchScreenActionAsync(ScreenElement element)
     {
+        var screen = project.Engine.Screens.Screens.FirstOrDefault(screen => screen.Elements.Contains(element));
+        if (screen != null && await DispatchTriggerAsync(new("button", Button: "screen:" + screen.Name + "/" + element.Id))) return;
         if (startupFailed || execution != null) return;
         switch (element.Action)
         {
@@ -165,7 +167,9 @@ public partial class GameWindow
     {
         if (startupFailed) return;
         foreach (var (button, action) in screenButtons)
-            button.IsEnabled = execution == null && action switch
+        {
+            bool trigger = GameTriggerInput.ButtonId(button, project.Engine.Screens) is { } id && HasButtonTrigger(id);
+            button.IsEnabled = execution == null && (trigger || action switch
             {
                 "resume" or "save" => ready,
                 "continue" => saves.Exists("auto") || saves.Exists("quick"),
@@ -175,7 +179,8 @@ public partial class GameWindow
                 "load_slot" => SaveSlotsList.SelectedItem is GameSaveEntry { Damaged: false },
                 "delete_slot" => SaveSlotsList.SelectedItem != null,
                 _ => true
-            };
+            });
+        }
     }
 
     private async Task ShowSaveBrowserAsync()

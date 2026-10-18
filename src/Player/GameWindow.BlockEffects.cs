@@ -49,8 +49,10 @@ public partial class GameWindow
                     catch (Exception error) when (error is System.IO.IOException or NotSupportedException or ArgumentException or FormatException)
                     { QueueOutput("Ошибка элемента экрана: " + error.Message); continue; }
                     view.Width = element.Width; view.Height = element.Height; Canvas.SetLeft(view, element.X); Canvas.SetTop(view, element.Y);
+                    GameTriggerInput.SetButtonId(view, "screen:" + layout.Name + "/" + element.Id);
                     if (view is Button button) button.Click += async (_, _) =>
                     {
+                        if (await TryButtonTriggerAsync(view)) return;
                         if (element.Action is "back" or "resume") ScriptScreenViewbox.Visibility = MainScriptScreenViewbox.Visibility = Visibility.Collapsed;
                         else await DispatchScreenActionAsync(element);
                     };
