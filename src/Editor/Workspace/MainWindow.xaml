@@ -21,8 +21,9 @@
                     <Button Content="Настройки" Padding="14,10" Margin="5" Click="BtnSettings_Click"/>
                     <Button Content="Помощь" Padding="14,10" Margin="5" Click="BtnHelp_Click"/>
                 </WrapPanel>
-                <TextBlock Text="Последние проекты" FontSize="16" FontWeight="Bold" Margin="5,20,0,8"/>
-                <ScrollViewer MaxHeight="340" Width="680" VerticalScrollBarVisibility="Auto">
+                <StackPanel Width="680" HorizontalAlignment="Center">
+                <TextBlock x:Name="RecentProjectsHeading" Text="Последние проекты" FontSize="16" FontWeight="Bold" Margin="15,20,0,8"/>
+                <ScrollViewer MaxHeight="340" VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="RecentProjectsList">
                         <ItemsControl.ItemTemplate><DataTemplate>
                             <DockPanel Margin="5,3">
@@ -35,6 +36,7 @@
                         </DataTemplate></ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </ScrollViewer>
+                </StackPanel>
             </StackPanel>
 
             <Grid x:Name="ProjectPanel" Visibility="Collapsed" Background="{DynamicResource Editor.Background}">
@@ -47,7 +49,10 @@
                 <Grid Grid.Row="1">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBox x:Name="FileSearch" Grid.Column="0" Padding="8" Margin="0,0,0,10" ToolTip="Поиск файлов по имени и относительному пути" TextChanged="FileSearch_TextChanged"/>
+                    <Grid Grid.Column="0" Margin="0,0,0,10">
+                        <TextBox x:Name="FileSearch" Padding="8" ToolTip="Поиск файлов по имени и относительному пути" AutomationProperties.Name="Поиск файлов" TextChanged="FileSearch_TextChanged"/>
+                        <TextBlock Text="Поиск..." Margin="9,0" VerticalAlignment="Center" Foreground="{DynamicResource Editor.Text}" Opacity="0.5" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=FileSearch}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                    </Grid>
                     <TabControl x:Name="DocumentTabs" Grid.Column="2" Margin="0,0,0,10" SelectionChanged="DocumentTabs_SelectionChanged" Visibility="Collapsed"/>
                     <TreeView x:Name="ProjectFilesTree" Grid.Row="1" SelectedItemChanged="ProjectFilesTree_SelectedItemChanged" MouseDoubleClick="OpenScript_DoubleClick">
                         <TreeView.ItemContainerStyle><Style TargetType="TreeViewItem"><Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/><Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/></Style></TreeView.ItemContainerStyle>
@@ -64,18 +69,20 @@
                         <DataGridTextColumn Header="Имя файла" Binding="{Binding FileName, Mode=OneWay}" Width="*"/>
                         <DataGridTextColumn Header="Путь" Binding="{Binding FilePath, Mode=OneWay}" Width="2*"/>
                         <DataGridTextColumn Header="Тип" Binding="{Binding FileType, Mode=OneWay}" Width="*"/>
-                        <DataGridTemplateColumn Header="Действия" Width="150">
+                        <DataGridTemplateColumn Header="Действия" Width="180">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <ComboBox Width="140" SelectionChanged="FileActionsComboBox_SelectionChanged" Tag="{Binding}"
-                                              ToolTip="Выберите действие">
-                                        <ComboBoxItem Content="Посмотреть"/>
+                                    <Grid>
+                                    <ComboBox x:Name="FileActionInput" HorizontalAlignment="Stretch" SelectionChanged="FileActionsComboBox_SelectionChanged" Tag="{Binding}"
+                                              ToolTip="Действия с файлом" AutomationProperties.Name="Действия с файлом">
                                         <ComboBoxItem Content="Редактировать"/>
-                                        <ComboBoxItem Content="Внешний редактор"/>
                                         <ComboBoxItem Content="Переименовать"/>
                                         <ComboBoxItem Content="Дублировать"/>
+                                        <ComboBoxItem Content="Переместить"/>
                                         <ComboBoxItem Content="Удалить"/>
                                     </ComboBox>
+                                    <TextBlock Text="Действия…" Margin="9,0,28,0" VerticalAlignment="Center" Foreground="{DynamicResource Editor.Muted}" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SelectedIndex, ElementName=FileActionInput}" Value="-1"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                                    </Grid>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -147,7 +154,7 @@
                                         <RadioButton GroupName="AccessibilityMode" Tag="{Binding Id}" Checked="Accessibility_Checked" Margin="0,0,7,7" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
                                             <RadioButton.IsChecked><MultiBinding Converter="{StaticResource AccessibilitySelected}" Mode="OneWay"><Binding Path="Id"/><Binding Path="(local:BlockAccessibility.Mode)" RelativeSource="{RelativeSource AncestorType={x:Type Window}}"/></MultiBinding></RadioButton.IsChecked>
                                             <RadioButton.Template><ControlTemplate TargetType="RadioButton"><Border x:Name="ModeCard" BorderBrush="{DynamicResource Editor.Border}" Background="{DynamicResource Editor.Background}" BorderThickness="1" CornerRadius="7" Padding="8"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="ModeCard" Property="BorderBrush" Value="{DynamicResource KNE.AccentBrush}"/><Setter TargetName="ModeCard" Property="BorderThickness" Value="3"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ModeCard" Property="Background" Value="{DynamicResource Editor.Hover}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ModeCard" Property="BorderBrush" Value="{DynamicResource KNE.PinkBrush}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></RadioButton.Template>
-                                            <StackPanel><local:AccessibilityPreview Mode="{Binding Id}" Height="66" Margin="0,0,0,7"/><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{Binding Description}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,4,0,0"/></StackPanel>
+                                            <StackPanel><local:AccessibilityPreview Mode="{Binding Id}" Height="104" Margin="0,0,0,9"/><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{Binding Description}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,4,0,0"/></StackPanel>
                                         </RadioButton>
                                     </DataTemplate></ItemsControl.ItemTemplate>
                                 </ItemsControl>

@@ -5,6 +5,7 @@
         Background="#FF201134" Loaded="Window_Loaded" Closed="Window_Closed"
         PreviewKeyDown="Window_PreviewKeyDown">
     <Window.Resources>
+        <ResourceDictionary><ResourceDictionary.MergedDictionaries><ResourceDictionary Source="../Editor/Themes/ScrollChrome.xaml"/></ResourceDictionary.MergedDictionaries>
         <SolidColorBrush x:Key="GameTextBrush" Color="#FFF5EEFF"/>
         <SolidColorBrush x:Key="GameAccentBrush" Color="#FFD3ACFF"/>
         <SolidColorBrush x:Key="GameButtonBrush" Color="#EB3C2654"/>
@@ -35,6 +36,7 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        </ResourceDictionary>
     </Window.Resources>
     <Grid>
         <Grid x:Name="SceneArea" ClipToBounds="True" SizeChanged="SceneArea_SizeChanged">

@@ -195,7 +195,13 @@ public sealed class BlockLibraryPagingTests
                 var content = (FrameworkElement)window.Content; content.Measure(new Size(1100, 700)); content.Arrange(new Rect(0, 0, 1100, 700)); content.UpdateLayout();
                 var scroller = Find<ScrollViewer>(window, "BlockLibraryScroller");
                 Assert.True(scroller.ScrollableWidth > 0); Assert.True(scroller.ScrollableHeight > 0);
-                Assert.Equal(1202, view.ActualWidth); Assert.All(Cards(view), card => Assert.Equal(236, card.ActualWidth));
+                Assert.Equal(1178, view.ActualWidth); Assert.All(Cards(view), card => Assert.Equal(236, card.ActualWidth));
+                Assert.True(ScrollNavigation.GetEnabled(scroller));
+                Assert.False(ScrollNavigation.TryScrollHorizontal(scroller, -120, false));
+                Assert.True(ScrollNavigation.TryScrollHorizontal(scroller, -10000, true)); content.UpdateLayout();
+                Assert.Equal(scroller.ScrollableWidth, scroller.HorizontalOffset);
+                Assert.True(ScrollNavigation.TryScrollHorizontal(scroller, 10000, true)); content.UpdateLayout();
+                Assert.Equal(0, scroller.HorizontalOffset);
             }
             finally { window.Close(); }
             return Task.CompletedTask;

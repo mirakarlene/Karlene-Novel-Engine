@@ -9,6 +9,7 @@ public sealed class ProjectFile
     public string FileName => Path.GetFileName(FilePath);
     public string FileType => Path.GetExtension(FilePath).ToLowerInvariant() switch
     {
+        ".knegraph" => "Блок-схема",
         ".cs" or ".bat" or ".lua" or ".json" or ".js" or ".py" or ".html" or ".css" or ".rpy" or ".rpyc" or ".rpa" or ".krl" => "Скрипт",
         ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" => "Рисунок",
         ".mp3" or ".wav" or ".flac" => "Аудио",

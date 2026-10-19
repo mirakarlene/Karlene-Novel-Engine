@@ -10,7 +10,7 @@ public sealed record EditorThemeOption(string Id, string Label);
 public static class EditorTheme
 {
     private const string Marker = "KNE.ThemeLoaded";
-    public static IReadOnlyList<EditorThemeOption> Themes { get; } = [new("kne", "KNE · акварель"), new("light", "Светлая"), new("dark", "Тёмная"), new("rose", "Розовый кварц"), new("ocean", "Ночной океан"), new("forest", "Лесной туман"), new("amber", "Тёплый янтарь"), new("lavender", "Лавандовый рассвет"), new("midnight", "Полночь"), new("cherry", "Вишнёвый бархат"), new("sand", "Песчаный берег"), new("aurora", "Северное сияние")];
+    public static IReadOnlyList<EditorThemeOption> Themes { get; } = [new("kne", "KNE · акварель"), new("light", "Светлая"), new("dark", "Тёмная"), new("rose", "Розовый кварц"), new("ocean", "Ночной океан"), new("forest", "Лесной туман"), new("amber", "Тёплый янтарь"), new("lavender", "Лавандовый рассвет"), new("midnight", "Полночь"), new("cherry", "Вишнёвый бархат"), new("sand", "Песчаный берег"), new("aurora", "Северное сияние"), new("sapphire", "Сапфировая ночь"), new("peach", "Персиковый рассвет"), new("graphite", "Графит"), new("mint", "Мятный сад"), new("plum", "Сливовый бархат")];
     public static string Normalize(string? theme) => Themes.Any(option => option.Id == theme) ? theme! : "kne";
     /// <summary>Installs a window-scoped palette and updates existing editor descendants.</summary>
     public static void Apply(Window window, string theme)

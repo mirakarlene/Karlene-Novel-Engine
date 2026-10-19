@@ -129,8 +129,8 @@ public partial class BlockLibraryView : UserControl
         var color = (Color)ColorConverter.ConvertFromString(entry.Color);
         var text = new StackPanel();
         text.Children.Add(new TextBlock { Text = entry.Title, FontSize = 16, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 25, 8), MaxHeight = 43 });
-        var description = new TextBlock { Text = entry.Description, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 50, Foreground = Brushes.DimGray };
-        description.SetResourceReference(TextBlock.ForegroundProperty, "Editor.Muted"); text.Children.Add(description);
+        var description = new TextBlock { Text = entry.Description, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 50, Opacity = .85 };
+        text.Children.Add(description);
         var content = new Grid(); content.Children.Add(text);
         string key = BlockLibraryPreferences.Key(entry); bool favorite = preferences.Favorites.Contains(key, StringComparer.Ordinal);
         var star = new Button { Content = favorite ? "★" : "☆", Tag = key, Width = 26, Height = 26, Padding = new Thickness(0),
@@ -144,13 +144,17 @@ public partial class BlockLibraryView : UserControl
         };
         content.Children.Add(star);
         var icon = new CategoryIcon { Group = entry.Group, Margin = new Thickness(0, 0, 30, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
-        icon.SetResourceReference(CategoryIcon.ForegroundProperty, "Editor.Text"); content.Children.Add(icon);
+        icon.SetBinding(CategoryIcon.ForegroundProperty, new System.Windows.Data.Binding("Foreground") { RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.FindAncestor, typeof(Button), 1) }); content.Children.Add(icon);
         var button = new Button { Tag = entry.Kind, Content = content, Width = 236, Height = 130, Margin = new Thickness(0, 0, 12, 12),
             Padding = new Thickness(14), Background = Brushes.White, BorderBrush = new SolidColorBrush(color), BorderThickness = new Thickness(0, 5, 0, 1),
             HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top };
+        button.SetResourceReference(StyleProperty, "CategoryHover.Button");
         button.SetResourceReference(BackgroundProperty, "Editor.Surface");
         BlockAccessibility.Decorate(button, entry.Group, presentation =>
         {
+            Color tint = entry.Kind == ScriptNodeKind.Start ? Colors.White : entry.Kind == ScriptNodeKind.End ? Colors.Black : presentation.Color;
+            CategoryHover.SetColor(button, new SolidColorBrush(tint));
+            CategoryHover.SetInk(button, entry.Kind == ScriptNodeKind.Start ? Brushes.Black : entry.Kind == ScriptNodeKind.End ? Brushes.White : new SolidColorBrush(presentation.Foreground));
             button.BorderBrush = new SolidColorBrush(entry.Kind == ScriptNodeKind.Start ? Colors.White : entry.Kind == ScriptNodeKind.End ? Colors.Black : presentation.Color);
             button.BorderThickness = presentation.BorderWidth == 3 ? new Thickness(3, 5, 3, 3) : new Thickness(0, 5, 0, 1);
             text.Children.OfType<TextBlock>().First().Margin = new Thickness(0, 0, presentation.Badges ? 52 : 25, 8);
