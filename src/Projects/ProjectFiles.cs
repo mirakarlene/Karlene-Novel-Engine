@@ -33,6 +33,21 @@ public sealed class ProjectFiles(ProjectInfo project)
         return target;
     }
 
+    /// <summary>Moves an ordinary project file to a new full path without overwriting another file.</summary>
+    /// <param name="file">File from the current loaded project snapshot.</param>
+    /// <param name="path">Destination file path inside this project, in an existing directory.</param>
+    /// <returns>The validated destination path.</returns>
+    public string Move(ProjectFile file, string path)
+    {
+        string source = ValidateSource(file);
+        EnsureNotProtected(source);
+        string target = PathSafety.EnsureInside(project.Path, path);
+        PathSafety.ValidateFileName(Path.GetFileName(target));
+        if (source.Equals(target, StringComparison.Ordinal)) return source;
+        File.Move(source, target, overwrite: false);
+        return target;
+    }
+
     public void Delete(ProjectFile file)
     {
         string source = ValidateSource(file);
@@ -55,7 +70,7 @@ public sealed class ProjectFiles(ProjectInfo project)
         if (source.Equals(Path.Combine(project.Path, "project.json"), StringComparison.OrdinalIgnoreCase) ||
             source.Equals(ResolveProtectedEntry(() => project.MainScenePath, project.Configuration.EntryPoints?.MainScene), StringComparison.OrdinalIgnoreCase) ||
             source.Equals(ResolveProtectedEntry(() => project.InitScriptPath, project.Configuration.EntryPoints?.InitScript), StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Нельзя удалить или переименовать конфигурацию и точки входа проекта. Для смены сценария сначала измените entry_points в project.json.");
+            throw new InvalidOperationException("Нельзя удалить, переименовать или переместить конфигурацию и точки входа проекта. Для смены сценария сначала измените entry_points в project.json.");
     }
 
     private string? ResolveProtectedEntry(Func<string> resolve, string? configured)

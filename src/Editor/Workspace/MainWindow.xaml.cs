@@ -356,23 +356,13 @@ public partial class MainWindow : Window
             string source = operations.ValidateSource(file);
             switch (action)
             {
-                case "Посмотреть":
-                    string details = await Task.Run(() =>
-                    {
-                        var info = new FileInfo(source);
-                        return $"Имя: {info.Name}\nПуть: {info.FullName}\nРазмер: {info.Length:N0} байт\nИзменён: {info.LastWriteTime:g}\nАтрибуты: {info.Attributes}";
-                    }, lifetime.Token);
-                    if (!closed) MessageBox.Show(this, details, "Информация о файле");
-                    break;
                 case "Редактировать":
                     if (ScriptDocument.IsCodePath(source) || ScriptDocument.IsVisualPath(source))
                     {
                         await OpenScriptAsync(source);
                         break;
                     }
-                    goto case "Внешний редактор";
-                case "Внешний редактор":
-                    using (Process.Start(EditorLauncher.CreateStartInfo(settings.EditorPath, source))) { }
+                    launchProjectScript(EditorLauncher.CreateStartInfo(settings.EditorPath, source));
                     break;
                 case "Переименовать":
                     if (IsDocumentOpen(source))
@@ -387,6 +377,15 @@ public partial class MainWindow : Window
                     copyDialog.Title = "Дублировать файл";
                     if (copyDialog.ShowDialog(this) != true) return;
                     await Task.Run(() => operations.Duplicate(file, copyDialog.FileName), lifetime.Token);
+                    await OpenProjectAsync(project.Path);
+                    break;
+                case "Переместить":
+                    if (IsDocumentOpen(source))
+                        throw new InvalidOperationException("Открытый сценарий нельзя переместить. Сначала закройте его в редакторе.");
+                    var moveDialog = CreateFileDialog(project.Path, file.FileName);
+                    moveDialog.Title = "Переместить файл · выберите новый путь внутри проекта";
+                    if (moveDialog.ShowDialog(this) != true) return;
+                    await Task.Run(() => operations.Move(file, moveDialog.FileName), lifetime.Token);
                     await OpenProjectAsync(project.Path);
                     break;
                 case "Удалить":
@@ -472,10 +471,12 @@ public partial class MainWindow : Window
         }, "Оформление…");
     }
 
-    private void OpenScript_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private async void OpenScript_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (FilesDataGrid.SelectedItem is ProjectFile file && (ScriptDocument.IsCodePath(file.FilePath) || ScriptDocument.IsVisualPath(file.FilePath)))
-            BtnOpenScript_Click(sender, e);
+        if (currentProject is not { } project || FileAtDoubleClick(sender, e.OriginalSource as DependencyObject) is not { } file ||
+            !(ScriptDocument.IsCodePath(file.FilePath) || ScriptDocument.IsVisualPath(file.FilePath))) return;
+        e.Handled = true;
+        await RunOperationAsync(() => OpenScriptAsync(new ProjectFiles(project).ValidateSource(file)), "Открытие сценария…");
     }
 
     private void BtnFileList_Click(object sender, RoutedEventArgs e)

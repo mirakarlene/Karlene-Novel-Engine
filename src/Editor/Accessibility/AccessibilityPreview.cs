@@ -14,7 +14,10 @@ public sealed class AccessibilityPreview : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
-        dc.PushTransform(new ScaleTransform(ActualWidth / 200, ActualHeight / 76));
+        // Preserve proportions inside both narrow and wide settings cards.
+        double scale = Math.Min(ActualWidth / 200, ActualHeight / 76);
+        dc.PushTransform(new TranslateTransform((ActualWidth - 200 * scale) / 2, (ActualHeight - 76 * scale) / 2));
+        dc.PushTransform(new ScaleTransform(scale, scale));
         var dark = new SolidColorBrush(ColorVisionFilter.Transform(Color.FromRgb(27, 29, 39), Mode));
         dc.DrawRoundedRectangle(dark, null, new Rect(0, 0, 200, 76), 5, 5);
         string[] groups = ["narrative", "logic", "visual"]; string[] labels = ["Реплика", "Условие", "Фон"];
@@ -29,6 +32,6 @@ public sealed class AccessibilityPreview : FrameworkElement
             dc.DrawText(new FormattedText(labels[i], CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"), 9, ink, 1), new Point(x + 5, presentation.Badges ? 42 : 31));
             if (i < 2) dc.DrawLine(new Pen(Brushes.White, 1), new Point(x + 57, 37), new Point(x + 65, 37));
         }
-        dc.Pop();
+        dc.Pop(); dc.Pop();
     }
 }

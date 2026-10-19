@@ -161,4 +161,49 @@
         <SolidColorBrush x:Key="Editor.Subtitle" Color="#E3B4E7"/>
         <LinearGradientBrush x:Key="Editor.WelcomeBackground" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#38305D" Offset="0"/><GradientStop Color="#14292E" Offset="0.4"/><GradientStop Color="#09231E" Offset="1"/></LinearGradientBrush>
     </ResourceDictionary>
+    <ResourceDictionary x:Key="Theme.sapphire">
+        <sys:String x:Key="Editor.ThemeName">dark</sys:String>
+        <SolidColorBrush x:Key="Editor.Background" Color="#101E32"/><SolidColorBrush x:Key="Editor.Surface" Color="#1A304D"/>
+        <SolidColorBrush x:Key="Editor.Canvas" Color="#0B1525"/><SolidColorBrush x:Key="Editor.Text" Color="#EDF6FF"/>
+        <SolidColorBrush x:Key="Editor.Muted" Color="#B2CBE5"/><SolidColorBrush x:Key="Editor.Border" Color="#526F96"/>
+        <SolidColorBrush x:Key="Editor.Hover" Color="#29466C"/><SolidColorBrush x:Key="Editor.Selection" Color="#355A87"/>
+        <SolidColorBrush x:Key="Editor.Subtitle" Color="#BAC6FF"/>
+        <LinearGradientBrush x:Key="Editor.WelcomeBackground" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#173E70" Offset="0"/><GradientStop Color="#101E32" Offset="0.4"/><GradientStop Color="#080E1D" Offset="1"/></LinearGradientBrush>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Theme.peach">
+        <sys:String x:Key="Editor.ThemeName">light</sys:String>
+        <SolidColorBrush x:Key="Editor.Background" Color="#FFF0E9"/><SolidColorBrush x:Key="Editor.Surface" Color="#FFF9F5"/>
+        <SolidColorBrush x:Key="Editor.Canvas" Color="#F1DED6"/><SolidColorBrush x:Key="Editor.Text" Color="#4B302E"/>
+        <SolidColorBrush x:Key="Editor.Muted" Color="#805A56"/><SolidColorBrush x:Key="Editor.Border" Color="#C79A8C"/>
+        <SolidColorBrush x:Key="Editor.Hover" Color="#F6DAD0"/><SolidColorBrush x:Key="Editor.Selection" Color="#EBC9C0"/>
+        <SolidColorBrush x:Key="Editor.Subtitle" Color="#925070"/>
+        <LinearGradientBrush x:Key="Editor.WelcomeBackground" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#F9D3CD" Offset="0"/><GradientStop Color="#FFF0E9" Offset="0.4"/><GradientStop Color="#FFF9ED" Offset="1"/></LinearGradientBrush>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Theme.graphite">
+        <sys:String x:Key="Editor.ThemeName">dark</sys:String>
+        <SolidColorBrush x:Key="Editor.Background" Color="#202227"/><SolidColorBrush x:Key="Editor.Surface" Color="#2E3138"/>
+        <SolidColorBrush x:Key="Editor.Canvas" Color="#15171B"/><SolidColorBrush x:Key="Editor.Text" Color="#F2F2F5"/>
+        <SolidColorBrush x:Key="Editor.Muted" Color="#BCC0CA"/><SolidColorBrush x:Key="Editor.Border" Color="#676E7B"/>
+        <SolidColorBrush x:Key="Editor.Hover" Color="#414650"/><SolidColorBrush x:Key="Editor.Selection" Color="#535A68"/>
+        <SolidColorBrush x:Key="Editor.Subtitle" Color="#D3BFE9"/>
+        <LinearGradientBrush x:Key="Editor.WelcomeBackground" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#353744" Offset="0"/><GradientStop Color="#202227" Offset="0.4"/><GradientStop Color="#101215" Offset="1"/></LinearGradientBrush>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Theme.mint">
+        <sys:String x:Key="Editor.ThemeName">light</sys:String>
+        <SolidColorBrush x:Key="Editor.Background" Color="#ECF7F1"/><SolidColorBrush x:Key="Editor.Surface" Color="#F7FFFA"/>
+        <SolidColorBrush x:Key="Editor.Canvas" Color="#D9EAE2"/><SolidColorBrush x:Key="Editor.Text" Color="#243F35"/>
+        <SolidColorBrush x:Key="Editor.Muted" Color="#527264"/><SolidColorBrush x:Key="Editor.Border" Color="#97BAA9"/>
+        <SolidColorBrush x:Key="Editor.Hover" Color="#D7EDE0"/><SolidColorBrush x:Key="Editor.Selection" Color="#BCDACB"/>
+        <SolidColorBrush x:Key="Editor.Subtitle" Color="#73507F"/>
+        <LinearGradientBrush x:Key="Editor.WelcomeBackground" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#CAE9DD" Offset="0"/><GradientStop Color="#ECF7F1" Offset="0.4"/><GradientStop Color="#FAFFF3" Offset="1"/></LinearGradientBrush>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Theme.plum">
+        <sys:String x:Key="Editor.ThemeName">dark</sys:String>
+        <SolidColorBrush x:Key="Editor.Background" Color="#261B32"/><SolidColorBrush x:Key="Editor.Surface" Color="#392846"/>
+        <SolidColorBrush x:Key="Editor.Canvas" Color="#1A1124"/><SolidColorBrush x:Key="Editor.Text" Color="#F9EFFC"/>
+        <SolidColorBrush x:Key="Editor.Muted" Color="#CEB5DB"/><SolidColorBrush x:Key="Editor.Border" Color="#806191"/>
+        <SolidColorBrush x:Key="Editor.Hover" Color="#50385F"/><SolidColorBrush x:Key="Editor.Selection" Color="#694A79"/>
+        <SolidColorBrush x:Key="Editor.Subtitle" Color="#F0B7DC"/>
+        <LinearGradientBrush x:Key="Editor.WelcomeBackground" StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#492E61" Offset="0"/><GradientStop Color="#261B32" Offset="0.4"/><GradientStop Color="#180D20" Offset="1"/></LinearGradientBrush>
+    </ResourceDictionary>
 </ResourceDictionary>

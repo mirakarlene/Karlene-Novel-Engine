@@ -20,7 +20,7 @@ public sealed class BrandThemeTests
         Assert.Equal("kne", new UserSettings().Theme);
         Assert.Equal("", new UserSettings().UserName);
         Assert.Equal("kne", (await fixture.Store.LoadAsync()).Theme);
-        foreach (string id in new[] { "kne", "light", "dark", "rose", "ocean", "forest", "amber", "lavender", "midnight", "cherry", "sand", "aurora" })
+        foreach (string id in new[] { "kne", "light", "dark", "rose", "ocean", "forest", "amber", "lavender", "midnight", "cherry", "sand", "aurora", "sapphire", "peach", "graphite", "mint", "plum" })
         {
             await fixture.Store.SaveAsync(new UserSettings { Theme = id, UserName = "Алиса" });
             var loaded = await fixture.Store.LoadAsync();
@@ -37,7 +37,7 @@ public sealed class BrandThemeTests
     [Fact]
     public Task Palettes_AreDistinctWindowScopedAndDynamic_AndBrandColorsAndGradientStayAvailable() => WorkspaceTabsTests.Sta(() =>
     {
-        string[] ids = ["kne", "light", "dark", "rose", "ocean", "forest", "amber", "lavender", "midnight", "cherry", "sand", "aurora"];
+        string[] ids = ["kne", "light", "dark", "rose", "ocean", "forest", "amber", "lavender", "midnight", "cherry", "sand", "aurora", "sapphire", "peach", "graphite", "mint", "plum"];
         Assert.Equal(ids, EditorTheme.Themes.Select(option => option.Id));
         Assert.All(EditorTheme.Themes, option => Assert.False(string.IsNullOrWhiteSpace(option.Label)));
         Assert.Equal(ids.Length, EditorTheme.Themes.Select(option => option.Label).Distinct().Count());
