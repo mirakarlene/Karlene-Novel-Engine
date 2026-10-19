@@ -76,8 +76,16 @@ public sealed class EngineSettings
             В fullscreen системная рамка скрыта; F11 возвращает оконный режим.
             Предпросмотр выбранной сцены пропускает начальное меню.
             performance.json: graphics (api auto/vulkan/opengl, v_sync, max_fps 30/60/144/0,
-            msaa_samples 0/2/4, limit_resource_cache true/false, resource_cache_limit_mb 16/32/64/128/256/512), fps_counter, fps_corner, statistics_overlay, loading_indicator,
-            debug_mode, preloading, saves_path. Кнопка «Параметры проекта» редактирует эти значения.
+            msaa_samples 0/2/4, texture_quality original/half/quarter, limit_resource_cache true/false,
+            resource_cache_limit_mb 16/32/64/128/256/512), fps_counter, fps_corner, statistics_overlay,
+            loading_indicator, debug_mode, preloading, unload_previous_scene, max_async_tasks 32/64/128,
+            audio_buffer low_latency/balanced/stable, saves_path. Кнопка «Параметры проекта» редактирует эти значения.
+            texture_quality уменьшает размеры декодированных изображений по каждой оси, без изменения файлов.
+            unload_previous_scene убирает из кэша ресурсы прошлой сцены, сохраняя показанные изображения.
+            max_async_tasks включает основную ветку и применяется при новом запуске сценария.
+            audio_buffer задаёт два буфера по 25/75/150 мс при следующем открытии аудиофайла.
+            Название проекта меняется в project.json; папка проекта не переименовывается.
+            Danger Zone: сброс сохранений или удаление папки проекта после подтверждения и 72 нажатий.
             scene-performance.json: scenes с путями .krl или .knegraph; effects_quality high/medium/low,
             post_processing. Кнопка «Параметры сцены» редактирует отдельные сцены.
             Сохранения находятся в saves или папке saves_path; смена пути не переносит старые файлы.

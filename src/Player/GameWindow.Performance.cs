@@ -18,6 +18,7 @@ public partial class GameWindow
     private readonly FramePacer performancePacer = new();
     private long lastPerformanceReport;
     internal string ProjectPath => project.Path;
+    internal async Task CloseForProjectDeletionAsync() { Close(); await runtime.DisposeAsync(); }
     /// <summary>Applies saved graphics and scene policies to an already open game, without restarting its story.</summary>
     internal void ReloadPerformanceSettings()
     {
@@ -25,11 +26,20 @@ public partial class GameWindow
         var scenes = PerformanceSettingsStore.LoadScenes(project.Path);
         var active = project.Engine.Performance;
         active.Graphics = saved.Graphics; active.Preloading = saved.Preloading;
+        active.UnloadPreviousScene = saved.UnloadPreviousScene; active.AudioBuffer = saved.AudioBuffer; active.MaxAsyncTasks = saved.MaxAsyncTasks;
         active.FpsCounter = saved.FpsCounter; active.StatisticsOverlay = saved.StatisticsOverlay;
         active.FpsCorner = saved.FpsCorner; active.LoadingIndicator = saved.LoadingIndicator;
         project.Engine.ScenePerformance.Scenes = scenes.Scenes;
         preloading?.Cancel(); preloading?.Dispose(); preloading = null;
+        bool textureChanged = GraphicsEnvironment.GetSettings(this).TextureQuality != saved.Graphics.TextureQuality;
         assets.Configure(saved.Graphics); GraphicsEnvironment.SetSettings(this, saved.Graphics);
+        if (textureChanged)
+        {
+            BackgroundImage.Source = LoadImage(runtime.Visuals.Background); CharacterImage.Source = LoadImage(runtime.Visuals.Character); gameplayUi?.Reset();
+            DefaultBackgroundImage.Source = project.Engine.Theme.BackgroundImage == null ? null : LoadImage(ResourcePaths.Resolve(project.Path, project.Engine.Theme.BackgroundImage));
+            refreshScreenResources = true; scenePolicyChanged = true;
+            if (activeScreen is { } screen) ShowLayout(screen);
+        }
         performanceScene = null; lastPerformanceReport = 0; performancePacer.Reset();
         UpdatePerformance();
     }
@@ -57,10 +67,11 @@ public partial class GameWindow
         path = path?.Replace('\\', '/');
         if (path != performanceScene)
         {
+            preloading?.Cancel(); preloading?.Dispose(); preloading = null;
+            if (performanceScene != null && project.Engine.Performance.UnloadPreviousScene) assets.RetainForScene(project, runtime.Visuals);
             performanceScene = path; activeScenePerformance = project.Engine.ScenePerformance.For(path);
             AnimatedBackdrop.SetQuality(activeScenePerformance.EffectsQuality);
             sceneEffects?.Stop(); scenePolicyChanged = true;
-            preloading?.Cancel(); preloading?.Dispose(); preloading = null;
             if (project.Engine.Performance.Preloading && path != null)
             { preloading = new(); _ = PreloadResourcesAsync(path, preloading.Token); }
         }

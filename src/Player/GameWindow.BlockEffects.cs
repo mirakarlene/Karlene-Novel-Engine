@@ -7,9 +7,10 @@ namespace KNE;
 public partial class GameWindow
 {
     private SceneEffectsPresenter? sceneEffects;
-    private readonly Dictionary<string, MediaPlayer> audioPlayers = [];
+    private readonly Dictionary<string, GameAudioPlayer> audioPlayers = [];
     private readonly HashSet<string> activeAudioChannels = [];
     private StoryFrame? handledEnd;
+    private bool refreshScreenResources;
 
     private void InitializeBlockEffects()
     {
@@ -17,7 +18,7 @@ public partial class GameWindow
         audioPlayers["music"] = music; audioPlayers["sfx"] = sound;
         foreach (string channel in new[] { "voice", "ambient" })
         {
-            var player = new MediaPlayer(); audioPlayers[channel] = player;
+            var player = new GameAudioPlayer(); audioPlayers[channel] = player;
             player.MediaFailed += (_, error) => QueueOutput("Ошибка аудио «" + channel + "»: " + error.ErrorException.Message);
         }
         foreach (var pair in audioPlayers)
@@ -32,7 +33,7 @@ public partial class GameWindow
     private void RenderBlockEffects(SceneVisuals scene)
     {
         sceneEffects!.Apply(scene, preferences.Animate && project.Engine.Theme.AnimationEnabled && activeScenePerformance.EffectsQuality != "low", activeScenePerformance.PostProcessing);
-        if (scene.ScreenVersion != renderedVisuals?.ScreenVersion || scene.OverlayScreen != renderedVisuals?.OverlayScreen)
+        if (refreshScreenResources || scene.ScreenVersion != renderedVisuals?.ScreenVersion || scene.OverlayScreen != renderedVisuals?.OverlayScreen)
         {
             ScriptScreenCanvas.Children.Clear();
             MainScriptScreenCanvas.Children.Clear();
@@ -45,7 +46,7 @@ public partial class GameWindow
                 foreach (var element in layout.Elements)
                 {
                     FrameworkElement view;
-                    try { view = ScreenRenderer.Create(element, project.Engine.Theme, project.Path, ResolveScreenText); }
+                    try { view = ScreenRenderer.Create(element, project.Engine.Theme, project.Path, ResolveScreenText, path => assets.Load(path)); }
                     catch (Exception error) when (error is System.IO.IOException or NotSupportedException or ArgumentException or FormatException)
                     { QueueOutput("Ошибка элемента экрана: " + error.Message); continue; }
                     view.Width = element.Width; view.Height = element.Height; Canvas.SetLeft(view, element.X); Canvas.SetTop(view, element.Y);
@@ -60,6 +61,7 @@ public partial class GameWindow
                     ScreenRenderer.Animate(view, element, preferences.Animate && project.Engine.Theme.AnimationEnabled);
                 }
         }
+        refreshScreenResources = false;
         foreach (var channel in scene.AudioChannels)
         {
             var player = audioPlayers[channel.Channel];
@@ -68,7 +70,7 @@ public partial class GameWindow
             {
                 player.Close();
                 activeAudioChannels.Remove(channel.Channel);
-                if (channel.Path != null) { player.Open(new Uri(channel.Path)); player.Play(); activeAudioChannels.Add(channel.Channel); }
+                if (channel.Path != null) { player.BufferProfile = project.Engine.Performance.AudioBuffer; player.Open(new Uri(channel.Path)); player.Play(); if (player.Source != null) activeAudioChannels.Add(channel.Channel); }
             }
         }
         RefreshAudioVolumes(scene);

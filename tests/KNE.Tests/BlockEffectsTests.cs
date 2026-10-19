@@ -144,7 +144,7 @@ public sealed class BlockEffectsTests
             var window = new GameWindow(project);
             var state = SceneVisuals.Empty with { MasterVolume = .5, AudioChannels = [new("music", Volume: .25), new("voice", Volume: .4), new("ambient", Volume: .5)] };
             typeof(GameWindow).GetMethod("RefreshAudioVolumes", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, [state]);
-            var players = (Dictionary<string, MediaPlayer>)typeof(GameWindow).GetField("audioPlayers", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!;
+            var players = (Dictionary<string, GameAudioPlayer>)typeof(GameWindow).GetField("audioPlayers", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!;
             Assert.Equal(new[] { "ambient", "music", "sfx", "voice" }, players.Keys.Order().ToArray());
             Assert.Equal(.1, players["music"].Volume, 6); Assert.Equal(.16, players["voice"].Volume, 6); Assert.Equal(.2, players["ambient"].Volume, 6); Assert.Equal(.4, players["sfx"].Volume, 6);
             typeof(GameWindow).GetMethod("CloseAudio", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);

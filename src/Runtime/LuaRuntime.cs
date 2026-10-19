@@ -110,6 +110,7 @@ public sealed partial class LuaRuntime : IGameSession
         lua["kne_editor"] = editorSource?.StepCommands == true;
         lua["kne_scene_test"] = editorSource?.SceneTest == true;
         lua["kne_seed"] = seed;
+        lua["kne_max_async_tasks"] = project.Engine.Performance.MaxAsyncTasks;
         fingerprint = ComputeFingerprint(scripts);
         lua.DoString("""
             function print(...)

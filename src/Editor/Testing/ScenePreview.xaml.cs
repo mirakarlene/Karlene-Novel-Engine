@@ -43,6 +43,7 @@ public partial class ScenePreview : UserControl
     private long renderedOverlayVersion = -1;
     private string? renderedBackgroundPath;
     private string? renderedCharacterPath;
+    private string? resourceScene;
     private bool? renderedBackdropAnimate;
     private StoryFrame? renderedSceneStory;
     private ChoicePresentation? choicePresentation;
@@ -105,6 +106,7 @@ public partial class ScenePreview : UserControl
         var previous = preview; preview = null; pendingSelection = null;
         AnimatedBackdrop.Configure(project?.Engine.Theme ?? new(), false);
         project = null;
+        resourceScene = null;
         if (previous != null) _ = DisposePreviousAsync(previous);
     }
 
@@ -216,6 +218,11 @@ public partial class ScenePreview : UserControl
         if (project == null) return;
         var theme = project.Engine.Theme;
         string? scenePath = story.Identity?.Scene.Split("::", StringSplitOptions.None)[0];
+        if (scenePath != resourceScene)
+        {
+            if (resourceScene != null && project.Engine.Performance.UnloadPreviousScene) assets.RetainForScene(project, visuals);
+            resourceScene = scenePath;
+        }
         var performance = project.Engine.ScenePerformance.For(scenePath);
         animate &= performance.EffectsQuality != "low";
         AnimatedBackdrop.SetQuality(performance.EffectsQuality);
@@ -243,7 +250,7 @@ public partial class ScenePreview : UserControl
                 {
                     var view = ScreenRenderer.Create(element, theme, project.Path, text => text.Replace("{{title}}", project.Title)
                         .Replace("{{subtitle}}", project.Engine.Game.Subtitle).Replace("{{start_label}}", project.Engine.Game.StartLabel)
-                        .Replace("{{continue_label}}", project.Engine.Game.ContinueLabel).Replace("{{exit_label}}", project.Engine.Game.ExitLabel));
+                        .Replace("{{continue_label}}", project.Engine.Game.ContinueLabel).Replace("{{exit_label}}", project.Engine.Game.ExitLabel), path => assets.Load(path));
                     view.Width = element.Width; view.Height = element.Height; Canvas.SetLeft(view, element.X); Canvas.SetTop(view, element.Y);
                     GameTriggerInput.SetButtonId(view, "screen:" + layout.Name + "/" + element.Id);
                     targetCanvas.Children.Add(view); ScreenRenderer.Animate(view, element, animate);

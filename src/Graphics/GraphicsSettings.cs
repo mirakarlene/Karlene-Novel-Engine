@@ -13,6 +13,9 @@ public sealed record GraphicsSettings
     public bool VSync { get; set; } = true;
     public int MaxFps { get; set; } = 60;
     public int MsaaSamples { get; set; }
+    /// <summary>Decode project textures at original, half or quarter dimensions.</summary>
+    public string TextureQuality { get; set; } = "original";
+    public static IReadOnlyList<GraphicsOption<string>> TextureQualities { get; } = [new("original", "Оригинал"), new("half", "Половина"), new("quarter", "Четверть")];
     /// <summary>Bounds optional decoded images and native preparation caches.</summary>
     public bool LimitResourceCache { get; set; } = true;
     /// <summary>Maximum optional cache size in MiB; active displayed resources are separate.</summary>
@@ -28,6 +31,7 @@ public sealed record GraphicsSettings
         if (!Apis.Any(item => item.Value == Api) || !FrameRates.Any(item => item.Value == MaxFps) || !Antialiasing.Any(item => item.Value == MsaaSamples))
             throw new InvalidDataException("Графика: неизвестный API, лимит FPS или уровень MSAA.");
         if (!CacheLimits.Any(item => item.Value == ResourceCacheLimitMb)) throw new InvalidDataException("Неизвестный лимит кэша ресурсов.");
+        if (!TextureQualities.Any(item => item.Value == TextureQuality)) throw new InvalidDataException("Неизвестное качество текстур.");
     }
     /// <summary>Recovers user preferences from missing or invalid older settings.</summary>
     public static GraphicsSettings Normalize(GraphicsSettings? value)
@@ -35,7 +39,8 @@ public sealed record GraphicsSettings
         value ??= new();
         return value with { Api = Apis.Any(item => item.Value == value.Api) ? value.Api : "auto", MaxFps = FrameRates.Any(item => item.Value == value.MaxFps) ? value.MaxFps : 60,
             MsaaSamples = Antialiasing.Any(item => item.Value == value.MsaaSamples) ? value.MsaaSamples : 0,
-            ResourceCacheLimitMb = CacheLimits.Any(item => item.Value == value.ResourceCacheLimitMb) ? value.ResourceCacheLimitMb : 64 };
+            ResourceCacheLimitMb = CacheLimits.Any(item => item.Value == value.ResourceCacheLimitMb) ? value.ResourceCacheLimitMb : 64,
+            TextureQuality = TextureQualities.Any(item => item.Value == value.TextureQuality) ? value.TextureQuality : "original" };
     }
 }
 
@@ -49,13 +54,23 @@ public sealed class ProjectPerformanceSettings
     public bool LoadingIndicator { get; set; } = true;
     public bool DebugMode { get; set; }
     public bool Preloading { get; set; } = true;
+    /// <summary>Release optional resources when execution enters a different scene file.</summary>
+    public bool UnloadPreviousScene { get; set; }
+    /// <summary>Maximum active coroutine tasks, including the main branch.</summary>
+    public int MaxAsyncTasks { get; set; } = 128;
+    /// <summary>Profile selecting two bounded audio output buffers per channel.</summary>
+    public string AudioBuffer { get; set; } = "balanced";
     public string SavesPath { get; set; } = "saves";
+    public static IReadOnlyList<GraphicsOption<int>> AsyncTaskLimits { get; } = [new(32, "32"), new(64, "64"), new(128, "128")];
+    public static IReadOnlyList<GraphicsOption<string>> AudioBuffers { get; } = [new("low_latency", "Низкая задержка"), new("balanced", "Сбалансированный"), new("stable", "Стабильный")];
     public static IReadOnlyList<GraphicsOption<string>> Corners { get; } = [new("top_left", "Слева сверху"), new("top_right", "Справа сверху"), new("bottom_left", "Слева снизу"), new("bottom_right", "Справа снизу")];
     public void Validate(string root)
     {
         if (Graphics == null) throw new InvalidDataException("Секция graphics не должна быть null.");
         Graphics.Validate();
         if (!Corners.Any(item => item.Value == FpsCorner)) throw new InvalidDataException("Неизвестный угол счётчика FPS.");
+        if (!AsyncTaskLimits.Any(item => item.Value == MaxAsyncTasks)) throw new InvalidDataException("Лимит асинхронных задач: 32, 64 или 128.");
+        if (!AudioBuffers.Any(item => item.Value == AudioBuffer)) throw new InvalidDataException("Неизвестный профиль аудио буфера.");
         _ = ResolveSavesPath(root);
     }
     /// <summary>Resolves the explicit save directory. Relative paths remain confined to the project.</summary>
