@@ -85,7 +85,7 @@ public partial class GameWindow
             }
             else
             {
-                try { view = ScreenRenderer.Create(element, project.Engine.Theme, project.Path, ResolveScreenText); }
+                try { view = ScreenRenderer.Create(element, project.Engine.Theme, project.Path, ResolveScreenText, path => assets.Load(path)); }
                 catch (Exception ex) when (ex is IOException or NotSupportedException or ArgumentException or FormatException)
                 { QueueOutput("Ошибка элемента оформления: " + ex.Message); Notify("Не удалось показать элемент «" + element.Text + "»."); continue; }
                 if (view is Button button) button.Click += async (_, _) => await DispatchScreenActionAsync(element);

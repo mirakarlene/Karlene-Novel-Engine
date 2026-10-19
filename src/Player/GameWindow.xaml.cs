@@ -24,8 +24,8 @@ public partial class GameWindow : Window
     private StoryFrame? renderedStory;
     private ChoicePresentation? choicePresentation;
     private SceneVisuals? renderedVisuals;
-    private readonly MediaPlayer music = new();
-    private readonly MediaPlayer sound = new();
+    private readonly GameAudioPlayer music = new();
+    private readonly GameAudioPlayer sound = new();
     private bool loaded;
     private bool startupFailed;
     private bool fullscreen;
@@ -577,7 +577,8 @@ public partial class GameWindow : Window
             if (!scene.AudioChannels.Any(c => c.Channel == "music") && scene.MusicVersion != renderedVisuals?.MusicVersion)
             {
                 music.Close();
-                if (scene.Music != null) { music.Open(new Uri(scene.Music)); music.Play(); }
+                activeAudioChannels.Remove("music");
+                if (scene.Music != null) { music.BufferProfile = project.Engine.Performance.AudioBuffer; music.Open(new Uri(scene.Music)); music.Play(); if (music.Source != null) activeAudioChannels.Add("music"); }
             }
         }
         catch (Exception ex) { QueueOutput("Ошибка музыки: " + ex.Message); }
@@ -585,7 +586,7 @@ public partial class GameWindow : Window
         {
             if (!scene.AudioChannels.Any(c => c.Channel == "sfx") && scene.Sound != null && scene.SoundVersion != renderedVisuals?.SoundVersion)
             {
-                sound.Open(new Uri(scene.Sound)); sound.Play();
+                sound.BufferProfile = project.Engine.Performance.AudioBuffer; sound.Open(new Uri(scene.Sound)); sound.Play(); if (sound.Source != null) activeAudioChannels.Add("sfx");
             }
         }
         catch (Exception ex) { QueueOutput("Ошибка звука: " + ex.Message); }

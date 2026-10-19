@@ -10,16 +10,35 @@ internal sealed class SceneAssetCache
     private readonly Dictionary<string, (long Length, DateTime Modified, BitmapImage Image, long Bytes, long Access)> images = new(StringComparer.OrdinalIgnoreCase);
     private long bytes, access, generation;
     private long budget = 64 * 1024 * 1024;
+    private int textureDivisor = 1;
     internal long CachedBytes { get { lock (sync) return bytes; } }
     internal int CachedCount { get { lock (sync) return images.Count; } }
     internal void Configure(GraphicsSettings settings)
     {
         settings.Validate();
-        lock (sync) { budget = settings.CacheBudgetBytes; generation++; Trim(0); }
+        lock (sync)
+        {
+            int divisor = settings.TextureQuality switch { "half" => 2, "quarter" => 4, _ => 1 };
+            if (divisor != textureDivisor) { images.Clear(); bytes = 0; textureDivisor = divisor; }
+            budget = settings.CacheBudgetBytes; generation++; Trim(0);
+        }
     }
     internal void Clear()
     {
         lock (sync) { generation++; images.Clear(); bytes = access = 0; }
+    }
+    internal void RetainForScene(ProjectInfo project, SceneVisuals visuals)
+    {
+        var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string? path in new[] { visuals.Background, visuals.Character }) if (path != null) keep.Add(path);
+        foreach (string path in visuals.UiConfigurations.Select(item => item.Style.Texture).OfType<string>()) keep.Add(PathSafety.ResolveRelative(project.Path, path));
+        foreach (string path in project.Engine.Screens.Screens.Where(screen => screen.Id == visuals.OverlayScreen).SelectMany(screen => screen.Elements).Where(element => element.Type == "image").Select(element => element.Image).OfType<string>()) keep.Add(PathSafety.ResolveRelative(project.Path, path));
+        if (project.Engine.Theme.BackgroundImage is { } background) keep.Add(PathSafety.ResolveRelative(project.Path, background));
+        lock (sync)
+        {
+            generation++;
+            foreach (string path in images.Keys.Where(path => !keep.Contains(path)).ToArray()) { bytes -= images[path].Bytes; images.Remove(path); }
+        }
     }
     private void Trim(long incoming)
     {
@@ -33,15 +52,22 @@ internal sealed class SceneAssetCache
     {
         token.ThrowIfCancellationRequested();
         var file = new FileInfo(path);
-        long epoch;
+        long epoch; int divisor;
         lock (sync)
         {
-            epoch = generation;
+            epoch = generation; divisor = textureDivisor;
             if (images.TryGetValue(path, out var cached) && cached.Length == file.Length && cached.Modified == file.LastWriteTimeUtc)
             { images[path] = cached with { Access = ++access }; return cached.Image; }
         }
         if (file.Length > 64 * 1024 * 1024) throw new InvalidDataException("Изображение больше 64 МБ.");
         var image = new BitmapImage(); image.BeginInit(); image.CacheOption = BitmapCacheOption.OnLoad;
+        if (divisor != 1)
+        {
+            using var source = File.OpenRead(path);
+            var header = BitmapDecoder.Create(source, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None).Frames[0];
+            image.DecodePixelWidth = Math.Max(1, header.PixelWidth / divisor);
+            image.DecodePixelHeight = Math.Max(1, header.PixelHeight / divisor);
+        }
         image.CreateOptions = BitmapCreateOptions.IgnoreImageCache; image.UriSource = new Uri(path); image.EndInit(); image.Freeze();
         long cost = (long)image.PixelWidth * image.PixelHeight * 4;
         lock (sync)

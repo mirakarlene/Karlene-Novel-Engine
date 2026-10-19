@@ -12,6 +12,7 @@ internal static class SceneRuntimeLua
             local flow_failure = {}
             local active_stack = {}
             local scene_test = kne_scene_test == true
+            local task_limit = kne_max_async_tasks or 128
             function kne_scene_owned(thread) return owned[thread] == true end
             function kne_diagnostics_threads()
                 local result = {}
@@ -250,7 +251,7 @@ internal static class SceneRuntimeLua
                                 subscription.used = true
                             else
                             local count = 0; for _, current in ipairs(tasks) do if not current.done then count = count + 1 end end
-                            if count >= 128 then fail(subscription.owner, "Одновременно разрешено не более 128 веток") end
+                            if count >= task_limit then fail(subscription.owner, "Одновременно разрешено не более " .. task_limit .. " веток") end
                             local child = create(subscription.entry, false, nil, subscription.thread)
                             child.trigger = true; subscription.active = child
                             subscription.used = kne_trigger_once(subscription.specification)
@@ -291,7 +292,7 @@ internal static class SceneRuntimeLua
                     elseif event.kind == "spawn" then
                         local count = 0
                         for _, current in ipairs(tasks) do if not current.done then count = count + 1 end end
-                        if count + #event.entries > 128 then return fail(task, "Одновременно разрешено не более 128 веток") end
+                        if count + #event.entries > task_limit then return fail(task, "Одновременно разрешено не более " .. task_limit .. " веток") end
                         group_id = group_id + 1
                         if group_id > 10000 then return fail(task, "Больше 10000 групп параллельных веток") end
                         local group = {owner = task, awaited = not event.detached}; groups[group_id] = group

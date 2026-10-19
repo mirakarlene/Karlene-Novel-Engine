@@ -9,7 +9,7 @@ namespace KNE;
 /// <summary>Shared vector element rendering for the appearance editor and the game window.</summary>
 public static class ScreenRenderer
 {
-    public static FrameworkElement Create(ScreenElement element, GameTheme theme, string root, Func<string, string> resolve)
+    public static FrameworkElement Create(ScreenElement element, GameTheme theme, string root, Func<string, string> resolve, Func<string, BitmapSource>? loadImage = null)
     {
         string label = resolve(element.Text);
         Brush TextBrush() => new SolidColorBrush((Color)ColorConverter.ConvertFromString(theme.TextColor));
@@ -19,7 +19,7 @@ public static class ScreenRenderer
             "panel" => new Border { Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(theme.ButtonColor)), CornerRadius = new CornerRadius(16) },
             "toggle" => new CheckBox { Content = label, Foreground = TextBrush(), FontSize = element.FontSize, VerticalContentAlignment = VerticalAlignment.Center },
             "slider" => SliderView(label, TextBrush(), element.FontSize),
-            "image" => ImageView(root, element.Image),
+            "image" => ImageView(root, element.Image, loadImage),
             "save_list" => new ListBox { ItemsSource = new[] { "Ручной слот · текущая реплика", "Автосохранение · дата и время" }, FontSize = 18 },
             "save_name" => new TextBox { Text = "Имя ручного слота", Padding = new Thickness(8), FontSize = 18 },
             _ => new Button { Content = label, FontSize = element.FontSize, Padding = new Thickness(12, 6, 12, 6), HorizontalContentAlignment = HorizontalAlignment.Center,
@@ -40,13 +40,15 @@ public static class ScreenRenderer
         stack.Children.Add(new Slider { Minimum = 0, Maximum = 1, Value = 0.8, Margin = new Thickness(0, 8, 0, 0) });
         return stack;
     }
-    private static Image ImageView(string root, string? relative)
+    private static Image ImageView(string root, string? relative, Func<string, BitmapSource>? loadImage)
     {
         var view = new Image { Stretch = Stretch.UniformToFill };
         if (!string.IsNullOrWhiteSpace(relative))
         {
+            string path = ResourcePaths.Resolve(root, relative);
+            if (loadImage != null) { view.Source = loadImage(path); return view; }
             var image = new BitmapImage(); image.BeginInit(); image.CacheOption = BitmapCacheOption.OnLoad;
-            image.UriSource = new Uri(ResourcePaths.Resolve(root, relative)); image.EndInit(); image.Freeze(); view.Source = image;
+            image.UriSource = new Uri(path); image.EndInit(); image.Freeze(); view.Source = image;
         }
         return view;
     }

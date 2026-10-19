@@ -17,6 +17,13 @@ public partial class SceneTestingWindow : Window
     private bool snapshotReady;
     private readonly DispatcherTimer sceneClock = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private long lastSceneTick = System.Diagnostics.Stopwatch.GetTimestamp();
+    private Task? closingResources;
+    internal string ProjectPath => project.Path;
+    internal async Task CloseForProjectDeletionAsync()
+    {
+        Close();
+        if (closingResources != null) await closingResources;
+    }
     public SceneTestingWindow(ProjectInfo project, EditorSelection selection, bool sceneTest)
     {
         InitializeComponent(); GraphicsEnvironment.SetSettings(this, project.Engine.Performance.Graphics); this.project = project; this.selection = selection; sceneMode = sceneTest;
@@ -55,6 +62,11 @@ public partial class SceneTestingWindow : Window
     private async void Testing_Closed(object? sender, EventArgs e)
     {
         closed = true; sceneClock.Stop(); lifetime.Cancel(); SceneSurface.Stop();
+        closingResources = DisposeClosedSessionsAsync();
+        await closingResources;
+    }
+    private async Task DisposeClosedSessionsAsync()
+    {
         if (scene != null) await scene.DisposeAsync(); if (frame != null) await frame.DisposeAsync();
         lifetime.Dispose();
     }
