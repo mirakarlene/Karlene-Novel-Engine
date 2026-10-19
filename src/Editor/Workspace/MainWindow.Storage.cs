@@ -47,7 +47,7 @@ public partial class MainWindow
         string name = Interaction.InputBox("Название папки хранилища проектов:", "Хранилище проектов", "projects");
         if (string.IsNullOrWhiteSpace(name)) return false;
         string storage = ProjectStorage.Create(parent.FolderName, name.Trim());
-        var next = new UserSettings { EditorPath = settings.EditorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = settings.Theme, UserName = settings.UserName, AccessibilityMode = settings.AccessibilityMode, WelcomeObjects = settings.WelcomeObjects };
+        var next = new UserSettings { Graphics = settings.Graphics, EditorPath = settings.EditorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = settings.Theme, UserName = settings.UserName, AccessibilityMode = settings.AccessibilityMode, WelcomeObjects = settings.WelcomeObjects };
         await settingsStore.SaveAsync(next); settings = next; TxtProjectsStorage.Text = storage;
         return true;
     }

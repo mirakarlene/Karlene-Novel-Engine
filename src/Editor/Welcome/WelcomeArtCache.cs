@@ -10,7 +10,7 @@ internal sealed record WelcomeArtCache(BitmapSource Image, Rect Bounds)
     internal static WelcomeArtCache Create(Drawing art, double dpiScale)
     {
         Rect bounds = art.Bounds;
-        if (bounds.IsEmpty) return new(BitmapSource.Create(1, 1, 96, 96, PixelFormats.Pbgra32, null, new byte[4], 4), Rect.Empty);
+        if (bounds.IsEmpty) { var empty = BitmapSource.Create(1, 1, 96, 96, PixelFormats.Pbgra32, null, new byte[4], 4); empty.Freeze(); return new(empty, Rect.Empty); }
         bounds.Inflate(1, 1);
         double scale = Math.Clamp(dpiScale * 2, 1, 8);
         var visual = new DrawingVisual();

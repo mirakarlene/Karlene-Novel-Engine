@@ -16,6 +16,8 @@ public sealed class SceneTestSession : IAsyncDisposable
     private int frameStart;
     public StoryFrame Story => session?.Story ?? StoryFrame.Empty;
     public SceneVisuals Visuals => session?.Visuals ?? SceneVisuals.Empty;
+    public double LogicMilliseconds => session?.LogicMilliseconds ?? 0;
+    public PreviewLocation? Location => session?.Location;
     public RuntimeWindowSettings Window => session?.WindowSettings ?? project.Engine.RuntimeDefaults(project.Title);
     public bool CanGoBack => history.Any(action => IsVisibleFrame(action.BeforeKind));
     public bool Completed => Story.Completed;

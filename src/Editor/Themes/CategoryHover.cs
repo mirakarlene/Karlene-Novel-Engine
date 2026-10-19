@@ -13,6 +13,16 @@ public static class CategoryHover
     public static readonly DependencyProperty InkProperty = DependencyProperty.RegisterAttached("Ink", typeof(Brush), typeof(CategoryHover), new PropertyMetadata(Brushes.White));
     /// <summary>The animated fraction of the category fill, from zero to one.</summary>
     public static readonly DependencyProperty ProgressProperty = DependencyProperty.RegisterAttached("Progress", typeof(double), typeof(CategoryHover), new PropertyMetadata(0d));
+    /// <summary>Whether this command can currently be activated; favorites can remain enabled separately.</summary>
+    public static readonly DependencyProperty AvailableProperty = DependencyProperty.RegisterAttached("Available", typeof(bool), typeof(CategoryHover), new PropertyMetadata(true, AvailabilityChanged));
+    /// <summary>Reads command availability.</summary><param name="view">Library card.</param><returns>Whether insertion is allowed.</returns>
+    public static bool GetAvailable(DependencyObject view) => (bool)view.GetValue(AvailableProperty);
+    /// <summary>Sets command availability without disabling the nested favorite button.</summary><param name="view">Library card.</param><param name="available">Whether insertion is allowed.</param>
+    public static void SetAvailable(DependencyObject view, bool available) => view.SetValue(AvailableProperty, available);
+    private static void AvailabilityChanged(DependencyObject view, DependencyPropertyChangedEventArgs args)
+    {
+        if (view is FrameworkElement item && !(bool)args.NewValue) { item.BeginAnimation(ProgressProperty, null); SetProgress(item, 0); }
+    }
     /// <summary>Associates a navigation item with live accessibility category colors.</summary>
     public static readonly DependencyProperty GroupProperty = DependencyProperty.RegisterAttached("Group", typeof(string), typeof(CategoryHover), new PropertyMetadata("", GroupChanged));
     private static readonly DependencyProperty HookedProperty = DependencyProperty.RegisterAttached("Hooked", typeof(bool), typeof(CategoryHover), new PropertyMetadata(false));
@@ -48,10 +58,13 @@ public static class CategoryHover
     {
         if (view is not FrameworkElement item || (bool)item.GetValue(HookedProperty)) return;
         item.SetValue(HookedProperty, true);
-        item.MouseEnter += (_, _) => Animate(item, 1);
+        item.MouseEnter += (_, _) => { if (item.IsEnabled && GetAvailable(item)) Animate(item, 1); };
         item.MouseLeave += (_, _) => Animate(item, 0);
         item.IsEnabledChanged += (_, _) => { if (!item.IsEnabled) Animate(item, 0); };
     }
-    private static void Animate(FrameworkElement item, double target) => item.BeginAnimation(ProgressProperty,
-        new DoubleAnimation(target, TimeSpan.FromSeconds(.24)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+    private static void Animate(FrameworkElement item, double target)
+    {
+        if (!item.IsEnabled || !GetAvailable(item)) { item.BeginAnimation(ProgressProperty, null); SetProgress(item, 0); return; }
+        item.BeginAnimation(ProgressProperty, new DoubleAnimation(target, TimeSpan.FromSeconds(.24)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+    }
 }

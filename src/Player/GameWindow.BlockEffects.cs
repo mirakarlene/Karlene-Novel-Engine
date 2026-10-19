@@ -31,7 +31,7 @@ public partial class GameWindow
 
     private void RenderBlockEffects(SceneVisuals scene)
     {
-        sceneEffects!.Apply(scene, preferences.Animate && project.Engine.Theme.AnimationEnabled);
+        sceneEffects!.Apply(scene, preferences.Animate && project.Engine.Theme.AnimationEnabled && activeScenePerformance.EffectsQuality != "low", activeScenePerformance.PostProcessing);
         if (scene.ScreenVersion != renderedVisuals?.ScreenVersion || scene.OverlayScreen != renderedVisuals?.OverlayScreen)
         {
             ScriptScreenCanvas.Children.Clear();

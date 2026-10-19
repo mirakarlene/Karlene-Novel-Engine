@@ -161,6 +161,8 @@ public partial class BlockLibraryView : UserControl
         });
         // Keep starring available even when the command cannot currently be inserted.
         bool available = canAdd(entry.Kind);
+        CategoryHover.SetAvailable(button, available);
+        button.Focusable = available;
         if (!available) { text.Opacity = .5; button.ToolTip = entry.Kind == ScriptNodeKind.Start ? "В схеме уже есть начало." : "Достигнут предел в 500 блоков."; }
         button.Click += (_, e) => { if (ReferenceEquals(e.Source, button) && canAdd(entry.Kind)) BlockSelected?.Invoke(this, entry); };
         return button;

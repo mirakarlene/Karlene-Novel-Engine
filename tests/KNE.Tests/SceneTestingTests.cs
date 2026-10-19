@@ -105,7 +105,7 @@ public sealed class SceneTestingTests
                 var surface = Find<ScenePreview>(window, "SceneSurface");
                 Assert.Equal("selected:3", Find<TextBlock>(surface, "DialogueText").Text);
                 Assert.Equal(Visibility.Collapsed, Find<Button>(window, "NextFrameButton").Visibility);
-                Assert.False(Find<AnimatedBackground>(surface, "AnimatedBackdrop").HasAnimatedProperties);
+                var backdrop = Find<AnimatedBackground>(surface, "AnimatedBackdrop"); double phase = backdrop.Phase; backdrop.Step(.05); Assert.Equal(phase, backdrop.Phase);
                 var identity = Field<EditorPreview>(window, "frame").Story.Identity; Assert.NotNull(identity);
                 Assert.Contains($"фрейм {identity.SceneFrameId} / в игре {identity.GlobalFrameId}", Find<TextBlock>(window, "TestingStatus").Text);
                 Assert.Equal(Visibility.Collapsed, Find<Border>(window, "TestingErrorOverlay").Visibility);

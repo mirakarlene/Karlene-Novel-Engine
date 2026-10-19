@@ -29,6 +29,8 @@ public sealed class ProcessGameSession : IGameSession
     public RuntimeWindowSettings WindowSettings { get { lock (sync) return snapshot.Window; } }
     public StoryFrame Story { get { lock (sync) return snapshot.Story; } }
     public SceneVisuals Visuals { get { lock (sync) return snapshot.Visuals; } }
+    private double logicMilliseconds;
+    public double LogicMilliseconds { get { lock (sync) return logicMilliseconds; } }
     public PreviewLocation? Location { get { lock (sync) return snapshot.Location; } }
     public bool PreviewPaused => Story.Kind == "preview";
     public JsonElement Variables { get { lock (sync) return snapshot.Variables; } }
@@ -130,6 +132,7 @@ public sealed class ProcessGameSession : IGameSession
             lock (sync)
             {
                 if (message.Snapshot != null) snapshot = message.Snapshot;
+                if (command != "checkpoint" && message.Snapshot != null) logicMilliseconds = message.Snapshot.LogicMilliseconds;
                 recovery = message.Checkpoint;
                 canReturnAfterError = false;
                 if (command is "start" or "restore") started = true;

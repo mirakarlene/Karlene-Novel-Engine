@@ -9,12 +9,14 @@ public sealed class ProjectChangeMonitor : IDisposable
     private readonly Timer timer;
     private readonly object sync = new();
     private bool disposed;
-    private readonly string savesPrefix;
+    private string savesPrefix;
+    private readonly string defaultSavesPrefix;
     public event EventHandler? Changed;
 
     public ProjectChangeMonitor(string path)
     {
-        savesPrefix = Path.Combine(PathSafety.NormalizeDirectory(path), "saves") + Path.DirectorySeparatorChar;
+        defaultSavesPrefix = Path.Combine(PathSafety.NormalizeDirectory(path), "saves") + Path.DirectorySeparatorChar;
+        savesPrefix = PerformanceSettingsStore.LoadProject(path).ResolveSavesPath(path) + Path.DirectorySeparatorChar;
         watcher = new FileSystemWatcher(path)
         {
             IncludeSubdirectories = true,
@@ -32,8 +34,8 @@ public sealed class ProjectChangeMonitor : IDisposable
 
     private void Schedule(object? sender, FileSystemEventArgs? e)
     {
-        bool IsSavePath(string value) => value.StartsWith(savesPrefix, StringComparison.OrdinalIgnoreCase) ||
-            value.Equals(Path.TrimEndingDirectorySeparator(savesPrefix), StringComparison.OrdinalIgnoreCase);
+        bool IsSavePath(string value) => value.StartsWith(savesPrefix, StringComparison.OrdinalIgnoreCase) || value.StartsWith(defaultSavesPrefix, StringComparison.OrdinalIgnoreCase) ||
+            value.Equals(Path.TrimEndingDirectorySeparator(savesPrefix), StringComparison.OrdinalIgnoreCase) || value.Equals(Path.TrimEndingDirectorySeparator(defaultSavesPrefix), StringComparison.OrdinalIgnoreCase);
         if (e != null && IsSavePath(e.FullPath) && (e is not RenamedEventArgs renamed || IsSavePath(renamed.OldFullPath))) return;
         lock (sync) { if (!disposed) timer.Change(400, Timeout.Infinite); }
     }
@@ -54,4 +56,5 @@ public sealed class ProjectChangeMonitor : IDisposable
             timer.Dispose();
         }
     }
+    internal void SetSaveDirectory(string path) => savesPrefix = PathSafety.NormalizeDirectory(path) + Path.DirectorySeparatorChar;
 }

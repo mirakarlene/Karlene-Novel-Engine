@@ -28,6 +28,10 @@ public sealed class WelcomeBubbles : WelcomeAnimation
     private readonly List<WelcomeArtCache> sprites = [];
     private (Color Ink, Color Accent, string Kind, double Dpi) cachedKey;
     internal int CacheBuilds { get; private set; }
+    private GraphicsLayer? graphics;
+    private bool preparing;
+    private int generation;
+    public WelcomeBubbles() { Unloaded += (_, _) => { graphics?.Dispose(); graphics = null; generation++; preparing = false; }; }
     internal BubbleField Field => this.field;
     public void SetPointer(Point? point) => pointer = point is { } p && double.IsFinite(p.X) && double.IsFinite(p.Y) ? p : null;
     protected override void Advance(double seconds) => field.Step(seconds, RenderSize, pointer);
@@ -41,15 +45,56 @@ public sealed class WelcomeBubbles : WelcomeAnimation
         var key = (color, accent, Normalize(ObjectKind), VisualTreeHelper.GetDpi(this).DpiScaleX);
         if (sprites.Count != field.Bubbles.Count || cachedKey != key)
         {
-            sprites.Clear();
-            foreach (var bubble in field.Bubbles) sprites.Add(WelcomeArtCache.Create(Artwork(bubble.Radius, key.Item3, color, accent), key.Item4));
-            cachedKey = key; CacheBuilds++;
+            if (IsLoaded && IsVisible && Window.GetWindow(this)?.IsVisible == true)
+            { PrepareSprites(key); if (sprites.Count == 0) { dc.Pop(); return; } }
+            else { sprites.Clear(); foreach (var bubble in field.Bubbles) sprites.Add(WelcomeArtCache.Create(Artwork(bubble.Radius, key.Item3, color, accent), key.Item4)); cachedKey = key; CacheBuilds++; }
+        }
+        if (IsLoaded && IsVisible && Window.GetWindow(this)?.IsVisible == true)
+        {
+            graphics ??= new(this);
+            double density = VisualTreeHelper.GetDpi(this).DpiScaleX;
+            if (graphics.TryDraw(dc, () =>
+            {
+                var items = new List<GraphicsSprite>(field.Bubbles.Count);
+                for (int i = 0; i < field.Bubbles.Count; i++)
+                {
+                    var bounds = sprites[i].Bounds; bounds.Offset(field.Bubbles[i].X, field.Bubbles[i].Y);
+                    items.Add(new(GraphicsTextures.Get(sprites[i].Image), new Rect(bounds.X * density, bounds.Y * density, bounds.Width * density, bounds.Height * density)));
+                }
+                return new GraphicsFrame(Math.Max(1, (int)Math.Ceiling(ActualWidth * density)), Math.Max(1, (int)Math.Ceiling(ActualHeight * density)), items);
+            }, new Rect(RenderSize))) { dc.Pop(); return; }
         }
         for (int i = 0; i < field.Bubbles.Count; i++)
         {
             var bounds = sprites[i].Bounds; bounds.Offset(field.Bubbles[i].X, field.Bubbles[i].Y); dc.DrawImage(sprites[i].Image, bounds);
         }
         dc.Pop();
+    }
+    private void PrepareSprites((Color Ink, Color Accent, string Kind, double Dpi) key)
+    {
+        if (preparing) return; preparing = true;
+        int revision = generation; var radii = field.Bubbles.Select(bubble => bubble.Radius).ToArray(); var dispatcher = Dispatcher;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var artwork = radii.Select(radius => WelcomeArtCache.Create(Artwork(radius, key.Kind, key.Ink, key.Accent), key.Dpi)).ToArray();
+                if (!dispatcher.HasShutdownStarted) dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (revision != generation) return;
+                    var current = ((Ink as SolidColorBrush)?.Color ?? Colors.Plum, (Accent as SolidColorBrush)?.Color ?? Colors.MediumPurple, Normalize(ObjectKind), VisualTreeHelper.GetDpi(this).DpiScaleX);
+                    if (current == key) { sprites.Clear(); sprites.AddRange(artwork); cachedKey = key; CacheBuilds++; }
+                    preparing = false; InvalidateVisual();
+                }));
+            }
+            catch (Exception error)
+            {
+                EngineDiagnostics.Trace("Подготовка частиц", error.Message);
+                if (!dispatcher.HasShutdownStarted) dispatcher.BeginInvoke(new Action(() => { if (revision == generation) preparing = false; }));
+            }
+            finally { System.Windows.Threading.Dispatcher.CurrentDispatcher.InvokeShutdown(); }
+        }) { IsBackground = true, Name = "KNE welcome artwork" };
+        thread.SetApartmentState(ApartmentState.STA); thread.Start();
     }
     private static DrawingGroup Artwork(double radius, string kind, Color color, Color accent)
     {

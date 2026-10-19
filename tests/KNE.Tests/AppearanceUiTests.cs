@@ -95,7 +95,8 @@ public sealed class AppearanceUiTests
                     var slider = ScreenCanvas(window).Children.OfType<StackPanel>().Single(p => ((ScreenElement)p.Tag).Id == "inert-slider").Children.OfType<Slider>().Single();
                     slider.Value = 0.1;
                     Assert.Equal(WindowStyle.SingleBorderWindow, window.WindowStyle);
-                    Assert.True(Find<AnimatedBackground>(window, "AnimatedBackdrop").HasAnimatedProperties);
+                    var backdrop = Find<AnimatedBackground>(window, "AnimatedBackdrop");
+                    double before = backdrop.Phase; backdrop.Step(.05); Assert.NotEqual(before, backdrop.Phase);
                     Invoke(window, "RenderOutput");
                     Assert.False(File.Exists(Path.Combine(store.DirectoryPath, "preferences.json")));
                     ScreenButton(window, "back").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -232,7 +233,7 @@ public sealed class AppearanceUiTests
                 var toggles = ScreenCanvas(window).Children.OfType<CheckBox>().ToArray();
                 var animation = toggles.Single(t => ((ScreenElement)t.Tag).Action == "animation");
                 animation.IsChecked = false; animation.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Assert.False(Find<AnimatedBackground>(window, "AnimatedBackdrop").HasAnimatedProperties);
+                var backdrop = Find<AnimatedBackground>(window, "AnimatedBackdrop"); double phase = backdrop.Phase; backdrop.Step(.05); Assert.Equal(phase, backdrop.Phase);
                 Assert.False(Find<Border>(window, "MenuOverlay").HasAnimatedProperties);
                 var full = toggles.Single(t => ((ScreenElement)t.Tag).Action == "fullscreen");
                 full.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -255,7 +256,7 @@ public sealed class AppearanceUiTests
             try
             {
                 reopened.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
-                Assert.False(Find<AnimatedBackground>(reopened, "AnimatedBackdrop").HasAnimatedProperties);
+                var backdrop = Find<AnimatedBackground>(reopened, "AnimatedBackdrop"); double phase = backdrop.Phase; backdrop.Step(.05); Assert.Equal(phase, backdrop.Phase);
                 ScreenButton(reopened, "settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var volume = ScreenCanvas(reopened).Children.OfType<StackPanel>().Single(p => ((ScreenElement)p.Tag).Action == "music_volume").Children.OfType<Slider>().Single();
                 Assert.Equal(0.25, volume.Value);
@@ -325,8 +326,8 @@ public sealed class AppearanceUiTests
         await Sta(() =>
         {
             var theme = new GameTheme(); var background = new AnimatedBackground();
-            background.Configure(theme, true); Assert.True(background.HasAnimatedProperties);
-            background.Configure(theme, false); Assert.False(background.HasAnimatedProperties);
+            background.Configure(theme, true); background.Step(.05); Assert.True(background.Phase > 0);
+            background.Configure(theme, false); double phase = background.Phase; background.Step(.05); Assert.Equal(phase, background.Phase);
             foreach (string palette in ThemePalettes.Names.Where(n => n != "custom"))
             {
                 ThemePalettes.Apply(theme, palette); Assert.Equal(palette, theme.Palette);

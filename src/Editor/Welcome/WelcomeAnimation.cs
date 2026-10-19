@@ -1,41 +1,16 @@
-using System.Diagnostics;
 using System.Windows;
-using System.Windows.Threading;
 
 namespace KNE;
 
-/// <summary>A bounded welcome-only animation clock, detached when the visual leaves its window.</summary>
+/// <summary>A visible-only welcome animation driven by the configured frame cap and composition policy.</summary>
 public abstract class WelcomeAnimation : FrameworkElement
 {
-    private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(33) };
-    private Window? owner;
-    private long lastTick;
-    internal bool IsAnimating => timer.IsEnabled;
+    private readonly GraphicsFrameClock clock;
+    internal bool IsAnimating => clock.Running;
     protected WelcomeAnimation()
     {
         IsHitTestVisible = false;
-        timer.Tick += (_, _) => { long now = Stopwatch.GetTimestamp(); Step(Math.Min(.05, Stopwatch.GetElapsedTime(lastTick, now).TotalSeconds)); lastTick = now; };
-        Loaded += (_, _) =>
-        {
-            owner = Window.GetWindow(this); if (owner != null) owner.StateChanged += OwnerStateChanged;
-            SystemParameters.StaticPropertyChanged += PreferencesChanged;
-            RefreshAnimation();
-        };
-        Unloaded += (_, _) =>
-        {
-            timer.Stop(); if (owner != null) owner.StateChanged -= OwnerStateChanged; owner = null;
-            SystemParameters.StaticPropertyChanged -= PreferencesChanged;
-        };
-        IsVisibleChanged += (_, _) => RefreshAnimation(); SizeChanged += (_, _) => RefreshAnimation();
-    }
-    private void OwnerStateChanged(object? sender, EventArgs e) => RefreshAnimation();
-    private void PreferencesChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    { if (e.PropertyName == nameof(SystemParameters.ClientAreaAnimation)) Dispatcher.BeginInvoke(RefreshAnimation); }
-    private void RefreshAnimation()
-    {
-        if (IsLoaded && IsVisible && ActualWidth > 0 && ActualHeight > 0 && owner?.WindowState != WindowState.Minimized && SystemParameters.ClientAreaAnimation)
-        { if (!timer.IsEnabled) { lastTick = Stopwatch.GetTimestamp(); timer.Start(); } }
-        else timer.Stop();
+        clock = new(this, Step); SizeChanged += (_, _) => clock.Refresh();
     }
     internal void Step(double seconds)
     {

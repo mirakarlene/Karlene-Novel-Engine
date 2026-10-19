@@ -183,7 +183,7 @@ public sealed class StartupErrorUiTests
         Assert.False(Find<Button>(window, "NextButton").IsEnabled);
         Assert.False(Find<TextBox>(window, "CommandInput").IsEnabled);
         Assert.True(Find<Button>(window, "StartupErrorExitButton").IsEnabled);
-        Assert.False(Find<AnimatedBackground>(window, "AnimatedBackdrop").HasAnimatedProperties);
+        var backdrop = Find<AnimatedBackground>(window, "AnimatedBackdrop"); double phase = backdrop.Phase; backdrop.Step(.05); Assert.Equal(phase, backdrop.Phase);
         Assert.False(string.IsNullOrWhiteSpace(Find<TextBox>(window, "StartupErrorMessage").Text));
     }
 

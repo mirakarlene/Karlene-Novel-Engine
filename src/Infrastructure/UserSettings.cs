@@ -20,6 +20,7 @@ public sealed class UserSettings
     public string AccessibilityMode { get; set; } = "normal";
     /// <summary>Decorative welcome-object shape; defaults to the original bubbles.</summary>
     public string WelcomeObjects { get; set; } = "bubbles";
+    public GraphicsSettings Graphics { get; set; } = new();
 
     public void RememberProject(string path)
     {
@@ -65,6 +66,7 @@ public sealed class UserSettingsStore
                 settings.UserName = (settings.UserName ?? "").Trim();
                 settings.AccessibilityMode = BlockAccessibility.Normalize(settings.AccessibilityMode);
                 settings.WelcomeObjects = WelcomeBubbles.Normalize(settings.WelcomeObjects);
+                settings.Graphics = GraphicsSettings.Normalize(settings.Graphics);
                 settings.HiddenProjects = (settings.HiddenProjects ?? []).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 settings.ProjectLastOpened = new(settings.ProjectLastOpened ?? [], StringComparer.OrdinalIgnoreCase);
                 settings.RecentProjects = (settings.RecentProjects ?? []).Where(p => !string.IsNullOrWhiteSpace(p))
