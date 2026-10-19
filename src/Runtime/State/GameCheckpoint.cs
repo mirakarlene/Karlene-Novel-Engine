@@ -15,6 +15,7 @@ public interface IGameSession : IAsyncDisposable
     RuntimeWindowSettings WindowSettings { get; }
     StoryFrame Story { get; }
     SceneVisuals Visuals { get; }
+    double LogicMilliseconds => 0;
     Task StartAsync(CancellationToken cancellationToken = default);
     Task AdvanceAsync(CancellationToken cancellationToken = default);
     Task ChooseAsync(int option, CancellationToken cancellationToken = default);
@@ -31,11 +32,13 @@ public interface IGameSession : IAsyncDisposable
 public sealed class GameSaveStore
 {
     public string DirectoryPath { get; }
+    private readonly string projectPath;
 
     public GameSaveStore(string projectPath, string? storageDirectory = null, string? legacyDirectory = null)
     {
-        DirectoryPath = storageDirectory == null ? PathSafety.ResolveRelative(projectPath, "saves") : PathSafety.NormalizeDirectory(storageDirectory);
-        if (legacyDirectory != null || storageDirectory == null) ImportLegacySlots(legacyDirectory ?? LegacyDirectory(projectPath));
+        this.projectPath = PathSafety.NormalizeDirectory(projectPath);
+        DirectoryPath = storageDirectory == null ? PerformanceSettingsStore.LoadProject(projectPath).ResolveSavesPath(projectPath) : PathSafety.NormalizeDirectory(storageDirectory);
+        if ((legacyDirectory != null || storageDirectory == null) && !File.Exists(Path.Combine(DirectoryPath, ".legacy-import-complete"))) ImportLegacySlots(legacyDirectory ?? LegacyDirectory(projectPath));
     }
 
     /// <summary>Locates save slots created by versions that stored progress in the user profile.</summary>
@@ -91,6 +94,30 @@ public sealed class GameSaveStore
 
     /// <summary>Deletes only the selected validated slot.</summary>
     public void Delete(string slot) => File.Delete(SlotPath(slot));
+
+    /// <summary>Deletes recognized checkpoints belonging to this project, preserving preferences and unrelated files.</summary>
+    public async Task<int> DeleteAllProgressAsync(CancellationToken token = default)
+    {
+        PathSafety.RejectLinks(DirectoryPath);
+        if (!Directory.Exists(DirectoryPath)) return 0;
+        var targets = new List<string>();
+        // Never recursively delete a selected directory. Check ownership and every individual path first.
+        foreach (string path in Directory.EnumerateFiles(DirectoryPath, "*.json"))
+        {
+            token.ThrowIfCancellationRequested();
+            string slot = Path.GetFileNameWithoutExtension(path);
+            try
+            {
+                var value = await LoadAsync(slot, token);
+                if (PathSafety.NormalizeDirectory(value.ProjectPath).Equals(projectPath, StringComparison.OrdinalIgnoreCase)) targets.Add(SlotPath(slot));
+            }
+            catch (Exception error) when (error is InvalidDataException or ArgumentException or IOException or System.Text.Json.JsonException) { }
+        }
+        token.ThrowIfCancellationRequested();
+          foreach (string target in targets) { PathSafety.RejectLinks(target); File.Delete(target); }
+          if (targets.Count > 0) await File.WriteAllTextAsync(PathSafety.ResolveRelative(DirectoryPath, ".legacy-import-complete"), "Progress was reset; do not restore legacy slots automatically.");
+        return targets.Count;
+    }
 
     public async Task SaveAsync(string slot, GameCheckpoint checkpoint, CancellationToken cancellationToken = default)
     {

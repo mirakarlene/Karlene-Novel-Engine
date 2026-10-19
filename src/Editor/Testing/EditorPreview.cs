@@ -21,6 +21,7 @@ public sealed class EditorPreview : IAsyncDisposable
     private int? targetFunctionLine;
     public StoryFrame Story => session?.Story ?? StoryFrame.Empty;
     public SceneVisuals Visuals => session?.Visuals ?? SceneVisuals.Empty;
+    public double LogicMilliseconds => session?.LogicMilliseconds ?? 0;
     public RuntimeWindowSettings Window => session?.WindowSettings ?? project.Engine.RuntimeDefaults(project.Title);
     public PreviewLocation? Location => session?.Location;
     public bool NeedsChoice => Story.Kind == "choice";

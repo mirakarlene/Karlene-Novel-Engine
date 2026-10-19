@@ -12,6 +12,8 @@ public sealed class EngineSettings
     public GameTheme Theme { get; set; } = new();
     public ScreenLayouts Screens { get; set; } = ScreenLayouts.CreateDefaults();
     public GameDefaults Game { get; init; } = new();
+    public ProjectPerformanceSettings Performance { get; init; } = new();
+    public ScenePerformanceDocument ScenePerformance { get; init; } = new();
     public JsonElement InitialState { get; init; } = JsonSerializer.SerializeToElement(new Dictionary<string, object>());
     public static JsonSerializerOptions JsonOptions { get; } = new()
     {
@@ -28,6 +30,8 @@ public sealed class EngineSettings
             Window = Read<WindowDefaults>(root, "window.json"),
             Theme = Read<GameTheme>(root, "theme.json"),
             Game = Read<GameDefaults>(root, "game.json"),
+            Performance = PerformanceSettingsStore.LoadProject(root),
+            ScenePerformance = PerformanceSettingsStore.LoadScenes(root),
             InitialState = Read<JsonElement>(root, "state.json", JsonSerializer.SerializeToElement(new Dictionary<string, object>()))
         };
         string screensPath = PathSafety.ResolveRelative(root, "engine/screens.json");
@@ -49,7 +53,8 @@ public sealed class EngineSettings
         foreach (var item in new (string Name, object Value)[]
         {
             ("window.json", settings.Window), ("theme.json", settings.Theme),
-            ("game.json", settings.Game), ("state.json", settings.InitialState), ("screens.json", settings.Screens)
+            ("game.json", settings.Game), ("state.json", settings.InitialState), ("screens.json", settings.Screens),
+            ("performance.json", settings.Performance), ("scene-performance.json", settings.ScenePerformance)
         })
             File.WriteAllText(Path.Combine(directory, item.Name), JsonSerializer.Serialize(item.Value, JsonOptions));
         File.WriteAllText(Path.Combine(directory, "README.txt"), """
@@ -70,7 +75,13 @@ public sealed class EngineSettings
             Escape — меню паузы; F11 — полноэкранный режим; F3 — журнал и команды отладки.
             В fullscreen системная рамка скрыта; F11 возвращает оконный режим.
             Предпросмотр выбранной сцены пропускает начальное меню.
-            Сохранения игрока находятся в папке проекта saves, а не в engine.
+            performance.json: graphics (api auto/vulkan/opengl, v_sync, max_fps 30/60/144/0,
+            msaa_samples 0/2/4), fps_counter, fps_corner, statistics_overlay, loading_indicator,
+            debug_mode, preloading, saves_path. Кнопка «Параметры проекта» редактирует эти значения.
+            scene-performance.json: scenes с путями .knegraph; effects_quality high/medium/low,
+            post_processing. Кнопка «Параметры сцены» редактирует отдельные сцены.
+            Сохранения находятся в saves или папке saves_path; смена пути не переносит старые файлы.
+            Графический API применяется к слоям KNE; WPF-контролы используют системный рендерер.
             Изменение state.json отменяет совместимость старых сохранений; изменение темы — нет.
             """);
     }

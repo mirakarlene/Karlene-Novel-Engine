@@ -28,17 +28,18 @@ public partial class GameWindow
         string text = variables.ValueKind == JsonValueKind.Object
             ? JsonSerializer.Serialize(variables, VariableFormatting)
             : "Переменные появятся после начала выполнения сценария.";
+        if (project.Engine.Performance.DebugMode) text = $"{System.Runtime.InteropServices.RuntimeInformation.OSDescription}\n.NET {Environment.Version} · {Environment.MachineName}\nAPI: {GraphicsEnvironment.For(this).Backend} · логика {runtime.LogicMilliseconds:F2} мс\n" + text;
         if (text == renderedVariables) return;
         VariablesOutput.Text = text;
         renderedVariables = text;
     }
 
-    private void CloseConsole_Click(object sender, RoutedEventArgs e) => DebugOverlay.Visibility = Visibility.Collapsed;
+    private void CloseConsole_Click(object sender, RoutedEventArgs e) => DebugOverlay.Visibility = project.Engine.Performance.DebugMode ? Visibility.Visible : Visibility.Collapsed;
 
     private void ErrorConsole_Click(object sender, RoutedEventArgs e)
     {
         RenderConsole();
-        DebugOverlay.Visibility = DebugOverlay.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+        DebugOverlay.Visibility = !project.Engine.Performance.DebugMode && DebugOverlay.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private async void ErrorRestart_Click(object sender, RoutedEventArgs e) => await RestartFromErrorAsync();

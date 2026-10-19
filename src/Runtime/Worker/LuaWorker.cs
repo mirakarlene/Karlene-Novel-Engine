@@ -8,7 +8,7 @@ namespace KNE;
 internal sealed record WorkerRequest(long Id, string Command, int Option = 0, string? Text = null, GameCheckpoint? Checkpoint = null,
     EditorPreviewSource? EditorSource = null, double Seconds = 0, bool Cancel = false);
 internal sealed record SessionSnapshot(RuntimeWindowSettings Window, StoryFrame Story, SceneVisuals Visuals,
-    PreviewLocation? Location = null, JsonElement Variables = default, bool TransitionInProgress = false);
+    PreviewLocation? Location = null, JsonElement Variables = default, bool TransitionInProgress = false, double LogicMilliseconds = 0);
 internal sealed record WorkerMessage(string Type, long Id = 0, string? Text = null, SessionSnapshot? Snapshot = null,
     GameCheckpoint? Checkpoint = null, string? Error = null, string? ErrorType = null, GameErrorReport? Report = null);
 
@@ -65,6 +65,7 @@ internal static class LuaWorker
                         TimeSpan.FromHours(1), interactive: true, preview: preview, editorSource: request.EditorSource,
                         variablesUpdated: value => Send(new("variables", Snapshot: new(runtime!.WindowSettings, runtime.Story, runtime.Visuals,
                             runtime.Location, value, runtime.TransitionInProgress))));
+                    var logicWatch = System.Diagnostics.Stopwatch.StartNew();
                     switch (request.Command)
                     {
                         case "start": await runtime.StartAsync().ConfigureAwait(false); break;
@@ -78,13 +79,14 @@ internal static class LuaWorker
                         case "checkpoint": break;
                         default: throw new InvalidDataException("Неизвестная команда рабочего процесса.");
                     }
+                    logicWatch.Stop();
                     GameCheckpoint? checkpoint = null;
                     try { if (request.EditorSource == null) checkpoint = await runtime.GetCheckpointAsync().ConfigureAwait(false); }
                     catch (Exception ex) when (request.Command != "checkpoint")
                     {
                         Send(new("log", Text: "Сохранение недоступно: " + ex.Message));
                     }
-                    Send(new("result", request.Id, Snapshot: new(runtime.WindowSettings, runtime.Story, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress), Checkpoint: checkpoint));
+                    Send(new("result", request.Id, Snapshot: new(runtime.WindowSettings, runtime.Story, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress, logicWatch.Elapsed.TotalMilliseconds), Checkpoint: checkpoint));
                 }
                 catch (Exception ex) { Send(new("error", request.Id,
                     Snapshot: runtime == null ? null : new(runtime.WindowSettings, runtime.Story, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress),

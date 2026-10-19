@@ -1,0 +1,81 @@
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using Microsoft.Win32;
+
+namespace KNE;
+
+public sealed class ProjectParametersWindow : Window
+{
+    private readonly ProjectInfo project;
+    internal GraphicsSettingsEditor GraphicsInput { get; } = new();
+    internal TextBox SavesInput { get; } = new();
+    internal ComboBox CornerInput { get; } = GraphicsSettingsEditor.Choice(ProjectPerformanceSettings.Corners);
+    private readonly Dictionary<string, CheckBox> switches = [];
+    private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, Margin = new(0, 10, 0, 10) };
+    public ProjectParametersWindow(ProjectInfo project)
+    {
+        this.project = project; Title = "Параметры проекта · " + project.Title; Width = 780; Height = 840; MinWidth = 540; MinHeight = 500; WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        var value = PerformanceSettingsStore.LoadProject(project.Path);
+        var body = new StackPanel { Margin = new(24) }; body.Children.Add(GraphicsInput); GraphicsInput.Value = value.Graphics;
+        AddSwitch(body, "fps", "Счётчик FPS", value.FpsCounter); body.Children.Add(CornerInput); CornerInput.SelectedValue = value.FpsCorner;
+        AddSwitch(body, "stats", "Оверлей статистики (RAM, GPU, Draw Calls)", value.StatisticsOverlay);
+        AddSwitch(body, "loading", "Уведомление загрузки в углу", value.LoadingIndicator);
+        AddSwitch(body, "debug", "Режим отладки — консоль всегда открыта", value.DebugMode);
+        AddSwitch(body, "preload", "Предзагрузка ресурсов следующей сцены", value.Preloading);
+        body.Children.Add(new TextBlock { Text = "Путь к сохранениям", Margin = new(0, 12, 0, 6) });
+        var row = new DockPanel(); var browse = new Button { Content = "Выбрать…", Margin = new(8, 0, 0, 0) }; DockPanel.SetDock(browse, Dock.Right); row.Children.Add(browse); SavesInput.Text = value.SavesPath; row.Children.Add(SavesInput); body.Children.Add(row);
+        browse.Click += (_, _) => { var dialog = new OpenFolderDialog(); if (dialog.ShowDialog(this) == true) SavesInput.Text = dialog.FolderName; };
+        body.Children.Add(new TextBlock { Text = "Относительный путь считается от проекта. При смене папки существующие сохранения не переносятся.", TextWrapping = TextWrapping.Wrap, Opacity = .65, Margin = new(0, 8, 0, 12) });
+        var reset = new Button { Content = "Удалить все сохранения", Background = Brushes.DarkRed, Foreground = Brushes.White, BorderBrush = Brushes.IndianRed, Padding = new(12, 8, 12, 8), HorizontalAlignment = HorizontalAlignment.Left };
+        reset.Click += async (_, _) =>
+        {
+            if (MessageBox.Show(this, "Удалить сохранения этого проекта из сохранённой папки? Настройки и посторонние файлы останутся. Действие нельзя отменить.", "Сброс прогресса", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+            try { status.Text = "Удалено сохранений: " + await new GameSaveStore(project.Path).DeleteAllProgressAsync(); }
+            catch (Exception error) { status.Text = error.Message; }
+        };
+        body.Children.Add(reset); body.Children.Add(status);
+        var footer = new WrapPanel(); var save = new Button { Content = "Сохранить", Margin = new(0, 0, 8, 0) }; var cancel = new Button { Content = "Отмена" }; footer.Children.Add(save); footer.Children.Add(cancel); body.Children.Add(footer);
+        save.Click += async (_, _) => { try { await SaveAsync(); DialogResult = true; } catch (Exception error) { status.Text = error.Message; } }; cancel.Click += (_, _) => Close();
+        Content = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden };
+    }
+    private void AddSwitch(Panel body, string key, string label, bool value) { var input = new CheckBox { Content = label, IsChecked = value, Margin = new(0, 7, 0, 7) }; switches[key] = input; body.Children.Add(input); }
+    internal Task SaveAsync() => PerformanceSettingsStore.SaveProjectAsync(project.Path, new() { Graphics = GraphicsInput.Value, FpsCounter = switches["fps"].IsChecked == true, FpsCorner = (string?)CornerInput.SelectedValue ?? "top_right", StatisticsOverlay = switches["stats"].IsChecked == true, LoadingIndicator = switches["loading"].IsChecked == true, DebugMode = switches["debug"].IsChecked == true, Preloading = switches["preload"].IsChecked == true, SavesPath = SavesInput.Text.Trim() });
+}
+
+public sealed class SceneParametersWindow : Window
+{
+    private readonly ProjectInfo project;
+    private readonly ScenePerformanceDocument document;
+    internal ComboBox SceneInput { get; } = new() { DisplayMemberPath = "Label", SelectedValuePath = "Value", Margin = new(0, 8, 0, 16) };
+    internal ComboBox QualityInput { get; } = GraphicsSettingsEditor.Choice(ScenePerformanceSettings.Qualities);
+    internal CheckBox PostProcessingInput { get; } = new() { Content = "Включить постобработку (вспышка, тряска)", Margin = new(0, 10, 0, 16) };
+    private readonly StackPanel options = new() { IsEnabled = false };
+    private readonly TextBlock metrics = new() { TextWrapping = TextWrapping.Wrap, Margin = new(0, 12, 0, 12) };
+    private string? selected;
+    public SceneParametersWindow(ProjectInfo project)
+    {
+        this.project = project; document = PerformanceSettingsStore.LoadScenes(project.Path); Title = "Параметры сцены · " + project.Title; Width = 700; Height = 530; MinWidth = 500; MinHeight = 420; WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        var body = new StackPanel { Margin = new(24) }; body.Children.Add(new TextBlock { Text = "Выберите блок-схему" }); body.Children.Add(SceneInput);
+        SceneInput.ItemsSource = project.Files.Where(file => ScriptDocument.IsVisualPath(file.FilePath)).Select(file => { string path = Path.GetRelativePath(project.Path, file.FilePath).Replace('\\', '/'); return new GraphicsOption<string>(path, path); }).ToArray();
+        options.Children.Add(new TextBlock { Text = "Качество эффектов" }); options.Children.Add(QualityInput); options.Children.Add(PostProcessingInput); options.Children.Add(metrics); body.Children.Add(options);
+        options.Children.Add(new TextBlock { Text = "Среднее: меньше сегментов узора. Низкое: статичный узор и эффекты без анимации. Постобработка управляет вспышками и тряской, не меняя сценарий.", TextWrapping = TextWrapping.Wrap, Opacity = .65, Margin = new(0, 0, 0, 12) });
+        SceneInput.SelectionChanged += (_, _) => { StoreSelection(); selected = SceneInput.SelectedValue as string; options.IsEnabled = selected != null; var value = document.For(selected); QualityInput.SelectedValue = value.EffectsQuality; PostProcessingInput.IsChecked = value.PostProcessing; metrics.Text = SceneMetrics.Describe(project.Path, selected); };
+        var save = new Button { Content = "Сохранить", HorizontalAlignment = HorizontalAlignment.Left }; body.Children.Add(save);
+        save.Click += async (_, _) => { try { await SaveAsync(); DialogResult = true; } catch (Exception error) { metrics.Text = error.Message; } };
+        Content = body;
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        timer.Tick += (_, _) => { if (selected != null) metrics.Text = SceneMetrics.Describe(project.Path, selected); };
+        Loaded += (_, _) => timer.Start(); Closed += (_, _) => timer.Stop();
+    }
+    private void StoreSelection() { if (selected != null) document.Scenes[selected] = new() { EffectsQuality = (string?)QualityInput.SelectedValue ?? "high", PostProcessing = PostProcessingInput.IsChecked == true }; }
+    internal Task SaveAsync() { StoreSelection(); return PerformanceSettingsStore.SaveScenesAsync(project.Path, document); }
+}
+
+internal static class SceneMetrics
+{
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> values = new(StringComparer.OrdinalIgnoreCase);
+    internal static void Record(string root, string scene, double milliseconds, int? draws, int objects) => values[Path.Combine(root, scene)] = $"Логика: {milliseconds:F2} мс\nDraw Calls графического слоя: {(draws?.ToString() ?? "н/д (WPF)")}\nОбъектов сцены: {objects}" + (objects > 100 ? "\nБольше 100 объектов: проверьте возможность объединения спрайтов." : "");
+    internal static string Describe(string root, string? scene) => scene != null && values.TryGetValue(Path.Combine(root, scene), out var value) ? value : "Замеры появятся после запуска этой сцены. Draw Calls WPF и общая VRAM недоступны; они не подменяются количеством объектов.";
+}

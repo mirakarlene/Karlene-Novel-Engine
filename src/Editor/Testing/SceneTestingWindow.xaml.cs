@@ -19,7 +19,7 @@ public partial class SceneTestingWindow : Window
     private long lastSceneTick = System.Diagnostics.Stopwatch.GetTimestamp();
     public SceneTestingWindow(ProjectInfo project, EditorSelection selection, bool sceneTest)
     {
-        InitializeComponent(); this.project = project; this.selection = selection; sceneMode = sceneTest;
+        InitializeComponent(); GraphicsEnvironment.SetSettings(this, project.Engine.Performance.Graphics); this.project = project; this.selection = selection; sceneMode = sceneTest;
         Title = (sceneMode ? "Тестировать сцену · " : "Предпросмотр фрейма · ") + project.Title;
         InitializeTestingTriggers();
         Width = project.Engine.Window.Width; Height = project.Engine.Window.Height + 70;
@@ -79,6 +79,11 @@ public partial class SceneTestingWindow : Window
     }
     private void Render()
     {
+        string path = scene?.Location?.File ?? frame?.Location?.File ?? selection.FilePath;
+        if (System.IO.Path.IsPathFullyQualified(path)) path = System.IO.Path.GetRelativePath(project.Path, path);
+        var stats = GraphicsEnvironment.For(this);
+        var visuals = scene?.Visuals ?? frame?.Visuals ?? SceneVisuals.Empty;
+        SceneMetrics.Record(project.Path, path, scene?.LogicMilliseconds ?? frame?.LogicMilliseconds ?? 0, stats.DrawCalls, (visuals.Background == null ? 0 : 1) + (visuals.Character == null ? 0 : 1));
         if (sceneMode && scene != null)
         {
             if (!scene.Completed) SceneSurface.DisplayScene(project, scene.Window, scene.Visuals, scene.Story, true, true);

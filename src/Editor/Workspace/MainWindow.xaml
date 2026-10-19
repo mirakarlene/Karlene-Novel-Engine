@@ -11,6 +11,7 @@
     </Grid>
     <DockPanel Margin="20" Background="Transparent">
         <TextBlock x:Name="OperationStatus" DockPanel.Dock="Bottom" Margin="0,12,0,0" TextWrapping="Wrap"/>
+        <TextBlock x:Name="FileCountStatus" DockPanel.Dock="Bottom" Margin="0,8,0,0" Foreground="{DynamicResource Editor.Muted}"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Visibility, ElementName=ProjectPanel}" Value="Visible"/><Condition Binding="{Binding Visibility, ElementName=FilesDataGrid}" Value="Visible"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
         <Grid>
             <StackPanel x:Name="WelcomePanel" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <local:WatercolorLogo x:Name="WelcomeLogo" Height="125" Width="960" HorizontalAlignment="Center" StartColor="{DynamicResource KNE.AccentColor}" EndColor="{DynamicResource KNE.PinkColor}" Margin="0,0,0,12" AutomationProperties.Name="Karlene Novel Engine"/>
@@ -45,7 +46,7 @@
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-                <DockPanel Margin="0,0,0,16"><Button x:Name="AppearanceButton" DockPanel.Dock="Right" Content="Оформление" Padding="10,6" Click="BtnAppearance_Click"/><TextBlock x:Name="ProjectTitleTextBlock" FontSize="24" FontWeight="Bold"/></DockPanel>
+                <DockPanel Margin="0,0,0,16"><Button x:Name="AppearanceButton" DockPanel.Dock="Right" Content="Оформление" Padding="10,6" Click="BtnAppearance_Click"/><Button x:Name="SceneParametersButton" DockPanel.Dock="Right" Content="Параметры сцены" Margin="0,0,8,0" Padding="10,6" Click="SceneParameters_Click"/><Button x:Name="ProjectParametersButton" DockPanel.Dock="Right" Content="Параметры проекта" Margin="0,0,8,0" Padding="10,6" Click="ProjectParameters_Click"/><TextBlock x:Name="ProjectTitleTextBlock" FontSize="24" FontWeight="Bold"/></DockPanel>
                 <Grid Grid.Row="1">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -146,7 +147,7 @@
                                 </Grid>
                                 <TextBlock Text="Летающие объекты главного экрана" Margin="0,0,0,7"/>
                                 <ComboBox x:Name="WelcomeObjectInput" DisplayMemberPath="Label" SelectedValuePath="Id" SelectionChanged="WelcomeObject_Changed" Margin="0,0,0,20"/>
-                                <TextBlock Text="Доступность блоков" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,7"/>
+                                <TextBlock Text="Графика KNE" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,8"/><local:GraphicsSettingsEditor x:Name="AppGraphicsInput"/><TextBlock Text="Доступность блоков" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,7"/>
                                 <TextBlock Text="Миниатюры показывают различия восприятия. Режим меняет палитру категорий и добавляет значки; оформление игры остаётся прежним." TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,0,0,10"/>
                                 <ItemsControl x:Name="AccessibilityCards">
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="3"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>

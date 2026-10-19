@@ -113,12 +113,12 @@ public sealed class ScenePreviewUiTests
                 Assert.Equal(220, Find<Border>(view, "DialoguePanel").Height);
                 Assert.Equal(new Thickness(20), Find<Border>(view, "DialoguePanel").Margin);
                 var backdrop = Find<AnimatedBackground>(view, "AnimatedBackdrop");
-                Assert.False(backdrop.HasAnimatedProperties);
+                double phase = backdrop.Phase; backdrop.Step(.05); Assert.Equal(phase, backdrop.Phase);
                 typeof(ScenePreview).GetMethod("RenderSnapshot", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(view, [worker, true]);
-                Assert.True(backdrop.HasAnimatedProperties);
+                backdrop.Step(.05); Assert.NotEqual(phase, backdrop.Phase);
                 view.Measure(new Size(1100, 360)); view.Arrange(new Rect(0, 0, 1100, 360)); view.UpdateLayout();
                 Capture(view, "scene-preview.png");
-                view.Stop(); Assert.False(backdrop.HasAnimatedProperties);
+                view.Stop(); phase = backdrop.Phase; backdrop.Step(.05); Assert.Equal(phase, backdrop.Phase);
             }
             finally { view.Stop(); }
             return Task.CompletedTask;

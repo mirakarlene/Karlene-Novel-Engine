@@ -32,7 +32,7 @@ public partial class ScenePreview : UserControl
         ResetGameplayUi();
         DialogueEffects.Reset();
         sceneEffects?.Stop();
-        AnimatedBackdrop.BeginAnimation(AnimatedBackground.PhaseProperty, null);
+        AnimatedBackdrop.Configure(project?.Engine.Theme ?? new(), false);
         renderedBackdropAnimate = null; renderedSceneStory = null;
         renderedOverlay = null; renderedOverlayVersion = -1;
     }
@@ -100,7 +100,7 @@ public partial class ScenePreview : UserControl
         active = false; revision++; debounce.Stop(); operation?.Cancel();
         ResetPresentation();
         var previous = preview; preview = null; pendingSelection = null;
-        AnimatedBackdrop.BeginAnimation(AnimatedBackground.PhaseProperty, null);
+        AnimatedBackdrop.Configure(project?.Engine.Theme ?? new(), false);
         if (previous != null) _ = DisposePreviousAsync(previous);
     }
 
@@ -211,6 +211,10 @@ public partial class ScenePreview : UserControl
     {
         if (project == null) return;
         var theme = project.Engine.Theme;
+        string? scenePath = story.Identity?.Scene.Split("::", StringSplitOptions.None)[0];
+        var performance = project.Engine.ScenePerformance.For(scenePath);
+        animate &= performance.EffectsQuality != "low";
+        AnimatedBackdrop.SetQuality(performance.EffectsQuality);
         SceneArea.Width = window.Width; SceneArea.Height = window.Height;
         SceneArea.Background = Brush(window.Background);
         DefaultBackground.Visibility = !visuals.BackgroundsCleared && window.Background == theme.BackgroundColor ? Visibility.Visible : Visibility.Collapsed;
@@ -220,7 +224,7 @@ public partial class ScenePreview : UserControl
         AnimatedBackdrop.Visibility = visuals.Background == null && theme.BackgroundImage == null && DefaultBackground.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
         if (renderedBackdropAnimate != animate) { AnimatedBackdrop.Configure(theme, animate); renderedBackdropAnimate = animate; }
         CharacterImage.HorizontalAlignment = visuals.Position switch { "left" => HorizontalAlignment.Left, "right" => HorizontalAlignment.Right, _ => HorizontalAlignment.Center };
-        sceneEffects!.Apply(visuals, animate);
+        sceneEffects!.Apply(visuals, animate, performance.PostProcessing);
         if (renderedOverlay != visuals.OverlayScreen || renderedOverlayVersion != visuals.ScreenVersion)
         {
             ScriptScreenCanvas.Children.Clear();

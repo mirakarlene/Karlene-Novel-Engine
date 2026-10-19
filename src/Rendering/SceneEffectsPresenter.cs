@@ -32,7 +32,7 @@ internal sealed class SceneEffectsPresenter
         }
     }
 
-    public void Apply(SceneVisuals state, bool animate)
+    public void Apply(SceneVisuals state, bool animate, bool postProcessing = true)
     {
         title.Text = state.Title; title.Visibility = state.Title.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         if (previous?.BackgroundMotion != state.BackgroundMotion) Move(background, state.BackgroundMotion, animate);
@@ -49,7 +49,7 @@ internal sealed class SceneEffectsPresenter
         if (previous?.Shake != state.Shake)
         {
             shake.BeginAnimation(TranslateTransform.XProperty, null); shake.X = 0;
-            if (animate && state.Shake.Duration > 0 && state.Shake.Amount > 0)
+            if (animate && postProcessing && state.Shake.Duration > 0 && state.Shake.Amount > 0)
             {
                 var timeline = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromSeconds(state.Shake.Duration) };
                 for (int i = 0; i <= 12; i++) timeline.KeyFrames.Add(new LinearDoubleKeyFrame(i == 12 ? 0 : state.Shake.Amount * (i % 2 == 0 ? -1 : 1), KeyTime.FromPercent(i / 12d)));
@@ -60,7 +60,7 @@ internal sealed class SceneEffectsPresenter
         {
             flash.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(state.Flash.Color));
             flash.BeginAnimation(UIElement.OpacityProperty, null); flash.Opacity = 0;
-            if (animate && state.Flash.Duration > 0 && state.Flash.Version > 0)
+            if (animate && postProcessing && state.Flash.Duration > 0 && state.Flash.Version > 0)
                 flash.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, 0, TimeSpan.FromSeconds(state.Flash.Duration)));
         }
         previous = state;

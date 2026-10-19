@@ -40,7 +40,7 @@ public partial class GameWindow : Window
         this.preview = preview;
         this.saves = saves ?? new GameSaveStore(project.Path);
         LoadPreferences();
-        Title = project.Title;
+        Title = project.Title; InitializePerformance();
         ApplyEngineTheme();
         runtime = new ProcessGameSession(project, QueueOutput, preview: preview);
         InitializeBlockEffects();
@@ -237,7 +237,7 @@ public partial class GameWindow : Window
         ResumeButton.Visibility = ready ? Visibility.Visible : Visibility.Collapsed;
         DialoguePanel.Visibility = Visibility.Collapsed;
         GameControls.Visibility = Visibility.Collapsed;
-        DebugOverlay.Visibility = Visibility.Collapsed;
+        DebugOverlay.Visibility = project.Engine.Performance.DebugMode ? Visibility.Visible : Visibility.Collapsed;
         PauseAudio();
         DialogueEffects.Stop();
         choicePresentation?.Stop();
@@ -299,7 +299,7 @@ public partial class GameWindow : Window
         ChoicePanel.IsEnabled = false;
         StartButton.IsEnabled = false; ContinueButton.IsEnabled = false; ResumeButton.IsEnabled = false;
         PauseButton.IsEnabled = false;
-        Notify(starting ? "Загрузка игры…" : "Выполнение…");
+        if (project.Engine.Performance.LoadingIndicator) Notify(starting ? "Загрузка игры…" : "Выполнение…");
         StatusText.Text = starting ? "Загрузка сценария…" : "Выполнение команды…";
         try
         {
@@ -435,6 +435,7 @@ public partial class GameWindow : Window
         if (signal != null && runtime.Story.Triggers.Any(trigger => trigger.Matches(signal)) && ready && execution == null)
         { e.Handled = true; await DispatchTriggerAsync(signal); return; }
         if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
+        if (e.Key == Key.F3 && project.Engine.Performance.DebugMode) { e.Handled = true; return; }
         if (e.Key == Key.F3 && (project.Engine.Game.DebugEnabled || diagnosticConsole))
         {
             DebugOverlay.Visibility = DebugOverlay.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
@@ -458,7 +459,7 @@ public partial class GameWindow : Window
 
     private async void Window_Closed(object? sender, EventArgs e)
     {
-        closed = true;
+        closed = true; preloading?.Cancel(); preloading?.Dispose();
         blockFlowLifetime.Cancel();
         renderTimer.Stop();
         FlushPreferences();
@@ -497,6 +498,7 @@ public partial class GameWindow : Window
             AnimatedBackdrop.Visibility = defaultBackground && project.Engine.Theme.BackgroundImage == null ? Visibility.Visible : Visibility.Collapsed;
             renderedSettings = settings;
         }
+        UpdatePerformance();
         RenderStory();
         RenderVisuals();
         ApplyGameplayUi(runtime.Visuals);
@@ -557,7 +559,11 @@ public partial class GameWindow : Window
     private void RenderVisuals()
     {
         var scene = runtime.Visuals;
-        if (scene == renderedVisuals) return;
+        if (scene == renderedVisuals)
+        {
+            if (scenePolicyChanged) { RenderBlockEffects(scene); scenePolicyChanged = false; }
+            return;
+        }
         if (scene.Background != renderedVisuals?.Background) BackgroundImage.Source = LoadImage(scene.Background);
         if (scene.Character != renderedVisuals?.Character) CharacterImage.Source = LoadImage(scene.Character);
         CharacterImage.HorizontalAlignment = scene.Position switch { "left" => HorizontalAlignment.Left, "right" => HorizontalAlignment.Right, _ => HorizontalAlignment.Center };
@@ -579,6 +585,7 @@ public partial class GameWindow : Window
         }
         catch (Exception ex) { QueueOutput("Ошибка звука: " + ex.Message); }
         RenderBlockEffects(scene);
+        scenePolicyChanged = false;
         bool showDefaultBackground = !scene.BackgroundsCleared && runtime.WindowSettings.Background == project.Engine.Theme.BackgroundColor;
         DefaultBackground.Visibility = DefaultBackgroundImage.Visibility = showDefaultBackground ? Visibility.Visible : Visibility.Collapsed;
         AnimatedBackdrop.Visibility = showDefaultBackground && project.Engine.Theme.BackgroundImage == null ? Visibility.Visible : Visibility.Collapsed;
@@ -590,13 +597,7 @@ public partial class GameWindow : Window
         if (path == null) return null;
         try
         {
-            var image = new BitmapImage();
-            image.BeginInit();
-            image.CacheOption = BitmapCacheOption.OnLoad;
-            image.UriSource = new Uri(path);
-            image.EndInit();
-            image.Freeze();
-            return image;
+            return assets.Load(path);
         }
         catch (Exception ex) { QueueOutput("Ошибка изображения: " + ex.Message); return null; }
     }

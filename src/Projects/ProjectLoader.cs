@@ -75,7 +75,8 @@ public static class ProjectLoader
         {
             Window = new WindowDefaults { Width = 800, Height = 600 },
             Theme = new GameTheme { BackgroundColor = "#FF2D2D30", Pattern = false },
-            Game = new GameDefaults { MainMenu = false }
+            Game = new GameDefaults { MainMenu = false },
+            Performance = PerformanceSettingsStore.LoadProject(root), ScenePerformance = PerformanceSettingsStore.LoadScenes(root)
         };
         var result = new ProjectInfo { Path = root, Configuration = configuration, Engine = engine };
         var snapshot = await Task.Run(() => EnumerateFiles(root, cancellationToken), cancellationToken);
@@ -89,6 +90,7 @@ public static class ProjectLoader
         var files = new List<string>();
         var warnings = new List<string>();
         var pending = new Stack<string>();
+        string savesDirectory = PerformanceSettingsStore.LoadProject(root).ResolveSavesPath(root);
         pending.Push(root);
         while (pending.TryPop(out string? directory))
         {
@@ -96,6 +98,7 @@ public static class ProjectLoader
             foreach (string entry in Directory.EnumerateFileSystemEntries(directory))
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (entry.Equals(savesDirectory, StringComparison.OrdinalIgnoreCase)) continue;
                 if (directory.Equals(root, StringComparison.OrdinalIgnoreCase) &&
                     (Path.GetFileName(entry).Equals("saves", StringComparison.OrdinalIgnoreCase) ||
                      Path.GetFileName(entry).Equals(".kne-backups", StringComparison.OrdinalIgnoreCase))) continue;

@@ -75,6 +75,7 @@ public partial class MainWindow : Window
     private async void Window_Loaded(object sender, RoutedEventArgs e) => await RunOperationAsync(async () =>
     {
         settings = await settingsStore.LoadAsync();
+        AppGraphicsInput.Value = settings.Graphics; GraphicsEnvironment.SetSettings(this, settings.Graphics);
         TxtEditorPath.Text = settings.EditorPath;
         TxtProjectsStorage.Text = settings.ProjectsStoragePath;
         TxtUserName.Text = settings.UserName;
@@ -155,8 +156,8 @@ public partial class MainWindow : Window
         if (closed) return false;
         WatchProject(loaded.Path);
         ShowPanel(ProjectPanel);
-        OperationStatus.Text = loaded.Warnings.Count == 0 ? "Файлов: " + loaded.Files.Count :
-            $"Файлов: {loaded.Files.Count}. " + string.Join(Environment.NewLine, loaded.Warnings.Take(5));
+        FileCountStatus.Text = "Файлов: " + loaded.Files.Count;
+        OperationStatus.Text = string.Join(Environment.NewLine, loaded.Warnings.Take(5));
         OperationStatus.Text += identityWarning;
         if (remember)
         {
@@ -211,6 +212,7 @@ public partial class MainWindow : Window
 
     private void BtnSettings_Click(object sender, RoutedEventArgs e)
     {
+        AppGraphicsInput.Value = settings.Graphics; GraphicsEnvironment.SetSettings(this, settings.Graphics);
         TxtEditorPath.Text = settings.EditorPath;
         TxtProjectsStorage.Text = settings.ProjectsStoragePath;
         TxtUserName.Text = settings.UserName;
@@ -234,9 +236,9 @@ public partial class MainWindow : Window
         }
         string userName = TxtUserName.Text.Trim();
         if (userName.Length > 80 || userName.Any(char.IsControl)) throw new ArgumentException("Имя пользователя: до 80 символов, без переносов строк и управляющих символов.");
-        var next = new UserSettings { EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = EditorTheme.Normalize((string?)ThemeInput.SelectedValue), UserName = userName, AccessibilityMode = BlockAccessibility.GetMode(this), WelcomeObjects = WelcomeBubbles.Normalize((string?)WelcomeObjectInput.SelectedValue) };
+        var next = new UserSettings { Graphics = AppGraphicsInput.Value, EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = EditorTheme.Normalize((string?)ThemeInput.SelectedValue), UserName = userName, AccessibilityMode = BlockAccessibility.GetMode(this), WelcomeObjects = WelcomeBubbles.Normalize((string?)WelcomeObjectInput.SelectedValue) };
         await settingsStore.SaveAsync(next);
-        settings = next;
+        settings = next; GraphicsEnvironment.SetSettings(this, settings.Graphics);
         UpdateWelcomeGreeting();
         await RefreshStoredProjectsAsync();
         OperationStatus.Text = "Настройки сохранены.";
@@ -306,7 +308,7 @@ public partial class MainWindow : Window
 
     private void WatchProject(string path)
     {
-        if (monitoredPath == path) return;
+        if (monitoredPath == path) { monitor?.SetSaveDirectory(PerformanceSettingsStore.LoadProject(path).ResolveSavesPath(path)); return; }
         pendingRefresh = false;
         monitor?.Dispose();
         monitor = new ProjectChangeMonitor(path);
