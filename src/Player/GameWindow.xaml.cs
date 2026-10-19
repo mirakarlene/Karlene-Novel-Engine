@@ -237,7 +237,7 @@ public partial class GameWindow : Window
         ResumeButton.Visibility = ready ? Visibility.Visible : Visibility.Collapsed;
         DialoguePanel.Visibility = Visibility.Collapsed;
         GameControls.Visibility = Visibility.Collapsed;
-        DebugOverlay.Visibility = project.Engine.Performance.DebugMode ? Visibility.Visible : Visibility.Collapsed;
+        if (!diagnosticConsole) DebugOverlay.Visibility = Visibility.Collapsed;
         PauseAudio();
         DialogueEffects.Stop();
         choicePresentation?.Stop();
@@ -435,10 +435,10 @@ public partial class GameWindow : Window
         if (signal != null && runtime.Story.Triggers.Any(trigger => trigger.Matches(signal)) && ready && execution == null)
         { e.Handled = true; await DispatchTriggerAsync(signal); return; }
         if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
-        if (e.Key == Key.F3 && project.Engine.Performance.DebugMode) { e.Handled = true; return; }
         if (e.Key == Key.F3 && (project.Engine.Game.DebugEnabled || diagnosticConsole))
         {
             DebugOverlay.Visibility = DebugOverlay.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+            RenderConsole();
             if (DebugOverlay.Visibility == Visibility.Visible) CommandInput.Focus();
             else if (runtime.Story.Kind == "input") PlayerInput.FocusAnswer(); else NextButton.Focus();
             e.Handled = true; return;
@@ -459,7 +459,12 @@ public partial class GameWindow : Window
 
     private async void Window_Closed(object? sender, EventArgs e)
     {
-        closed = true; preloading?.Cancel(); preloading?.Dispose();
+        closed = true; preloading?.Cancel(); preloading?.Dispose(); assets.Clear();
+        CompositionTarget.Rendering -= PerformanceRendering;
+        gameplayUi?.Reset(); gameplayUi = null;
+        ScriptScreenCanvas.Children.Clear(); MainScriptScreenCanvas.Children.Clear(); ScreenCanvas.Children.Clear();
+        formattedSnapshot = default; formattedVariableBody = renderedVariables = null;
+        BackgroundImage.Source = CharacterImage.Source = DefaultBackgroundImage.Source = null;
         blockFlowLifetime.Cancel();
         renderTimer.Stop();
         FlushPreferences();

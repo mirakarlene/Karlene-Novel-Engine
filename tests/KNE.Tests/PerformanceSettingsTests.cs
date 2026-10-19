@@ -111,7 +111,7 @@ public sealed class PerformanceSettingsTests
     [InlineData("scene-performance.json", "null")] [InlineData("scene-performance.json", "[]")]
     [InlineData("scene-performance.json", "{\"version\":0}")] [InlineData("scene-performance.json", "{\"version\":2}")]
     [InlineData("scene-performance.json", "{\"scenes\":null}")] [InlineData("scene-performance.json", "{\"scenes\":{\"one.knegraph\":null}}")]
-    [InlineData("scene-performance.json", "{\"scenes\":{\"one.krl\":{}}}")]
+    [InlineData("scene-performance.json", "{\"scenes\":{\"one.txt\":{}}}")]
     [InlineData("scene-performance.json", "{\"scenes\":{\"one.knegraph\":{\"effects_quality\":null}}}")]
     [InlineData("scene-performance.json", "{\"scenes\":{\"one.knegraph\":{\"unknown\":0}}}")]
     [InlineData("scene-performance.json", "{\"scenes\":{\"one.knegraph\":{},\"ONE.knegraph\":{}}}")]

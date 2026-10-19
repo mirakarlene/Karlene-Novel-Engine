@@ -76,9 +76,9 @@ public sealed class EngineSettings
             В fullscreen системная рамка скрыта; F11 возвращает оконный режим.
             Предпросмотр выбранной сцены пропускает начальное меню.
             performance.json: graphics (api auto/vulkan/opengl, v_sync, max_fps 30/60/144/0,
-            msaa_samples 0/2/4), fps_counter, fps_corner, statistics_overlay, loading_indicator,
+            msaa_samples 0/2/4, limit_resource_cache true/false, resource_cache_limit_mb 16/32/64/128/256/512), fps_counter, fps_corner, statistics_overlay, loading_indicator,
             debug_mode, preloading, saves_path. Кнопка «Параметры проекта» редактирует эти значения.
-            scene-performance.json: scenes с путями .knegraph; effects_quality high/medium/low,
+            scene-performance.json: scenes с путями .krl или .knegraph; effects_quality high/medium/low,
             post_processing. Кнопка «Параметры сцены» редактирует отдельные сцены.
             Сохранения находятся в saves или папке saves_path; смена пути не переносит старые файлы.
             Графический API применяется к слоям KNE; WPF-контролы используют системный рендерер.

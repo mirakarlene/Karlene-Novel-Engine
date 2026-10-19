@@ -29,15 +29,18 @@ public sealed class WelcomeBubbles : WelcomeAnimation
     private (Color Ink, Color Accent, string Kind, double Dpi) cachedKey;
     internal int CacheBuilds { get; private set; }
     private GraphicsLayer? graphics;
+    private GraphicsAtlas? atlas;
+    private int atlasBuild = -1;
     private bool preparing;
     private int generation;
-    public WelcomeBubbles() { Unloaded += (_, _) => { graphics?.Dispose(); graphics = null; generation++; preparing = false; }; }
+    public WelcomeBubbles() { Unloaded += (_, _) => { graphics?.Dispose(); graphics = null; atlas = null; generation++; preparing = false; }; IsVisibleChanged += (_, _) => { if (!IsVisible) atlas = null; }; }
     internal BubbleField Field => this.field;
     public void SetPointer(Point? point) => pointer = point is { } p && double.IsFinite(p.X) && double.IsFinite(p.Y) ? p : null;
     protected override void Advance(double seconds) => field.Step(seconds, RenderSize, pointer);
     protected override void OnRender(DrawingContext dc)
     {
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
+        if (Window.GetWindow(this)?.WindowState == WindowState.Minimized) return;
         field.Resize(RenderSize);
         dc.PushClip(new RectangleGeometry(new Rect(RenderSize)));
         Color color = (Ink as SolidColorBrush)?.Color ?? Colors.Plum;
@@ -49,24 +52,16 @@ public sealed class WelcomeBubbles : WelcomeAnimation
             { PrepareSprites(key); if (sprites.Count == 0) { dc.Pop(); return; } }
             else { sprites.Clear(); foreach (var bubble in field.Bubbles) sprites.Add(WelcomeArtCache.Create(Artwork(bubble.Radius, key.Item3, color, accent), key.Item4)); cachedKey = key; CacheBuilds++; }
         }
+        IReadOnlyList<WelcomeArtCache> artwork = sprites;
         if (IsLoaded && IsVisible && Window.GetWindow(this)?.IsVisible == true)
         {
-            graphics ??= new(this);
-            double density = VisualTreeHelper.GetDpi(this).DpiScaleX;
-            if (graphics.TryDraw(dc, () =>
-            {
-                var items = new List<GraphicsSprite>(field.Bubbles.Count);
-                for (int i = 0; i < field.Bubbles.Count; i++)
-                {
-                    var bounds = sprites[i].Bounds; bounds.Offset(field.Bubbles[i].X, field.Bubbles[i].Y);
-                    items.Add(new(GraphicsTextures.Get(sprites[i].Image), new Rect(bounds.X * density, bounds.Y * density, bounds.Width * density, bounds.Height * density)));
-                }
-                return new GraphicsFrame(Math.Max(1, (int)Math.Ceiling(ActualWidth * density)), Math.Max(1, (int)Math.Ceiling(ActualHeight * density)), items);
-            }, new Rect(RenderSize))) { dc.Pop(); return; }
+            if (graphics == null || graphics.IsDisposed) { graphics = new(this); graphics.Released += () => atlas = null; }
+            if (atlas == null || atlasBuild != CacheBuilds) { atlas = new(sprites); atlasBuild = CacheBuilds; }
+            if (graphics.TryGetBitmap(() => atlas.Frame, atlas, out var bitmap)) artwork = atlas.Artwork(bitmap!);
         }
         for (int i = 0; i < field.Bubbles.Count; i++)
         {
-            var bounds = sprites[i].Bounds; bounds.Offset(field.Bubbles[i].X, field.Bubbles[i].Y); dc.DrawImage(sprites[i].Image, bounds);
+            var bounds = artwork[i].Bounds; bounds.Offset(field.Bubbles[i].X, field.Bubbles[i].Y); dc.DrawImage(artwork[i].Image, bounds);
         }
         dc.Pop();
     }

@@ -17,16 +17,18 @@ public sealed class AnimatedBackground : FrameworkElement
     private readonly GraphicsFrameClock clock;
     private GraphicsLayer? graphics;
     private string quality = "high";
+    private GraphicsFrame? preparedFrame;
+    private (double Width, double Height, double Dpi) preparedSize;
     public AnimatedBackground()
     {
         IsHitTestVisible = false;
-        clock = new(this, Step);
+        clock = new(this, Step, primary: true);
         Loaded += (_, _) => Start();
         Unloaded += (_, _) => { graphics?.Dispose(); graphics = null; };
     }
     public void Configure(GameTheme value, bool animate)
     {
-        theme = value; motion = animate && value.AnimationEnabled;
+        theme = value; motion = animate && value.AnimationEnabled; preparedFrame = null;
         InvalidateVisual(); Start();
     }
     private void Start()
@@ -34,7 +36,7 @@ public sealed class AnimatedBackground : FrameworkElement
         BeginAnimation(PhaseProperty, null); Phase = 0;
         clock.Refresh();
     }
-    internal void SetQuality(string value) { if (quality == value) return; quality = value; InvalidateVisual(); }
+    internal void SetQuality(string value) { if (quality == value) return; quality = value; preparedFrame = null; InvalidateVisual(); }
     internal void Step(double seconds)
     {
         if (!double.IsFinite(seconds) || seconds < 0) throw new ArgumentOutOfRangeException(nameof(seconds));
@@ -46,11 +48,20 @@ public sealed class AnimatedBackground : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
+        if (Window.GetWindow(this)?.WindowState == WindowState.Minimized) return;
         if (!theme.Pattern || theme.PatternStyle is "none" or "ornament" || ActualWidth < 1 || ActualHeight < 1) return;
         if (IsLoaded && IsVisible && Window.GetWindow(this)?.IsVisible == true)
         {
-            graphics ??= new(this, primary: true);
-            if (graphics.TryDraw(dc, CreateFrame, new Rect(RenderSize))) return;
+            if (graphics == null || graphics.IsDisposed) graphics = new(this);
+            var size = (ActualWidth, ActualHeight, VisualTreeHelper.GetDpi(this).DpiScaleX);
+            if (preparedFrame == null || preparedSize != size) { preparedFrame = CreateFrame(); preparedSize = size; }
+            if (graphics.TryGetBitmap(() => preparedFrame, preparedFrame, out var bitmap))
+            {
+                dc.PushClip(new RectangleGeometry(new Rect(RenderSize)));
+                var bounds = theme.PatternStyle == "waves" ? new Rect(-Phase / Math.Tau * ActualWidth / 2, 0, ActualWidth * 1.5, ActualHeight)
+                    : new Rect(-60 + Phase / Math.Tau * 60, -60 + Phase / Math.Tau * 60, ActualWidth + 120, ActualHeight + 120);
+                dc.DrawImage(bitmap, bounds); dc.Pop(); return;
+            }
         }
         var ink = new SolidColorBrush((Color)ColorConverter.ConvertFromString(theme.PatternColor));
         ink.Freeze();
@@ -107,24 +118,23 @@ public sealed class AnimatedBackground : FrameworkElement
         }
         if (theme.PatternStyle == "waves")
         {
-            int steps = quality == "high" ? 100 : quality == "medium" ? 60 : 30;
+            int steps = quality == "high" ? 150 : quality == "medium" ? 90 : 45;
             for (int row = 0; row < 9; row++)
             {
                 double baseline = (row - .5) * ActualHeight / 7;
-                Point previous = new(0, WaveY(0, ActualWidth, baseline, theme.WaveAmplitude, Phase + row * .5));
-                for (int step = 1; step <= steps; step++) { double x = step * ActualWidth / steps; Point next = new(x, WaveY(x, ActualWidth, baseline, theme.WaveAmplitude, Phase + row * .5)); Line(previous, next); previous = next; }
+                Point previous = new(0, WaveY(0, ActualWidth, baseline, theme.WaveAmplitude, row * .5));
+                for (int step = 1; step <= steps; step++) { double x = step * ActualWidth * 1.5 / steps; Point next = new(x, WaveY(x, ActualWidth, baseline, theme.WaveAmplitude, row * .5)); Line(previous, next); previous = next; }
             }
         }
         else
         {
-            double shift = Phase / Math.Tau * 60;
-            for (double x = -60 + shift; x < ActualWidth + 60; x += 60)
-                for (double y = -60 + shift; y < ActualHeight + 60; y += 60)
+            for (double x = 0; x < ActualWidth + 120; x += 60)
+                for (double y = 0; y < ActualHeight + 120; y += 60)
                     if (theme.PatternStyle == "dots")
                     { for (int i = 0; i < 12; i++) Triangle(new(x, y), new(x + 2.5 * Math.Cos(i * Math.Tau / 12), y + 2.5 * Math.Sin(i * Math.Tau / 12)), new(x + 2.5 * Math.Cos((i + 1) * Math.Tau / 12), y + 2.5 * Math.Sin((i + 1) * Math.Tau / 12))); }
                     else { Line(new(x, y), new(x + 60, y)); Line(new(x, y), new(x, y + 60)); }
         }
-        return new(Math.Max(1, (int)Math.Ceiling(ActualWidth * dpi)), Math.Max(1, (int)Math.Ceiling(ActualHeight * dpi)), [], vertices);
+        return new(Math.Max(1, (int)Math.Ceiling((theme.PatternStyle == "waves" ? ActualWidth * 1.5 : ActualWidth + 120) * dpi)), Math.Max(1, (int)Math.Ceiling((theme.PatternStyle == "waves" ? ActualHeight : ActualHeight + 120) * dpi)), [], vertices);
     }
 }
 

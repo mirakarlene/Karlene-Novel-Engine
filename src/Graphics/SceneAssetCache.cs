@@ -7,25 +7,52 @@ namespace KNE;
 internal sealed class SceneAssetCache
 {
     private readonly object sync = new();
-    private readonly Dictionary<string, (long Length, DateTime Modified, BitmapImage Image, long Bytes)> images = new(StringComparer.OrdinalIgnoreCase);
-    private long bytes;
-    private const long Budget = 64 * 1024 * 1024;
+    private readonly Dictionary<string, (long Length, DateTime Modified, BitmapImage Image, long Bytes, long Access)> images = new(StringComparer.OrdinalIgnoreCase);
+    private long bytes, access, generation;
+    private long budget = 64 * 1024 * 1024;
     internal long CachedBytes { get { lock (sync) return bytes; } }
-    internal BitmapImage Load(string path)
+    internal int CachedCount { get { lock (sync) return images.Count; } }
+    internal void Configure(GraphicsSettings settings)
     {
+        settings.Validate();
+        lock (sync) { budget = settings.CacheBudgetBytes; generation++; Trim(0); }
+    }
+    internal void Clear()
+    {
+        lock (sync) { generation++; images.Clear(); bytes = access = 0; }
+    }
+    private void Trim(long incoming)
+    {
+        while (images.Count > 0 && (bytes > budget - incoming || images.Count >= (incoming == 0 ? 33 : 32)))
+        {
+            var oldest = images.MinBy(entry => entry.Value.Access);
+            bytes -= oldest.Value.Bytes; images.Remove(oldest.Key);
+        }
+    }
+    internal BitmapImage Load(string path, CancellationToken token = default)
+    {
+        token.ThrowIfCancellationRequested();
         var file = new FileInfo(path);
-        lock (sync) if (images.TryGetValue(path, out var cached) && cached.Length == file.Length && cached.Modified == file.LastWriteTimeUtc) return cached.Image;
+        long epoch;
+        lock (sync)
+        {
+            epoch = generation;
+            if (images.TryGetValue(path, out var cached) && cached.Length == file.Length && cached.Modified == file.LastWriteTimeUtc)
+            { images[path] = cached with { Access = ++access }; return cached.Image; }
+        }
         if (file.Length > 64 * 1024 * 1024) throw new InvalidDataException("Изображение больше 64 МБ.");
         var image = new BitmapImage(); image.BeginInit(); image.CacheOption = BitmapCacheOption.OnLoad;
         image.CreateOptions = BitmapCreateOptions.IgnoreImageCache; image.UriSource = new Uri(path); image.EndInit(); image.Freeze();
         long cost = (long)image.PixelWidth * image.PixelHeight * 4;
         lock (sync)
         {
+            token.ThrowIfCancellationRequested();
+            if (epoch != generation) return image;
             if (images.Remove(path, out var previous)) bytes -= previous.Bytes;
-            if (cost <= Budget)
+            if (cost <= budget)
             {
-                while (bytes + cost > Budget || images.Count >= 32) { var oldest = images.First(); bytes -= oldest.Value.Bytes; images.Remove(oldest.Key); }
-                images[path] = (file.Length, file.LastWriteTimeUtc, image, cost); bytes += cost;
+                Trim(cost);
+                images[path] = (file.Length, file.LastWriteTimeUtc, image, cost, ++access); bytes += cost;
             }
         }
         return image;
@@ -100,7 +127,7 @@ internal sealed class SceneAssetCache
             foreach (string path in paths.Take(24))
             {
                 token.ThrowIfCancellationRequested();
-                try { _ = Load(path); } catch (Exception error) when (error is IOException or NotSupportedException or ArgumentException or InvalidDataException or System.IO.FileFormatException) { }
+                try { _ = Load(path, token); } catch (Exception error) when (error is IOException or NotSupportedException or ArgumentException or InvalidDataException or System.IO.FileFormatException) { }
             }
         }, token);
     }

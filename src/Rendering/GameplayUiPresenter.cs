@@ -3,7 +3,6 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 
 namespace KNE;
 
@@ -19,15 +18,17 @@ internal sealed class GameplayUiPresenter
     private readonly string root;
     private readonly Dictionary<DependencyObject, Dictionary<DependencyProperty, object>> originals = [];
     private readonly List<(FrameworkElement Child, DependencyObject Parent, int Index)> moved = [];
-    private readonly Dictionary<string, ImageSource> textures = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SceneAssetCache assets;
+    private readonly bool ownsCache;
     private GameplayUiConfiguration[]? rendered;
     private Button[] renderedChoices = [];
 
     public GameplayUiPresenter(Grid scene, Border dialogue, TextBlock speaker, TextBlock text, StackPanel choices,
-        IReadOnlyDictionary<string, Button> buttons, string root)
+        IReadOnlyDictionary<string, Button> buttons, string root, SceneAssetCache? assets = null)
     {
         this.scene = scene; this.dialogue = dialogue; this.speaker = speaker; this.text = text;
         this.choices = choices; this.buttons = buttons; this.root = root;
+        ownsCache = assets == null; this.assets = assets ?? new();
     }
 
     public void Apply(SceneVisuals visuals)
@@ -60,7 +61,7 @@ internal sealed class GameplayUiPresenter
     public void Reset()
     {
         var focused = Keyboard.FocusedElement as UIElement;
-        Restore(); rendered = null; renderedChoices = []; textures.Clear();
+        Restore(); rendered = null; renderedChoices = []; if (ownsCache) assets.Clear();
         if (focused is { IsVisible: true, IsEnabled: true, IsKeyboardFocused: false }) focused.Focus();
     }
 
@@ -181,12 +182,7 @@ internal sealed class GameplayUiPresenter
     {
         if (style.Texture is null) return ColorBrush(style.BackgroundColor);
         string path = ResourcePaths.Resolve(root, style.Texture);
-        if (!textures.TryGetValue(path, out var image))
-        {
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.UriSource = new Uri(path); bitmap.EndInit(); bitmap.Freeze();
-            textures.Add(path, image = bitmap);
-        }
+        var image = assets.Load(path);
         var brush = new ImageBrush(image) { Stretch = Stretch.Fill }; brush.Freeze(); return brush;
     }
 

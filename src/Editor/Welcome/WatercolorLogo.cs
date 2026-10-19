@@ -18,9 +18,11 @@ public sealed class WatercolorLogo : WelcomeAnimation
     private double cachedScale;
     internal int CacheBuilds { get; private set; }
     private GraphicsLayer? graphics;
+    private GraphicsAtlas? atlas;
+    private int atlasBuild = -1;
     private bool preparing;
     private int generation;
-    public WatercolorLogo() { Unloaded += (_, _) => { graphics?.Dispose(); graphics = null; generation++; preparing = false; }; }
+    public WatercolorLogo() { Unloaded += (_, _) => { graphics?.Dispose(); graphics = null; atlas = null; generation++; preparing = false; }; IsVisibleChanged += (_, _) => { if (!IsVisible) atlas = null; }; }
     private double width, phase;
     internal double MotionPhase => phase;
     internal Vector OffsetFor(int index) => new(Math.Sin(phase * .7 + index * .8) * 1.4, Math.Sin(phase + index * .65) * 3);
@@ -30,6 +32,7 @@ public sealed class WatercolorLogo : WelcomeAnimation
     protected override void OnRender(DrawingContext dc)
     {
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
+        if (Window.GetWindow(this)?.WindowState == WindowState.Minimized) return;
         bool live = IsLoaded && IsVisible && Window.GetWindow(this)?.IsVisible == true;
         if (live && letters.Count == 0) { PrepareArtwork(); return; }
         if (letters.Count == 0) BuildLetters();
@@ -40,29 +43,18 @@ public sealed class WatercolorLogo : WelcomeAnimation
             if (live) { PrepareArtwork(); if (cachedLetters.Count == 0) return; }
             else { cachedLetters.Clear(); foreach (var letter in letters) cachedLetters.Add(WelcomeArtCache.Create(letter, dpi)); cachedScale = dpi; CacheBuilds++; }
         }
-        if (IsLoaded && IsVisible && Window.GetWindow(this)?.IsVisible == true)
+        IReadOnlyList<WelcomeArtCache> artwork = cachedLetters;
+        if (live)
         {
-            graphics ??= new(this, primary: false);
-            double density = VisualTreeHelper.GetDpi(this).DpiScaleX;
-            if (graphics.TryDraw(dc, () =>
-            {
-                var sprites = new List<GraphicsSprite>(cachedLetters.Count);
-                for (int i = 0; i < cachedLetters.Count; i++)
-                {
-                    var art = cachedLetters[i]; if (art.Bounds.IsEmpty) continue;
-                    var bounds = art.Bounds; bounds.Offset(OffsetFor(i));
-                    bounds = new Rect(((ActualWidth - width * scale) / 2 + bounds.X * scale) * density,
-                        ((ActualHeight - 100 * scale) / 2 + bounds.Y * scale) * density, bounds.Width * scale * density, bounds.Height * scale * density);
-                    sprites.Add(new(GraphicsTextures.Get(art.Image), bounds));
-                }
-                return new GraphicsFrame(Math.Max(1, (int)Math.Ceiling(ActualWidth * density)), Math.Max(1, (int)Math.Ceiling(ActualHeight * density)), sprites);
-            }, new Rect(RenderSize))) return;
+            if (graphics == null || graphics.IsDisposed) { graphics = new(this, primary: false); graphics.Released += () => atlas = null; }
+            if (atlas == null || atlasBuild != CacheBuilds) { atlas = new(cachedLetters); atlasBuild = CacheBuilds; }
+            if (graphics.TryGetBitmap(() => atlas.Frame, atlas, out var bitmap)) artwork = atlas.Artwork(bitmap!);
         }
         dc.PushTransform(new TranslateTransform((ActualWidth - width * scale) / 2, (ActualHeight - 100 * scale) / 2));
         dc.PushTransform(new ScaleTransform(scale, scale));
         for (int i = 0; i < letters.Count; i++)
         {
-            var art = cachedLetters[i]; if (art.Bounds.IsEmpty) continue;
+            var art = artwork[i]; if (art.Bounds.IsEmpty) continue;
             Vector offset = OffsetFor(i); var bounds = art.Bounds; bounds.Offset(offset); dc.DrawImage(art.Image, bounds);
         }
         dc.Pop(); dc.Pop();

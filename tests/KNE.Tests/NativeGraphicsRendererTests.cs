@@ -167,6 +167,34 @@ public sealed class NativeGraphicsRendererTests
         Pixel(recovery, 2, 2, 0, 255, 0, 255);
     }
 
+    [GpuTheory]
+    [InlineData("vulkan")]
+    [InlineData("opengl")]
+    public void NativeGpu_CacheBudgetEvictsPreviousResourcesRejectsOversizeAndReleasesPreparationTargets(string api)
+    {
+        using var renderer = NativeGraphicsRenderer.Create(api, false);
+        renderer.SetCacheBudget(1024);
+        foreach (long invalid in new long[] { 0, -1, long.MinValue })
+            Assert.Throws<ArgumentOutOfRangeException>(() => renderer.SetCacheBudget(invalid));
+        long? allocated = null;
+        for (int revision = 0; revision < 40; revision++)
+        {
+            var pixels = new byte[16 * 16 * 4];
+            for (int pixel = 0; pixel < 16 * 16; pixel++) { pixels[pixel * 4] = (byte)(20 + revision); pixels[pixel * 4 + 3] = 255; }
+            var texture = new GraphicsTexture(1000 + revision, 16, 16, pixels);
+            using var image = renderer.Render(new GraphicsFrame(2, 2, [new(texture, new Rect(0, 0, 2, 2))]), 0);
+            Pixel(image, 1, 1, 20 + revision, 0, 0, 255);
+            allocated ??= image.TrackedGpuBytes;
+            Assert.Equal(allocated.Value, image.TrackedGpuBytes);
+        }
+        var oversized = new GraphicsTexture(2000, 17, 16, new byte[17 * 16 * 4]);
+        Assert.Throws<InvalidOperationException>(() => renderer.Render(new GraphicsFrame(2, 2, [new(oversized, new Rect(0, 0, 2, 2))]), 0));
+        renderer.ReleasePreparationResources(); renderer.ReleasePreparationResources();
+        using var restored = renderer.Render(new GraphicsFrame(2, 2, [new(Solid(2001, 0, 255, 0, 255), new Rect(0, 0, 2, 2))]), 0);
+        Pixel(restored, 1, 1, 0, 255, 0, 255);
+        Assert.True(allocated.HasValue); Assert.True(restored.TrackedGpuBytes < allocated.GetValueOrDefault());
+    }
+
     private static GraphicsTexture Solid(long id, byte blue, byte green, byte red, byte alpha) => new(id, 1, 1, [blue, green, red, alpha]);
 
     private static void Pixel(GraphicsPixels image, int x, int y, int blue, int green, int red, int alpha)

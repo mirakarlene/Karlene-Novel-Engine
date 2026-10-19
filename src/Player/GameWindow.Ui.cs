@@ -11,7 +11,7 @@ public partial class GameWindow
             {
                 ["next"] = NextButton, ["save"] = SaveButton, ["load"] = LoadButton,
                 ["auto_save"] = LoadAutoButton, ["pause"] = PauseButton
-            }, project.Path);
+            }, project.Path, assets);
         gameplayUi.Apply(visuals);
     }
 }

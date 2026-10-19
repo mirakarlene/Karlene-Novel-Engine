@@ -10,7 +10,7 @@ public partial class MainWindow
         await RunOperationAsync(async () =>
         {
             var window = new ProjectParametersWindow(project) { Owner = this }; EditorTheme.Apply(window, settings.Theme);
-            if (window.ShowDialog() == true) await OpenProjectAsync(project.Path);
+            if (window.ShowDialog() == true) { RefreshOpenGamePerformance(project.Path); await OpenProjectAsync(project.Path); }
         }, "Параметры проекта…");
     }
     private async void SceneParameters_Click(object sender, RoutedEventArgs e)
@@ -19,7 +19,12 @@ public partial class MainWindow
         await RunOperationAsync(async () =>
         {
             var window = new SceneParametersWindow(project) { Owner = this }; EditorTheme.Apply(window, settings.Theme);
-            if (window.ShowDialog() == true) await OpenProjectAsync(project.Path);
+            if (window.ShowDialog() == true) { RefreshOpenGamePerformance(project.Path); await OpenProjectAsync(project.Path); }
         }, "Параметры сцены…");
+    }
+    private static void RefreshOpenGamePerformance(string path)
+    {
+        if (Application.Current == null) return;
+        foreach (var game in Application.Current.Windows.OfType<GameWindow>().Where(game => game.ProjectPath.Equals(path, StringComparison.OrdinalIgnoreCase)).ToArray()) game.ReloadPerformanceSettings();
     }
 }

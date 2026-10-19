@@ -13,7 +13,13 @@ public sealed record GraphicsSettings
     public bool VSync { get; set; } = true;
     public int MaxFps { get; set; } = 60;
     public int MsaaSamples { get; set; }
-    public static IReadOnlyList<GraphicsOption<string>> Apis { get; } = [new("auto", "Автоматически (Vulkan / OpenGL)"), new("vulkan", "Только Vulkan"), new("opengl", "Только OpenGL")];
+    /// <summary>Bounds optional decoded images and native preparation caches.</summary>
+    public bool LimitResourceCache { get; set; } = true;
+    /// <summary>Maximum optional cache size in MiB; active displayed resources are separate.</summary>
+    public int ResourceCacheLimitMb { get; set; } = 64;
+    public static IReadOnlyList<GraphicsOption<int>> CacheLimits { get; } = [new(16, "16 МиБ"), new(32, "32 МиБ"), new(64, "64 МиБ"), new(128, "128 МиБ"), new(256, "256 МиБ"), new(512, "512 МиБ")];
+    internal long CacheBudgetBytes => LimitResourceCache ? ResourceCacheLimitMb * 1024L * 1024 : long.MaxValue;
+    public static IReadOnlyList<GraphicsOption<string>> Apis { get; } = [new("auto", "Автоматически (OpenGL / Vulkan)"), new("vulkan", "Только Vulkan"), new("opengl", "Только OpenGL")];
     public static IReadOnlyList<GraphicsOption<int>> FrameRates { get; } = [new(30, "30"), new(60, "60"), new(144, "144"), new(0, "Без ограничений")];
     public static IReadOnlyList<GraphicsOption<int>> Antialiasing { get; } = [new(0, "Нет"), new(2, "MSAA ×2"), new(4, "MSAA ×4")];
     /// <summary>Rejects unsupported persisted values before a native context is created.</summary>
@@ -21,13 +27,15 @@ public sealed record GraphicsSettings
     {
         if (!Apis.Any(item => item.Value == Api) || !FrameRates.Any(item => item.Value == MaxFps) || !Antialiasing.Any(item => item.Value == MsaaSamples))
             throw new InvalidDataException("Графика: неизвестный API, лимит FPS или уровень MSAA.");
+        if (!CacheLimits.Any(item => item.Value == ResourceCacheLimitMb)) throw new InvalidDataException("Неизвестный лимит кэша ресурсов.");
     }
     /// <summary>Recovers user preferences from missing or invalid older settings.</summary>
     public static GraphicsSettings Normalize(GraphicsSettings? value)
     {
         value ??= new();
         return value with { Api = Apis.Any(item => item.Value == value.Api) ? value.Api : "auto", MaxFps = FrameRates.Any(item => item.Value == value.MaxFps) ? value.MaxFps : 60,
-            MsaaSamples = Antialiasing.Any(item => item.Value == value.MsaaSamples) ? value.MsaaSamples : 0 };
+            MsaaSamples = Antialiasing.Any(item => item.Value == value.MsaaSamples) ? value.MsaaSamples : 0,
+            ResourceCacheLimitMb = CacheLimits.Any(item => item.Value == value.ResourceCacheLimitMb) ? value.ResourceCacheLimitMb : 64 };
     }
 }
 
@@ -76,6 +84,7 @@ public sealed record ScenePerformanceSettings
 /// <summary>A versioned collection keyed by project-relative graph paths.</summary>
 public sealed class ScenePerformanceDocument
 {
+    internal static bool IsScenePath(string path) => ScriptDocument.IsVisualPath(path) || Path.GetExtension(path).Equals(".krl", StringComparison.OrdinalIgnoreCase);
     public int Version { get; set; } = 1;
     public Dictionary<string, ScenePerformanceSettings> Scenes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public ScenePerformanceSettings For(string? relativePath) => relativePath != null && Scenes.TryGetValue(relativePath.Replace('\\', '/'), out var value) ? value : new();
@@ -86,7 +95,7 @@ public sealed class ScenePerformanceDocument
         foreach (var pair in Scenes)
         {
             string full = PathSafety.ResolveRelative(root, pair.Key);
-            if (!ScriptDocument.IsVisualPath(full) || !paths.Add(full) || pair.Value == null) throw new InvalidDataException("Параметры сцены требуют уникальный путь к .knegraph.");
+            if (!IsScenePath(full) || !paths.Add(full) || pair.Value == null) throw new InvalidDataException("Параметры сцены требуют уникальный путь к .krl или .knegraph.");
             pair.Value.Validate();
         }
     }

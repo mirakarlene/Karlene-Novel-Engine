@@ -38,7 +38,8 @@ public sealed class ErrorActionsUiTests
                 Assert.Equal(Visibility.Visible, Find<Grid>(window, "SceneArea").Visibility);
                 Assert.Equal("Safe segment", Find<TextBlock>(window, "DialogueText").Text);
                 Assert.True(Find<Button>(window, "NextButton").IsEnabled);
-                Assert.Equal(7, Globals(window).GetProperty("state").GetProperty("score").GetInt32());
+                var runtime = (ProcessGameSession)typeof(GameWindow).GetField("runtime", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+                Assert.Equal(7, runtime.Variables.GetProperty("Globals").GetProperty("state").GetProperty("score").GetInt32());
                 Assert.Equal(saved, await File.ReadAllBytesAsync(store.SlotPath("auto")));
                 await FailAdvance(window);
                 Assert.True(Find<Button>(window, "ErrorReturnButton").IsEnabled);

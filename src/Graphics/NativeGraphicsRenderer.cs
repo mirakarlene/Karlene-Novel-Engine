@@ -20,14 +20,14 @@ internal sealed class GraphicsPixels(int width, int height, byte[] pixels, strin
 {
     internal int Width { get; } = width;
     internal int Height { get; } = height;
-    internal byte[] Pixels { get; } = pixels;
+    private byte[] data = pixels;
+    internal byte[] Pixels => data;
     internal string Backend { get; } = backend;
     internal int DrawCalls { get; } = draws;
     internal long TrackedGpuBytes { get; } = bytes;
     internal double Milliseconds { get; } = milliseconds;
     internal int MsaaSamples { get; } = samples;
-    private bool disposed;
-    public void Dispose() { if (!disposed) { disposed = true; ArrayPool<byte>.Shared.Return(Pixels); } }
+    public void Dispose() => Interlocked.Exchange(ref data, Array.Empty<byte>());
 }
 
 /// <summary>Native offscreen OpenGL/Vulkan compositor. All creation, rendering and disposal belong to its worker thread.</summary>
@@ -47,6 +47,7 @@ internal sealed class NativeGraphicsRenderer : IDisposable
     private int width, height, samples = -1;
     private bool disposed;
     private long textureBytes;
+    private long cacheBudget = 64 * 1024 * 1024;
     private static readonly object glCreation = new();
     internal string Backend => device.BackendType == GraphicsBackend.Vulkan ? "vulkan" : "opengl";
     private const int MaximumVertices = 65536;
@@ -55,11 +56,11 @@ internal sealed class NativeGraphicsRenderer : IDisposable
     {
         if (api == "auto")
         {
-            try { return Create("vulkan", vsync); }
-            catch (Exception vulkan) when (vulkan is not OutOfMemoryException)
+            try { return Create("opengl", vsync); }
+            catch (Exception gl) when (gl is not OutOfMemoryException)
             {
-                try { return Create("opengl", vsync); }
-                catch (Exception gl) when (gl is not OutOfMemoryException) { throw new AggregateException("Vulkan и OpenGL недоступны.", vulkan, gl); }
+                try { return Create("vulkan", vsync); }
+                catch (Exception vulkan) when (vulkan is not OutOfMemoryException) { throw new AggregateException("OpenGL и Vulkan недоступны.", gl, vulkan); }
             }
         }
         if (api is not ("vulkan" or "opengl")) throw new ArgumentException("Неизвестный графический API.", nameof(api));
@@ -70,6 +71,7 @@ internal sealed class NativeGraphicsRenderer : IDisposable
             if (api == "vulkan") device = GraphicsDevice.CreateVulkan(options);
             else lock (glCreation)
                 VeldridStartup.CreateWindowAndGraphicsDevice(new WindowCreateInfo(0, 0, 1, 1, Veldrid.WindowState.Hidden, "KNE · OpenGL context"), options, GraphicsBackend.OpenGL, out window, out device);
+            if (device.BackendType != (api == "vulkan" ? GraphicsBackend.Vulkan : GraphicsBackend.OpenGL)) throw new InvalidOperationException("Драйвер создал другой API вместо выбранного: " + api);
             return new(device, window);
         }
         catch { device?.Dispose(); window?.Close(); throw; }
@@ -96,8 +98,7 @@ internal sealed class NativeGraphicsRenderer : IDisposable
         EnsureSurface(frame.Width, frame.Height, msaaSamples);
         var used = frame.Sprites.Select(sprite => sprite.Texture.Id).ToHashSet();
         if (frame.Geometry is { Count: > 0 }) used.Add(white.Id);
-        if (textures.Count > 64 || textureBytes > 64 * 1024 * 1024)
-            foreach (long key in textures.Keys.Where(key => !used.Contains(key)).ToArray())
+        foreach (long key in textures.Keys.Where(key => !used.Contains(key)).ToArray())
             { var old = textures[key]; old.Binding.Dispose(); old.Texture.Dispose(); textureBytes -= old.Bytes; textures.Remove(key); }
         // Prepare resources before command recording, so rejected uploads cannot leave an open command list.
         foreach (var sprite in frame.Sprites) _ = TextureBinding(sprite.Texture);
@@ -133,7 +134,7 @@ internal sealed class NativeGraphicsRenderer : IDisposable
             if (msaaSamples > 0) commands.ResolveTexture(target, resolved);
             commands.CopyTexture(resolved!, staging!); commands.End(); device.SubmitCommands(commands); device.WaitForIdle();
             var mapped = device.Map(staging!, MapMode.Read);
-            pixels = ArrayPool<byte>.Shared.Rent(checked(width * height * 4));
+            pixels = GC.AllocateUninitializedArray<byte>(checked(width * height * 4));
             try
             {
                 for (int row = 0; row < height; row++)
@@ -147,7 +148,6 @@ internal sealed class NativeGraphicsRenderer : IDisposable
             watch.Stop();
             return new(width, height, pixels, Backend, draws, allocated, watch.Elapsed.TotalMilliseconds, msaaSamples);
         }
-        catch { if (pixels != null) ArrayPool<byte>.Shared.Return(pixels); throw; }
         finally { ArrayPool<GraphicsVertex>.Shared.Return(vertices); }
     }
 
@@ -160,8 +160,8 @@ internal sealed class NativeGraphicsRenderer : IDisposable
     private ResourceSet TextureBinding(GraphicsTexture source)
     {
         if (textures.TryGetValue(source.Id, out var existing)) return existing.Binding;
-        if (textures.Count >= 256 || textureBytes + (long)source.Width * source.Height * 4 > 128 * 1024 * 1024)
-            throw new InvalidOperationException("Кеш графического слоя превысил 128 МБ или 256 текстур.");
+        if (textures.Count >= 256 || textureBytes + (long)source.Width * source.Height * 4 > cacheBudget)
+            throw new InvalidOperationException("Подготовка графики превышает лимит кэша ресурсов.");
         var texture = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D((uint)source.Width, (uint)source.Height, 1, 1, PixelFormat.B8_G8_R8_A8_UNorm, TextureUsage.Sampled));
         try
         {
@@ -203,6 +203,13 @@ internal sealed class NativeGraphicsRenderer : IDisposable
     }
     private void DisposeSurface()
     { pipeline?.Dispose(); framebuffer?.Dispose(); staging?.Dispose(); if (resolved != target) resolved?.Dispose(); target?.Dispose(); pipeline = null; framebuffer = null; staging = resolved = target = null; }
+    internal void SetCacheBudget(long bytes) { if (bytes <= 0) throw new ArgumentOutOfRangeException(nameof(bytes)); cacheBudget = bytes; }
+    internal void ReleasePreparationResources()
+    {
+        device.WaitForIdle(); DisposeSurface();
+        foreach (var item in textures.Values) { item.Binding.Dispose(); item.Texture.Dispose(); }
+        textures.Clear(); textureBytes = 0;
+    }
     public void Dispose()
     {
         if (disposed) return; disposed = true;
