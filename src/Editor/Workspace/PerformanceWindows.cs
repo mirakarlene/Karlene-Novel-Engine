@@ -22,7 +22,7 @@ public sealed class ProjectParametersWindow : Window
         AddSwitch(body, "fps", "Счётчик FPS", value.FpsCounter); body.Children.Add(CornerInput); CornerInput.SelectedValue = value.FpsCorner;
         AddSwitch(body, "stats", "Оверлей статистики (RAM, GPU, Draw Calls)", value.StatisticsOverlay);
         AddSwitch(body, "loading", "Уведомление загрузки в углу", value.LoadingIndicator);
-        AddSwitch(body, "debug", "Режим отладки — консоль всегда открыта", value.DebugMode);
+        AddSwitch(body, "debug", "Режим отладки — открыть консоль при запуске", value.DebugMode);
         AddSwitch(body, "preload", "Предзагрузка ресурсов следующей сцены", value.Preloading);
         body.Children.Add(new TextBlock { Text = "Путь к сохранениям", Margin = new(0, 12, 0, 6) });
         var row = new DockPanel(); var browse = new Button { Content = "Выбрать…", Margin = new(8, 0, 0, 0) }; DockPanel.SetDock(browse, Dock.Right); row.Children.Add(browse); SavesInput.Text = value.SavesPath; row.Children.Add(SavesInput); body.Children.Add(row);
@@ -57,8 +57,8 @@ public sealed class SceneParametersWindow : Window
     public SceneParametersWindow(ProjectInfo project)
     {
         this.project = project; document = PerformanceSettingsStore.LoadScenes(project.Path); Title = "Параметры сцены · " + project.Title; Width = 700; Height = 530; MinWidth = 500; MinHeight = 420; WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        var body = new StackPanel { Margin = new(24) }; body.Children.Add(new TextBlock { Text = "Выберите блок-схему" }); body.Children.Add(SceneInput);
-        SceneInput.ItemsSource = project.Files.Where(file => ScriptDocument.IsVisualPath(file.FilePath)).Select(file => { string path = Path.GetRelativePath(project.Path, file.FilePath).Replace('\\', '/'); return new GraphicsOption<string>(path, path); }).ToArray();
+        var body = new StackPanel { Margin = new(24) }; body.Children.Add(new TextBlock { Text = "Выберите сцену (.krl или .knegraph)" }); body.Children.Add(SceneInput);
+        SceneInput.ItemsSource = project.Files.Where(file => ScenePerformanceDocument.IsScenePath(file.FilePath)).Select(file => { string path = Path.GetRelativePath(project.Path, file.FilePath).Replace('\\', '/'); return new GraphicsOption<string>(path, path); }).ToArray();
         options.Children.Add(new TextBlock { Text = "Качество эффектов" }); options.Children.Add(QualityInput); options.Children.Add(PostProcessingInput); options.Children.Add(metrics); body.Children.Add(options);
         options.Children.Add(new TextBlock { Text = "Среднее: меньше сегментов узора. Низкое: статичный узор и эффекты без анимации. Постобработка управляет вспышками и тряской, не меняя сценарий.", TextWrapping = TextWrapping.Wrap, Opacity = .65, Margin = new(0, 0, 0, 12) });
         SceneInput.SelectionChanged += (_, _) => { StoreSelection(); selected = SceneInput.SelectedValue as string; options.IsEnabled = selected != null; var value = document.For(selected); QualityInput.SelectedValue = value.EffectsQuality; PostProcessingInput.IsChecked = value.PostProcessing; metrics.Text = SceneMetrics.Describe(project.Path, selected); };
@@ -75,7 +75,22 @@ public sealed class SceneParametersWindow : Window
 
 internal static class SceneMetrics
 {
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> values = new(StringComparer.OrdinalIgnoreCase);
-    internal static void Record(string root, string scene, double milliseconds, int? draws, int objects) => values[Path.Combine(root, scene)] = $"Логика: {milliseconds:F2} мс\nDraw Calls графического слоя: {(draws?.ToString() ?? "н/д (WPF)")}\nОбъектов сцены: {objects}" + (objects > 100 ? "\nБольше 100 объектов: проверьте возможность объединения спрайтов." : "");
-    internal static string Describe(string root, string? scene) => scene != null && values.TryGetValue(Path.Combine(root, scene), out var value) ? value : "Замеры появятся после запуска этой сцены. Draw Calls WPF и общая VRAM недоступны; они не подменяются количеством объектов.";
+    private static readonly object sync = new();
+    private static readonly Dictionary<string, (double Ms, int? Draws, int Objects)> values = new(StringComparer.OrdinalIgnoreCase);
+    internal static void Record(string root, string scene, double milliseconds, int? draws, int objects)
+    {
+        lock (sync)
+        {
+            string key = Path.Combine(root, scene);
+            if (values.Count >= 512 && !values.ContainsKey(key)) values.Remove(values.Keys.First());
+            values[key] = (milliseconds, draws, objects);
+        }
+    }
+    internal static string Describe(string root, string? scene)
+    {
+        lock (sync)
+            return scene != null && values.TryGetValue(Path.Combine(root, scene), out var value)
+                ? $"Логика: {value.Ms:F2} мс\nDraw Calls графического слоя: {(value.Draws?.ToString() ?? "н/д (WPF)")}\nОбъектов сцены: {value.Objects}" + (value.Objects > 100 ? "\nБольше 100 объектов: проверьте возможность объединения спрайтов." : "")
+                : "Замеры появятся после запуска этой сцены. Draw Calls WPF и общая VRAM недоступны; они не подменяются количеством объектов.";
+    }
 }

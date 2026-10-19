@@ -15,6 +15,7 @@ public partial class ScenePreview : UserControl
     private EditorSelection? pendingSelection;
     private CancellationTokenSource? operation;
     private readonly SemaphoreSlim gate = new(1, 1);
+    private readonly SceneAssetCache assets = new();
     private readonly DispatcherTimer debounce = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private int revision;
     private bool active;
@@ -48,7 +49,7 @@ public partial class ScenePreview : UserControl
     public void DisplayScene(ProjectInfo value, RuntimeWindowSettings window, SceneVisuals visuals, StoryFrame story, bool animate, bool allowChoices)
     {
         standalone = true; PreviewToolbar.Visibility = PreviewStatus.Visibility = Visibility.Collapsed;
-        if (!ReferenceEquals(project, value)) { project = value; ApplyTheme(); }
+        if (!ReferenceEquals(project, value)) { assets.Clear(); project = value; assets.Configure(value.Engine.Performance.Graphics); ApplyTheme(); }
         RenderScene(window, visuals, story, animate);
         ChoicePanel.IsHitTestVisible = allowChoices;
         ScriptScreenCanvas.IsHitTestVisible = MainScriptScreenCanvas.IsHitTestVisible = allowChoices && story.Triggers.Any(trigger => trigger.Kind is "button" or "hotspot");
@@ -75,7 +76,7 @@ public partial class ScenePreview : UserControl
 
     public void Open(ProjectInfo value)
     {
-        Stop(); project = value; active = true;
+        Stop(); project = value; assets.Configure(value.Engine.Performance.Graphics); active = true;
         preview = new EditorPreview(value, _ => { });
         ApplyTheme();
     }
@@ -99,8 +100,11 @@ public partial class ScenePreview : UserControl
     {
         active = false; revision++; debounce.Stop(); operation?.Cancel();
         ResetPresentation();
+        assets.Clear(); BackgroundImage.Source = CharacterImage.Source = DefaultBackgroundImage.Source = null;
+        renderedBackgroundPath = renderedCharacterPath = null;
         var previous = preview; preview = null; pendingSelection = null;
         AnimatedBackdrop.Configure(project?.Engine.Theme ?? new(), false);
+        project = null;
         if (previous != null) _ = DisposePreviousAsync(previous);
     }
 
@@ -275,10 +279,9 @@ public partial class ScenePreview : UserControl
     }
 
     private static Brush Brush(string color) => new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
-    private static BitmapImage? LoadImage(string? path)
+    private BitmapImage? LoadImage(string? path)
     {
         if (path == null) return null;
-        var image = new BitmapImage(); image.BeginInit(); image.CacheOption = BitmapCacheOption.OnLoad;
-        image.UriSource = new Uri(path); image.EndInit(); image.Freeze(); return image;
+        return assets.Load(path);
     }
 }

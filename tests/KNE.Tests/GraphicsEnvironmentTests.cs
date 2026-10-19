@@ -71,6 +71,26 @@ public sealed class GraphicsEnvironmentTests
     });
 
     [Fact]
+    public Task GraphicsPreferences_WindowConfigurationOverridesStaleChildDefaultsForNativePreparation() => WorkspaceTabsTests.Sta(() =>
+    {
+        var child = new Border(); var window = new Window { Content = child };
+        try
+        {
+            GraphicsEnvironment.SetSettings(child, new GraphicsSettings { Api = "auto", MaxFps = 30, VSync = true });
+            Assert.Equal("auto", GraphicsEnvironment.ResolveSettings(child).Api);
+            GraphicsEnvironment.SetSettings(window, new GraphicsSettings { Api = "opengl", MaxFps = 144, VSync = false, MsaaSamples = 4 });
+            var effective = GraphicsEnvironment.ResolveSettings(child);
+            Assert.Equal("opengl", effective.Api); Assert.Equal(144, effective.MaxFps); Assert.False(effective.VSync); Assert.Equal(4, effective.MsaaSamples);
+            Assert.Equal("auto", GraphicsEnvironment.GetSettings(child).Api);
+            GraphicsEnvironment.SetSettings(window, new GraphicsSettings { Api = "vulkan", MaxFps = 60, MsaaSamples = 2 });
+            Assert.Equal("vulkan", GraphicsEnvironment.ResolveSettings(child).Api);
+            Assert.Equal(2, GraphicsEnvironment.ResolveSettings(child).MsaaSamples);
+        }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public void GraphicsTelemetry_ReportsNativeDrawsBytesMaximumDurationAndFallbackErrorsWithoutInventingWpfDraws()
     {
         var stats = new GraphicsTelemetry();

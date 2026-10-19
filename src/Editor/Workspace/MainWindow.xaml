@@ -124,10 +124,10 @@
                 <Grid.Resources><local:AccessibilitySelectedConverter x:Key="AccessibilitySelected"/></Grid.Resources>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <TextBlock Text="Настройки" FontSize="28" FontWeight="Bold" Margin="0,0,0,16"/>
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <Grid>
+                <Viewbox x:Name="SettingsLayout" Grid.Row="1" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Stretch" VerticalAlignment="Top">
+                    <Grid Width="1300">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="0.9*" MinWidth="280"/><ColumnDefinition Width="18"/><ColumnDefinition Width="1.6*" MinWidth="610"/></Grid.ColumnDefinitions>
-                        <Border x:Name="ProjectsSettingsGroup" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18" VerticalAlignment="Top">
+                        <StackPanel x:Name="LeftSettingsColumn"><Border x:Name="ProjectsSettingsGroup" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18" VerticalAlignment="Top">
                             <StackPanel>
                                 <TextBlock Text="Проекты" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,20"/>
                                 <TextBlock Text="Путь к текстовому редактору" Margin="0,0,0,7"/>
@@ -138,6 +138,7 @@
                                 <TextBlock Text="Проекты создаются и обнаруживаются непосредственно в этой папке." TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>
+                        <Border x:Name="RenderSettingsGroup" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18" Margin="0,12,0,0"><StackPanel><TextBlock Text="Рендер" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,12"/><local:GraphicsSettingsEditor x:Name="AppGraphicsInput"/></StackPanel></Border></StackPanel>
                         <Border x:Name="DesignSettingsGroup" Grid.Column="2" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18" VerticalAlignment="Top">
                             <StackPanel>
                                 <TextBlock Text="Дизайн KNE" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,18"/>
@@ -147,7 +148,7 @@
                                 </Grid>
                                 <TextBlock Text="Летающие объекты главного экрана" Margin="0,0,0,7"/>
                                 <ComboBox x:Name="WelcomeObjectInput" DisplayMemberPath="Label" SelectedValuePath="Id" SelectionChanged="WelcomeObject_Changed" Margin="0,0,0,20"/>
-                                <TextBlock Text="Графика KNE" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,8"/><local:GraphicsSettingsEditor x:Name="AppGraphicsInput"/><TextBlock Text="Доступность блоков" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,7"/>
+                                <TextBlock Text="Доступность блоков" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,7"/>
                                 <TextBlock Text="Миниатюры показывают различия восприятия. Режим меняет палитру категорий и добавляет значки; оформление игры остаётся прежним." TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,0,0,10"/>
                                 <ItemsControl x:Name="AccessibilityCards">
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="3"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -162,7 +163,7 @@
                             </StackPanel>
                         </Border>
                     </Grid>
-                </ScrollViewer>
+                </Viewbox>
                 <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,16,0,0"><Button Content="Сохранить" Padding="18,10" Margin="0,0,10,0" Click="BtnSaveSettings_Click" Style="{StaticResource KNE.PrimaryButton}"/><Button Content="Назад" Padding="18,10" Click="BtnSettingsBack_Click"/></StackPanel>
             </Grid>
         </Grid>

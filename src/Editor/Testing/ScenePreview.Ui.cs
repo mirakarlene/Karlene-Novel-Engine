@@ -11,7 +11,7 @@ public partial class ScenePreview
     private void ApplyGameplayUi(SceneVisuals visuals, StoryFrame story)
     {
         if (project is null) return;
-        gameplayUi ??= new(SceneArea, DialoguePanel, SpeakerText, DialogueText, ChoicePanel, previewUiButtons, project.Path);
+        gameplayUi ??= new(SceneArea, DialoguePanel, SpeakerText, DialogueText, ChoicePanel, previewUiButtons, project.Path, assets);
         foreach (string target in new[] { "next", "save", "load", "auto_save", "pause" })
         {
             bool configured = visuals.UiConfigurations.Any(entry => entry.Target == target);

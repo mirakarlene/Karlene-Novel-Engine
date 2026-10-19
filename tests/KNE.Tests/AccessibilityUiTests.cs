@@ -41,6 +41,8 @@ public sealed class AccessibilityUiTests
             Assert.Single(radios, radio => radio.IsChecked == true && Mode(radio) == "normal");
             Assert.DoesNotContain(AccessibilityPresentationTests.Descendants(cards), element => element is ComboBox);
             var objects = Find<ComboBox>(window, "WelcomeObjectInput");
+            var graphics = Find<GraphicsSettingsEditor>(window, "AppGraphicsInput");
+            graphics.Value = new() { Api = "opengl", LimitResourceCache = true, ResourceCacheLimitMb = 32 };
             Assert.Equal(WelcomeBubbles.Objects.Select(option => option.Id), objects.Items.Cast<WelcomeObjectOption>().Select(option => option.Id));
             Assert.Equal("bubbles", objects.SelectedValue);
             foreach (string mode in new[] { "protanopia", "high_contrast", "normal", "tritanopia" })
@@ -58,6 +60,7 @@ public sealed class AccessibilityUiTests
             var stored = await fixture.Store.LoadAsync();
             Assert.Equal("tritanopia", stored.AccessibilityMode); Assert.Equal("stars", stored.WelcomeObjects); Assert.Equal("aurora", stored.Theme);
             Assert.Equal("Карлена", stored.UserName); Assert.Equal([project], stored.RecentProjects); Assert.Equal(historyTime, stored.ProjectLastOpened[project]);
+            Assert.Equal(graphics.Value, stored.Graphics); Assert.Equal("opengl", stored.Graphics.Api); Assert.Equal(32, stored.Graphics.ResourceCacheLimitMb);
             Render(window, "settings-accessibility.png");
             var restored = Create(fixture.Store);
             try
@@ -67,6 +70,7 @@ public sealed class AccessibilityUiTests
                 Assert.Equal("stars", Find<WelcomeBubbles>(restored, "WelcomeBubbleField").ObjectKind);
                 Assert.Equal("aurora", Find<ComboBox>(restored, "ThemeInput").SelectedValue);
                 Assert.Equal("Добро пожаловать, Карлена", Find<TextBlock>(restored, "WelcomeGreeting").Text);
+                Assert.Equal(graphics.Value, Find<GraphicsSettingsEditor>(restored, "AppGraphicsInput").Value);
                 Invoke(restored, "BtnSettings_Click", new Button(), new RoutedEventArgs()); Layout(restored);
                 var restoredRadios = AccessibilityPresentationTests.Descendants(Find<ItemsControl>(restored, "AccessibilityCards")).OfType<RadioButton>().ToArray();
                 Assert.Single(restoredRadios, radio => radio.IsChecked == true && Mode(radio) == "tritanopia");
@@ -78,7 +82,7 @@ public sealed class AccessibilityUiTests
     });
 
     [Fact]
-    public Task Settings_MinimumWindowKeepsBothGroupsAndAllSixCardsWithinHorizontalViewport_AndFooterReachableWhileScrolling() => WorkspaceTabsTests.Sta(async () =>
+    public Task Settings_MinimumWindowKeepsRenderUnderProjectsAndAllSettingsVisibleWithoutScrolling() => WorkspaceTabsTests.Sta(async () =>
     {
         using var fixture = new AccessibilitySettingsTests.SettingsFixture();
         var window = Create(fixture.Store); var size = new Size(1100, 700);
@@ -89,23 +93,31 @@ public sealed class AccessibilityUiTests
             var root = (FrameworkElement)window.Content;
             var settings = Find<FrameworkElement>(window, "SettingsPanel");
             var projects = Find<Border>(window, "ProjectsSettingsGroup"); var design = Find<Border>(window, "DesignSettingsGroup");
+            var render = Find<Border>(window, "RenderSettingsGroup");
             var cards = Find<ItemsControl>(window, "AccessibilityCards");
-            var scroller = Assert.Single(AccessibilityPresentationTests.Descendants(settings).OfType<ScrollViewer>(), scroll =>
-                AccessibilityPresentationTests.Descendants(scroll).Contains(projects) && AccessibilityPresentationTests.Descendants(scroll).Contains(design));
+            var graphics = Find<GraphicsSettingsEditor>(window, "AppGraphicsInput");
+            Assert.Contains(graphics, AccessibilityPresentationTests.Descendants(render));
+            Assert.DoesNotContain(graphics, AccessibilityPresentationTests.Descendants(design));
+            Assert.DoesNotContain(AccessibilityPresentationTests.Descendants(settings).OfType<ScrollViewer>(), scroll =>
+                AccessibilityPresentationTests.Descendants(scroll).Contains(projects) || AccessibilityPresentationTests.Descendants(scroll).Contains(design) || AccessibilityPresentationTests.Descendants(scroll).Contains(render));
+            Assert.Contains(AccessibilityPresentationTests.Descendants(render).OfType<TextBlock>(), text => text.Text == "Рендер");
             Rect Bounds(FrameworkElement element, Visual relative) => element.TransformToVisual(relative).TransformBounds(new Rect(element.RenderSize));
-            void FitsHorizontally(FrameworkElement element)
+            void FitsInWindow(FrameworkElement element)
             {
-                var bounds = Bounds(element, scroller);
+                var bounds = Bounds(element, root);
                 Assert.True(element.ActualWidth > 0, element.GetType().Name + " must be laid out.");
-                Assert.InRange(bounds.Left, -1, scroller.ViewportWidth + 1);
-                Assert.InRange(bounds.Right, 0, scroller.ViewportWidth + 1);
+                Assert.InRange(bounds.Left, -1, size.Width + 1); Assert.InRange(bounds.Right, 0, size.Width + 1);
+                Assert.InRange(bounds.Top, -1, size.Height + 1); Assert.InRange(bounds.Bottom, 0, size.Height + 1);
             }
-            FitsHorizontally(projects); FitsHorizontally(design);
-            Assert.True(Bounds(projects, scroller).Right < Bounds(design, scroller).Left);
+            FitsInWindow(projects); FitsInWindow(design); FitsInWindow(render); FitsInWindow(graphics);
+            Assert.True(Bounds(projects, root).Right < Bounds(design, root).Left);
+            Assert.Equal(Bounds(projects, root).Left, Bounds(render, root).Left, 1);
+            Assert.True(Bounds(render, root).Top > Bounds(projects, root).Bottom);
+            Assert.True(Bounds(render, root).Right < Bounds(design, root).Left);
             var radios = AccessibilityPresentationTests.Descendants(cards).OfType<RadioButton>().ToArray(); Assert.Equal(6, radios.Length);
             foreach (var radio in radios)
             {
-                FitsHorizontally(radio);
+                FitsInWindow(radio);
                 var preview = Assert.Single(AccessibilityPresentationTests.Descendants(radio).OfType<AccessibilityPreview>());
                 Assert.InRange(preview.ActualWidth, 100, radio.ActualWidth);
                 var previewBounds = Bounds(preview, radio);
@@ -117,15 +129,12 @@ public sealed class AccessibilityUiTests
             var footerBefore = footerButtons.Select(button => Bounds(button, root)).ToArray();
             foreach (var button in footerButtons)
             {
-                Assert.DoesNotContain(button, AccessibilityPresentationTests.Descendants(scroller));
                 var bounds = Bounds(button, root); Assert.True(button.IsEnabled); Assert.True(bounds.Width > 0 && bounds.Height > 0);
                 Assert.InRange(bounds.Left, 0, size.Width); Assert.InRange(bounds.Right, 0, size.Width);
                 Assert.InRange(bounds.Top, 0, size.Height); Assert.InRange(bounds.Bottom, 0, size.Height);
             }
-            scroller.ScrollToBottom(); root.UpdateLayout();
-            var lastCard = Bounds(radios[^1], scroller);
-            Assert.InRange(lastCard.Top, 0, scroller.ViewportHeight + 1);
-            Assert.InRange(lastCard.Bottom, 0, scroller.ViewportHeight + 1);
+            root.UpdateLayout();
+            FitsInWindow(radios[^1]);
             Assert.Equal(footerBefore, footerButtons.Select(button => Bounds(button, root)));
             Render(window, "settings-accessibility-minimum.png", size);
         }

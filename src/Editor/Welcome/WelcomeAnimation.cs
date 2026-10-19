@@ -10,7 +10,7 @@ public abstract class WelcomeAnimation : FrameworkElement
     protected WelcomeAnimation()
     {
         IsHitTestVisible = false;
-        clock = new(this, Step); SizeChanged += (_, _) => clock.Refresh();
+        clock = new(this, Step, primary: this is WelcomeBubbles); SizeChanged += (_, _) => clock.Refresh();
     }
     internal void Step(double seconds)
     {

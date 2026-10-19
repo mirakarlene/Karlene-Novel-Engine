@@ -1,5 +1,4 @@
 using System.IO;
-using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -18,7 +17,8 @@ public sealed class FrameCatalog
 {
     private const int MaximumEntries = 100_000;
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
-    private static readonly ConcurrentDictionary<string, SemaphoreSlim> SyncGates = new(StringComparer.OrdinalIgnoreCase);
+    // A fixed stripe set retains no project paths while serializing writers of the same registry.
+    private static readonly SemaphoreSlim[] SyncGates = Enumerable.Range(0, 64).Select(_ => new SemaphoreSlim(1, 1)).ToArray();
     private sealed record Registry(int Version, IReadOnlyList<FrameEntry> Entries);
     private sealed record Candidate(string Key, string File, string Function, int FunctionLine, int Line, string? NodeId, bool HasText)
     {
@@ -85,7 +85,7 @@ public sealed class FrameCatalog
     public static async Task<FrameCatalog> SynchronizeAsync(ProjectInfo project, CancellationToken cancellationToken = default)
     {
         string target = PathSafety.ResolveRelative(project.Path, "engine/frame-ids.json");
-        var gate = SyncGates.GetOrAdd(target, _ => new(1, 1));
+        var gate = SyncGates[(uint)StringComparer.OrdinalIgnoreCase.GetHashCode(target) % (uint)SyncGates.Length];
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {

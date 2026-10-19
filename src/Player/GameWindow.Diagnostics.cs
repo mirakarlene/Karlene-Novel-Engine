@@ -15,6 +15,8 @@ public partial class GameWindow
     private GameErrorReport? currentErrorReport;
     private bool diagnosticConsole;
     private string? renderedVariables;
+    private JsonElement formattedSnapshot;
+    private string? formattedVariableBody;
 
     private void RefreshErrorActions()
     {
@@ -24,22 +26,28 @@ public partial class GameWindow
 
     private void RenderVariables()
     {
+        if (DebugOverlay.Visibility != Visibility.Visible) return;
         var variables = runtime is ProcessGameSession session ? session.Variables : default;
-        string text = variables.ValueKind == JsonValueKind.Object
-            ? JsonSerializer.Serialize(variables, VariableFormatting)
-            : "Переменные появятся после начала выполнения сценария.";
+        if (formattedVariableBody == null || !variables.Equals(formattedSnapshot))
+        {
+            formattedSnapshot = variables;
+            formattedVariableBody = variables.ValueKind == JsonValueKind.Object
+                ? JsonSerializer.Serialize(variables, VariableFormatting)
+                : "Переменные появятся после начала выполнения сценария.";
+        }
+        string text = formattedVariableBody;
         if (project.Engine.Performance.DebugMode) text = $"{System.Runtime.InteropServices.RuntimeInformation.OSDescription}\n.NET {Environment.Version} · {Environment.MachineName}\nAPI: {GraphicsEnvironment.For(this).Backend} · логика {runtime.LogicMilliseconds:F2} мс\n" + text;
         if (text == renderedVariables) return;
         VariablesOutput.Text = text;
         renderedVariables = text;
     }
 
-    private void CloseConsole_Click(object sender, RoutedEventArgs e) => DebugOverlay.Visibility = project.Engine.Performance.DebugMode ? Visibility.Visible : Visibility.Collapsed;
+    private void CloseConsole_Click(object sender, RoutedEventArgs e) => DebugOverlay.Visibility = Visibility.Collapsed;
 
     private void ErrorConsole_Click(object sender, RoutedEventArgs e)
     {
+        DebugOverlay.Visibility = DebugOverlay.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
         RenderConsole();
-        DebugOverlay.Visibility = !project.Engine.Performance.DebugMode && DebugOverlay.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private async void ErrorRestart_Click(object sender, RoutedEventArgs e) => await RestartFromErrorAsync();
