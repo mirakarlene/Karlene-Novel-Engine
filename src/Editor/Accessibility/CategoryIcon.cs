@@ -22,7 +22,7 @@ public sealed class CategoryIcon : FrameworkElement
     {
         string label = BlockLibrary.Groups.FirstOrDefault(group => group.Id == Group)?.Title ?? Group;
         ToolTip = label; AutomationProperties.SetName(this, "Категория: " + label);
-        BlockAccessibility.Decorate(this, Group, mode => Visibility = mode.Badges ? Visibility.Visible : Visibility.Collapsed);
+        BlockAccessibility.Decorate(this, Group, mode => Visibility = mode.Badges || BlockLibrary.Groups.Any(g => g.Id == Group && g.Icon.Length > 0) ? Visibility.Visible : Visibility.Collapsed);
     }
     /// <summary>Returns a stable silhouette discriminator for a category.</summary>
     /// <param name="group">Catalog group ID.</param><returns>A vector symbol name.</returns>
@@ -48,6 +48,11 @@ public sealed class CategoryIcon : FrameworkElement
     internal static Geometry GeometryFor(string group) => symbols[SymbolFor(group)];
     protected override void OnRender(DrawingContext dc)
     {
+        if (BlockLibrary.Groups.FirstOrDefault(g => g.Id == Group)?.Icon is { Length: > 0 } icon)
+        {
+            dc.DrawText(new FormattedText(icon, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+                new Typeface("Segoe UI Symbol"), Math.Min(ActualWidth, ActualHeight), Foreground, VisualTreeHelper.GetDpi(this).PixelsPerDip), new Point()); return;
+        }
         dc.PushTransform(new ScaleTransform(ActualWidth / 24, ActualHeight / 24)); dc.DrawGeometry(Foreground, null, GeometryFor(Group)); dc.Pop();
     }
 }

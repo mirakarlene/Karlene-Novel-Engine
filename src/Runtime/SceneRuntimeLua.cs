@@ -289,6 +289,11 @@ internal static class SceneRuntimeLua
                         if event.kind == "call" and #stack >= 64 then return fail(task, "Глубина вызовов сцен больше 64") end
                         local ok, next_entry = pcall(resolve, event.target)
                         if not ok then return fail(task, next_entry) end
+                        if kne_plugin_scene then
+                            local scene_name = type(event.target) == "string" and event.target or debug.getinfo(next_entry, "S").short_src
+                            local problem = kne_plugin_scene(scene_name)
+                            if problem ~= "" then return fail(task, problem) end
+                        end
                         if task == root and #stack == 1 and event.kind == "goto" then
                             close_others()
                             if scene_test then close_task(root); return end

@@ -1,23 +1,36 @@
 namespace KNE;
 
 /// <summary>A category in the visual command library.</summary>
-public sealed record BlockGroup(string Id, string Title, string Color);
+public sealed record BlockGroup(string Id, string Title, string Color, string Icon = "");
 
 /// <summary>A selectable command with a description and category color.</summary>
-public sealed record BlockDefinition(ScriptNodeKind Kind, string Group, string Title, string Description, string Color);
+public sealed record BlockDefinition(ScriptNodeKind Kind, string Group, string Title, string Description, string Color, PluginBlock? Plugin = null);
 
 /// <summary>The grouped library and defaults used when creating a new visual block.</summary>
 public static class BlockLibrary
 {
     /// <summary>Groups in the author-facing order.</summary>
-    public static IReadOnlyList<BlockGroup> Groups { get; } = [
+    internal static IReadOnlyList<BlockGroup> BuiltInGroups { get; } = [
         new("terminals", "Начало и конец", "#64748B"), new("narrative", "Нарратив", "#C65C16"),
         new("logic", "Логика", "#2563A6"), new("visual", "Визуал", "#8246B3"),
         new("audio", "Звук", "#228052"), new("flows", "Потоки", "#C44A88"), new("calculations", "Вычисления", "#83CFF0"), new("async", "Асинхронность", "#BA3846"), new("triggers", "Триггеры", "#8B5A35"),
         new("configurations", "Конфигурации", "#137C83"), new("shaders", "Шейдеры", "#AF5CFF"), new("plugins", "Плагины", "#6B7280")];
 
     /// <summary>All selectable entries with distinct narrative branching and logic comparisons.</summary>
-    public static IReadOnlyList<BlockDefinition> Definitions { get; } = Build();
+    private static IReadOnlyList<BlockDefinition> BuiltInDefinitions { get; } = Build();
+    public static IReadOnlyList<BlockGroup> Groups => PluginCatalog.Current?.ExtendGroups(BuiltInGroups) ?? BuiltInGroups;
+    public static IReadOnlyList<BlockDefinition> Definitions => PluginCatalog.Current?.ExtendDefinitions(BuiltInDefinitions) ?? BuiltInDefinitions;
+
+    /// <summary>Creates a custom block with persistent ports and parameter defaults.</summary>
+    public static ScriptNode Create(BlockDefinition entry)
+    {
+        if (entry.Plugin is not { } block) return Create(entry.Kind, entry.Group);
+        return new ScriptNode { Kind = ScriptNodeKind.Plugin, Category = entry.Group,
+            Plugin = new() { BlockId = block.Id, Title = block.Title, Icon = block.Icon, Color = block.Color, Inputs = block.Inputs?.ToArray() ?? ["Вход"],
+                Parameters = new System.Text.Json.Nodes.JsonObject((block.Parameters ?? []).Select(p => new KeyValuePair<string, System.Text.Json.Nodes.JsonNode?>(p.Id, PluginApi.ParameterDefault(p))))
+            },
+            Options = (block.Outputs ?? ["Далее"]).Select(port => new ScriptOption { Text = port }).ToList() };
+    }
 
     private static IReadOnlyList<BlockDefinition> Build()
     {
@@ -167,6 +180,11 @@ public static class BlockLibrary
     }
 
     /// <summary>The header color for an existing block.</summary>
-    public static string ColorFor(ScriptNode node) => node.Kind is ScriptNodeKind.Start or ScriptNodeKind.End || node.Category.Length == 0
-        ? Definitions.First(entry => entry.Kind == (node.Kind == ScriptNodeKind.Condition ? ScriptNodeKind.Branching : node.Kind)).Color : Groups.Single(group => group.Id == node.Category).Color;
+    public static string ColorFor(ScriptNode node)
+    {
+        var entry = node.Plugin == null ? Definitions.First(d => d.Kind == (node.Kind == ScriptNodeKind.Condition ? ScriptNodeKind.Branching : node.Kind)) : null;
+        if (node.Kind is ScriptNodeKind.Start or ScriptNodeKind.End) return entry!.Color;
+        string group = node.Category.Length > 0 ? node.Category : entry?.Group ?? "plugins";
+        return PluginCatalog.Current?.ActivePalette?.Groups?.GetValueOrDefault(group) ?? node.Plugin?.Color ?? Groups.FirstOrDefault(g => g.Id == group)?.Color ?? entry?.Color ?? "#6B7280";
+    }
 }

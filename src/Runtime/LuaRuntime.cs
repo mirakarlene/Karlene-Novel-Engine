@@ -10,6 +10,8 @@ namespace KNE;
 /// <summary>Owns a Lua state used only by serialized background operations.</summary>
 public sealed partial class LuaRuntime : IGameSession
 {
+    /// <summary>The loaded game model exposed to trusted extensions.</summary>
+    public ProjectInfo Project => project;
     private readonly ProjectInfo project;
     private readonly Action<string> output;
     private readonly SemaphoreSlim gate = new(1, 1);
@@ -41,6 +43,7 @@ public sealed partial class LuaRuntime : IGameSession
     private long nextVariablesAt;
     private bool transitionPending;
     private (string? File, int? Line, string Trace, string Problem, FrameIdentity? Frame)? scriptFailure;
+    private bool pluginFailureCaptured;
     public TimeSpan ExecutionLimit { get; }
 
     public LuaRuntime(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool interactive = false, bool preview = false,
@@ -199,6 +202,7 @@ public sealed partial class LuaRuntime : IGameSession
         InitializeNarrative();
         InitializeTextInput();
         InitializeChoices();
+        InitializePluginApi();
         string initPath = project.InitScriptPath;
         string scenePath = project.MainScenePath;
         string scriptModules = Path.GetDirectoryName(initPath)!.Replace('\\', '/') + "/?.lua";
@@ -217,6 +221,7 @@ public sealed partial class LuaRuntime : IGameSession
             f.Path.Equals(editorSource.RelativePath(project.Path), StringComparison.OrdinalIgnoreCase)))
             throw new InvalidDataException("Функция предпросмотра не объявлена в выбранном файле: " + entryName);
         lua["kne_entry"] = lua[entryName];
+        PublishPluginEvent("on_scene_start", new { Scene = entryName });
         using var main = lua["kne_entry"] as LuaFunction ?? throw new InvalidDataException("Не найдена игровая функция: " + entryName);
         if (interactive)
         {
@@ -352,7 +357,9 @@ public sealed partial class LuaRuntime : IGameSession
         lock (stateLock) story = frame;
     }
 
-    public async Task<GameCheckpoint> GetCheckpointAsync(CancellationToken cancellationToken = default)
+    public Task<GameCheckpoint> GetCheckpointAsync(CancellationToken cancellationToken = default) => CapturePluginCheckpointAsync(true, cancellationToken);
+
+    internal async Task<GameCheckpoint> CapturePluginCheckpointAsync(bool saving, CancellationToken cancellationToken = default)
     {
         GameCheckpoint? checkpoint = null;
         await RunAsync(() =>
@@ -360,6 +367,7 @@ public sealed partial class LuaRuntime : IGameSession
             if (!initialized || !interactive) throw new InvalidOperationException("Нет запущенной интерактивной сцены.");
             if (history.Count > 10_000) throw new InvalidDataException("История игры слишком длинная для сохранения.");
             using var table = lua!["state"] as LuaTable ?? throw new InvalidDataException("state должен оставаться таблицей.");
+            if (saving) PublishPluginEvent("on_save");
             JsonElement state = JsonSerializer.SerializeToElement(ReadState(table, 0));
             checkpoint = new GameCheckpoint(1, project.Path, fingerprint, seed, history.ToArray(), Story, state);
         }, cancellationToken).ConfigureAwait(false);
@@ -388,6 +396,12 @@ public sealed partial class LuaRuntime : IGameSession
                 InstallHook();
                 switch (action.Kind)
                 {
+                    case "plugin_input" when action.Command != null:
+                        var pluginInput = JsonSerializer.Deserialize<PluginInput>(action.Command) ?? throw new InvalidDataException("Пустое событие плагина.");
+                        PublishPluginInputEvent(pluginInput);
+                        pluginHost!.Api.Input(pluginInput); break;
+                    case "plugin_event_input" when action.Command != null:
+                        PublishPluginInputEvent(JsonSerializer.Deserialize<PluginInput>(action.Command) ?? throw new InvalidDataException("Пустое событие плагина.")); break;
                     case "advance" when Story.CanAdvance: ResumeStory(null); break;
                     case "choose" when Story.Kind == "choice" && action.Option >= 1 && action.Option <= Story.Options.Count && IsChoiceEnabled(Story, action.Option): ResumeStory(action.Option); break;
                     case "input" when Story.Kind == "input" && action.Command != null: SubmitInputCore(action.Command, action.Cancel); break;
@@ -415,6 +429,8 @@ public sealed partial class LuaRuntime : IGameSession
             };
         }
         finally { replaying = false; }
+        if (pluginHost != null) { using var context = new PluginContext(this); pluginHost.Api.RestoreScreens(context); }
+        PublishPluginEvent("on_load");
     }, cancellationToken, "Загрузка сохранения");
 
     private string ComputeFingerprint(GameScripts? program = null)
@@ -426,13 +442,15 @@ public sealed partial class LuaRuntime : IGameSession
         if (!pluginsEnabled) hash.AppendData(Encoding.UTF8.GetBytes("plugins-disabled"));
         // Include the resolved scene identity: previewing another scene must not accept its sibling's saves.
         hash.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(project.Path, project.MainScenePath)));
+        byte[] hashBuffer = new byte[65536];
         foreach (string relative in program.Files.Select(f => f.Path).Concat(ProjectLoader.EnumerateFiles(project.Path, CancellationToken.None).Files
-                     .Where(path => Path.GetExtension(path).Equals(".cs", StringComparison.OrdinalIgnoreCase)).Select(path => Path.GetRelativePath(project.Path, path).Replace('\\', '/')))
+                     .Where(path => Path.GetExtension(path).Equals(".cs", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".kneplugin.json", StringComparison.OrdinalIgnoreCase)).Select(path => Path.GetRelativePath(project.Path, path).Replace('\\', '/')))
                      .Append("project.json").OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
             string path = PathSafety.ResolveRelative(project.Path, relative);
             hash.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(project.Path, path)));
-            hash.AppendData(File.ReadAllBytes(path));
+            using var source = File.OpenRead(path); int read;
+            while ((read = source.Read(hashBuffer)) != 0) hash.AppendData(hashBuffer.AsSpan(0, read));
         }
         // Presentation changes should not invalidate a player's progress; initial game state should.
         string statePath = PathSafety.ResolveRelative(project.Path, "engine/state.json");
@@ -524,6 +542,7 @@ public sealed partial class LuaRuntime : IGameSession
                 executionToken = linked.Token;
                 deadline = Stopwatch.GetTimestamp() + (long)(ExecutionLimit.TotalSeconds * Stopwatch.Frequency);
                 scriptFailure = null;
+                pluginFailureCaptured = false;
                 currentScriptFrame = null;
             }
             await Task.Run(() =>
@@ -567,6 +586,8 @@ public sealed partial class LuaRuntime : IGameSession
     /// <summary>Captures the original failing Lua frame before coroutine unwinding loses its stack.</summary>
     public void RecordScriptError(string source, int line, string trace, string problem)
     {
+        if (pluginFailureCaptured && scriptFailure is { } pluginFailure && problem.EndsWith(pluginFailure.Problem, StringComparison.Ordinal)) return;
+        pluginFailureCaptured = false;
         if (scriptFailure is { } previous && previous.Problem == problem) return;
         string? file = string.IsNullOrEmpty(source) ? null : source.Replace('\\', '/');
         if (file != null && Path.IsPathRooted(file))
@@ -663,7 +684,7 @@ public sealed partial class LuaRuntime : IGameSession
         }
         if (!replaying) variablesUpdated?.Invoke(value);
     }
-    public bool ErrorSnapshotNeeded(string problem) => scriptFailure == null || scriptFailure.Value.Problem != problem;
+    public bool ErrorSnapshotNeeded(string problem) => !(pluginFailureCaptured && scriptFailure is { } failure && problem.EndsWith(failure.Problem, StringComparison.Ordinal)) && (scriptFailure == null || scriptFailure.Value.Problem != problem);
 
     /// <summary>Validates an engine-owned end screen without changing the visible scene.</summary>
     public string ValidateEndAction(string action, string? screen)

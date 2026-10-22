@@ -16,10 +16,15 @@ public partial class ScriptEditor
 
     /// <summary>Creates a command at the center of the visible canvas, retaining the viewport and undo history.</summary>
     public void AddBlock(ScriptNodeKind kind, string? category = null)
+        => AddBlock(BlockLibrary.Definitions.First(entry => entry.Kind == kind && (category == null || entry.Group == category)));
+
+    /// <summary>Adds a registered block, including a stable plugin definition.</summary>
+    public void AddBlock(BlockDefinition entry)
     {
+        var kind = entry.Kind;
         ApplyProperties();
         if (!CanAddBlock(kind)) throw new InvalidOperationException(kind == ScriptNodeKind.Start ? "Блок «Начало» уже существует." : "Добавление блока недоступно: предел 500 блоков.");
-        var node = BlockLibrary.Create(kind, category);
+        var node = BlockLibrary.Create(entry);
         node.IsShaderInvocation = kind == ScriptNodeKind.ShaderContainer && Document?.Graph?.IsShader == false;
         double centerX = (GraphScroll.ActualWidth / 2 - CanvasPan.X) / ZoomSlider.Value;
         double centerY = (GraphScroll.ActualHeight / 2 - CanvasPan.Y) / ZoomSlider.Value;
@@ -43,6 +48,7 @@ public partial class ScriptEditor
         ExtendedProperties.Children.Clear(); extendedEdits.Clear();
         selectedSpeakerId = node?.SpeakerId ?? ""; UpdateSpeakerReference();
         if (node == null) return;
+        if (node.Kind == ScriptNodeKind.Plugin) { AddPluginFields(node); return; }
         if (node.Kind is ScriptNodeKind.RemoveLayerShaders or ScriptNodeKind.RemoveAllShaders) { AddShaderRemovalFields(node); return; }
         if (ShaderLibrary.IsShader(node.Kind)) { AddShaderFields(node); return; }
         AddNarrativeFields(node);

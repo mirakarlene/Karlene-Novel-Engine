@@ -11,6 +11,15 @@ public interface IKnePlugin
 /// <summary>Small lifetime-bound bridge shared by C# plugins and the running game's scalar state.</summary>
 public interface IPluginContext
 {
+    /// <summary>Session-owned registration and engine services; unavailable in pre-SDK hosts.</summary>
+    PluginApi Api => throw new NotSupportedException("Этот хост не предоставляет Plugin API v1.");
+    /// <summary>Reads structured JSON state without exposing live Lua references.</summary>
+    System.Text.Json.JsonElement GetJson(string name) => System.Text.Json.JsonSerializer.SerializeToElement(Get(name));
+    /// <summary>Writes structured JSON state.</summary>
+    void SetJson(string name, System.Text.Json.JsonElement value) => Set(name, value.ValueKind switch
+    { System.Text.Json.JsonValueKind.String => value.GetString(), System.Text.Json.JsonValueKind.Number => value.GetDouble(), System.Text.Json.JsonValueKind.True => true, System.Text.Json.JsonValueKind.False => false, System.Text.Json.JsonValueKind.Null => null, _ => throw new NotSupportedException("Структуры не поддерживаются этим хостом.") });
+    /// <summary>Invokes a named Lua callback for a custom block and returns its 1-based output index.</summary>
+    int InvokeLua(string function, string parametersJson) => throw new NotSupportedException("Lua недоступен в этом контексте.");
     /// <summary>Gets the absolute directory of the running project.</summary>
     string ProjectDirectory { get; }
     /// <summary>Gets a token canceled when the current game operation or worker is stopped.</summary>

@@ -98,10 +98,12 @@ public sealed partial class VisualScript
                 Fail(node, "размер блока: ширина от 160 до 4096, высота от 100 до 4096");
             if (node.Options == null || node.Options.Count > 20 || node.Options.Any(o => o == null || o.Text == null))
                 throw new InvalidDataException("У выбора должно быть не более 20 вариантов.");
+            if (node.TargetInputs?.Any(p => p.Key < 0 || p.Key >= node.Outputs().Count() || p.Value is < 0 or >= 20) == true)
+                Fail(node, "некорректный индекс целевого входа");
             if (node.Text == null || node.Speaker == null || node.Path == null || node.Variable == null ||
                 node.Value == null || node.CompareVariable == null || node.Position == null || node.Channel == null || node.Target == null || node.IterationKey == null || node.Category == null || node.ScreenLayer == null || node.UiTarget == null || node.SpeakerId == null)
                 throw new InvalidDataException("Свойства блока не должны содержать null.");
-            if (node.Category is not ("" or "terminals" or "narrative" or "logic" or "visual" or "audio" or "flows" or "calculations" or "async" or "triggers" or "configurations" or "shaders" or "plugins"))
+            if (node.Kind != ScriptNodeKind.Plugin && node.Category is not ("" or "terminals" or "narrative" or "logic" or "visual" or "audio" or "flows" or "calculations" or "async" or "triggers" or "configurations" or "shaders" or "plugins"))
                 throw new InvalidDataException("Неизвестная группа блока.");
             if (!ShaderLibrary.CanPlace(node.Kind, IsShader)) throw new InvalidDataException("Блоки «Шейдеры» размещаются только в .kneshader, кроме контейнера; игровые блоки — в .knegraph.");
             if (ShaderLibrary.IsShader(node.Kind)) ShaderLibrary.ValidateNode(node);
@@ -113,6 +115,12 @@ public sealed partial class VisualScript
                 Fail(node, "вес ветки должен быть конечным неотрицательным числом");
             try
             {
+                if (node.Kind == ScriptNodeKind.Plugin)
+                {
+                    if (node.Plugin == null) throw new ArgumentException("Отсутствуют метаданные блока плагина.");
+                    node.Plugin.Validate();
+                    if (node.Options.Any(p => string.IsNullOrWhiteSpace(p.Text) || p.Text.Length > 80) || node.Options.Select(p => p.Text).Distinct().Count() != node.Options.Count) throw new ArgumentException("Некорректные выходные порты блока плагина.");
+                }
                 node.Character?.Validate(); node.TextEffect?.Validate(); node.Input?.Validate(); node.Trigger?.Validate();
                 if (CalculationCompiler.IsCalculation(node.Kind)) _ = CalculationCompiler.Compile(node.Kind, node.Calculation ?? new CalculationSettings(), node.Variable);
                 node.ChoiceSettings?.Validate();
@@ -219,7 +227,7 @@ public enum ScriptNodeKind
     Subsystem, TriggerKey, TriggerButton, TriggerHotspot, TriggerTextClosed, TriggerCombination,
     Arithmetic, Modulo, Increment, Decrement, Pow, Sqrt, Trigonometry, Absolute, Clamp, Round, Floor, Ceil, Lerp, Remap, WeightedRandom, Constant, Formula,
     ShaderContainer, ShaderTexture, ShaderUv, ShaderTime, ShaderScreenPosition, ShaderFloat, ShaderVector, ShaderColor, ShaderTilingOffset, ShaderRotate, ShaderPolar, ShaderFlipbook, ShaderTwirl, ShaderSimplex, ShaderVoronoi, ShaderCheckerboard, ShaderLinearGradient, ShaderRadialGradient, ShaderSplit, ShaderCombine, ShaderHueShift, ShaderSaturation, ShaderContrast, ShaderBrightness, ShaderInvert, ShaderGrayscale, ShaderPosterize, ShaderGaussianBlur, ShaderBoxBlur, ShaderMotionBlur, ShaderBloom, ShaderChromatic, ShaderVignette, ShaderScanlines, ShaderLensDistortion, ShaderPixelate, ShaderSharpen, ShaderSobel, ShaderDithering, ShaderMix, ShaderAdd, ShaderSubtract, ShaderMultiply, ShaderScreen, ShaderStep, ShaderSmoothstep, ShaderOutput,
-    RemoveLayerShaders, RemoveAllShaders
+    RemoveLayerShaders, RemoveAllShaders, Plugin
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -247,6 +255,12 @@ public enum ScriptComparison
 /// <summary>An editable command and its explicitly ordered output ports.</summary>
 public sealed class ScriptNode
 {
+    /// <summary>Custom plugin identity and structured parameters.</summary>
+    public PluginNodeSettings? Plugin { get; set; }
+    /// <summary>Optional destination input indices per output. Missing entries use input zero.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<int, int>? TargetInputs { get; set; }
+    /// <summary>Returns the destination input selected for an outgoing flow.</summary>
+    public int TargetInput(int output) => TargetInputs?.GetValueOrDefault(output) ?? 0;
     [JsonIgnore] internal bool IsShaderInvocation { get; set; }
     /// <summary>Hides effects until this execution flow reaches another shader container.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool SuppressShadersUntilContainer { get; set; }
@@ -375,7 +389,7 @@ public sealed class ScriptNode
 
     /// <summary>The user-facing Russian name of this command.</summary>
     [JsonIgnore]
-    public string Title => Kind switch
+    public string Title => Kind == ScriptNodeKind.Plugin ? Plugin?.Title ?? "Блок плагина" : Kind switch
     {
         ScriptNodeKind.RemoveLayerShaders => "Удалить шейдер с слоя", ScriptNodeKind.RemoveAllShaders => "Удалить все шейдеры",
         _ when ShaderLibrary.IsShader(Kind) => Kind == ScriptNodeKind.ShaderContainer && Path.Length > 0 ? System.IO.Path.GetFileName(Path) : ShaderLibrary.Get(Kind).Title,
@@ -416,6 +430,7 @@ public sealed class ScriptNode
     /// <returns>Labels and optional destination identifiers in display order.</returns>
     public IEnumerable<(string Label, string? Target)> Outputs()
     {
+        if (Kind == ScriptNodeKind.Plugin) { foreach (var port in Options) yield return (port.Text, port.Target); yield break; }
         if (ShaderLibrary.IsData(this)) { foreach (string output in ShaderLibrary.Get(Kind).Outputs) yield return (output, null); yield break; }
         if (Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.Comment) yield break;
         if (Kind == ScriptNodeKind.TextInput)
@@ -447,10 +462,14 @@ public sealed class ScriptNode
     /// <summary>Connects or disconnects a port by its displayed index.</summary>
     /// <param name="index">Zero-based output port index.</param>
     /// <param name="target">Destination identifier, or null to disconnect.</param>
-    public void SetOutput(int index, string? target)
+    public void SetOutput(int index, string? target, int input = 0)
     {
         if (index < 0 || index >= Outputs().Count()) throw new ArgumentOutOfRangeException(nameof(index));
-        if (Kind == ScriptNodeKind.TextInput)
+        if (input is < 0 or >= 20) throw new ArgumentOutOfRangeException(nameof(input));
+        if (target != null && input > 0) (TargetInputs ??= [])[index] = input;
+        else TargetInputs?.Remove(index);
+        if (Kind == ScriptNodeKind.Plugin) Options[index].Target = target;
+        else if (Kind == ScriptNodeKind.TextInput)
         {
             if (index == 0) Next = target;
             else if (index == 1 && Input?.HasErrorOutput == true) True = target;

@@ -589,6 +589,7 @@ public partial class ScriptEditor : UserControl
         ApplyProperties();
         graph = Document.Graph!;
         var destination = graph.Nodes.Single(n => n.Id == target);
+        if (destination.Plugin is { Inputs.Length: 0 }) throw new InvalidOperationException("У блока нет входных портов.");
         if (ShaderLibrary.IsData(graph.Nodes.Single(n => n.Id == connection.Id)) != ShaderLibrary.IsData(destination))
         { pendingConnection = null; EditorStatus.Text = "Команды плагинов и порты значений шейдера соединяются отдельно."; return; }
         if (destination.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment || target == connection.Id)

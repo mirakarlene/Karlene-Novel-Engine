@@ -34,7 +34,7 @@ public sealed record ProjectAnalysisResult(string ProjectName, DateTimeOffset Oc
     }
 }
 
-/// <summary>Best-effort diagnostics over saved project sources; project code is never executed.</summary>
+/// <summary>Static diagnostics over saved sources; game scripts are not executed. Registered extension validators run trusted plugin code.</summary>
 public static class ProjectAnalyzer
 {
     private const long SourceLimit = 8 * 1024 * 1024;
@@ -113,6 +113,15 @@ public static class ProjectAnalyzer
                             references.Add(new(node.Path, path, 1, node.Id));
                     }
                     AnalyzeGraph(visual, path, findings);
+                    if (PluginCatalog.Current is { } pluginApi && pluginApi.ProjectDirectory.Equals(root, StringComparison.OrdinalIgnoreCase))
+                    {
+                        try
+                        {
+                            foreach (var item in pluginApi.Validate(visual)) Add("KNEPLUGIN", path, null, item.Message,
+                                item.IsError ? ProjectDiagnosticSeverity.Error : ProjectDiagnosticSeverity.Warning, item.NodeId);
+                        }
+                        catch (Exception error) { Add("KNEPLUGIN", path, null, "Ошибка валидатора плагина: " + error.Message); }
+                    }
                     try { visual.Compile(); }
                     catch (InvalidDataException error) { Add("KNE101", path, null, error.Message); }
                 }

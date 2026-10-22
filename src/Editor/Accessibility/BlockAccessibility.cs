@@ -66,7 +66,7 @@ public static class BlockAccessibility
     {
         mode = Normalize(mode); int index = BlockLibrary.Groups.ToList().FindIndex(item => item.Id == group);
         if (index < 0) index = 0;
-        string original = BlockLibrary.Groups[index].Color;
+        string original = PluginCatalog.Current?.ActivePalette?.Groups?.GetValueOrDefault(group) ?? BlockLibrary.Groups[index].Color;
         string[] safe = mode == "tritanopia" ? ["#666666", "#B83B63", "#007F83", "#903F80", "#4B667D", "#C44A65", "#9CCED6", "#8D4051", "#506A79", "#506060", "#777777"] : ["#64748B", "#E69F00", "#0072B2", "#CC79A7", "#009E73", "#56B4E9", "#F0E442", "#D55E00", "#775E91", "#007B83", "#777777"];
         Color color = (Color)ColorConverter.ConvertFromString(mode == "normal" || mode == "high_contrast" ? original : safe[index % safe.Length]);
         if (mode == "achromatopsia") { byte value = (byte)(45 + index * 16); color = Color.FromRgb(value, value, value); }

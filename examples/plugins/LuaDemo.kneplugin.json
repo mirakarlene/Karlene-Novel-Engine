@@ -1,0 +1,5 @@
+{
+  "id": "kne.sdk.lua_demo",
+  "source": "plugins/LuaDemo.lua",
+  "apiVersion": 1
+}

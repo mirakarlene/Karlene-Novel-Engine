@@ -7,6 +7,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="System.Speech" Version="10.0.0" />
+    <PackageReference Include="PDFsharp-MigraDoc-WPF" Version="6.2.3" />
     <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <PackageReference Include="NLua" Version="1.7.5" />
     <PackageReference Include="NAudio.WinMM" Version="3.0.0" />
@@ -17,6 +19,7 @@
     <PackageReference Include="Veldrid.SPIRV" Version="1.0.15" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <Compile Remove="tests\**\*.cs" />
+    <Compile Remove="examples\**\*.cs" />
     <EmbeddedResource Remove="tests\**\*" />
     <None Remove="tests\**\*" />
     <Page Remove="tests\**\*.xaml" />

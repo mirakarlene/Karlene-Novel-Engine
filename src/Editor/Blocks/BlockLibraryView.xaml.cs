@@ -46,6 +46,8 @@ public partial class BlockLibraryView : UserControl
     {
         ArgumentNullException.ThrowIfNull(availability);
         canAdd = availability; BlockSearch.Clear(); page = 0;
+        ScrollViewer.SetVerticalScrollBarVisibility(BlockGroups, PluginCatalog.Current?.Groups.Count > 0 ? ScrollBarVisibility.Hidden : ScrollBarVisibility.Disabled);
+        BlockGroups.ItemsSource = new[] { new BlockGroup("favorites", "Избранное", "#B58B20"), new BlockGroup("recent", "Недавнее", "#697384") }.Concat(BlockLibrary.Groups).ToArray();
         BlockGroups.SelectedItem = BlockGroups.Items.Cast<BlockGroup>().First(group => group.Id == (availability(ScriptNodeKind.ShaderOutput) && !availability(ScriptNodeKind.Dialogue) ? "shaders" : "narrative"));
         Render(); BlockSearch.Focus(); _ = LoadPreferencesAsync();
     }
@@ -128,7 +130,7 @@ public partial class BlockLibraryView : UserControl
     {
         var color = (Color)ColorConverter.ConvertFromString(entry.Color);
         var text = new StackPanel();
-        text.Children.Add(new TextBlock { Text = entry.Title, FontSize = 16, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 25, 8), MaxHeight = 43 });
+        text.Children.Add(new TextBlock { Text = (entry.Plugin == null ? "" : entry.Plugin.Icon + " ") + entry.Title, FontSize = 16, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 25, 8), MaxHeight = 43 });
         var description = new TextBlock { Text = entry.Description, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 50, Opacity = .85 };
         text.Children.Add(description);
         var content = new Grid(); content.Children.Add(text);
