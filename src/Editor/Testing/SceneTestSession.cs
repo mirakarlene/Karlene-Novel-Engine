@@ -96,17 +96,23 @@ public sealed class SceneTestSession : IAsyncDisposable
         var configuration = JsonSerializer.Deserialize<ProjectConfiguration>(JsonSerializer.Serialize(project.Configuration, ProjectConfiguration.JsonOptions), ProjectConfiguration.JsonOptions)!;
         configuration.EntryPoints ??= new();
         configuration.EntryPoints.MainScene = Path.GetRelativePath(project.Path, PathSafety.EnsureInside(project.Path, selection.FilePath)).Replace('\\', '/');
-        var isolated = new ProjectInfo { Path = project.Path, Configuration = configuration, Engine = project.Engine };
+        var isolated = new ProjectInfo { Path = project.Path, Configuration = configuration, Engine = project.Engine, ApplicationPlugins = project.ApplicationPlugins };
         session = new ProcessGameSession(isolated, _ => { }, preview: true,
             editorSource: new EditorPreviewSource(selection.FilePath, selection.Source, selection.Function, StepCommands: false, SceneTest: true, Seed: seed));
         await session.StartAsync(token).ConfigureAwait(false);
     }
     private Task<string> ReadSourceSignatureAsync(CancellationToken token) => Task.Run(() =>
     {
-        var scripts = GameScripts.Load(project, new(selection.FilePath, selection.Source));
+        var scripts = GameScripts.Load(project, new(selection.FilePath, selection.Source), pluginsEnabled: EngineLaunch.PluginsEnabled);
         string sources = string.Join("\n", scripts.Files.Select(file => file.Path + "\n" + file.Priority + "\n" + file.Source));
         foreach (string path in ProjectLoader.EnumerateFiles(project.Path, token).Files.Where(path => Path.GetExtension(path).Equals(".cs", StringComparison.OrdinalIgnoreCase)).Order(StringComparer.OrdinalIgnoreCase))
             sources += "\n" + Path.GetRelativePath(project.Path, path) + "\n" + File.ReadAllText(path);
+        foreach (string path in EngineLaunch.PluginsEnabled ? project.ApplicationPlugins : [])
+        {
+            token.ThrowIfCancellationRequested();
+            using var source = File.OpenRead(ApplicationPluginFiles.Validate(path));
+            sources += "\napplication-plugin:" + path + "\n" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(source));
+        }
         foreach (string relative in new[] { "project.json", "engine/state.json" })
         {
             string path = PathSafety.ResolveRelative(project.Path, relative);

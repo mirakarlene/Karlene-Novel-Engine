@@ -21,6 +21,8 @@ public sealed class UserSettings
     /// <summary>Decorative welcome-object shape; defaults to the original bubbles.</summary>
     public string WelcomeObjects { get; set; } = "bubbles";
     public GraphicsSettings Graphics { get; set; } = new();
+    /// <summary>Absolute C# and Lua extension paths enabled for this KNE user profile.</summary>
+    public List<string> ApplicationPlugins { get; set; } = [];
 
     public void RememberProject(string path)
     {
@@ -62,7 +64,8 @@ public sealed class UserSettingsStore
                     ?? throw new InvalidDataException("Файл настроек содержит null.");
                 settings.EditorPath ??= "";
                 settings.ProjectsStoragePath ??= "";
-                settings.Theme = EditorTheme.Normalize(settings.Theme);
+                settings.ApplicationPlugins = ApplicationPluginFiles.Normalize(settings.ApplicationPlugins).ToList();
+                settings.Theme = settings.ApplicationPlugins.Count > 0 && !string.IsNullOrWhiteSpace(settings.Theme) && settings.Theme.Length <= 160 ? settings.Theme : EditorTheme.Normalize(settings.Theme);
                 settings.UserName = (settings.UserName ?? "").Trim();
                 settings.AccessibilityMode = BlockAccessibility.Normalize(settings.AccessibilityMode);
                 settings.WelcomeObjects = WelcomeBubbles.Normalize(settings.WelcomeObjects);

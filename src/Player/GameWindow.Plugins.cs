@@ -17,7 +17,7 @@ public partial class GameWindow
         var host = new PluginHost(project.Path, false, this);
         try
         {
-            host.Load(() => new EditorPluginContext(host.Api)); playerPlugins = host;
+            host.Load(() => new EditorPluginContext(host.Api), applicationPlugins: project.ApplicationPlugins); playerPlugins = host;
             var root = (Grid)Content; root.Children.Add(pluginOverlay); Panel.SetZIndex(pluginOverlay, 500);
             PreviewMouseDown += PluginMouseDown;
         }

@@ -59,7 +59,7 @@ public sealed partial class LuaRuntime
             lua["kne_sdk_dialogue_hooks"] = pluginHost.Api.HasDialogueListeners;
         };
         pluginHost.Api.BindingsChanged();
-        if (pluginsEnabled) pluginHost!.Load(() => new PluginContext(this), executionToken);
+        if (pluginsEnabled) pluginHost!.Load(() => new PluginContext(this), executionToken, project.ApplicationPlugins);
         if (pluginHost!.Api.GameTexture is { } texture) lua.DoString("background(" + LuaQuote(texture) + ")", "KNE plugin texture");
         Register(nameof(PluginSceneForLua), "kne_plugin_scene");
     }
@@ -126,10 +126,12 @@ public sealed partial class LuaRuntime
             foreach (var frame in new StackTrace(cause, true).GetFrames() ?? [])
             {
                 string? source = frame.GetFileName();
-                if (source == null || Path.IsPathRooted(source) || frame.GetFileLineNumber() <= 0) continue;
+                if (source == null || frame.GetFileLineNumber() <= 0) continue;
                 try
                 {
-                    string full = PathSafety.ResolveRelative(project.Path, source);
+                    bool applicationSource = project.ApplicationPlugins.Contains(source, StringComparer.OrdinalIgnoreCase);
+                    if (Path.IsPathRooted(source) && !applicationSource) continue;
+                    string full = applicationSource ? source : PathSafety.ResolveRelative(project.Path, source);
                     if (!File.Exists(full)) continue;
                     RecordScriptError(source, frame.GetFileLineNumber(), error.ToString(), error.Message); pluginFailureCaptured = true; return;
                 }

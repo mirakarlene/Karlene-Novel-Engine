@@ -453,6 +453,12 @@ public sealed partial class LuaRuntime : IGameSession
             while ((read = source.Read(hashBuffer)) != 0) hash.AppendData(hashBuffer.AsSpan(0, read));
         }
         // Presentation changes should not invalidate a player's progress; initial game state should.
+        foreach (string path in pluginsEnabled ? project.ApplicationPlugins : [])
+        {
+            hash.AppendData(Encoding.UTF8.GetBytes("application-plugin:" + path));
+            using var source = File.OpenRead(path); int read;
+            while ((read = source.Read(hashBuffer)) != 0) hash.AppendData(hashBuffer.AsSpan(0, read));
+        }
         string statePath = PathSafety.ResolveRelative(project.Path, "engine/state.json");
         if (File.Exists(statePath))
         {

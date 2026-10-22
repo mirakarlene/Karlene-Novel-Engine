@@ -9,19 +9,24 @@ public partial class MainWindow
     public ProjectInfo? Project => currentProject;
     private PluginHost? editorPlugins;
     private string? pluginProject;
-    private void LoadEditorPlugins(string projectDirectory)
+    private void LoadEditorPlugins(string? projectDirectory)
     {
-        if (pluginProject == projectDirectory) return;
+        if (pluginProject == (projectDirectory ?? "")) return;
         UnloadEditorPlugins();
         if (!EngineLaunch.PluginsEnabled) return;
-        var host = new PluginHost(projectDirectory, true, this);
+        if (projectDirectory == null && settings.ApplicationPlugins.Count == 0) { EditorTheme.Apply(this, settings.Theme); return; }
+        string directory = projectDirectory ?? System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(settingsStore.SettingsPath))!;
+        System.IO.Directory.CreateDirectory(directory);
+        var host = new PluginHost(directory, true, this);
         try
         {
-            host.Load(() => new EditorPluginContext(host.Api, lifetime.Token), lifetime.Token);
-            editorPlugins = host; pluginProject = projectDirectory; PluginCatalog.Current = host.Api;
+            host.Load(() => new EditorPluginContext(host.Api, lifetime.Token), lifetime.Token, settings.ApplicationPlugins, includeProjectPlugins: projectDirectory != null);
+            editorPlugins = host; pluginProject = projectDirectory ?? ""; PluginCatalog.Current = host.Api;
             ThemeInput.ItemsSource = EditorTheme.Themes; ThemeInput.SelectedValue = settings.Theme;
             EditorTheme.Apply(this, settings.Theme);
-            AddPluginButton("Диалоги / перевод…", ShowPluginTranslations);
+            applicationPluginLoadError = null;
+            if (projectDirectory == null) return;
+            AddPluginButton("Диалоги / переводы", ShowPluginTranslations, 210);
             foreach (var command in host.Api.commands.Where(c => c.Location == "toolbar")) AddPluginButton(command.Title, () => command.Execute(PluginEditor()));
             foreach (var tab in host.Api.tabs) AddPluginButton(tab.Title, () => OpenPluginTab(tab));
             if (host.Api.commands.Any(c => c.Location == "context"))
@@ -36,12 +41,12 @@ public partial class MainWindow
                 EditorWorkspace.ContextMenu = menu;
             }
         }
-        catch { host.Dispose(); PluginCatalog.Current = null; throw; }
+        catch (Exception error) { UnloadEditorPlugins(); host.Dispose(); applicationPluginLoadError = error.Message; throw; }
     }
     private PluginEditorContext PluginEditor() => new(currentProject!.Path, () => ActiveEditor.GetPluginGraph(), graph => ActiveEditor.ReplacePluginGraph(graph));
-    private void AddPluginButton(string title, Action execute)
+    private void AddPluginButton(string title, Action execute, double minimumWidth = 0)
     {
-        var button = new Button { Content = title, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(10, 6, 10, 6) };
+        var button = new Button { Content = title, MinWidth = minimumWidth, Margin = new Thickness(0, 0, 8, 4), Padding = new Thickness(14, 6, 14, 6) };
         button.Click += async (_, _) => await RunOperationAsync(() => { execute(); return Task.CompletedTask; }, title);
         PluginToolbar.Children.Add(button);
     }
