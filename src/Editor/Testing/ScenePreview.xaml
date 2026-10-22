@@ -15,15 +15,19 @@
         </DockPanel>
         <Border Grid.Row="1" Background="#FF100A18" BorderBrush="#FFB6A6C8" BorderThickness="1">
             <Viewbox x:Name="SceneViewbox" Stretch="Uniform">
+                <Grid Width="1280" Height="720">
                 <Grid x:Name="SceneArea" Width="1280" Height="720" ClipToBounds="True">
                     <Grid x:Name="VisualLayer">
+                    <Grid x:Name="ShaderBackgroundLayer">
                     <Border x:Name="DefaultBackground"/>
                     <local:AnimatedBackground x:Name="AnimatedBackdrop"/>
                     <Image x:Name="DefaultBackgroundImage" Stretch="UniformToFill"/>
                     <Image x:Name="BackgroundImage" Stretch="UniformToFill"/>
+                    </Grid>
                     <Image x:Name="CharacterImage" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Bottom"/>
                     <Viewbox x:Name="MainScriptScreenViewbox" Stretch="Uniform" Visibility="Collapsed"><Canvas x:Name="MainScriptScreenCanvas" Width="1280" Height="720" IsHitTestVisible="False"/></Viewbox>
                     </Grid>
+                    <Grid x:Name="ShaderUiLayer">
                     <TextBlock x:Name="SceneTitle" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" FontSize="36" Foreground="White" Margin="48" IsHitTestVisible="False" Visibility="Collapsed"/>
                     <Border x:Name="DialoguePanel" VerticalAlignment="Bottom" Visibility="Collapsed" BorderThickness="1">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -41,6 +45,8 @@
                     <Viewbox x:Name="ScriptScreenViewbox" Panel.ZIndex="20" Stretch="Uniform" Visibility="Collapsed"><Canvas x:Name="ScriptScreenCanvas" Width="1280" Height="720" IsHitTestVisible="False"/></Viewbox>
                     <local:ChoiceTimerPresenter x:Name="ChoiceTimer" Panel.ZIndex="25"/>
                     <Border x:Name="SceneFlash" Background="White" Opacity="0" IsHitTestVisible="False"/>
+                    </Grid>
+                </Grid>
                 </Grid>
             </Viewbox>
         </Border>

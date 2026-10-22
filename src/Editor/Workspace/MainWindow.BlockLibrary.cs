@@ -9,7 +9,7 @@ public partial class MainWindow
     {
         if (busy || closed || ActiveEditor.Document?.Graph == null) return;
         BlockLibraryOverlay.Visibility = Visibility.Visible; ProjectPanel.IsEnabled = false;
-        LibraryView.Open(ActiveEditor.CanAddBlock);
+        LibraryView.Open(kind => ShaderLibrary.IsShader(kind) && ActiveEditor.Document?.Graph?.IsShader == false || ActiveEditor.CanAddBlock(kind));
     }
     private void CloseBlockLibrary()
     {
@@ -20,6 +20,13 @@ public partial class MainWindow
     {
         try
         {
+            if (ShaderLibrary.IsShader(entry.Kind) && ActiveEditor.Document?.Graph?.IsShader != true)
+            {
+                var warning = new Window { Owner = this, Title = "Шейдерная блок-схема", Width = 480, Height = 220, ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterOwner };
+                var body = new System.Windows.Controls.StackPanel { Margin = new Thickness(24) };
+                body.Children.Add(new System.Windows.Controls.TextBlock { Text = "Блоки раздела «Шейдеры» нужно размещать в отдельных специальных файлах .kneshader. Создайте такой файл через «Новая блок-схема».", TextWrapping = TextWrapping.Wrap, FontSize = 16 });
+                var close = new System.Windows.Controls.Button { Content = "Понятно", Margin = new Thickness(0, 20, 0, 0), IsDefault = true, IsCancel = true }; close.Click += (_, _) => warning.Close(); body.Children.Add(close); warning.Content = body; EditorTheme.Apply(warning, settings.Theme); warning.ShowDialog(); return;
+            }
             ActiveEditor.AddBlock(entry.Kind, entry.Group); CloseBlockLibrary();
             Task recordUse = LibraryView.RecordUseAsync(entry);
             if (entry.Kind == ScriptNodeKind.Script) SceneEditor_ProjectScriptRequested(ActiveEditor, EventArgs.Empty);

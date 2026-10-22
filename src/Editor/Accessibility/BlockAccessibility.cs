@@ -57,7 +57,7 @@ public static class BlockAccessibility
         if (view.GetValue(DecorationProperty) is Decoration decoration) decoration.Update(Presentation(decoration.Group, GetMode(view)));
         if (view is CategoryIcon icon) icon.InvalidateVisual();
         if (view is System.Windows.Controls.Border border && BlockLibrary.Groups.Any(group => group.Id == GetCategory(view)))
-            border.BorderBrush = new SolidColorBrush(Presentation(GetCategory(view), GetMode(view)).Color);
+            border.BorderBrush = GetCategory(view) == "shaders" && GetMode(view) == "normal" ? ShaderRainbow.Create(border) : new SolidColorBrush(Presentation(GetCategory(view), GetMode(view)).Color);
     }
     /// <summary>Resolves a category tint, readable text and non-color cues.</summary>
     /// <param name="group">Catalog group ID.</param><param name="mode">Accessibility mode ID.</param>

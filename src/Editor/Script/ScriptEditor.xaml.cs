@@ -146,6 +146,11 @@ public partial class ScriptEditor : UserControl
             : "Произвольный Lua/KRL не преобразуется в блоки. Создайте визуальную сцену.";
         ExportButton.IsEnabled = document.IsVisual;
         SaveButton.IsEnabled = RunButton.IsEnabled = TestSceneButton.IsEnabled = MainSceneButton.IsEnabled = CloseDocumentButton.IsEnabled = true;
+        bool shader = document.Graph?.IsShader == true;
+        FunctionNameInput.IsEnabled = !shader; RunButton.Content = shader ? "Предпросмотр шейдера" : "Предпросмотр фрейма";
+        FunctionLabel.Visibility = FunctionNameInput.Visibility = shader ? Visibility.Collapsed : Visibility.Visible;
+        ExportButton.Content = shader ? "Экспорт GLSL / HLSL…" : "Копия как KRL…";
+        TestSceneButton.IsEnabled = MainSceneButton.IsEnabled = !shader;
         if (document.IsVisual)
         {
             GraphMode.IsChecked = true;
@@ -291,7 +296,7 @@ public partial class ScriptEditor : UserControl
             updating = true;
             try
             {
-                CodeEditor.Text = model.Compile();
+                CodeEditor.Text = model.IsShader ? ShaderGraphCompiler.Compile(model, projectRoot, Document.FilePath).Glsl : model.Compile();
                 EditorStatus.Text = "Предпросмотр. Для ручного редактирования создайте KRL-копию.";
             }
             catch (InvalidDataException ex)
@@ -382,6 +387,11 @@ public partial class ScriptEditor : UserControl
             SelectedTitle.Text = node?.Title ?? "Выберите блок";
             ApplyPropertiesButton.IsEnabled = DeleteBlockButton.IsEnabled = node != null;
             UpdateExtendedProperties(node);
+            if (Document?.Graph?.IsShader == true)
+            {
+                foreach (var field in new UIElement[] { SpeakerField, TextField, OptionsField, PathField, PositionField, LoopInput, VariableField, ComparisonField, TransitionHelp }) Visible(field, false);
+                return;
+            }
             if (node == null)
             {
                 foreach (var field in new UIElement[]
@@ -509,6 +519,7 @@ public partial class ScriptEditor : UserControl
 
     private static string Summary(ScriptNode node) => node.Kind switch
     {
+        _ when ShaderLibrary.IsShader(node.Kind) => node.Kind == ScriptNodeKind.ShaderContainer ? node.Path : node.Kind == ScriptNodeKind.ShaderTexture ? "Цель: " + node.Shader?.Target + " " + node.Shader?.Screen : ShaderLibrary.Get(node.Kind).Description,
         _ when CalculationCompiler.IsCalculation(node.Kind) => "state." + node.Variable + " ← " + (node.Kind == ScriptNodeKind.Formula ? node.Calculation?.FormulaName : node.Calculation?.A),
         ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue => (node.Speaker.Length == 0 ? "" : node.Speaker + ": ") + node.Text,
         ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.Comment or ScriptNodeKind.Title or ScriptNodeKind.ConsoleWrite => node.Text,
@@ -566,6 +577,7 @@ public partial class ScriptEditor : UserControl
 
     private void ConnectTo(string target)
     {
+        if (Document?.Graph?.IsShader == true && pendingConnection is { } shaderConnection) { ConnectShaderPorts(shaderConnection.Id, shaderConnection.Port, target, -1); return; }
         if (pendingConnection is not { } connection || Document?.Graph is not { } graph)
         {
             SelectNode(target);
@@ -617,7 +629,7 @@ public partial class ScriptEditor : UserControl
     private void Run_Click(object sender, RoutedEventArgs e) => Guard(() =>
     {
         ApplyProperties();
-        _ = Document?.Graph?.Compile();
+        if (Document?.Graph is { IsShader: false } graph) _ = graph.Compile();
         RunRequested?.Invoke(this, EventArgs.Empty);
     });
 
@@ -640,15 +652,17 @@ public partial class ScriptEditor : UserControl
     {
         ApplyProperties();
         if (Document?.Graph == null) return;
+        bool shader = Document.Graph.IsShader;
         var dialog = new SaveFileDialog
         {
             InitialDirectory = System.IO.Path.GetDirectoryName(Document.FilePath),
-            FileName = System.IO.Path.GetFileNameWithoutExtension(Document.FilePath) + "_manual.krl",
-            Filter = "KRL (*.krl)|*.krl", DefaultExt = ".krl", AddExtension = true, OverwritePrompt = false
+            FileName = System.IO.Path.GetFileNameWithoutExtension(Document.FilePath) + (shader ? ".frag" : "_manual.krl"),
+            Filter = shader ? "GLSL (*.frag)|*.frag|HLSL (*.hlsl)|*.hlsl" : "KRL (*.krl)|*.krl", DefaultExt = shader ? ".frag" : ".krl", AddExtension = true, OverwritePrompt = false
         };
         if (dialog.ShowDialog(Window.GetWindow(this)) != true) return;
-        await Document.ExportAsync(dialog.FileName);
-        EditorStatus.Text = "Создана KRL-копия. Откройте её для ручного редактирования.";
+        string destination = shader ? System.IO.Path.ChangeExtension(dialog.FileName, dialog.FilterIndex == 2 ? ".hlsl" : ".frag") : dialog.FileName;
+        await Document.ExportAsync(destination);
+        EditorStatus.Text = shader ? "Шейдер экспортирован: " + destination : "Создана KRL-копия. Откройте её для ручного редактирования.";
     });
 
     private async void Editor_KeyDown(object sender, KeyEventArgs e)

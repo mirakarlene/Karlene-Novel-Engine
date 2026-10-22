@@ -49,7 +49,7 @@ public static class CategoryHover
         BlockAccessibility.Decorate(item, group, presentation =>
         {
             var color = group switch { "favorites" => Colors.DarkGoldenrod, "recent" => Colors.SlateGray, _ => presentation.Color };
-            SetColor(item, new SolidColorBrush(color));
+            SetColor(item, group == "shaders" && BlockAccessibility.GetMode(item) == "normal" ? ShaderRainbow.Create(item) : new SolidColorBrush(color));
             double luminance = .2126 * BlockAccessibility.Linear(color.R) + .7152 * BlockAccessibility.Linear(color.G) + .0722 * BlockAccessibility.Linear(color.B);
             SetInk(item, luminance > .179 ? Brushes.Black : Brushes.White);
         });

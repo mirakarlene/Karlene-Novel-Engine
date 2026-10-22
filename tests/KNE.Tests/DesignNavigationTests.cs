@@ -13,7 +13,7 @@ namespace KNE.Tests;
 public sealed class DesignNavigationTests
 {
     [Fact]
-    public Task BlockPicker_AllThirteenCategoriesFitOneNarrowColumnWithGaps_AndCardsKeepTheirSizeAndFavorites() => WorkspaceTabsTests.Sta(async () =>
+    public Task BlockPicker_AllFourteenCategoriesFitOneNarrowColumnWithGaps_AndCardsKeepTheirSizeAndFavorites() => WorkspaceTabsTests.Sta(async () =>
     {
         using var fixture = new TempProject();
         var library = new BlockLibraryView(new BlockLibraryPreferenceStore(Path.Combine(fixture.Root, "preferences.json")));
@@ -22,7 +22,7 @@ public sealed class DesignNavigationTests
         {
             EditorTheme.Apply(owner, "kne"); library.Open(_ => true); await library.LoadPreferencesAsync(); FileBrowserDesignTests.Layout(library, new Size(1178, 652));
             var groups = WorkspaceTabsTests.Find<ListBox>(library, "BlockGroups");
-            Assert.Equal(13, groups.Items.Count); Assert.InRange(groups.ActualWidth, 150, 170);
+            Assert.Equal(14, groups.Items.Count); Assert.InRange(groups.ActualWidth, 150, 170);
             Assert.Equal(ScrollBarVisibility.Disabled, ScrollViewer.GetVerticalScrollBarVisibility(groups));
             Assert.Equal(ScrollBarVisibility.Disabled, ScrollViewer.GetHorizontalScrollBarVisibility(groups));
             double bottom = 0;

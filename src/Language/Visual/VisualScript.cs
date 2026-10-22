@@ -9,6 +9,8 @@ namespace KNE;
 /// <summary>Versioned source document for a visual scene. Layout is independent of execution order.</summary>
 public sealed partial class VisualScript
 {
+    /// <summary>Shader graphs use data ports and never export a Lua entry point.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool IsShader { get; set; }
     /// <summary>The persisted schema version; this editor supports version 1.</summary>
     public int Version { get; set; } = 1;
 
@@ -51,7 +53,7 @@ public sealed partial class VisualScript
         {
             var script = JsonSerializer.Deserialize<VisualScript>(json, JsonOptions)
                          ?? throw new InvalidDataException("Блок-схема не должна содержать null.");
-            script.DetachLegacyComments();
+            if (!script.IsShader) script.DetachLegacyComments();
             foreach (var node in script.Nodes?.Where(node => node != null && node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene) ?? []) node.Category = "flows";
             // Both legacy categories compared a state value to a literal. Preserve the operation,
             // ports and IDs while moving it to the current narrative branching command.
@@ -97,8 +99,10 @@ public sealed partial class VisualScript
             if (node.Text == null || node.Speaker == null || node.Path == null || node.Variable == null ||
                 node.Value == null || node.CompareVariable == null || node.Position == null || node.Channel == null || node.Target == null || node.IterationKey == null || node.Category == null || node.ScreenLayer == null || node.UiTarget == null || node.SpeakerId == null)
                 throw new InvalidDataException("Свойства блока не должны содержать null.");
-            if (node.Category is not ("" or "terminals" or "narrative" or "logic" or "visual" or "audio" or "flows" or "calculations" or "async" or "triggers" or "configurations" or "plugins"))
+            if (node.Category is not ("" or "terminals" or "narrative" or "logic" or "visual" or "audio" or "flows" or "calculations" or "async" or "triggers" or "configurations" or "shaders" or "plugins"))
                 throw new InvalidDataException("Неизвестная группа блока.");
+            if (ShaderLibrary.IsShader(node.Kind) != IsShader) throw new InvalidDataException("Блоки «Шейдеры» размещаются только в отдельных файлах .kneshader; игровые блоки — в .knegraph.");
+            if (IsShader) ShaderLibrary.ValidateNode(node);
             if (new[] { node.Duration, node.OffsetX, node.OffsetY, node.Amount, node.Minimum, node.Maximum, node.Opacity }.Any(v => !double.IsFinite(v)))
                 throw new InvalidDataException("Числовые свойства блока должны быть конечными.");
             if (new[] { node.Text, node.Speaker, node.Path, node.Value }.Any(value => value.Length > 16000))
@@ -127,7 +131,7 @@ public sealed partial class VisualScript
 
     /// <summary>Validates the graph and generates its named Lua function using the KNE API.</summary>
     /// <returns>Lua source for a complete, acyclic scene.</returns>
-    public string Compile(bool editorPreview = false, bool subsystem = false) => CompileCore(editorPreview, subsystem);
+    public string Compile(bool editorPreview = false, bool subsystem = false) => IsShader ? throw new InvalidDataException("Шейдер нельзя выполнять как сценарий Lua.") : CompileCore(editorPreview, subsystem);
 
     private void DetachLegacyComments()
     {
@@ -205,7 +209,8 @@ public enum ScriptNodeKind
     IncludeLua, IncludeCs, Script, ConfigureDialogue, ConfigureButton, ClearBackgrounds, ClearSprites, RegisterCharacter, TextPause, ClearText, AutoDialogue, ConsoleWrite, RandomBranch, EffectDialogue, TextInput,
     UpdateCharacter, SetSpeaker, ResetSpeakers, Branching, CompareVariables, TimedChoice,
     Subsystem, TriggerKey, TriggerButton, TriggerHotspot, TriggerTextClosed, TriggerCombination,
-    Arithmetic, Modulo, Increment, Decrement, Pow, Sqrt, Trigonometry, Absolute, Clamp, Round, Floor, Ceil, Lerp, Remap, WeightedRandom, Constant, Formula
+    Arithmetic, Modulo, Increment, Decrement, Pow, Sqrt, Trigonometry, Absolute, Clamp, Round, Floor, Ceil, Lerp, Remap, WeightedRandom, Constant, Formula,
+    ShaderContainer, ShaderTexture, ShaderUv, ShaderTime, ShaderScreenPosition, ShaderFloat, ShaderVector, ShaderColor, ShaderTilingOffset, ShaderRotate, ShaderPolar, ShaderFlipbook, ShaderTwirl, ShaderSimplex, ShaderVoronoi, ShaderCheckerboard, ShaderLinearGradient, ShaderRadialGradient, ShaderSplit, ShaderCombine, ShaderHueShift, ShaderSaturation, ShaderContrast, ShaderBrightness, ShaderInvert, ShaderGrayscale, ShaderPosterize, ShaderGaussianBlur, ShaderBoxBlur, ShaderMotionBlur, ShaderBloom, ShaderChromatic, ShaderVignette, ShaderScanlines, ShaderLensDistortion, ShaderPixelate, ShaderSharpen, ShaderSobel, ShaderDithering, ShaderMix, ShaderAdd, ShaderSubtract, ShaderMultiply, ShaderScreen, ShaderStep, ShaderSmoothstep, ShaderOutput
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -233,6 +238,8 @@ public enum ScriptComparison
 /// <summary>An editable command and its explicitly ordered output ports.</summary>
 public sealed class ScriptNode
 {
+    /// <summary>Shader-only values and input connections.</summary>
+    public ShaderNodeSettings? Shader { get; set; }
     /// <summary>Operands, weighted rows, or reusable named formula steps.</summary>
     public CalculationSettings? Calculation { get; set; }
     /// <summary>Event block: connected blocks await the event; disconnected roots register an independent handler.</summary>
@@ -358,6 +365,7 @@ public sealed class ScriptNode
     [JsonIgnore]
     public string Title => Kind switch
     {
+        _ when ShaderLibrary.IsShader(Kind) => Kind == ScriptNodeKind.ShaderContainer && Path.Length > 0 ? System.IO.Path.GetFileName(Path) : ShaderLibrary.Get(Kind).Title,
         ScriptNodeKind.Start => "Начало", ScriptNodeKind.Dialogue => "Реплика", ScriptNodeKind.Choice => "Выбор", ScriptNodeKind.TimedChoice => "Выбор с таймером",
         ScriptNodeKind.Condition => "Условие (значение, прежний формат)", ScriptNodeKind.Branching => "Ветвление", ScriptNodeKind.CompareVariables => "Условие", ScriptNodeKind.SetVariable => "Переменная",
         ScriptNodeKind.Subsystem => Path.Length == 0 ? "Подсистема" : System.IO.Path.GetFileName(Path),
@@ -395,6 +403,7 @@ public sealed class ScriptNode
     /// <returns>Labels and optional destination identifiers in display order.</returns>
     public IEnumerable<(string Label, string? Target)> Outputs()
     {
+        if (ShaderLibrary.IsShader(Kind)) { foreach (string output in ShaderLibrary.Get(Kind).Outputs) yield return (output, null); yield break; }
         if (Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.Comment) yield break;
         if (Kind == ScriptNodeKind.TextInput)
         {

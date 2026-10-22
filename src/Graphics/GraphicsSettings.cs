@@ -89,6 +89,8 @@ public sealed record ScenePerformanceSettings
 {
     public string EffectsQuality { get; set; } = "high";
     public bool PostProcessing { get; set; } = true;
+    /// <summary>Bypasses all project shaders for this scene without changing its authored files.</summary>
+    public bool HideShaders { get; set; }
     public static IReadOnlyList<GraphicsOption<string>> Qualities { get; } = [new("high", "Высокое"), new("medium", "Среднее"), new("low", "Низкое")];
     public void Validate()
     {

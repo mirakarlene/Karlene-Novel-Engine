@@ -83,14 +83,19 @@ public static class ProjectAnalyzer
         {
             token.ThrowIfCancellationRequested();
             string path = Path.GetRelativePath(root, file).Replace('\\', '/');
-            bool code = ScriptDocument.IsCodePath(file), graph = ScriptDocument.IsVisualPath(file);
+            bool code = ScriptDocument.IsCodePath(file), graph = ScriptDocument.IsVisualPath(file), shader = ScriptDocument.IsShaderPath(file);
             bool config = path.StartsWith("engine/", StringComparison.OrdinalIgnoreCase) && Path.GetExtension(file).Equals(".json", StringComparison.OrdinalIgnoreCase);
-            if (!code && !graph && !config) continue;
+            if (!code && !graph && !shader && !config) continue;
             try
             {
                 if (new FileInfo(file).Length > SourceLimit) { Add("KNE004", path, null, "Файл превышает допустимые 8 МБ."); continue; }
                 string text = await File.ReadAllTextAsync(file, token).ConfigureAwait(false);
-                if (config)
+                if (shader)
+                {
+                    try { var compiled = ShaderGraphCompiler.Compile(VisualScript.Parse(text), root, file); _ = compiled.ToHlsl(); }
+                    catch (Exception error) when (error is InvalidDataException or IOException or ArgumentException or Veldrid.SPIRV.SpirvCompilationException) { Add("KNE501", path, null, error.Message); }
+                }
+                else if (config)
                 {
                     using var json = JsonDocument.Parse(text);
                     if (json.RootElement.ValueKind is not JsonValueKind.Object) Add("KNE005", path, 1, "Конфигурация должна содержать JSON-объект.");

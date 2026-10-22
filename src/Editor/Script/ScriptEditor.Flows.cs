@@ -17,7 +17,7 @@ public partial class ScriptEditor
 
     internal void SetSubsystemPath(string nodeId, string relative)
     {
-        if (Document?.Graph?.Nodes.SingleOrDefault(node => node.Id == nodeId && node.Kind == ScriptNodeKind.Subsystem) is not { } node) return;
+        if (Document?.Graph?.Nodes.SingleOrDefault(node => node.Id == nodeId && node.Kind is ScriptNodeKind.Subsystem or ScriptNodeKind.ShaderContainer) is not { } node) return;
         Remember(); node.Path = relative; Repaint();
     }
     internal void OpenSubsystem(string nodeId) => Guard(() => { ApplyProperties(); SubsystemRequested?.Invoke(this, nodeId); });

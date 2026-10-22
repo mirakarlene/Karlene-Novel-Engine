@@ -46,7 +46,7 @@ public partial class BlockLibraryView : UserControl
     {
         ArgumentNullException.ThrowIfNull(availability);
         canAdd = availability; BlockSearch.Clear(); page = 0;
-        BlockGroups.SelectedItem = BlockGroups.Items.Cast<BlockGroup>().First(group => group.Id == "narrative");
+        BlockGroups.SelectedItem = BlockGroups.Items.Cast<BlockGroup>().First(group => group.Id == (availability(ScriptNodeKind.ShaderOutput) && !availability(ScriptNodeKind.Dialogue) ? "shaders" : "narrative"));
         Render(); BlockSearch.Focus(); _ = LoadPreferencesAsync();
     }
 
@@ -157,6 +157,7 @@ public partial class BlockLibraryView : UserControl
             CategoryHover.SetInk(button, entry.Kind == ScriptNodeKind.Start ? Brushes.Black : entry.Kind == ScriptNodeKind.End ? Brushes.White : new SolidColorBrush(presentation.Foreground));
             button.BorderBrush = new SolidColorBrush(entry.Kind == ScriptNodeKind.Start ? Colors.White : entry.Kind == ScriptNodeKind.End ? Colors.Black : presentation.Color);
             button.BorderThickness = presentation.BorderWidth == 3 ? new Thickness(3, 5, 3, 3) : new Thickness(0, 5, 0, 1);
+            if (entry.Group == "shaders" && BlockAccessibility.GetMode(button) == "normal") { var rainbow = ShaderRainbow.Create(button); button.BorderBrush = rainbow; CategoryHover.SetColor(button, rainbow); CategoryHover.SetInk(button, Brushes.Black); }
             text.Children.OfType<TextBlock>().First().Margin = new Thickness(0, 0, presentation.Badges ? 52 : 25, 8);
         });
         // Keep starring available even when the command cannot currently be inserted.

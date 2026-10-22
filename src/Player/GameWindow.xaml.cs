@@ -44,6 +44,7 @@ public partial class GameWindow : Window
         ApplyEngineTheme();
         runtime = new ProcessGameSession(project, QueueOutput, preview: preview);
         InitializeBlockEffects();
+        InitializeShaders();
         InitializeTriggerInput();
         music.MediaEnded += (_, _) => { if (runtime.Visuals.AudioChannels.All(c => c.Channel != "music") && runtime.Visuals.LoopMusic) { music.Position = TimeSpan.Zero; music.Play(); } };
         music.MediaFailed += (_, e) => QueueOutput("Ошибка музыки: " + e.ErrorException.Message);
@@ -473,6 +474,7 @@ public partial class GameWindow : Window
         execution?.Cancel();
         DialogueEffects.Stop();
         choicePresentation?.Stop();
+        if (shaders != null) await shaders.DisposeAsync();
         try { await runtime.DisposeAsync(); }
         catch (Exception ex) { System.Diagnostics.Trace.TraceError("Lua cleanup failed: {0}", ex); }
     }

@@ -18,7 +18,7 @@ public partial class GameWindow
     private readonly FramePacer performancePacer = new();
     private long lastPerformanceReport;
     internal string ProjectPath => project.Path;
-    internal async Task CloseForProjectDeletionAsync() { Close(); await runtime.DisposeAsync(); }
+    internal async Task CloseForProjectDeletionAsync() { Close(); if (shaders != null) await shaders.DisposeAsync(); await runtime.DisposeAsync(); }
     /// <summary>Applies saved graphics and scene policies to an already open game, without restarting its story.</summary>
     internal void ReloadPerformanceSettings()
     {
@@ -65,6 +65,7 @@ public partial class GameWindow
         string? path = (runtime as ProcessGameSession)?.Location?.File;
         if (path != null && Path.IsPathFullyQualified(path)) path = Path.GetRelativePath(project.Path, path);
         path = path?.Replace('\\', '/');
+        shaders?.SetScene(path);
         if (path != performanceScene)
         {
             preloading?.Cancel(); preloading?.Dispose(); preloading = null;

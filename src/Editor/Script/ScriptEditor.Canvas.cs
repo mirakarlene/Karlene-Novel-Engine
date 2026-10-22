@@ -13,7 +13,7 @@ internal sealed class GraphPort : Button
 {
     internal required string NodeId { get; init; }
     internal int? OutputIndex { get; init; }
-    internal bool IsOutput => OutputIndex.HasValue;
+    internal bool IsOutput => OutputIndex is >= 0;
 
     internal GraphPort()
     {
@@ -66,7 +66,7 @@ public partial class ScriptEditor
     private Thumb? activeResizeThumb;
 
     private static double NodeWidth(ScriptNode node) => node.Width;
-    private static double NodeHeight(ScriptNode node) => node.Height ?? Math.Max(136, 88 + node.Outputs().Count() * 28);
+    private static double NodeHeight(ScriptNode node) => node.Height ?? Math.Max(136, 88 + Math.Max(node.Outputs().Count(), ShaderLibrary.IsShader(node.Kind) ? ShaderLibrary.Get(node.Kind).Inputs.Length : 0) * 28);
 
     private void RenderCanvasGraph()
     {
@@ -86,7 +86,7 @@ public partial class ScriptEditor
                 Background = brush, CornerRadius = new CornerRadius(9, 9, 0, 0), Height = 32,
                 Cursor = Cursors.SizeAll, Child = new TextBlock
                 {
-                    Text = node.Title, Foreground = node.Kind == ScriptNodeKind.Start || CalculationCompiler.IsCalculation(node.Kind) ? Brushes.Black : Brushes.White,
+                    Text = node.Title, Foreground = node.Kind == ScriptNodeKind.Start || CalculationCompiler.IsCalculation(node.Kind) || graph.IsShader ? Brushes.Black : Brushes.White,
                     FontWeight = FontWeights.Bold, TextTrimming = TextTrimming.CharacterEllipsis,
                     Margin = new Thickness(12, 6, 12, 0), ToolTip = DescribeNodeIdentity(node)
                 }
@@ -101,13 +101,21 @@ public partial class ScriptEditor
             summary.SetResourceReference(TextBlock.ForegroundProperty, "Editor.Text"); contents.Children.Add(summary);
             var ports = new Grid { Height = Math.Max(20, NodeHeight(node) - 81), ClipToBounds = false };
             var outputs = node.Outputs().ToArray();
-            int rows = Math.Max(1, outputs.Length);
+            string[] shaderInputs = graph.IsShader ? ShaderLibrary.Get(node.Kind).Inputs : [];
+            int rows = Math.Max(1, Math.Max(outputs.Length, shaderInputs.Length));
             for (int i = 0; i < rows; i++) ports.RowDefinitions.Add(new RowDefinition());
-            if (node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.Comment))
+            if (!graph.IsShader && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.Comment))
             {
                 var input = CreateGraphPort(node, null, portBrush, "Вход");
                 input.HorizontalAlignment = HorizontalAlignment.Left; input.Margin = new Thickness(-12, 0, 0, 0);
                 Grid.SetRowSpan(input, rows); ports.Children.Add(input);
+            }
+            for (int index = 0; index < shaderInputs.Length; index++)
+            {
+                var input = CreateGraphPort(node, -index - 1, portBrush, shaderInputs[index]);
+                input.HorizontalAlignment = HorizontalAlignment.Left; input.Margin = new Thickness(-12, 0, 0, 0); Grid.SetRow(input, index); ports.Children.Add(input);
+                var label = new TextBlock { Text = shaderInputs[index], FontSize = 11, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(14, 0, 50, 0) };
+                label.SetResourceReference(TextBlock.ForegroundProperty, "Editor.Muted"); Grid.SetRow(label, index); ports.Children.Add(label);
             }
             for (int index = 0; index < outputs.Length; index++)
             {
@@ -142,7 +150,8 @@ public partial class ScriptEditor
                 bool adapted = BlockAccessibility.GetMode(card) != "normal";
                 var tint = adapted && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.End) ? new SolidColorBrush(presentation.Color) : brush;
                 header.Background = tint; UpdateCardOutline(node, card);
-                title.Foreground = node.Kind == ScriptNodeKind.Start ? Brushes.Black : node.Kind == ScriptNodeKind.End ? Brushes.White : adapted ? new SolidColorBrush(presentation.Foreground) : CalculationCompiler.IsCalculation(node.Kind) ? Brushes.Black : Brushes.White;
+                if (graph.IsShader && !adapted) header.Background = ShaderRainbow.Create(header);
+                title.Foreground = node.Kind == ScriptNodeKind.Start ? Brushes.Black : node.Kind == ScriptNodeKind.End ? Brushes.White : adapted ? new SolidColorBrush(presentation.Foreground) : CalculationCompiler.IsCalculation(node.Kind) || graph.IsShader ? Brushes.Black : Brushes.White;
                 badge.Foreground = title.Foreground;
                 foreach (var port in ports.Children.OfType<GraphPort>()) port.Foreground = tint;
                 if (cardShadows.TryGetValue(node.Id, out var softBorder) && softBorder.Effect is DropShadowEffect effect) effect.Color = tint.Color;
@@ -158,7 +167,7 @@ public partial class ScriptEditor
             GraphCanvas.Children.Add(shadow); cardShadows.Add(node.Id, shadow);
             card.PreviewMouseLeftButtonDown += (_, args) =>
             {
-                if (node.Kind != ScriptNodeKind.Subsystem || args.ClickCount != 2) return;
+                if (node.Kind is not (ScriptNodeKind.Subsystem or ScriptNodeKind.ShaderContainer) || args.ClickCount != 2) return;
                 for (DependencyObject? target = args.OriginalSource as DependencyObject; target != null && target != card; target = VisualTreeHelper.GetParent(target))
                     if (target is ButtonBase or Thumb) return;
                 args.Handled = true; OpenSubsystem(node.Id);
@@ -177,7 +186,7 @@ public partial class ScriptEditor
         var port = new GraphPort
         {
             NodeId = node.Id, OutputIndex = output, Foreground = color, Content = label,
-            ToolTip = output.HasValue ? label + " · потяните к входу. Правая кнопка — отсоединить."
+            ToolTip = output is >= 0 ? label + " · потяните к входу. Правая кнопка — отсоединить."
                 : "Вход · потяните к выходу другого блока"
         };
         graphPorts.Add((node.Id, output), port);
@@ -218,6 +227,7 @@ public partial class ScriptEditor
         port.LostMouseCapture += (_, _) => { if (draggingPort == port) CancelPortDrag(clearPending: false); };
         port.MouseRightButtonUp += (_, e) => Guard(() =>
         {
+            if (Document?.Graph?.IsShader == true) { DisconnectShaderPort(port); e.Handled = true; return; }
             if (output is not { } index || Document?.Graph == null) return;
             ApplyProperties(repaint: false);
             var graph = Document.Graph;
@@ -241,6 +251,12 @@ public partial class ScriptEditor
     private void ClickGraphPort(GraphPort port)
     {
         GraphScroll.Focus();
+        if (Document?.Graph?.IsShader == true)
+        {
+            if (port.IsOutput) { ApplyProperties(repaint: false); pendingConnection = (port.NodeId, port.OutputIndex!.Value); EditorStatus.Text = "Выберите вход значения другого блока."; }
+            else if (pendingConnection is { } source) ConnectShaderPorts(source.Id, source.Port, port.NodeId, port.OutputIndex ?? -1);
+            return;
+        }
         if (port.OutputIndex is { } index)
         {
             ApplyProperties(repaint: false); pendingConnection = (port.NodeId, index);
@@ -251,6 +267,7 @@ public partial class ScriptEditor
 
     internal bool ConnectGraphPorts(string firstNode, int? firstOutput, string secondNode, int? secondOutput)
     {
+        if (Document?.Graph?.IsShader == true) return ConnectShaderPorts(firstNode, firstOutput ?? -1, secondNode, secondOutput ?? -1);
         if (firstOutput.HasValue == secondOutput.HasValue || firstNode == secondNode || Document?.Graph is not { } graph) return false;
         string source = firstOutput.HasValue ? firstNode : secondNode;
         string target = firstOutput.HasValue ? secondNode : firstNode;
@@ -295,8 +312,9 @@ public partial class ScriptEditor
             return new Point(node.X + local.X, node.Y + local.Y);
         }
         double body = Math.Max(20, NodeHeight(node) - 81);
-        return new Point(node.X + (output.HasValue ? NodeWidth(node) : 0), node.Y + 78.5 +
-            (output.HasValue ? body * (output.Value + .5) / Math.Max(1, node.Outputs().Count()) : body / 2));
+        bool isOutput = output is >= 0;
+        return new Point(node.X + (isOutput ? NodeWidth(node) : 0), node.Y + 78.5 +
+            (isOutput ? body * (output!.Value + .5) / Math.Max(1, node.Outputs().Count()) : output is < 0 ? body * (-output.Value - .5) / Math.Max(1, ShaderLibrary.Get(node.Kind).Inputs.Length) : body / 2));
     }
 
     internal static PathGeometry ConnectionGeometry(Point start, Point end)
@@ -329,6 +347,17 @@ public partial class ScriptEditor
         var map = graph.Nodes.ToDictionary(n => n.Id);
         foreach (var node in graph.Nodes)
         {
+            if (graph.IsShader)
+            {
+                foreach (var (input, connection) in node.Shader!.Inputs)
+                {
+                    if (!map.ContainsKey(connection.Node)) continue;
+                    int slot = Array.IndexOf(ShaderLibrary.Get(node.Kind).Inputs, input); if (slot < 0) continue;
+                    var path = new System.Windows.Shapes.Path { Data = ConnectionGeometry(PortAnchor(connection.Node, connection.Output), PortAnchor(node.Id, -slot - 1)), Stroke = Brushes.MediumPurple, StrokeThickness = 2.5, IsHitTestVisible = false };
+                    GraphCanvas.Children.Add(path); links.Add(path);
+                }
+                continue;
+            }
             int index = 0;
             foreach (var (_, target) in node.Outputs())
             {

@@ -60,7 +60,7 @@ public sealed class AccessibilityPresentationTests
         Assert.Equal(Color.FromRgb(230, 159, 0), BlockAccessibility.Presentation("narrative", "protanopia").Color);
         Assert.Equal(Color.FromRgb(0, 114, 178), BlockAccessibility.Presentation("logic", "deuteranopia").Color);
         Assert.Equal(Color.FromRgb(144, 63, 128), BlockAccessibility.Presentation("visual", "tritanopia").Color);
-        Assert.Equal(11, BlockLibrary.Groups.Select(group => CategoryIcon.SymbolFor(group.Id)).Distinct().Count());
+        Assert.Equal(12, BlockLibrary.Groups.Select(group => CategoryIcon.SymbolFor(group.Id)).Distinct().Count());
         foreach (var group in BlockLibrary.Groups)
         {
             var normal = BlockAccessibility.Presentation(group.Id, "normal");

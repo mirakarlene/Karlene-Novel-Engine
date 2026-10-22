@@ -14,7 +14,7 @@ public static class BlockLibrary
         new("terminals", "Начало и конец", "#64748B"), new("narrative", "Нарратив", "#C65C16"),
         new("logic", "Логика", "#2563A6"), new("visual", "Визуал", "#8246B3"),
         new("audio", "Звук", "#228052"), new("flows", "Потоки", "#C44A88"), new("calculations", "Вычисления", "#83CFF0"), new("async", "Асинхронность", "#BA3846"), new("triggers", "Триггеры", "#8B5A35"),
-        new("configurations", "Конфигурации", "#137C83"), new("plugins", "Плагины", "#6B7280")];
+        new("configurations", "Конфигурации", "#137C83"), new("shaders", "Шейдеры", "#AF5CFF"), new("plugins", "Плагины", "#6B7280")];
 
     /// <summary>All selectable entries with distinct narrative branching and logic comparisons.</summary>
     public static IReadOnlyList<BlockDefinition> Definitions { get; } = Build();
@@ -22,6 +22,7 @@ public static class BlockLibrary
     private static IReadOnlyList<BlockDefinition> Build()
     {
         var entries = new List<BlockDefinition>();
+        foreach (var shader in ShaderLibrary.Definitions) entries.Add(new(shader.Kind, "shaders", shader.Title, shader.Description, "#AF5CFF"));
         void Add(string group, ScriptNodeKind kind, string title, string description) => entries.Add(new(kind, group, title, description,
             kind == ScriptNodeKind.Start ? "#FFFFFF" : kind == ScriptNodeKind.End ? "#000000" : Groups.Single(g => g.Id == group).Color));
         Add("terminals", ScriptNodeKind.Start, "Начало", "Точка входа схемы. В одной схеме может быть только одно начало.");
@@ -116,6 +117,7 @@ public static class BlockLibrary
         if (category != null && !Definitions.Any(entry => entry.Kind == kind && entry.Group == category))
             throw new ArgumentException("Блок недоступен в выбранной группе.", nameof(category));
         var node = new ScriptNode { Kind = kind };
+        if (ShaderLibrary.IsShader(kind)) node.Shader = new ShaderNodeSettings();
         if (CalculationCompiler.IsCalculation(kind))
         {
             node.Calculation = new CalculationSettings();
