@@ -45,11 +45,14 @@ public sealed class EngineSettings
     }
 
     /// <summary>Creates a complete editable engine template inside the new project's staging directory.</summary>
-    public static void WriteTemplate(string root)
+    public static void WriteTemplate(string root) => WriteTemplate(root, null);
+
+    /// <summary>Creates editable settings from explicit new-project choices, retaining legacy defaults when omitted.</summary>
+    public static void WriteTemplate(string root, ProjectCreationOptions? options)
     {
+        var settings = options?.CreateEngineSettings() ?? new EngineSettings();
         string directory = PathSafety.ResolveRelative(root, "engine");
         Directory.CreateDirectory(directory);
-        var settings = new EngineSettings();
         foreach (var item in new (string Name, object Value)[]
         {
             ("window.json", settings.Window), ("theme.json", settings.Theme),
@@ -90,7 +93,7 @@ public sealed class EngineSettings
             post_processing, hide_shaders (не отображать шейдеры, по умолчанию false).
             Кнопка «Параметры сцены» редактирует отдельные сцены.
             .kneshader — отдельный граф значений для GPU; Texture задаёт цель, Fragment Output — итог.
-            Корневые шейдеры применяются автоматически; подключённые контейнеры отдельно не запускаются.
+            Шейдеры запускаются контейнером в нужном месте сценария; сами по себе файлы не выполняются.
             Изменение .kneshader применяется при новом открытии окна игры / предпросмотра.
             Сохранения находятся в saves или папке saves_path; смена пути не переносит старые файлы.
             Графический API применяется к слоям KNE; WPF-контролы используют системный рендерер.

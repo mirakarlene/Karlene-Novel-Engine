@@ -186,7 +186,7 @@ public partial class MainWindow : Window
         await RunOperationAsync(async () =>
         {
             if (!await EnsureProjectStorageAsync()) return;
-            string path = await ProjectCreator.CreateProjectAsync(name, settings.ProjectsStoragePath, method.AuthoringMode, lifetime.Token);
+            string path = await ProjectCreator.CreateProjectAsync(name, settings.ProjectsStoragePath, method.AuthoringMode, method.Options, lifetime.Token);
             if (!await OpenProjectAsync(path, remember: true)) return;
             if (currentProject != null) await OpenScriptAsync(currentProject.MainScenePath);
         }, "Создание проекта…");

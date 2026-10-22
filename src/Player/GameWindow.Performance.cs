@@ -66,7 +66,7 @@ public partial class GameWindow
         if (path != null && Path.IsPathFullyQualified(path)) path = Path.GetRelativePath(project.Path, path);
         path = path?.Replace('\\', '/');
         shaders?.SetScene(path);
-        if (shaders != null) _ = shaders.SetActiveAsync(runtime.Visuals.Shaders);
+        if (shaders != null) _ = shaders.SetActiveAsync(runtime.Visuals.ShaderSuppressions.Length == 0 ? runtime.Visuals.Shaders : []);
         if (path != performanceScene)
         {
             preloading?.Cancel(); preloading?.Dispose(); preloading = null;

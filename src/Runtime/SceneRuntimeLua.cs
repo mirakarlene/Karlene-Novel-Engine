@@ -8,6 +8,9 @@ internal static class SceneRuntimeLua
             local definitions, loaded = {}, {}
             local subsystem_entries = {}
             local owned = setmetatable({}, {__mode = "k"})
+            local shader_flows = setmetatable({}, {__mode = "k"})
+            local next_shader_flow = 0
+            function kne_shader_flow() return shader_flows[coroutine.running()] or "startup" end
             local transfer = {}
             local flow_failure = {}
             local active_stack = {}
@@ -52,6 +55,7 @@ internal static class SceneRuntimeLua
                     return table.unpack(result, 2, result.n)
                 end)
                 if kne_inherit_speaker then kne_inherit_speaker(parent, thread) end
+                shader_flows[thread] = shader_flows[parent]
                 local hook, mask, count = debug.gethook()
                 if type(hook) == "function" then debug.sethook(thread, hook, mask, count) end
                 return thread
@@ -189,6 +193,8 @@ internal static class SceneRuntimeLua
                 local subscriptions = {}
                 local function create(fn, detached, group, parent)
                     local task = {stack = {kne_scene_thread(fn, parent)}, input = table.pack(), detached = detached, group = group, transitions = 0}
+                    next_shader_flow = next_shader_flow + 1
+                    shader_flows[task.stack[1]] = "flow:" .. next_shader_flow
                     tasks[#tasks + 1] = task
                     return task
                 end
