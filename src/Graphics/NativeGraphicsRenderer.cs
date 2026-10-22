@@ -36,7 +36,10 @@ internal sealed class NativeGraphicsRenderer : IDisposable
     private readonly GraphicsDevice device;
     private readonly Sdl2Window? window;
     private readonly ResourceLayout layout;
-    private readonly Shader[] shaders;
+    private Shader[] shaders;
+    private readonly Dictionary<string, Shader[]> shaderVariants = new(StringComparer.Ordinal);
+    private string fragmentSource = FragmentShader;
+    private readonly DeviceBuffer shaderGlobals;
     private readonly CommandList commands;
     private readonly DeviceBuffer vertexBuffer;
     private readonly Dictionary<long, (Texture Texture, ResourceSet Binding, long Bytes)> textures = [];
@@ -83,17 +86,34 @@ internal sealed class NativeGraphicsRenderer : IDisposable
         var factory = device.ResourceFactory;
         layout = factory.CreateResourceLayout(new ResourceLayoutDescription(
             new ResourceLayoutElementDescription("Image", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
-            new ResourceLayoutElementDescription("ImageSampler", ResourceKind.Sampler, ShaderStages.Fragment)));
+            new ResourceLayoutElementDescription("ImageSampler", ResourceKind.Sampler, ShaderStages.Fragment),
+            new ResourceLayoutElementDescription("KneGlobals", ResourceKind.UniformBuffer, ShaderStages.Fragment)));
+        shaderGlobals = factory.CreateBuffer(new BufferDescription(32, BufferUsage.UniformBuffer | BufferUsage.Dynamic));
         shaders = factory.CreateFromSpirv(new ShaderDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(VertexShader), "main"),
             new ShaderDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(FragmentShader), "main"));
+        shaderVariants.Add(FragmentShader, shaders);
         commands = factory.CreateCommandList();
         vertexBuffer = factory.CreateBuffer(new BufferDescription(MaximumVertices * 32u, BufferUsage.VertexBuffer | BufferUsage.Dynamic));
     }
 
-    internal GraphicsPixels Render(GraphicsFrame frame, int msaaSamples)
+    internal GraphicsPixels Render(GraphicsFrame frame, int msaaSamples, CompiledShaderGraph? shader = null, float seconds = 0, Vector2 screenOrigin = default, Vector2 screenSize = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         Validate(frame, msaaSamples);
+        if (!float.IsFinite(seconds) || !float.IsFinite(screenOrigin.X) || !float.IsFinite(screenOrigin.Y) || !float.IsFinite(screenSize.X) || !float.IsFinite(screenSize.Y)) throw new ArgumentException("Некорректные часы или координаты шейдера.");
+        string fragment = shader?.Glsl ?? FragmentShader;
+        if (fragmentSource != fragment)
+        {
+            if (!shaderVariants.TryGetValue(fragment, out var compiled))
+            {
+                compiled = device.ResourceFactory.CreateFromSpirv(new ShaderDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(VertexShader), "main"), new ShaderDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(fragment), "main"));
+                shaderVariants.Add(fragment, compiled);
+            }
+            device.WaitForIdle(); DisposeSurface(); shaders = compiled; fragmentSource = fragment;
+            while (shaderVariants.Count > 17) { string oldest = shaderVariants.Keys.First(key => key != fragment); foreach (var old in shaderVariants[oldest]) old.Dispose(); shaderVariants.Remove(oldest); }
+        }
+        device.UpdateBuffer(shaderGlobals, 0, new Vector4(seconds, frame.Width, frame.Height, 0));
+        device.UpdateBuffer(shaderGlobals, 16, new Vector4(screenOrigin.X, screenOrigin.Y, screenSize.X == 0 ? frame.Width : screenSize.X, screenSize.Y == 0 ? frame.Height : screenSize.Y));
         var watch = Stopwatch.StartNew();
         EnsureSurface(frame.Width, frame.Height, msaaSamples);
         var used = frame.Sprites.Select(sprite => sprite.Texture.Id).ToHashSet();
@@ -166,7 +186,7 @@ internal sealed class NativeGraphicsRenderer : IDisposable
         try
         {
             device.UpdateTexture(texture, source.Pixels, 0, 0, 0, (uint)source.Width, (uint)source.Height, 1, 0, 0);
-            var binding = device.ResourceFactory.CreateResourceSet(new ResourceSetDescription(layout, texture, device.LinearSampler));
+            var binding = device.ResourceFactory.CreateResourceSet(new ResourceSetDescription(layout, texture, device.LinearSampler, shaderGlobals));
             long bytes = (long)source.Width * source.Height * 4; textureBytes += bytes; textures.Add(source.Id, (texture, binding, bytes)); return binding;
         }
         catch { texture.Dispose(); throw; }
@@ -213,10 +233,10 @@ internal sealed class NativeGraphicsRenderer : IDisposable
     public void Dispose()
     {
         if (disposed) return; disposed = true;
-        try { device.WaitForIdle(); DisposeSurface(); foreach (var item in textures.Values) { item.Binding.Dispose(); item.Texture.Dispose(); } shaders.ToList().ForEach(shader => shader.Dispose()); vertexBuffer.Dispose(); commands.Dispose(); layout.Dispose(); }
+        try { device.WaitForIdle(); DisposeSurface(); foreach (var item in textures.Values) { item.Binding.Dispose(); item.Texture.Dispose(); } foreach (var variant in shaderVariants.Values) foreach (var shader in variant) shader.Dispose(); shaderVariants.Clear(); vertexBuffer.Dispose(); shaderGlobals.Dispose(); commands.Dispose(); layout.Dispose(); }
         finally { device.Dispose(); window?.Close(); }
     }
-    private const string VertexShader = """
+    internal const string VertexShader = """
         #version 450
         layout(location=0) in vec2 Position;
         layout(location=1) in vec2 Uv;

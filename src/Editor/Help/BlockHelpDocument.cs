@@ -20,7 +20,7 @@ public static class BlockHelpDocument
             <p><b>Тестирование:</b> «Предпросмотр фрейма» показывает выбранный момент; «Тестировать сцену» запускает отдельную сцену, не всю игру. Ошибки содержат файл, строку и ID блока.</p><nav>
             """);
         foreach (var group in BlockLibrary.Groups) html.Append("<a href=\"#group-").Append(group.Id).Append("\">").Append(H(group.Title)).Append("</a>");
-        html.Append("</nav>");
+        html.Append("</nav><p><b>Шейдерные схемы:</b> .kneshader содержит граф значений без «Начала» и Lua-функций. Выход значения подключается к входам других блоков, итог — единственный Fragment Output. Корневые файлы применяются к цели Texture; контейнеры переиспользуются внутри родителя.</p>");
         foreach (var group in BlockLibrary.Groups)
         {
             html.Append("<h2 class=\"group\" id=\"group-").Append(group.Id).Append("\" style=\"border-color:").Append(group.Color).Append("\">").Append(H(group.Title)).Append("</h2>");
@@ -28,7 +28,7 @@ public static class BlockHelpDocument
             {
                 html.Append("<article id=\"").Append(entry.Kind).Append("\"><h3>").Append(H(entry.Title)).Append("</h3><p>").Append(H(entry.Description)).Append("</p><ul>");
                 foreach (var parameter in Parameters(entry.Kind)) html.Append("<li>").Append(H(parameter)).Append("</li>");
-                html.Append("</ul><p><small>").Append(entry.Kind is ScriptNodeKind.Comment ? "Портов нет. Заметка не выполняется." : entry.Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene ? "Выхода «Далее» нет: этот блок завершает текущую ветку." : "Подключите выходы к следующему блоку. Изменения свойств применяются кнопкой «Применить свойства» и сохраняются вместе со схемой.").Append("</small></p><a href=\"#\">К началу ↑</a></article>");
+                html.Append("</ul><p><small>").Append(ShaderLibrary.IsShader(entry.Kind) ? "Соединяйте выходы значений с нужными входами. Шейдер не участвует в порядке игровых команд." : entry.Kind is ScriptNodeKind.Comment ? "Портов нет. Заметка не выполняется." : entry.Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene ? "Выхода «Далее» нет: этот блок завершает текущую ветку." : "Подключите выходы к следующему блоку. Изменения свойств применяются кнопкой «Применить свойства» и сохраняются вместе со схемой.").Append("</small></p><a href=\"#\">К началу ↑</a></article>");
             }
         }
         return html.Append("</main></body></html>").ToString();
@@ -47,6 +47,17 @@ public static class BlockHelpDocument
     /// <summary>Parameters for one currently supported block.</summary>
     public static IReadOnlyList<string> Parameters(ScriptNodeKind kind)
     {
+        if (ShaderLibrary.IsShader(kind))
+        {
+            var definition = ShaderLibrary.Get(kind);
+            var parameters = new List<string> { "Только .kneshader. Соединения передают значения, один выход можно подключить к нескольким входам. Неподключённый вход использует значение по умолчанию.", "Входы: " + string.Join(", ", definition.Inputs) + ". Выходы: " + string.Join(", ", definition.Outputs) + "." };
+            parameters.AddRange(ShaderLibrary.Parameters(kind).Select(parameter => parameter.Label + ": по умолчанию " + parameter.Default.ToString(System.Globalization.CultureInfo.InvariantCulture) + "; диапазон " + parameter.Min + "…" + parameter.Max + "."));
+            if (kind == ScriptNodeKind.ShaderTexture) parameters.Add("Цель: вся сцена, фон, спрайт, игровой UI или экран с указанным названием. Один файл — одна цель. Файлы, подключённые контейнером, отдельно не применяются.");
+            if (kind == ScriptNodeKind.ShaderContainer) parameters.Add("Путь .kneshader от проекта. Двойной клик открывает / создаёт файл. Контейнер — чистая функция от UV и текстуры родителя; цель вложенного файла не меняет цель родителя. Циклы запрещены.");
+            if (kind is ScriptNodeKind.ShaderFloat or ScriptNodeKind.ShaderVector or ScriptNodeKind.ShaderColor) parameters.Add("Имя внешнего параметра; слайдеры и палитра доступны в отдельном предпросмотре шейдера. Значения предпросмотра не меняют файл.");
+            if (kind == ScriptNodeKind.ShaderOutput) parameters.Add("Ровно один итоговый выход. Компиляция GLSL / HLSL через SPIR-V и выполнение OpenGL / Vulkan. «Не отображать шейдеры» в параметрах сцены временно убирает эффекты.");
+            return parameters;
+        }
         if (CalculationCompiler.IsCalculation(kind))
         {
             var result = new List<string> { "Результат: имя переменной state (латиница, цифры, _, не с цифры). Числовые поля принимают выражения: score, state.score, 2.5, (a+b)*2. Пустая или нечисловая переменная — ошибка. Числа пишутся с точкой." };

@@ -359,7 +359,7 @@ public partial class MainWindow : Window
             switch (action)
             {
                 case "Редактировать":
-                    if (ScriptDocument.IsCodePath(source) || ScriptDocument.IsVisualPath(source))
+                    if (ScriptDocument.IsCodePath(source) || ScriptDocument.IsGraphPath(source))
                     {
                         await OpenScriptAsync(source);
                         break;
@@ -476,7 +476,7 @@ public partial class MainWindow : Window
     private async void OpenScript_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (currentProject is not { } project || FileAtDoubleClick(sender, e.OriginalSource as DependencyObject) is not { } file ||
-            !(ScriptDocument.IsCodePath(file.FilePath) || ScriptDocument.IsVisualPath(file.FilePath))) return;
+            !(ScriptDocument.IsCodePath(file.FilePath) || ScriptDocument.IsGraphPath(file.FilePath))) return;
         e.Handled = true;
         await RunOperationAsync(() => OpenScriptAsync(new ProjectFiles(project).ValidateSource(file)), "Открытие сценария…");
     }
@@ -493,15 +493,17 @@ public partial class MainWindow : Window
         var dialog = new SaveFileDialog
         {
             Title = "Создать визуальную сцену", InitialDirectory = project.Path,
-            FileName = "scene.knegraph", Filter = "Блок-схема KNE (*.knegraph)|*.knegraph",
+            FileName = "scene", Filter = "Игровая блок-схема (*.knegraph)|*.knegraph|Шейдерная блок-схема (*.kneshader)|*.kneshader",
             DefaultExt = ".knegraph", AddExtension = true, OverwritePrompt = false
         };
         if (dialog.ShowDialog(this) != true) return;
         await RunOperationAsync(async () =>
         {
-            await ScriptDocument.CreateVisualAsync(project.Path, dialog.FileName, lifetime.Token);
+            string path = dialog.FileName;
+            if (dialog.FilterIndex == 2 && !ScriptDocument.IsShaderPath(path)) path = Path.ChangeExtension(path, ".kneshader");
+            await ScriptDocument.CreateVisualAsync(project.Path, path, lifetime.Token);
             await OpenProjectAsync(project.Path);
-            await OpenScriptAsync(dialog.FileName);
+            await OpenScriptAsync(path);
         }, "Создание блок-схемы…");
     }
 

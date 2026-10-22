@@ -32,9 +32,10 @@ public sealed class ScriptDocument
         FilePath = path;
         savedContent = content;
         Code = content;
-        if (IsVisualPath(path))
+        if (IsGraphPath(path))
         {
             Graph = VisualScript.Parse(content);
+            if (Graph.IsShader != IsShaderPath(path)) throw new InvalidDataException("Формат графа должен соответствовать расширению .knegraph / .kneshader.");
             savedContent = Graph.Serialize();
         }
 
@@ -48,6 +49,10 @@ public sealed class ScriptDocument
     /// <returns>True for .knegraph, ignoring case.</returns>
     public static bool IsVisualPath(string path) =>
         Path.GetExtension(path).Equals(".knegraph", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Recognizes dedicated GPU data-flow graphs.</summary>
+    public static bool IsShaderPath(string path) => Path.GetExtension(path).Equals(".kneshader", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Recognizes either editable visual document without treating shaders as game scripts.</summary>
+    public static bool IsGraphPath(string path) => IsVisualPath(path) || IsShaderPath(path);
 
     /// <summary>Recognizes manually editable scenario source extensions.</summary>
     /// <param name="path">A filename or path.</param>
@@ -63,8 +68,8 @@ public sealed class ScriptDocument
         CancellationToken cancellationToken = default)
     {
         path = PathSafety.EnsureInside(root, path);
-        if (!IsVisualPath(path) && !IsCodePath(path))
-            throw new ArgumentException("Редактор поддерживает .lua, .krl и .knegraph.");
+        if (!IsGraphPath(path) && !IsCodePath(path))
+            throw new ArgumentException("Редактор поддерживает .lua, .krl, .knegraph и .kneshader.");
         if (new FileInfo(path).Length > 8 * 1024 * 1024) throw new InvalidDataException("Сценарий больше 8 МБ.");
         string content = await File.ReadAllTextAsync(path, cancellationToken);
         return new ScriptDocument(root, path, content);
@@ -79,7 +84,13 @@ public sealed class ScriptDocument
         CancellationToken cancellationToken = default)
     {
         path = PathSafety.EnsureInside(root, path);
-        if (!IsVisualPath(path)) throw new ArgumentException("Выберите расширение .knegraph.");
+        if (!IsGraphPath(path)) throw new ArgumentException("Выберите расширение .knegraph или .kneshader.");
+        if (IsShaderPath(path))
+        {
+            string shaderContent = ShaderGraphCompiler.Create().Serialize();
+            await WriteNewAsync(root, path, shaderContent, cancellationToken);
+            return new ScriptDocument(root, path, shaderContent);
+        }
         var graph = VisualScript.Create();
         graph.Nodes.Single(node => node.Kind == ScriptNodeKind.End).EndAction = ScriptEndAction.Menu;
         string stem = Path.GetFileNameWithoutExtension(path);
@@ -135,6 +146,12 @@ public sealed class ScriptDocument
     public Task ExportAsync(string path, CancellationToken cancellationToken = default)
     {
         if (Graph == null) throw new InvalidOperationException("Экспорт доступен для блок-схем.");
+        if (Graph.IsShader)
+        {
+            var shader = ShaderGraphCompiler.Compile(Graph, root, FilePath);
+            string source = Path.GetExtension(path).ToLowerInvariant() switch { ".frag" or ".glsl" => shader.Glsl, ".hlsl" => shader.ToHlsl(), _ => throw new ArgumentException("Выберите .frag / .glsl / .hlsl.") };
+            return WriteNewAsync(root, path, source, cancellationToken);
+        }
         if (!Path.GetExtension(path).Equals(".krl", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Выберите расширение .krl.");
         return WriteNewAsync(root, path, Graph.Compile(), cancellationToken);

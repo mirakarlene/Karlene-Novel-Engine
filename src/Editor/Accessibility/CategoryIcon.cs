@@ -26,7 +26,7 @@ public sealed class CategoryIcon : FrameworkElement
     }
     /// <summary>Returns a stable silhouette discriminator for a category.</summary>
     /// <param name="group">Catalog group ID.</param><returns>A vector symbol name.</returns>
-    public static string SymbolFor(string group) => group switch { "narrative" => "speech", "logic" => "gear", "visual" => "eye", "audio" => "note", "flows" => "arrows", "calculations" => "calculator", "async" => "branches", "triggers" => "lightning", "configurations" => "sliders", "plugins" => "puzzle", _ => "play" };
+    public static string SymbolFor(string group) => group switch { "narrative" => "speech", "logic" => "gear", "visual" => "eye", "audio" => "note", "flows" => "arrows", "calculations" => "calculator", "async" => "branches", "triggers" => "lightning", "configurations" => "sliders", "shaders" => "prism", "plugins" => "puzzle", _ => "play" };
     private static readonly Dictionary<string, Geometry> symbols = Build();
     private static Dictionary<string, Geometry> Build()
     {
@@ -41,6 +41,7 @@ public sealed class CategoryIcon : FrameworkElement
             ["lightning"] = "M13,0 L3,14 10,14 8,24 22,9 14,9 17,0 Z",
             ["sliders"] = "M1,5 L7,5 7,2 11,2 11,5 23,5 23,8 11,8 11,11 7,11 7,8 1,8 Z M1,16 L15,16 15,13 19,13 19,16 23,16 23,19 19,19 19,22 15,22 15,19 1,19 Z",
             ["puzzle"] = "M2,4 L9,4 Q7,-1 12,0 Q17,-1 15,4 L22,4 22,11 Q17,9 18,14 Q17,19 22,17 L22,24 2,24 2,17 Q7,19 6,14 Q7,9 2,11 Z",
+            ["prism"] = "M12,1 L23,21 1,21 Z M12,5 L5,18 12,14 19,18 Z",
             ["play"] = "M4,2 L22,12 4,22 Z" };
         return paths.ToDictionary(pair => pair.Key, pair => { var geometry = Geometry.Parse(pair.Value); geometry.Freeze(); return geometry; });
     }

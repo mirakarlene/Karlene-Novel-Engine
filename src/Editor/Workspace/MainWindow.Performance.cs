@@ -36,6 +36,7 @@ public partial class MainWindow
         {
             foreach (var game in Application.Current.Windows.OfType<GameWindow>().Where(game => game.ProjectPath.Equals(project.Path, StringComparison.OrdinalIgnoreCase)).ToArray()) await game.CloseForProjectDeletionAsync();
             foreach (var testing in Application.Current.Windows.OfType<SceneTestingWindow>().Where(window => window.ProjectPath.Equals(project.Path, StringComparison.OrdinalIgnoreCase)).ToArray()) await testing.CloseForProjectDeletionAsync();
+            foreach (var shader in Application.Current.Windows.OfType<ShaderPreviewWindow>().Where(window => window.ProjectPath.Equals(project.Path, StringComparison.OrdinalIgnoreCase)).ToArray()) await shader.CloseForProjectDeletionAsync();
         }
         monitor?.Dispose(); monitor = null; monitoredPath = null;
         try { await ProjectMaintenance.DeleteAsync(project, lifetime.Token); }

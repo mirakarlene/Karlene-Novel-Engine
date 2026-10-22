@@ -90,6 +90,7 @@ public partial class ScriptEditor
         {
             node.Next = Keep(node.Next); node.True = Keep(node.True); node.False = Keep(node.False);
             foreach (var option in node.Options) option.Target = Keep(option.Target);
+            if (node.Shader != null) foreach (string key in node.Shader.Inputs.Where(pair => !included.Contains(pair.Value.Node)).Select(pair => pair.Key).ToArray()) node.Shader.Inputs.Remove(key);
         }
         string? Keep(string? target) => target != null && included.Contains(target) ? target : null;
     }
@@ -101,6 +102,7 @@ public partial class ScriptEditor
         ApplyProperties();
         var graph = Document.Graph;
         var pasted = VisualScript.Parse(json);
+        if (pasted.IsShader != graph.IsShader) throw new InvalidDataException("Шейдерные блоки можно вставлять только в .kneshader.");
         pasted.Nodes.RemoveAll(node => node.Kind == ScriptNodeKind.Start);
         if (pasted.Nodes.Count == 0) return;
         if (graph.Nodes.Count + pasted.Nodes.Count > 500) throw new InvalidOperationException("Допускается не более 500 блоков.");
@@ -122,6 +124,7 @@ public partial class ScriptEditor
         {
             node.Next = Remap(node.Next); node.True = Remap(node.True); node.False = Remap(node.False);
             foreach (var option in node.Options) option.Target = Remap(option.Target);
+            if (node.Shader != null) foreach (string key in node.Shader.Inputs.Keys.ToArray()) { var link = node.Shader.Inputs[key]; if (Remap(link.Node) is { } target) node.Shader.Inputs[key] = link with { Node = target }; else node.Shader.Inputs.Remove(key); }
             node.Id = identities[node.Id];
             node.X = Math.Clamp(node.X + dx, -1_000_000_000, 1_000_000_000);
             node.Y = Math.Clamp(node.Y + dy, -1_000_000_000, 1_000_000_000);

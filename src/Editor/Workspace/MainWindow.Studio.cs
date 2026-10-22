@@ -14,6 +14,10 @@ public partial class MainWindow
         if (currentProject == null || closed) return;
         try
         {
+            if (ActiveEditor.Document is { Graph.IsShader: true } shaderDocument)
+            {
+                var shaderWindow = new ShaderPreviewWindow(currentProject, shaderDocument.Graph, shaderDocument.FilePath); EditorTheme.Apply(shaderWindow, settings.Theme); presentTestingWindow(shaderWindow); return;
+            }
             var selection = ActiveEditor.CapturePreview(sceneTest);
             if (selection == null) return;
             presentTestingWindow(new SceneTestingWindow(currentProject, selection with { FromMain = false }, sceneTest));

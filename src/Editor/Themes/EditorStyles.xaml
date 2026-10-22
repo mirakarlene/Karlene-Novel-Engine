@@ -112,7 +112,7 @@
     </Style>
     <Style x:Key="CategoryHover.Item" TargetType="ListBoxItem" BasedOn="{StaticResource Editor.Control}">
         <Setter Property="local:CategoryHover.Group" Value="{Binding Id}"/><Setter Property="Margin" Value="0,0,0,4"/>
-        <Setter Property="Height" Value="37"/><Setter Property="Padding" Value="6,4"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Height" Value="35"/><Setter Property="Padding" Value="6,4"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
             <Border x:Name="CategorySurface" Background="{TemplateBinding Background}" BorderBrush="{Binding Path=(local:CategoryHover.Color), RelativeSource={RelativeSource TemplatedParent}}" BorderThickness="0" CornerRadius="4"><Grid ClipToBounds="True">

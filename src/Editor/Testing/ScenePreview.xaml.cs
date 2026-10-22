@@ -16,6 +16,21 @@ public partial class ScenePreview : UserControl
     private CancellationTokenSource? operation;
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly SceneAssetCache assets = new();
+    private SceneShaderPresenter? shaders;
+    private Task shaderShutdown = Task.CompletedTask;
+    internal Task WaitForShaderShutdownAsync() => shaderShutdown;
+    private void ReleaseShaders() { if (shaders is { } previous) { shaders = null; shaderShutdown = Task.WhenAll(shaderShutdown, previous.DisposeAsync().AsTask()); } }
+    private void ConfigureShaders()
+    {
+        ReleaseShaders();
+        if (project?.Files.Any(file => ScriptDocument.IsShaderPath(file.FilePath)) != true) return;
+        var owner = project;
+        shaders = new(owner, this, shader => shader.Target switch {
+            "background" => ShaderBackgroundLayer, "sprite" => CharacterImage, "ui" => ShaderUiLayer,
+            "screen" when string.Equals(owner.Engine.Screens.Screens.FirstOrDefault(screen => screen.Id == renderedOverlay)?.Name.Trim(), shader.Screen.Trim(), StringComparison.OrdinalIgnoreCase) => MainScriptScreenViewbox.Visibility == Visibility.Visible ? MainScriptScreenViewbox : ScriptScreenViewbox,
+            "screen" => null, _ => SceneArea }, error => PreviewStatus.Text = "Шейдер: " + error.GetBaseException().Message);
+        _ = shaders.InitializeAsync();
+    }
     private readonly DispatcherTimer debounce = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private int revision;
     private bool active;
@@ -50,7 +65,7 @@ public partial class ScenePreview : UserControl
     public void DisplayScene(ProjectInfo value, RuntimeWindowSettings window, SceneVisuals visuals, StoryFrame story, bool animate, bool allowChoices)
     {
         standalone = true; PreviewToolbar.Visibility = PreviewStatus.Visibility = Visibility.Collapsed;
-        if (!ReferenceEquals(project, value)) { assets.Clear(); project = value; assets.Configure(value.Engine.Performance.Graphics); ApplyTheme(); }
+        if (!ReferenceEquals(project, value)) { assets.Clear(); project = value; assets.Configure(value.Engine.Performance.Graphics); ApplyTheme(); ConfigureShaders(); }
         RenderScene(window, visuals, story, animate);
         ChoicePanel.IsHitTestVisible = allowChoices;
         ScriptScreenCanvas.IsHitTestVisible = MainScriptScreenCanvas.IsHitTestVisible = allowChoices && story.Triggers.Any(trigger => trigger.Kind is "button" or "hotspot");
@@ -77,7 +92,7 @@ public partial class ScenePreview : UserControl
 
     public void Open(ProjectInfo value)
     {
-        Stop(); project = value; assets.Configure(value.Engine.Performance.Graphics); active = true;
+        Stop(); project = value; assets.Configure(value.Engine.Performance.Graphics); active = true; ConfigureShaders();
         preview = new EditorPreview(value, _ => { });
         ApplyTheme();
     }
@@ -106,6 +121,7 @@ public partial class ScenePreview : UserControl
         var previous = preview; preview = null; pendingSelection = null;
         AnimatedBackdrop.Configure(project?.Engine.Theme ?? new(), false);
         project = null;
+        ReleaseShaders();
         resourceScene = null;
         if (previous != null) _ = DisposePreviousAsync(previous);
     }
@@ -218,6 +234,7 @@ public partial class ScenePreview : UserControl
         if (project == null) return;
         var theme = project.Engine.Theme;
         string? scenePath = story.Identity?.Scene.Split("::", StringSplitOptions.None)[0];
+        shaders?.SetScene(scenePath);
         if (scenePath != resourceScene)
         {
             if (resourceScene != null && project.Engine.Performance.UnloadPreviousScene) assets.RetainForScene(project, visuals);

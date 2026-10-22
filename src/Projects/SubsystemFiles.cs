@@ -8,7 +8,7 @@ public static class SubsystemFiles
     public static async Task<string> EnsureAsync(string root, string path, CancellationToken token = default)
     {
         path = PathSafety.EnsureInside(root, path);
-        if (!ScriptDocument.IsVisualPath(path)) throw new ArgumentException("Подсистема должна иметь расширение .knegraph.");
+        if (!ScriptDocument.IsGraphPath(path)) throw new ArgumentException("Подсистема должна иметь расширение .knegraph или .kneshader.");
         if (File.Exists(path)) { _ = await ScriptDocument.OpenAsync(root, path, token); return path; }
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         PathSafety.EnsureInside(root, path);

@@ -67,6 +67,7 @@ public partial class SceneTestingWindow : Window
     }
     private async Task DisposeClosedSessionsAsync()
     {
+        await SceneSurface.WaitForShaderShutdownAsync();
         if (scene != null) await scene.DisposeAsync(); if (frame != null) await frame.DisposeAsync();
         lifetime.Dispose();
     }
