@@ -235,7 +235,7 @@ public partial class ScenePreview : UserControl
         var theme = project.Engine.Theme;
         string? scenePath = story.Identity?.Scene.Split("::", StringSplitOptions.None)[0];
         shaders?.SetScene(scenePath);
-        if (shaders != null) _ = shaders.SetActiveAsync(visuals.Shaders);
+        if (shaders != null) _ = shaders.SetActiveAsync(visuals.ShaderSuppressions.Length == 0 ? visuals.Shaders : []);
         shaders?.SetFrame(window, visuals, story);
         if (scenePath != resourceScene)
         {

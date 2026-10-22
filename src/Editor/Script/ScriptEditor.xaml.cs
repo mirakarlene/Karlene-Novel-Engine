@@ -564,6 +564,8 @@ public partial class ScriptEditor : UserControl
         ScriptNodeKind.StopSound => "Канал " + node.Channel,
         ScriptNodeKind.MasterVolume => "Громкость " + node.Amount,
         ScriptNodeKind.End => node.EndAction switch { ScriptEndAction.Menu => "Главное меню", ScriptEndAction.Screen => "Экран: " + node.Path, ScriptEndAction.Exit => "Закрыть игру", _ => "Завершить ветку / вернуться" },
+        ScriptNodeKind.RemoveLayerShaders => "Слой: " + node.Target + (node.Target == "screen" ? " · " + node.Path : ""),
+        ScriptNodeKind.RemoveAllShaders => node.SuppressShadersUntilContainer ? "Очистить и скрыть до следующего контейнера" : "Очистить все активные эффекты",
         _ => node.Kind == ScriptNodeKind.End ? "Завершение сцены" : "Команда сцены"
     };
 

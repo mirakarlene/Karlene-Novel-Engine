@@ -26,6 +26,8 @@ public static class BlockLibrary
         void Add(string group, ScriptNodeKind kind, string title, string description) => entries.Add(new(kind, group, title, description,
             kind == ScriptNodeKind.Start ? "#FFFFFF" : kind == ScriptNodeKind.End ? "#000000" : Groups.Single(g => g.Id == group).Color));
         Add("terminals", ScriptNodeKind.Start, "Начало", "Точка входа схемы. В одной схеме может быть только одно начало.");
+        Add("shaders", ScriptNodeKind.RemoveLayerShaders, "Удалить шейдер с слоя", "Удалить эффекты с выбранной цели; можно скрыть шейдеры до следующего контейнера этого потока.");
+        Add("shaders", ScriptNodeKind.RemoveAllShaders, "Удалить все шейдеры", "Очистить все активные эффекты; можно скрыть шейдеры до следующего контейнера этого потока.");
         Add("terminals", ScriptNodeKind.End, "Конец", "Главное меню, специальный экран, закрытие игры или возврат из вызова.");
         Add("narrative", ScriptNodeKind.Dialogue, "Реплика", "Текст в диалоговом окне с именем говорящего или от рассказчика.");
         Add("narrative", ScriptNodeKind.TextInput, "Ввод текста", "Запросить ответ игрока, сохранить в переменную и выбрать ветку по результату.");
@@ -117,6 +119,7 @@ public static class BlockLibrary
         if (category != null && !Definitions.Any(entry => entry.Kind == kind && entry.Group == category))
             throw new ArgumentException("Блок недоступен в выбранной группе.", nameof(category));
         var node = new ScriptNode { Kind = kind };
+        if (kind == ScriptNodeKind.RemoveLayerShaders) node.Target = "background";
         if (ShaderLibrary.IsShader(kind)) node.Shader = new ShaderNodeSettings();
         if (CalculationCompiler.IsCalculation(kind))
         {

@@ -86,6 +86,7 @@ public sealed partial class LuaRuntime : IGameSession
         frames = FrameCatalog.Load(project, scripts, editorSource);
         lua?.Dispose();
         lua = new Lua();
+        shaderTargets.Clear();
         lua.State.Encoding = Encoding.UTF8;
         lock (stateLock) windowSettings = project.Engine.RuntimeDefaults(project.Title);
         Register(nameof(PrintToUI), "print_to_ui");
@@ -168,14 +169,29 @@ public sealed partial class LuaRuntime : IGameSession
         InitializePlugins();
         lua.DoString("""
             function apply_shader(path, enabled)
+                local target, screen = "", ""
                 if enabled ~= false then
                     local result = kne_shader_source(path)
                     if result[1] ~= "" then error(result[1], 2) end
                     local setup, problem = load(result[0], "@" .. path .. " · plugins", "t", _G)
                     if not setup then error(problem, 2) end
                     setup()
+                    target, screen = result[2], result[3]
                 end
-                local problem = kne_script_api("apply_shader", table.pack(path, enabled ~= false))
+                local problem = kne_script_api("apply_shader", table.pack(path, enabled ~= false, target, screen, kne_shader_flow()))
+                if problem ~= "" then error(problem, 2) end
+                kne_editor_pause()
+            end
+            function clear_layer_shaders(target, screen, suppress)
+                if screen == nil then screen = "" end
+                if suppress ~= nil and type(suppress) ~= "boolean" then error("Ожидается true/false для скрытия шейдеров", 2) end
+                local problem = kne_script_api("clear_layer_shaders", table.pack(target, screen, suppress == true, kne_shader_flow()))
+                if problem ~= "" then error(problem, 2) end
+                kne_editor_pause()
+            end
+            function clear_shaders(suppress)
+                if suppress ~= nil and type(suppress) ~= "boolean" then error("Ожидается true/false для скрытия шейдеров", 2) end
+                local problem = kne_script_api("clear_shaders", table.pack(suppress == true, kne_shader_flow()))
                 if problem ~= "" then error(problem, 2) end
                 kne_editor_pause()
             end
@@ -588,7 +604,9 @@ public sealed partial class LuaRuntime : IGameSession
         {
             switch (name)
             {
-                case "apply_shader": SetShader(Text(1)!, arguments[2] is not false); break;
+                case "apply_shader": SetShader(Text(1)!, arguments[2] is not false, Text(3, true), Text(4, true), Text(5, true) ?? "startup"); break;
+                case "clear_layer_shaders": RemoveShaders(Text(1)!, Text(2)!, arguments[3] is true, Text(4, true) ?? "startup"); break;
+                case "clear_shaders": RemoveShaders(null, "", arguments[1] is true, Text(2, true) ?? "startup"); break;
                 case "set_window_title": SetWindowTitle(Text(1)!); break;
                 case "set_window_size": SetWindowSize(Number(1), Number(2)); break;
                 case "set_bg_color": SetBgColor(Text(1)!); break;

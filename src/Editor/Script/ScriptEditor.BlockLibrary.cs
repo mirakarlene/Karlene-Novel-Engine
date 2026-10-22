@@ -43,6 +43,7 @@ public partial class ScriptEditor
         ExtendedProperties.Children.Clear(); extendedEdits.Clear();
         selectedSpeakerId = node?.SpeakerId ?? ""; UpdateSpeakerReference();
         if (node == null) return;
+        if (node.Kind is ScriptNodeKind.RemoveLayerShaders or ScriptNodeKind.RemoveAllShaders) { AddShaderRemovalFields(node); return; }
         if (ShaderLibrary.IsShader(node.Kind)) { AddShaderFields(node); return; }
         AddNarrativeFields(node);
         AddFlowFields(node);

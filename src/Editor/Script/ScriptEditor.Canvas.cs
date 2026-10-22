@@ -86,7 +86,7 @@ public partial class ScriptEditor
                 Background = brush, CornerRadius = new CornerRadius(9, 9, 0, 0), Height = 32,
                 Cursor = Cursors.SizeAll, Child = new TextBlock
                 {
-                    Text = node.Title, Foreground = node.Kind == ScriptNodeKind.Start || CalculationCompiler.IsCalculation(node.Kind) || graph.IsShader ? Brushes.Black : Brushes.White,
+                    Text = node.Title, Foreground = node.Kind == ScriptNodeKind.Start || CalculationCompiler.IsCalculation(node.Kind) || graph.IsShader || node.Category == "shaders" ? Brushes.Black : Brushes.White,
                     FontWeight = FontWeights.Bold, TextTrimming = TextTrimming.CharacterEllipsis,
                     Margin = new Thickness(12, 6, 12, 0), ToolTip = DescribeNodeIdentity(node)
                 }
@@ -150,8 +150,8 @@ public partial class ScriptEditor
                 bool adapted = BlockAccessibility.GetMode(card) != "normal";
                 var tint = adapted && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.End) ? new SolidColorBrush(presentation.Color) : brush;
                 header.Background = tint; UpdateCardOutline(node, card);
-                if (ShaderLibrary.IsShader(node.Kind) && !adapted) header.Background = ShaderRainbow.Create(header);
-                title.Foreground = node.Kind == ScriptNodeKind.Start ? Brushes.Black : node.Kind == ScriptNodeKind.End ? Brushes.White : adapted ? new SolidColorBrush(presentation.Foreground) : CalculationCompiler.IsCalculation(node.Kind) || graph.IsShader ? Brushes.Black : Brushes.White;
+                if (category == "shaders" && !adapted) header.Background = ShaderRainbow.Create(header);
+                title.Foreground = node.Kind == ScriptNodeKind.Start ? Brushes.Black : node.Kind == ScriptNodeKind.End ? Brushes.White : adapted ? new SolidColorBrush(presentation.Foreground) : CalculationCompiler.IsCalculation(node.Kind) || graph.IsShader || category == "shaders" ? Brushes.Black : Brushes.White;
                 badge.Foreground = title.Foreground;
                 foreach (var port in ports.Children.OfType<GraphPort>()) port.Foreground = tint;
                 if (cardShadows.TryGetValue(node.Id, out var softBorder) && softBorder.Effect is DropShadowEffect effect) effect.Color = tint.Color;

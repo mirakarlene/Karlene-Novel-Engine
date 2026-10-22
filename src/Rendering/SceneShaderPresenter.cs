@@ -116,7 +116,7 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
         if (programs.Length == 0) return;
         // Worker IPC creates new arrays even for unchanged frames. Compare their content,
         // while versioned UI styles and active shaders are handled by their own revisions.
-        var normalizedVisuals = visuals with { AudioChannels = Array.Empty<AudioChannelState>(), UiConfigurations = Array.Empty<GameplayUiConfiguration>(), Shaders = Array.Empty<string>() };
+        var normalizedVisuals = visuals with { AudioChannels = Array.Empty<AudioChannelState>(), UiConfigurations = Array.Empty<GameplayUiConfiguration>(), Shaders = Array.Empty<string>(), ShaderSuppressions = Array.Empty<string>() };
         var normalizedStory = story with { Options = Array.Empty<string>(), ChoiceOptions = null, Triggers = Array.Empty<TriggerSettings>() };
         if (window != previousWindow || normalizedVisuals != previousVisuals || normalizedStory != previousStory ||
             !previousOptions.SequenceEqual(story.Options) || !(previousChoices ?? []).SequenceEqual(story.ChoiceOptions ?? [])) NotifyContentChanged();

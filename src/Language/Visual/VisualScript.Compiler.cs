@@ -200,6 +200,8 @@ public sealed partial class VisualScript
         ScriptNodeKind.IncludeLua => $"include_lua({Quote(node.Path)})",
         ScriptNodeKind.IncludeCs => $"include_cs({Quote(node.Path)})",
         ScriptNodeKind.ShaderContainer => $"apply_shader({Quote(node.Path)}, {(node.Shader?.Enabled == false ? "false" : "true")})",
+        ScriptNodeKind.RemoveLayerShaders => $"clear_layer_shaders({Quote(node.Target)}, {Quote(node.Path)}, {(node.SuppressShadersUntilContainer ? "true" : "false")})",
+        ScriptNodeKind.RemoveAllShaders => $"clear_shaders({(node.SuppressShadersUntilContainer ? "true" : "false")})",
         ScriptNodeKind.Script => $"run_script({Quote(node.Path)})",
         ScriptNodeKind.ConfigureDialogue or ScriptNodeKind.ConfigureButton => $"configure_ui({Quote(node.Kind == ScriptNodeKind.ConfigureDialogue ? "dialogue" : node.UiTarget)}, {Quote(System.Text.Json.JsonSerializer.Serialize(node.Ui ?? GameplayUiStyle.ForTarget(node.Kind == ScriptNodeKind.ConfigureDialogue ? "dialogue" : node.UiTarget), EngineSettings.JsonOptions))})",
         ScriptNodeKind.Join => $"kne_join(state[{Quote(node.Variable)}])",
@@ -281,6 +283,7 @@ public sealed partial class VisualScript
         if (node.Kind == ScriptNodeKind.ShowScreen && (node.Opacity < 0 || node.Opacity > 1 || node.ScreenLayer is not ("main" or "overlay")))
             Fail(node, "прозрачность должна быть от 0 до 1, слой — main или overlay");
         if (node.Kind == ScriptNodeKind.ShaderContainer && !ScriptDocument.IsShaderPath(node.Path)) Fail(node, "выберите файл .kneshader");
+        if (node.Kind == ScriptNodeKind.RemoveLayerShaders && (node.Target is not ("scene" or "background" or "sprite" or "ui" or "screen") || node.Target == "screen" && (string.IsNullOrWhiteSpace(node.Path) || node.Path.Length > 128))) Fail(node, "выберите слой и укажите название экрана для цели «Экран»");
         if (node.Kind is ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script)
         {
             string extension = Path.GetExtension(node.Path).ToLowerInvariant();

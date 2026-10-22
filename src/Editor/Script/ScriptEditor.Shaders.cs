@@ -8,6 +8,25 @@ namespace KNE;
 
 public partial class ScriptEditor
 {
+    private void AddShaderRemovalFields(ScriptNode node)
+    {
+        if (node.Kind == ScriptNodeKind.RemoveLayerShaders)
+        {
+            ExtendedProperties.Children.Add(new TextBlock { Text = "Слой шейдера" });
+            var target = GraphicsSettingsEditor.Choice(new GraphicsOption<string>[] { new("scene", "Вся сцена"), new("background", "Фон"), new("sprite", "Спрайт"), new("ui", "Игровой UI"), new("screen", "Экран по названию") });
+            target.Name = "ShaderRemovalTargetInput"; target.SelectedValue = node.Target;
+            target.SelectionChanged += (_, _) => TrackProperties(); ExtendedProperties.Children.Add(target);
+            extendedEdits.Add(changed => changed.Target = (string?)target.SelectedValue ?? "background");
+            ExtendedProperties.Children.Add(new TextBlock { Text = "Название экрана (для цели «Экран»)" });
+            var screen = new TextBox { Name = "ShaderRemovalScreenInput", Text = node.Path, Margin = new(0, 3, 0, 8) };
+            screen.TextChanged += (_, _) => TrackProperties(); ExtendedProperties.Children.Add(screen);
+            extendedEdits.Add(changed => changed.Path = screen.Text.Trim());
+        }
+        var suppress = new CheckBox { Name = "SuppressShadersInput", IsChecked = node.SuppressShadersUntilContainer,
+            Content = new TextBlock { Text = "Не отображать шейдеры после этого блока, пока поток не дойдёт до следующего контейнера GLSL/HLSL", TextWrapping = TextWrapping.Wrap }, Margin = new(0, 8, 0, 8) };
+        suppress.Click += (_, _) => TrackProperties(); ExtendedProperties.Children.Add(suppress);
+        extendedEdits.Add(changed => changed.SuppressShadersUntilContainer = suppress.IsChecked == true);
+    }
     internal bool ConnectShaderPorts(string first, int firstPort, string second, int secondPort)
     {
         if (Document?.Graph is not { IsShader: true } graph || first == second || (firstPort >= 0) == (secondPort >= 0)) return false;

@@ -90,9 +90,9 @@ public sealed class ShaderAuthoringTests
             groups.SelectedItem = groups.Items.Cast<BlockGroup>().Single(group => group.Id == "shaders");
             var cards = Find<WrapPanel>(view, "BlockCards").Children.OfType<Button>().ToArray(); Assert.Equal(12, cards.Length);
             Assert.All(cards, card => { Assert.IsType<LinearGradientBrush>(card.BorderBrush); Assert.Equal(236, card.Width); Assert.Equal(130, card.Height); });
-            Assert.Equal("1 / 4", Find<TextBlock>(view, "PageStatus").Text);
+            Assert.Equal("1 / 5", Find<TextBlock>(view, "PageStatus").Text);
             Capture(view, "shader-library.png", new Size(1178, 652));
-            Click(Find<Button>(view, "NextPageButton")); Assert.Equal("2 / 4", Find<TextBlock>(view, "PageStatus").Text);
+            Click(Find<Button>(view, "NextPageButton")); Assert.Equal("2 / 5", Find<TextBlock>(view, "PageStatus").Text);
             Assert.Equal(12, Find<WrapPanel>(view, "BlockCards").Children.Count);
             owner.Close();
         });

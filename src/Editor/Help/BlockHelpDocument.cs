@@ -47,6 +47,10 @@ public static class BlockHelpDocument
     /// <summary>Parameters for one currently supported block.</summary>
     public static IReadOnlyList<string> Parameters(ScriptNodeKind kind)
     {
+        if (kind is ScriptNodeKind.RemoveLayerShaders or ScriptNodeKind.RemoveAllShaders)
+            return ["Команда игровой схемы .knegraph с входом и выходом выполнения. Удаляет активные эффекты; исходные файлы не удаляются.",
+                kind == ScriptNodeKind.RemoveLayerShaders ? "Слой: вся сцена, фон, спрайт, игровой UI или экран по названию. Удаляются все шейдеры выбранной цели; название экрана сравнивается без учёта регистра." : "Удаляет все активные шейдеры.",
+                "Галочка скрывает также остальные и новые эффекты до следующего контейнера в этом потоке. Call/goto сохраняют поток; параллельная ветка не снимает чужую блокировку. При нескольких блокировках каждая снимается своим потоком. Если поток завершится без контейнера, блокировка сохраняется до перезапуска."];
         if (ShaderLibrary.IsShader(kind))
         {
             var definition = ShaderLibrary.Get(kind);

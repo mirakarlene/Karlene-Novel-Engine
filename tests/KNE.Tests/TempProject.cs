@@ -10,7 +10,8 @@ internal sealed class TempProject : IDisposable
     public TempProject()
     {
         Directory.CreateDirectory(Root);
-        ProjectPath = ProjectCreator.CreateProject("Новелла с пробелами", Root);
+        ProjectPath = ProjectCreator.CreateProject("Новелла с пробелами", Root, ProjectAuthoringMode.Code,
+            new ProjectCreationOptions { Width = 1280, Height = 720 });
     }
 
     public string Write(string relative, string content)

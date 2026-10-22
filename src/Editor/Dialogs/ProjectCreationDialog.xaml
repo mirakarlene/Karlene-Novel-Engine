@@ -5,13 +5,14 @@
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Background="{DynamicResource Editor.Background}">
     <Window.Resources>
         <Style x:Key="ModeCard" TargetType="RadioButton">
+            <Setter Property="Padding" Value="18"/>
             <Setter Property="Foreground" Value="{DynamicResource Editor.Text}"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="VerticalContentAlignment" Value="Stretch"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="CardBorder" BorderThickness="2" BorderBrush="#D7D0E6" Background="{DynamicResource Editor.Surface}" CornerRadius="14" Padding="18">
+                        <Border x:Name="CardBorder" BorderThickness="2" BorderBrush="#D7D0E6" Background="{DynamicResource Editor.Surface}" CornerRadius="14" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -30,8 +31,12 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="SetupCard" TargetType="RadioButton" BasedOn="{StaticResource ModeCard}">
+            <Setter Property="Padding" Value="8"/><Setter Property="Margin" Value="4"/>
+        </Style>
     </Window.Resources>
-    <Grid Margin="24">
+    <Grid>
+    <Grid x:Name="AuthoringPage" Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -92,5 +97,50 @@
             <Button Content="Отмена" IsCancel="True" Padding="18,8" Margin="0,0,10,0"/>
             <Button x:Name="ContinueButton" Content="Продолжить" IsDefault="True" Padding="22,8" Click="Continue_Click"/>
         </StackPanel>
+    </Grid>
+    <Grid x:Name="SettingsPage" Margin="24" Visibility="Collapsed">
+        <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+            <Grid Width="992" Height="640">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="48"/><RowDefinition Height="308"/><RowDefinition Height="42"/><RowDefinition Height="80"/><RowDefinition Height="108"/><RowDefinition Height="22"/><RowDefinition Height="32"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="Параметры новой игры" FontSize="23" FontWeight="SemiBold" Foreground="{DynamicResource Editor.Text}"/>
+                <UniformGrid x:Name="ResolutionCards" Grid.Row="1" Columns="4" Rows="2"/>
+                <StackPanel x:Name="CustomResolutionFields" Grid.Row="2" Orientation="Horizontal" Margin="4,4,0,4" IsEnabled="False">
+                    <TextBlock Text="Свой размер:" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <TextBox x:Name="CustomWidthInput" Text="1920" Width="84" VerticalContentAlignment="Center" AutomationProperties.Name="Ширина окна"/>
+                    <TextBlock Text="×" VerticalAlignment="Center" Margin="8,0"/>
+                    <TextBox x:Name="CustomHeightInput" Text="1080" Width="84" VerticalContentAlignment="Center" AutomationProperties.Name="Высота окна"/>
+                    <TextBlock Text="От 640×480 до 3840×2160" VerticalAlignment="Center" Margin="14,0" Opacity="0.65"/>
+                </StackPanel>
+                <Grid Grid.Row="3" Margin="4,4">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Графический API" FontWeight="SemiBold"/>
+                        <ComboBox x:Name="GraphicsApiInput" DisplayMemberPath="Label" SelectedValuePath="Value" Margin="0,4,0,0"/>
+                        <TextBlock Text="Если не знаете, оставьте по умолчанию" FontSize="11" Opacity="0.65" Margin="0,4,0,0"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Ограничение FPS" FontWeight="SemiBold"/>
+                        <ComboBox x:Name="FrameRateInput" DisplayMemberPath="Label" SelectedValuePath="Value" Margin="0,4,0,0"/>
+                        <TextBlock Text="Если не знаете, оставьте по умолчанию" FontSize="11" Opacity="0.65" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </Grid>
+                <Grid Grid.Row="4">
+                    <Grid.RowDefinitions><RowDefinition Height="22"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <TextBlock Text="Цветовая палитра игры" FontWeight="SemiBold" Margin="4,0"/>
+                    <UniformGrid x:Name="PaletteCards" Grid.Row="1" Columns="5"/>
+                </Grid>
+                <TextBlock x:Name="SetupErrorText" Grid.Row="5" Foreground="#E46A83" TextWrapping="Wrap" FontSize="12" Margin="4,0"/>
+                <DockPanel Grid.Row="6">
+                    <Button x:Name="BackButton" Content="Назад" Padding="18,4" Click="Back_Click"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Отмена" IsCancel="True" Padding="18,4" Margin="0,0,10,0"/>
+                        <Button x:Name="CreateButton" Content="Создать проект" Padding="22,4" Click="Create_Click"/>
+                    </StackPanel>
+                </DockPanel>
+            </Grid>
+        </Viewbox>
+    </Grid>
     </Grid>
 </Window>

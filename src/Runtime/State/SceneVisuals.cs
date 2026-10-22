@@ -20,6 +20,8 @@ public sealed partial record SceneVisuals(string? Background, string? Character,
     public AudioChannelState[] AudioChannels { get; init; } = [];
     /// <summary>Explicitly invoked shader paths in application order; checkpoint replay reconstructs this state.</summary>
     public string[] Shaders { get; init; } = [];
+    /// <summary>Execution flows that hide effects until their next shader container.</summary>
+    public string[] ShaderSuppressions { get; init; } = [];
 }
 
 public sealed record VisualMotion(double X = 0, double Y = 0, double Duration = 0, long Version = 0);

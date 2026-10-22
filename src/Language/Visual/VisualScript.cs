@@ -218,7 +218,8 @@ public enum ScriptNodeKind
     UpdateCharacter, SetSpeaker, ResetSpeakers, Branching, CompareVariables, TimedChoice,
     Subsystem, TriggerKey, TriggerButton, TriggerHotspot, TriggerTextClosed, TriggerCombination,
     Arithmetic, Modulo, Increment, Decrement, Pow, Sqrt, Trigonometry, Absolute, Clamp, Round, Floor, Ceil, Lerp, Remap, WeightedRandom, Constant, Formula,
-    ShaderContainer, ShaderTexture, ShaderUv, ShaderTime, ShaderScreenPosition, ShaderFloat, ShaderVector, ShaderColor, ShaderTilingOffset, ShaderRotate, ShaderPolar, ShaderFlipbook, ShaderTwirl, ShaderSimplex, ShaderVoronoi, ShaderCheckerboard, ShaderLinearGradient, ShaderRadialGradient, ShaderSplit, ShaderCombine, ShaderHueShift, ShaderSaturation, ShaderContrast, ShaderBrightness, ShaderInvert, ShaderGrayscale, ShaderPosterize, ShaderGaussianBlur, ShaderBoxBlur, ShaderMotionBlur, ShaderBloom, ShaderChromatic, ShaderVignette, ShaderScanlines, ShaderLensDistortion, ShaderPixelate, ShaderSharpen, ShaderSobel, ShaderDithering, ShaderMix, ShaderAdd, ShaderSubtract, ShaderMultiply, ShaderScreen, ShaderStep, ShaderSmoothstep, ShaderOutput
+    ShaderContainer, ShaderTexture, ShaderUv, ShaderTime, ShaderScreenPosition, ShaderFloat, ShaderVector, ShaderColor, ShaderTilingOffset, ShaderRotate, ShaderPolar, ShaderFlipbook, ShaderTwirl, ShaderSimplex, ShaderVoronoi, ShaderCheckerboard, ShaderLinearGradient, ShaderRadialGradient, ShaderSplit, ShaderCombine, ShaderHueShift, ShaderSaturation, ShaderContrast, ShaderBrightness, ShaderInvert, ShaderGrayscale, ShaderPosterize, ShaderGaussianBlur, ShaderBoxBlur, ShaderMotionBlur, ShaderBloom, ShaderChromatic, ShaderVignette, ShaderScanlines, ShaderLensDistortion, ShaderPixelate, ShaderSharpen, ShaderSobel, ShaderDithering, ShaderMix, ShaderAdd, ShaderSubtract, ShaderMultiply, ShaderScreen, ShaderStep, ShaderSmoothstep, ShaderOutput,
+    RemoveLayerShaders, RemoveAllShaders
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -247,6 +248,8 @@ public enum ScriptComparison
 public sealed class ScriptNode
 {
     [JsonIgnore] internal bool IsShaderInvocation { get; set; }
+    /// <summary>Hides effects until this execution flow reaches another shader container.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool SuppressShadersUntilContainer { get; set; }
     /// <summary>Shader-only values and input connections.</summary>
     public ShaderNodeSettings? Shader { get; set; }
     /// <summary>Operands, weighted rows, or reusable named formula steps.</summary>
@@ -374,6 +377,7 @@ public sealed class ScriptNode
     [JsonIgnore]
     public string Title => Kind switch
     {
+        ScriptNodeKind.RemoveLayerShaders => "Удалить шейдер с слоя", ScriptNodeKind.RemoveAllShaders => "Удалить все шейдеры",
         _ when ShaderLibrary.IsShader(Kind) => Kind == ScriptNodeKind.ShaderContainer && Path.Length > 0 ? System.IO.Path.GetFileName(Path) : ShaderLibrary.Get(Kind).Title,
         ScriptNodeKind.Start => "Начало", ScriptNodeKind.Dialogue => "Реплика", ScriptNodeKind.Choice => "Выбор", ScriptNodeKind.TimedChoice => "Выбор с таймером",
         ScriptNodeKind.Condition => "Условие (значение, прежний формат)", ScriptNodeKind.Branching => "Ветвление", ScriptNodeKind.CompareVariables => "Условие", ScriptNodeKind.SetVariable => "Переменная",

@@ -13,11 +13,20 @@ public static class ProjectCreator
     public static Task<string> CreateProjectAsync(string projectName, string basePath, ProjectAuthoringMode authoringMode, CancellationToken cancellationToken = default) =>
         Task.Run(() => CreateProject(projectName, basePath, authoringMode, cancellationToken), cancellationToken);
 
+    /// <summary>Creates a project asynchronously with explicit window, rendering and palette choices.</summary>
+    public static Task<string> CreateProjectAsync(string projectName, string basePath, ProjectAuthoringMode authoringMode, ProjectCreationOptions options, CancellationToken cancellationToken = default) =>
+        Task.Run(() => CreateProject(projectName, basePath, authoringMode, options, cancellationToken), cancellationToken);
+
     public static string CreateProject(string projectName, string basePath, CancellationToken cancellationToken = default) =>
         CreateProject(projectName, basePath, ProjectAuthoringMode.Code, cancellationToken);
 
-    public static string CreateProject(string projectName, string basePath, ProjectAuthoringMode authoringMode, CancellationToken cancellationToken = default)
+    public static string CreateProject(string projectName, string basePath, ProjectAuthoringMode authoringMode, CancellationToken cancellationToken = default) =>
+        CreateProject(projectName, basePath, authoringMode, new ProjectCreationOptions(), cancellationToken);
+
+    /// <summary>Atomically creates a project using validated creation choices.</summary>
+    public static string CreateProject(string projectName, string basePath, ProjectAuthoringMode authoringMode, ProjectCreationOptions options, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(options); options.Validate();
         if (!Enum.IsDefined(authoringMode)) throw new ArgumentOutOfRangeException(nameof(authoringMode));
         PathSafety.ValidateFileName(projectName);
         string root = PathSafety.NormalizeDirectory(basePath);
@@ -35,7 +44,7 @@ public static class ProjectCreator
             Directory.CreateDirectory(Path.Combine(staging, "game", "shaders"));
             Directory.CreateDirectory(Path.Combine(staging, "engine"));
             Directory.CreateDirectory(Path.Combine(staging, "saves"));
-            EngineSettings.WriteTemplate(staging);
+            EngineSettings.WriteTemplate(staging, options);
             Directory.CreateDirectory(Path.Combine(staging, "metadata"));
             cancellationToken.ThrowIfCancellationRequested();
             string mainScene = authoringMode == ProjectAuthoringMode.Visual ? "game/scenes/main.knegraph" : "game/scenes/main.krl";
