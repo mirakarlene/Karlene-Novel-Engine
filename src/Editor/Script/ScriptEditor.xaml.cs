@@ -577,7 +577,7 @@ public partial class ScriptEditor : UserControl
 
     private void ConnectTo(string target)
     {
-        if (Document?.Graph?.IsShader == true && pendingConnection is { } shaderConnection) { ConnectShaderPorts(shaderConnection.Id, shaderConnection.Port, target, -1); return; }
+        if (Document?.Graph?.Nodes.FirstOrDefault(node => node.Id == target) is { } shaderNode && ShaderLibrary.IsData(shaderNode) && pendingConnection is { } shaderConnection) { ConnectShaderPorts(shaderConnection.Id, shaderConnection.Port, target, -1); return; }
         if (pendingConnection is not { } connection || Document?.Graph is not { } graph)
         {
             SelectNode(target);
@@ -587,6 +587,8 @@ public partial class ScriptEditor : UserControl
         ApplyProperties();
         graph = Document.Graph!;
         var destination = graph.Nodes.Single(n => n.Id == target);
+        if (ShaderLibrary.IsData(graph.Nodes.Single(n => n.Id == connection.Id)) != ShaderLibrary.IsData(destination))
+        { pendingConnection = null; EditorStatus.Text = "Команды плагинов и порты значений шейдера соединяются отдельно."; return; }
         if (destination.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment || target == connection.Id)
             throw new InvalidOperationException("Выберите другой блок, кроме «Начала».");
         Remember();

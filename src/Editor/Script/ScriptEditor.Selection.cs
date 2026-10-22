@@ -102,7 +102,7 @@ public partial class ScriptEditor
         ApplyProperties();
         var graph = Document.Graph;
         var pasted = VisualScript.Parse(json);
-        if (pasted.IsShader != graph.IsShader) throw new InvalidDataException("Шейдерные блоки можно вставлять только в .kneshader.");
+        if (pasted.Nodes.Any(node => !ShaderLibrary.CanPlace(node.Kind, graph.IsShader))) throw new InvalidDataException("Шейдерные блоки можно вставлять только в .kneshader, кроме контейнера и плагинов.");
         pasted.Nodes.RemoveAll(node => node.Kind == ScriptNodeKind.Start);
         if (pasted.Nodes.Count == 0) return;
         if (graph.Nodes.Count + pasted.Nodes.Count > 500) throw new InvalidOperationException("Допускается не более 500 блоков.");

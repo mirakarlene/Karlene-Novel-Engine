@@ -19,11 +19,12 @@ internal static class ShaderRainbow
         void Refresh()
         {
             transform.BeginAnimation(RotateTransform.AngleProperty, null);
-            if (owner.IsLoaded && owner.IsVisible && owner.IsEnabled && CategoryHover.GetAvailable(owner))
+            if (owner.IsLoaded && owner.IsVisible && owner.IsMouseOver && owner.IsEnabled && CategoryHover.GetAvailable(owner))
                 transform.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(0, 360, TimeSpan.FromSeconds(8)) { RepeatBehavior = RepeatBehavior.Forever });
         }
         owner.Loaded += (_, _) => Refresh(); owner.Unloaded += (_, _) => transform.BeginAnimation(RotateTransform.AngleProperty, null);
         owner.IsVisibleChanged += (_, _) => Refresh(); owner.IsEnabledChanged += (_, _) => Refresh();
+        owner.MouseEnter += (_, _) => Refresh(); owner.MouseLeave += (_, _) => Refresh();
         Refresh(); return brush;
     }
 }

@@ -14,7 +14,7 @@ public partial class ScriptEditor
         string source = firstPort >= 0 ? first : second, target = firstPort < 0 ? first : second;
         int output = firstPort >= 0 ? firstPort : secondPort, input = -(firstPort < 0 ? firstPort : secondPort) - 1;
         var from = graph.Nodes.FirstOrDefault(n => n.Id == source); var to = graph.Nodes.FirstOrDefault(n => n.Id == target);
-        if (from == null || to == null || output >= ShaderLibrary.Get(from.Kind).Outputs.Length || input >= ShaderLibrary.Get(to.Kind).Inputs.Length) return false;
+        if (from == null || to == null || !ShaderLibrary.IsData(from) || !ShaderLibrary.IsData(to) || output >= ShaderLibrary.Get(from.Kind).Outputs.Length || input >= ShaderLibrary.Get(to.Kind).Inputs.Length) return false;
         var visited = new HashSet<string>();
         bool DependsOn(string id)
         {
@@ -29,11 +29,11 @@ public partial class ScriptEditor
     private void DisconnectShaderPort(GraphPort port)
     {
         ApplyProperties(repaint: false);
-        if (Document?.Graph is not { IsShader: true } graph) return;
+        if (Document?.Graph is not { IsShader: true } graph || !ShaderLibrary.IsData(graph.Nodes.Single(n => n.Id == port.NodeId))) return;
         Remember();
         if (port.IsOutput)
         {
-            foreach (var node in graph.Nodes)
+            foreach (var node in graph.Nodes.Where(ShaderLibrary.IsData))
                 foreach (string input in node.Shader!.Inputs.Where(pair => pair.Value.Node == port.NodeId && pair.Value.Output == port.OutputIndex).Select(pair => pair.Key).ToArray())
                     node.Shader.Inputs.Remove(input);
         }
@@ -58,6 +58,14 @@ public partial class ScriptEditor
             Text("ShaderPathInput", "Файл .kneshader от корня проекта", node.Path, (changed, value) => changed.Path = value);
             var open = new Button { Name = "OpenShaderContainerButton", Content = "Открыть / создать контейнер…", Margin = new(0, 0, 0, 8) };
             open.Click += (_, _) => OpenSubsystem(node.Id); ExtendedProperties.Children.Add(open);
+            if (node.IsShaderInvocation)
+            {
+                var enabled = new CheckBox { Content = "Включить шейдер", IsChecked = settings.Enabled, Margin = new(0, 0, 0, 8) };
+                enabled.Click += (_, _) => TrackProperties(); ExtendedProperties.Children.Add(enabled);
+                extendedEdits.Add(changed => changed.Shader!.Enabled = enabled.IsChecked == true);
+                ExtendedProperties.Children.Add(new TextBlock { Text = "Снимите галочку, чтобы отключить эффект в этой точке сценария.", TextWrapping = TextWrapping.Wrap, FontSize = 11, Opacity = .65 });
+                return;
+            }
         }
         if (node.Kind == ScriptNodeKind.ShaderTexture)
         {

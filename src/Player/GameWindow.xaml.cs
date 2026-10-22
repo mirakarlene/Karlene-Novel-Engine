@@ -511,6 +511,7 @@ public partial class GameWindow : Window
         ApplyGameplayUi(runtime.Visuals);
         RenderNarrative();
         HandleSceneEnd(runtime.Story);
+        shaders?.SetFrame(runtime.WindowSettings, runtime.Visuals, runtime.Story);
     }
 
     private void RenderConsole()

@@ -102,7 +102,7 @@ internal sealed class ShaderPreviewWindow : Window
         busy = true; int version = programRevision;
         try
         {
-            gpu ??= new();
+            gpu ??= new(this);
             var output = await gpu.RenderAsync(source, [program], project.Engine.Performance.Graphics, (float)clock.Elapsed.TotalSeconds, token: lifetime.Token);
             if (!closed && version == revision) { image.Source = output; renderedRevision = version; renderedSource = source; }
         }

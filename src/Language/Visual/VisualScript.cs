@@ -53,6 +53,7 @@ public sealed partial class VisualScript
         {
             var script = JsonSerializer.Deserialize<VisualScript>(json, JsonOptions)
                          ?? throw new InvalidDataException("Блок-схема не должна содержать null.");
+            script.SetShaderContext();
             if (!script.IsShader) script.DetachLegacyComments();
             foreach (var node in script.Nodes?.Where(node => node != null && node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene) ?? []) node.Category = "flows";
             // Both legacy categories compared a state value to a literal. Preserve the operation,
@@ -78,6 +79,7 @@ public sealed partial class VisualScript
 
     private void ValidateStructure()
     {
+        SetShaderContext();
         if (Version != 1) throw new InvalidDataException("Неподдерживаемая версия блок-схемы.");
         if (!LuaSource.IsIdentifier(FunctionName)) throw new InvalidDataException("Имя функции блок-схемы: латинские буквы, цифры и _, без цифры в начале и ключевых слов Lua.");
         if (Nodes == null || Nodes.Count > 500) throw new InvalidDataException("Допускается не более 500 блоков.");
@@ -101,8 +103,8 @@ public sealed partial class VisualScript
                 throw new InvalidDataException("Свойства блока не должны содержать null.");
             if (node.Category is not ("" or "terminals" or "narrative" or "logic" or "visual" or "audio" or "flows" or "calculations" or "async" or "triggers" or "configurations" or "shaders" or "plugins"))
                 throw new InvalidDataException("Неизвестная группа блока.");
-            if (ShaderLibrary.IsShader(node.Kind) != IsShader) throw new InvalidDataException("Блоки «Шейдеры» размещаются только в отдельных файлах .kneshader; игровые блоки — в .knegraph.");
-            if (IsShader) ShaderLibrary.ValidateNode(node);
+            if (!ShaderLibrary.CanPlace(node.Kind, IsShader)) throw new InvalidDataException("Блоки «Шейдеры» размещаются только в .kneshader, кроме контейнера; игровые блоки — в .knegraph.");
+            if (ShaderLibrary.IsShader(node.Kind)) ShaderLibrary.ValidateNode(node);
             if (new[] { node.Duration, node.OffsetX, node.OffsetY, node.Amount, node.Minimum, node.Maximum, node.Opacity }.Any(v => !double.IsFinite(v)))
                 throw new InvalidDataException("Числовые свойства блока должны быть конечными.");
             if (new[] { node.Text, node.Speaker, node.Path, node.Value }.Any(value => value.Length > 16000))
@@ -127,6 +129,12 @@ public sealed partial class VisualScript
                 catch (ArgumentException error) { Fail(node, error.Message); }
             }
         }
+    }
+
+    private void SetShaderContext()
+    {
+        foreach (var node in Nodes ?? [])
+            if (node != null) node.IsShaderInvocation = !IsShader && node.Kind == ScriptNodeKind.ShaderContainer;
     }
 
     /// <summary>Validates the graph and generates its named Lua function using the KNE API.</summary>
@@ -168,7 +176,7 @@ public sealed partial class VisualScript
     }
 
     // Escape bytes that Lua treats specially; JSON escaping is not Lua escaping (e.g. \uXXXX).
-    private static string Quote(string value)
+    internal static string Quote(string value)
     {
         var result = new StringBuilder("\"");
         foreach (char c in value)
@@ -238,6 +246,7 @@ public enum ScriptComparison
 /// <summary>An editable command and its explicitly ordered output ports.</summary>
 public sealed class ScriptNode
 {
+    [JsonIgnore] internal bool IsShaderInvocation { get; set; }
     /// <summary>Shader-only values and input connections.</summary>
     public ShaderNodeSettings? Shader { get; set; }
     /// <summary>Operands, weighted rows, or reusable named formula steps.</summary>
@@ -403,7 +412,7 @@ public sealed class ScriptNode
     /// <returns>Labels and optional destination identifiers in display order.</returns>
     public IEnumerable<(string Label, string? Target)> Outputs()
     {
-        if (ShaderLibrary.IsShader(Kind)) { foreach (string output in ShaderLibrary.Get(Kind).Outputs) yield return (output, null); yield break; }
+        if (ShaderLibrary.IsData(this)) { foreach (string output in ShaderLibrary.Get(Kind).Outputs) yield return (output, null); yield break; }
         if (Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.Comment) yield break;
         if (Kind == ScriptNodeKind.TextInput)
         {

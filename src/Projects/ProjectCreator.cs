@@ -32,6 +32,7 @@ public static class ProjectCreator
         {
             foreach (string directory in new[] { "scenes", "characters", "backgrounds", "resources", "scripts", "audio", "gui" })
                 Directory.CreateDirectory(Path.Combine(staging, "game", directory));
+            Directory.CreateDirectory(Path.Combine(staging, "game", "shaders"));
             Directory.CreateDirectory(Path.Combine(staging, "engine"));
             Directory.CreateDirectory(Path.Combine(staging, "saves"));
             EngineSettings.WriteTemplate(staging);
@@ -75,6 +76,7 @@ public static class ProjectCreator
                 engine/*.json — окно, оформление, меню и начальное состояние; см. engine/README.txt.
                 game/scripts/gamelogic.lua — инициализация и process_command(command).
                 {{mainScene}} — главная сцена с функцией main().
+                game/shaders — шейдерные файлы .kneshader; подключайте контейнером в нужном месте сценария.
                 Основной способ: {{(authoringMode == ProjectAuthoringMode.Visual ? "визуальные блок-схемы; откройте main.knegraph и редактируйте связанные блоки" : "традиционный код; откройте main.krl и редактируйте функцию main()")}}.
                 init(-10) в начале Lua/KRL подключает файл к загрузке: меньшие числа раньше.
                 main() — единственная глобальная функция старта во всём проекте; дубликаты показывают экран ошибки.

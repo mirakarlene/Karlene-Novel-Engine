@@ -12,7 +12,7 @@ public partial class ScriptEditor
 
     /// <summary>Checks the block limit and the unique entry-point rule without modifying the graph.</summary>
     public bool CanAddBlock(ScriptNodeKind kind) => Document?.Graph is { } graph && BlockLibrary.Definitions.Any(entry => entry.Kind == kind) && graph.Nodes.Count < 500 &&
-        ShaderLibrary.IsShader(kind) == graph.IsShader && (kind != ScriptNodeKind.Start || graph.Nodes.All(node => node.Kind != ScriptNodeKind.Start));
+        ShaderLibrary.CanPlace(kind, graph.IsShader) && (kind != ScriptNodeKind.Start || graph.Nodes.All(node => node.Kind != ScriptNodeKind.Start));
 
     /// <summary>Creates a command at the center of the visible canvas, retaining the viewport and undo history.</summary>
     public void AddBlock(ScriptNodeKind kind, string? category = null)
@@ -20,6 +20,7 @@ public partial class ScriptEditor
         ApplyProperties();
         if (!CanAddBlock(kind)) throw new InvalidOperationException(kind == ScriptNodeKind.Start ? "Блок «Начало» уже существует." : "Добавление блока недоступно: предел 500 блоков.");
         var node = BlockLibrary.Create(kind, category);
+        node.IsShaderInvocation = kind == ScriptNodeKind.ShaderContainer && Document?.Graph?.IsShader == false;
         double centerX = (GraphScroll.ActualWidth / 2 - CanvasPan.X) / ZoomSlider.Value;
         double centerY = (GraphScroll.ActualHeight / 2 - CanvasPan.Y) / ZoomSlider.Value;
         node.X = Math.Clamp(centerX - 105, -1_000_000_000, 1_000_000_000);

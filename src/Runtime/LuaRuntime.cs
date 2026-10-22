@@ -105,6 +105,7 @@ public sealed partial class LuaRuntime : IGameSession
         Register(nameof(ValidateTriggerForLua), "kne_validate_trigger");
         Register(nameof(TriggerMatchesForLua), "kne_trigger_matches");
         Register(nameof(TriggerOnceForLua), "kne_trigger_once");
+        Register(nameof(ShaderSourceForLua), "kne_shader_source");
         lua["project_dir"] = project.Path;
         lua["kne_interactive"] = interactive;
         lua["kne_editor"] = editorSource?.StepCommands == true;
@@ -165,6 +166,20 @@ public sealed partial class LuaRuntime : IGameSession
         // Resolve all paths before executing any project code.
         lua.DoString("state = " + StateLiteral(project.Engine.InitialState), "KNE initial state");
         InitializePlugins();
+        lua.DoString("""
+            function apply_shader(path, enabled)
+                if enabled ~= false then
+                    local result = kne_shader_source(path)
+                    if result[1] ~= "" then error(result[1], 2) end
+                    local setup, problem = load(result[0], "@" .. path .. " · plugins", "t", _G)
+                    if not setup then error(problem, 2) end
+                    setup()
+                end
+                local problem = kne_script_api("apply_shader", table.pack(path, enabled ~= false))
+                if problem ~= "" then error(problem, 2) end
+                kne_editor_pause()
+            end
+            """, "KNE shader activation");
         InitializeNarrative();
         InitializeTextInput();
         InitializeChoices();
@@ -573,6 +588,7 @@ public sealed partial class LuaRuntime : IGameSession
         {
             switch (name)
             {
+                case "apply_shader": SetShader(Text(1)!, arguments[2] is not false); break;
                 case "set_window_title": SetWindowTitle(Text(1)!); break;
                 case "set_window_size": SetWindowSize(Number(1), Number(2)); break;
                 case "set_bg_color": SetBgColor(Text(1)!); break;

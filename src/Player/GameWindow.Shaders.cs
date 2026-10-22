@@ -7,7 +7,6 @@ public partial class GameWindow
     private SceneShaderPresenter? shaders;
     private void InitializeShaders()
     {
-        if (!project.Files.Any(file => ScriptDocument.IsShaderPath(file.FilePath))) return;
         shaders = new(project, (FrameworkElement)Content, ResolveShaderTarget, error => ShowStartupError(error, "Шейдеры GLSL/HLSL"));
         Loaded += async (_, _) => { if (!closed) await shaders.InitializeAsync(); };
     }

@@ -23,7 +23,7 @@ public partial class ScenePreview : UserControl
     private void ConfigureShaders()
     {
         ReleaseShaders();
-        if (project?.Files.Any(file => ScriptDocument.IsShaderPath(file.FilePath)) != true) return;
+        if (project == null) return;
         var owner = project;
         shaders = new(owner, this, shader => shader.Target switch {
             "background" => ShaderBackgroundLayer, "sprite" => CharacterImage, "ui" => ShaderUiLayer,
@@ -235,6 +235,8 @@ public partial class ScenePreview : UserControl
         var theme = project.Engine.Theme;
         string? scenePath = story.Identity?.Scene.Split("::", StringSplitOptions.None)[0];
         shaders?.SetScene(scenePath);
+        if (shaders != null) _ = shaders.SetActiveAsync(visuals.Shaders);
+        shaders?.SetFrame(window, visuals, story);
         if (scenePath != resourceScene)
         {
             if (resourceScene != null && project.Engine.Performance.UnloadPreviousScene) assets.RetainForScene(project, visuals);

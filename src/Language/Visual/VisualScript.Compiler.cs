@@ -199,6 +199,7 @@ public sealed partial class VisualScript
         ScriptNodeKind.ClearSprites => "clear_sprites()",
         ScriptNodeKind.IncludeLua => $"include_lua({Quote(node.Path)})",
         ScriptNodeKind.IncludeCs => $"include_cs({Quote(node.Path)})",
+        ScriptNodeKind.ShaderContainer => $"apply_shader({Quote(node.Path)}, {(node.Shader?.Enabled == false ? "false" : "true")})",
         ScriptNodeKind.Script => $"run_script({Quote(node.Path)})",
         ScriptNodeKind.ConfigureDialogue or ScriptNodeKind.ConfigureButton => $"configure_ui({Quote(node.Kind == ScriptNodeKind.ConfigureDialogue ? "dialogue" : node.UiTarget)}, {Quote(System.Text.Json.JsonSerializer.Serialize(node.Ui ?? GameplayUiStyle.ForTarget(node.Kind == ScriptNodeKind.ConfigureDialogue ? "dialogue" : node.UiTarget), EngineSettings.JsonOptions))})",
         ScriptNodeKind.Join => $"kne_join(state[{Quote(node.Variable)}])",
@@ -279,6 +280,7 @@ public sealed partial class VisualScript
             Fail(node, "выберите игровую кнопку: choice, next, save, load, auto_save или pause");
         if (node.Kind == ScriptNodeKind.ShowScreen && (node.Opacity < 0 || node.Opacity > 1 || node.ScreenLayer is not ("main" or "overlay")))
             Fail(node, "прозрачность должна быть от 0 до 1, слой — main или overlay");
+        if (node.Kind == ScriptNodeKind.ShaderContainer && !ScriptDocument.IsShaderPath(node.Path)) Fail(node, "выберите файл .kneshader");
         if (node.Kind is ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script)
         {
             string extension = Path.GetExtension(node.Path).ToLowerInvariant();
