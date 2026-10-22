@@ -17,11 +17,15 @@ public partial class MainWindow
             string path;
             if (string.IsNullOrWhiteSpace(node.Path))
             {
-                var dialog = new SaveFileDialog { Title = "Создать или открыть подсистему", InitialDirectory = project.Path, FileName = shader ? "subsystem.kneshader" : "subsystem.knegraph", DefaultExt = shader ? ".kneshader" : ".knegraph", Filter = shader ? "Шейдерная блок-схема (*.kneshader)|*.kneshader" : "Блок-схема KNE (*.knegraph)|*.knegraph", OverwritePrompt = false };
+                var dialog = new SaveFileDialog { Title = "Создать или открыть подсистему", InitialDirectory = shader ? ProjectShaderPaths.Directory(project.Path) : project.Path, FileName = shader ? "subsystem.kneshader" : "subsystem.knegraph", DefaultExt = shader ? ".kneshader" : ".knegraph", Filter = shader ? "Шейдерная блок-схема (*.kneshader)|*.kneshader" : "Блок-схема KNE (*.knegraph)|*.knegraph", OverwritePrompt = false };
                 if (dialog.ShowDialog(this) != true) return;
-                path = PathSafety.EnsureInside(project.Path, dialog.FileName);
+                path = ProjectShaderPaths.NewFile(project.Path, dialog.FileName, shader);
             }
-            else path = PathSafety.ResolveRelative(project.Path, node.Path);
+            else
+            {
+                path = PathSafety.ResolveRelative(project.Path, node.Path);
+                if (shader && !File.Exists(path)) path = ProjectShaderPaths.NewFile(project.Path, path, true);
+            }
             if (shader != ScriptDocument.IsShaderPath(path)) throw new InvalidDataException("Контейнер шейдера требует .kneshader; игровая подсистема — .knegraph.");
             await SubsystemFiles.EnsureAsync(project.Path, path, lifetime.Token);
             editor.SetSubsystemPath(nodeId, Path.GetRelativePath(project.Path, path).Replace('\\', '/'));

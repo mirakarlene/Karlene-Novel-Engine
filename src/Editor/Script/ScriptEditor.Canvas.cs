@@ -101,10 +101,10 @@ public partial class ScriptEditor
             summary.SetResourceReference(TextBlock.ForegroundProperty, "Editor.Text"); contents.Children.Add(summary);
             var ports = new Grid { Height = Math.Max(20, NodeHeight(node) - 81), ClipToBounds = false };
             var outputs = node.Outputs().ToArray();
-            string[] shaderInputs = graph.IsShader ? ShaderLibrary.Get(node.Kind).Inputs : [];
+            string[] shaderInputs = ShaderLibrary.IsData(node) ? ShaderLibrary.Get(node.Kind).Inputs : [];
             int rows = Math.Max(1, Math.Max(outputs.Length, shaderInputs.Length));
             for (int i = 0; i < rows; i++) ports.RowDefinitions.Add(new RowDefinition());
-            if (!graph.IsShader && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.Comment))
+            if (!ShaderLibrary.IsData(node) && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.Comment))
             {
                 var input = CreateGraphPort(node, null, portBrush, "Вход");
                 input.HorizontalAlignment = HorizontalAlignment.Left; input.Margin = new Thickness(-12, 0, 0, 0);
@@ -150,7 +150,7 @@ public partial class ScriptEditor
                 bool adapted = BlockAccessibility.GetMode(card) != "normal";
                 var tint = adapted && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.End) ? new SolidColorBrush(presentation.Color) : brush;
                 header.Background = tint; UpdateCardOutline(node, card);
-                if (graph.IsShader && !adapted) header.Background = ShaderRainbow.Create(header);
+                if (ShaderLibrary.IsShader(node.Kind) && !adapted) header.Background = ShaderRainbow.Create(header);
                 title.Foreground = node.Kind == ScriptNodeKind.Start ? Brushes.Black : node.Kind == ScriptNodeKind.End ? Brushes.White : adapted ? new SolidColorBrush(presentation.Foreground) : CalculationCompiler.IsCalculation(node.Kind) || graph.IsShader ? Brushes.Black : Brushes.White;
                 badge.Foreground = title.Foreground;
                 foreach (var port in ports.Children.OfType<GraphPort>()) port.Foreground = tint;
@@ -227,7 +227,7 @@ public partial class ScriptEditor
         port.LostMouseCapture += (_, _) => { if (draggingPort == port) CancelPortDrag(clearPending: false); };
         port.MouseRightButtonUp += (_, e) => Guard(() =>
         {
-            if (Document?.Graph?.IsShader == true) { DisconnectShaderPort(port); e.Handled = true; return; }
+            if (ShaderLibrary.IsData(node)) { DisconnectShaderPort(port); e.Handled = true; return; }
             if (output is not { } index || Document?.Graph == null) return;
             ApplyProperties(repaint: false);
             var graph = Document.Graph;
@@ -251,7 +251,7 @@ public partial class ScriptEditor
     private void ClickGraphPort(GraphPort port)
     {
         GraphScroll.Focus();
-        if (Document?.Graph?.IsShader == true)
+        if (Document?.Graph?.Nodes.FirstOrDefault(node => node.Id == port.NodeId) is { } current && ShaderLibrary.IsData(current))
         {
             if (port.IsOutput) { ApplyProperties(repaint: false); pendingConnection = (port.NodeId, port.OutputIndex!.Value); EditorStatus.Text = "Выберите вход значения другого блока."; }
             else if (pendingConnection is { } source) ConnectShaderPorts(source.Id, source.Port, port.NodeId, port.OutputIndex ?? -1);
@@ -267,7 +267,7 @@ public partial class ScriptEditor
 
     internal bool ConnectGraphPorts(string firstNode, int? firstOutput, string secondNode, int? secondOutput)
     {
-        if (Document?.Graph?.IsShader == true) return ConnectShaderPorts(firstNode, firstOutput ?? -1, secondNode, secondOutput ?? -1);
+        if (Document?.Graph is { } model && model.Nodes.Any(node => (node.Id == firstNode || node.Id == secondNode) && ShaderLibrary.IsData(node))) return ConnectShaderPorts(firstNode, firstOutput ?? -1, secondNode, secondOutput ?? -1);
         if (firstOutput.HasValue == secondOutput.HasValue || firstNode == secondNode || Document?.Graph is not { } graph) return false;
         string source = firstOutput.HasValue ? firstNode : secondNode;
         string target = firstOutput.HasValue ? secondNode : firstNode;
@@ -347,7 +347,7 @@ public partial class ScriptEditor
         var map = graph.Nodes.ToDictionary(n => n.Id);
         foreach (var node in graph.Nodes)
         {
-            if (graph.IsShader)
+            if (ShaderLibrary.IsData(node))
             {
                 foreach (var (input, connection) in node.Shader!.Inputs)
                 {

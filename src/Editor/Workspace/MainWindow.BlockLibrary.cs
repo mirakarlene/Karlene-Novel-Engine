@@ -20,7 +20,7 @@ public partial class MainWindow
     {
         try
         {
-            if (ShaderLibrary.IsShader(entry.Kind) && ActiveEditor.Document?.Graph?.IsShader != true)
+            if (ShaderLibrary.IsShader(entry.Kind) && entry.Kind != ScriptNodeKind.ShaderContainer && ActiveEditor.Document?.Graph?.IsShader != true)
             {
                 var warning = new Window { Owner = this, Title = "Шейдерная блок-схема", Width = 480, Height = 220, ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterOwner };
                 var body = new System.Windows.Controls.StackPanel { Margin = new Thickness(24) };

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using System.Numerics;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -94,20 +95,55 @@ internal sealed class GraphicsLayer : IDisposable
 /// <summary>Shares one native context between layers of a window; the last release terminates its worker.</summary>
 internal sealed class SharedGraphicsWorker
 {
-    private sealed record Job(GraphicsFrame Frame, GraphicsSettings Settings, Action<GraphicsPixels?, Exception?> Complete);
+    private sealed record Job(GraphicsSettings? Settings, Func<NativeGraphicsRenderer, GraphicsPixels?> Render, Action<GraphicsPixels?, Exception?> Complete, bool Retain);
     private static readonly ConditionalWeakTable<Window, SharedGraphicsWorker> workers = new();
+    private static readonly object workerLock = new();
     private readonly BlockingCollection<Job> jobs = new(8);
     private int references;
     private volatile bool released;
+    private readonly TaskCompletionSource stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
     internal Thread WorkerThread { get; }
     private SharedGraphicsWorker() { WorkerThread = new Thread(Work) { IsBackground = true, Name = "KNE shared graphics preparation" }; WorkerThread.Start(); }
     internal static SharedGraphicsWorker Acquire(Window window)
     {
-        if (!workers.TryGetValue(window, out var worker) || worker.released) { workers.Remove(window); worker = new(); workers.Add(window, worker); }
-        worker.references++; return worker;
+        lock (workerLock)
+        {
+            if (!workers.TryGetValue(window, out var worker) || worker.released) { workers.Remove(window); worker = new(); workers.Add(window, worker); }
+            worker.references++; return worker;
+        }
     }
-    internal bool Enqueue(GraphicsFrame frame, GraphicsSettings settings, Action<GraphicsPixels?, Exception?> complete) => !released && jobs.TryAdd(new(frame, settings, complete));
-    internal void Release() { if (--references == 0) { released = true; jobs.CompleteAdding(); } }
+    internal static SharedGraphicsWorker CreateStandalone() => new() { references = 1 };
+    internal bool Enqueue(GraphicsFrame frame, GraphicsSettings settings, Action<GraphicsPixels?, Exception?> complete) => !released && jobs.TryAdd(new(settings, renderer => renderer.Render(frame, settings.MsaaSamples), complete, false));
+    internal Task<GraphicsPixels> RenderShadersAsync(BitmapSource source, CompiledShaderGraph[] programs, GraphicsSettings settings, float seconds, Vector2 origin, Vector2 screenSize, CancellationToken token)
+    {
+        var completion = new TaskCompletionSource<GraphicsPixels>(TaskCreationOptions.RunContinuationsAsynchronously);
+        GraphicsPixels Render(NativeGraphicsRenderer renderer)
+        {
+            token.ThrowIfCancellationRequested();
+            var texture = GraphicsTextures.Get(source);
+            return renderer.RenderChain(new(source.PixelWidth, source.PixelHeight, [new(texture, new Rect(0, 0, source.PixelWidth, source.PixelHeight))]), programs, seconds, origin, screenSize);
+        }
+        void Complete(GraphicsPixels? pixels, Exception? error)
+        {
+            if (error != null) completion.TrySetException(error);
+            else if (token.IsCancellationRequested) { pixels?.Dispose(); completion.TrySetCanceled(token); }
+            else completion.TrySetResult(pixels!);
+        }
+        if (released || !jobs.TryAdd(new(settings, Render, Complete, true))) throw new InvalidOperationException("Очередь рендера занята или закрыта.");
+        return completion.Task;
+    }
+    internal void Release() { lock (workerLock) { if (--references == 0) { released = true; jobs.CompleteAdding(); } } }
+    internal Task ReleaseAsync() { Release(); return released ? stopped.Task : Task.CompletedTask; }
+    internal async Task ReleaseShaderAsync()
+    {
+        try
+        {
+            var trimmed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (!released && jobs.TryAdd(new(null, _ => null, (_, error) => { if (error == null) trimmed.TrySetResult(); else trimmed.TrySetException(error); }, true)))
+                await trimmed.Task.ConfigureAwait(false);
+        }
+        finally { await ReleaseAsync().ConfigureAwait(false); }
+    }
     private void Work()
     {
         NativeGraphicsRenderer? renderer = null; string? api = null;
@@ -115,17 +151,25 @@ internal sealed class SharedGraphicsWorker
         {
             foreach (var job in jobs.GetConsumingEnumerable())
             {
-                if (released) break;
+                if (released) { job.Complete(null, new OperationCanceledException("Графическое окно закрыто.")); break; }
                 GraphicsPixels? result = null; Exception? failure = null;
                 try
                 {
+                    if (job.Settings == null) { renderer?.ReleasePreparationResources(); job.Complete(null, null); continue; }
                     if (api != job.Settings.Api) { renderer?.Dispose(); renderer = null; renderer = NativeGraphicsRenderer.Create(job.Settings.Api, false); api = job.Settings.Api; }
-                    renderer!.SetCacheBudget(job.Settings.CacheBudgetBytes); result = renderer.Render(job.Frame, job.Settings.MsaaSamples); renderer.ReleasePreparationResources();
+                    renderer!.SetCacheBudget(job.Settings.CacheBudgetBytes); result = job.Render(renderer);
+                    if (!job.Retain) renderer.ReleasePreparationResources();
                 }
+                catch (OperationCanceledException error) { result?.Dispose(); result = null; failure = error; }
                 catch (Exception error) when (error is not OutOfMemoryException) { result?.Dispose(); result = null; failure = error; renderer?.Dispose(); renderer = null; api = null; }
                 job.Complete(result, failure);
             }
         }
-        finally { renderer?.Dispose(); while (jobs.TryTake(out _)) { } jobs.Dispose(); }
+        finally
+        {
+            renderer?.Dispose();
+            while (jobs.TryTake(out var abandoned)) abandoned.Complete(null, new OperationCanceledException("Графическое окно закрыто."));
+            jobs.Dispose(); stopped.TrySetResult();
+        }
     }
 }

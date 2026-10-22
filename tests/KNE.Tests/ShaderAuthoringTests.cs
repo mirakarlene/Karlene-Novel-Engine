@@ -123,16 +123,22 @@ public sealed class ShaderAuthoringTests
     }
 
     [Fact]
-    public async Task RootShadersExcludeReferencedContainersButValidateRootlessCycles()
+    public async Task Presenter_LoadsOnlyExplicitlyActivatedRootsAndValidatesTheirContainers()
     {
         using var fixture = new TempProject();
-        fixture.Write("child.kneshader", ShaderGraphCompiler.Create().Serialize());
+        var child = ShaderGraphCompiler.Create(); var invert = BlockLibrary.Create(ScriptNodeKind.ShaderInvert); invert.Id = "invert";
+        child.Nodes.Add(invert); child.Nodes[1].Shader!.Inputs["Color"] = new(invert.Id);
+        fixture.Write("child.kneshader", child.Serialize());
         var parent = ShaderGraphCompiler.Create(); var container = BlockLibrary.Create(ScriptNodeKind.ShaderContainer); container.Id = "child"; container.Path = "child.kneshader"; parent.Nodes.Add(container);
         parent.Nodes.Single(node => node.Kind == ScriptNodeKind.ShaderOutput).Shader!.Inputs["Color"] = new("child");
         string root = fixture.Write("root.kneshader", parent.Serialize());
-        var programs = SceneShaderPresenter.LoadPrograms(await fixture.LoadAsync()); Assert.Single(programs); Assert.Equal(root, programs[0].Path);
+        var project = await fixture.LoadAsync();
+        Assert.Empty(SceneShaderPresenter.LoadPrograms(project));
+        var programs = SceneShaderPresenter.LoadPrograms(project, ["root.kneshader"]); Assert.Single(programs); Assert.Equal(root, programs[0].Path);
         container.Path = "root.kneshader"; fixture.Write("root.kneshader", parent.Serialize());
-        var cyclic = await fixture.LoadAsync(); Assert.Throws<InvalidDataException>(() => SceneShaderPresenter.LoadPrograms(cyclic));
+        var cyclic = await fixture.LoadAsync();
+        Assert.Empty(SceneShaderPresenter.LoadPrograms(cyclic));
+        Assert.Throws<InvalidDataException>(() => SceneShaderPresenter.LoadPrograms(cyclic, ["root.kneshader"]));
     }
 
     [GpuTheory]
@@ -153,6 +159,8 @@ public sealed class ShaderAuthoringTests
             try
             {
                 window.Show(); await presenter.InitializeAsync();
+                Assert.Equal(0, presenter.SurfaceCount); Assert.Empty(panel.Children.OfType<Image>());
+                await presenter.SetActiveAsync(["effect.kneshader"]);
                 await Until(() => failure != null || panel.Children.OfType<Image>().Any(image => image.Source != null));
                 Assert.Null(failure); Assert.Equal(1, presenter.SurfaceCount); Assert.True(target.IsHitTestVisible);
                 Assert.Same(target, panel.InputHitTest(new Point(panel.ActualWidth / 2, panel.ActualHeight / 2)));

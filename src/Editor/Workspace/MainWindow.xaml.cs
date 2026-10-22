@@ -500,7 +500,7 @@ public partial class MainWindow : Window
         await RunOperationAsync(async () =>
         {
             string path = dialog.FileName;
-            if (dialog.FilterIndex == 2 && !ScriptDocument.IsShaderPath(path)) path = Path.ChangeExtension(path, ".kneshader");
+            path = ProjectShaderPaths.NewFile(project.Path, path, dialog.FilterIndex == 2 || ScriptDocument.IsShaderPath(path));
             await ScriptDocument.CreateVisualAsync(project.Path, path, lifetime.Token);
             await OpenProjectAsync(project.Path);
             await OpenScriptAsync(path);

@@ -11,6 +11,10 @@ public sealed record ExposedShaderParameter(string Id, string Name, ScriptNodeKi
 /// <summary>Portable source and the presentation target of a validated shader graph.</summary>
 public sealed record CompiledShaderGraph(string Glsl, string Target, string Screen, bool Animated, IReadOnlyList<ExposedShaderParameter> Parameters)
 {
+    /// <summary>True only when the output is an unmodified source texture, so presentation can bypass the GPU.</summary>
+    public bool IsIdentity { get; init; }
+    /// <summary>Host plugin commands evaluated in the game coroutine when this shader is explicitly invoked.</summary>
+    public string ActivationScript { get; init; } = "";
     /// <summary>Translates the same vertex/fragment pair to HLSL using SPIRV-Cross.</summary>
     public string ToHlsl() => SpirvCompilation.CompileVertexFragment(Encoding.UTF8.GetBytes(NativeGraphicsRenderer.VertexShader), Encoding.UTF8.GetBytes(Glsl), CrossCompileTarget.HLSL).FragmentShader;
 }
@@ -32,19 +36,25 @@ public static class ShaderGraphCompiler
         var source = new StringBuilder(Header); var parameters = new List<ExposedShaderParameter>();
         var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (sourcePath != null) files.Add(PathSafety.EnsureInside(root, sourcePath));
-        int serial = 0, total = 0; bool animated = false; int samples = 0;
+        int serial = 0, total = 0; int samples = 0;
+        var activationScripts = new Dictionary<string, string>(StringComparer.Ordinal);
+        var identities = new Dictionary<string, bool>(StringComparer.Ordinal);
+        var animations = new Dictionary<string, bool>(StringComparer.Ordinal);
         var samplingCosts = new Dictionary<string, long>(StringComparer.Ordinal);
         string CompileGraph(VisualScript model, string identity, int depth)
         {
             if (depth > 12 || (total += model.Nodes.Count) > 500) throw new InvalidDataException("Шейдер: предел 12 вложений / 500 блоков с подсистемами.");
             _ = model.Serialize();
             if (!model.IsShader) throw new InvalidDataException("Контейнер должен ссылаться на .kneshader.");
-            var map = model.Nodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
+            var activation = new StringBuilder(); AppendPluginCommands(model, activation);
+            var children = new Dictionary<string, string>(StringComparer.Ordinal);
+            var data = model.Nodes.Where(node => ShaderLibrary.IsShader(node.Kind)).ToArray();
+            var map = data.ToDictionary(node => node.Id, StringComparer.Ordinal);
             var outputs = model.Nodes.Where(node => node.Kind == ScriptNodeKind.ShaderOutput).ToArray();
             if (outputs.Length != 1) throw new InvalidDataException("В шейдере должен быть ровно один Fragment Output.");
             var names = map.Keys.ToDictionary(id => id, _ => "kne_n" + serial++, StringComparer.Ordinal);
             var done = new HashSet<string>(); var active = new HashSet<string>();
-            foreach (var node in model.Nodes)
+            foreach (var node in data)
                 foreach (var link in node.Shader!.Inputs.Values)
                     if (!map.TryGetValue(link.Node, out var from) || link.Output >= ShaderLibrary.Get(from.Kind).Outputs.Length)
                         Fail(node, "вход ссылается на отсутствующий блок / выход");
@@ -70,7 +80,7 @@ public static class ShaderGraphCompiler
                         "B" => "vec4(0.5)", _ => "kne_sample(" + uv + ")" };
                 }
                 string color = I("Color"), coord = "(" + I("UV") + ").xy";
-                string body; int loopSamples = 1;
+                string body; int loopSamples = 1; bool isIdentity = false, isAnimated = false;
                 switch (node.Kind)
                 {
                     case ScriptNodeKind.ShaderContainer:
@@ -81,10 +91,11 @@ public static class ShaderGraphCompiler
                         if (new FileInfo(path).Length > 2 * 1024 * 1024) Fail(node, "файл больше 2 МБ");
                         var nested = VisualScript.Parse(File.ReadAllText(path));
                         string child = CompileGraph(nested, node.Path, depth + 1); files.Remove(path);
-                        body = "return " + child + "(" + coord + ");"; break;
-                    case ScriptNodeKind.ShaderTexture: body = "return kne_sample(" + coord + ");"; samples++; break;
+                        children[node.Id] = activationScripts[child];
+                        body = "return " + child + "(" + coord + ");"; isIdentity = identities[child] && !node.Shader.Inputs.ContainsKey("UV"); isAnimated = animations[child]; break;
+                    case ScriptNodeKind.ShaderTexture: body = "return kne_sample(" + coord + ");"; isIdentity = !node.Shader.Inputs.ContainsKey("UV"); samples++; break;
                     case ScriptNodeKind.ShaderUv: body = "return vec4(uv,0,1);"; break;
-                    case ScriptNodeKind.ShaderTime: animated = true; body = "return vec4(kneFrame.x);"; break;
+                    case ScriptNodeKind.ShaderTime: isAnimated = true; body = "return vec4(kneFrame.x);"; break;
                     case ScriptNodeKind.ShaderScreenPosition: body = "return vec4(kneOrigin.xy+uv*kneOrigin.zw,0,1);"; break;
                     case ScriptNodeKind.ShaderFloat:
                     case ScriptNodeKind.ShaderVector:
@@ -104,14 +115,17 @@ public static class ShaderGraphCompiler
                     case ScriptNodeKind.ShaderRotate: body = $"return vec4(kne_rotate({coord}-0.5,{P("amount")})+0.5,0,1);"; break;
                     case ScriptNodeKind.ShaderPolar: body = $"vec2 p={coord}-0.5; return vec4(length(p)*2.0,atan(p.y,p.x)/6.2831853+0.5,0,1);"; break;
                     case ScriptNodeKind.ShaderFlipbook:
-                        body = $"vec2 cells=vec2({P("columns")},{P("rows")}); float f=mod(floor(({I("Time")}).x*{P("speed")}),cells.x*cells.y);return vec4((fract({coord})+vec2(mod(f,cells.x),floor(f/cells.x)))/cells,0,1);"; animated |= !node.Shader.Inputs.ContainsKey("Time"); break;
+                        body = $"vec2 cells=vec2({P("columns")},{P("rows")}); float f=mod(floor(({I("Time")}).x*{P("speed")}),cells.x*cells.y);return vec4((fract({coord})+vec2(mod(f,cells.x),floor(f/cells.x)))/cells,0,1);"; isAnimated = !node.Shader.Inputs.ContainsKey("Time"); break;
                     case ScriptNodeKind.ShaderTwirl: body = $"vec2 p={coord}-0.5;return vec4(kne_rotate(p,length(p)*{P("amount")})+0.5,0,1);"; break;
                     case ScriptNodeKind.ShaderSimplex: body = $"return vec4(vec3(kne_simplex({coord}*{P("scale")})*0.5+0.5),1);"; break;
                     case ScriptNodeKind.ShaderVoronoi: body = $"return vec4(vec3(kne_voronoi({coord}*{P("scale")})),1);"; break;
                     case ScriptNodeKind.ShaderCheckerboard: body = $"vec2 p=floor({coord}*{P("scale")});return vec4(vec3(mod(p.x+p.y,2.0)),1);"; break;
                     case ScriptNodeKind.ShaderLinearGradient: body = $"return mix({I("A")},{I("B")},clamp({coord}.x,0.0,1.0));"; break;
                     case ScriptNodeKind.ShaderRadialGradient: body = $"return mix({I("A")},{I("B")},clamp(length({coord}-0.5)*2.0,0.0,1.0));"; break;
-                    case ScriptNodeKind.ShaderSplit: case ScriptNodeKind.ShaderOutput: body = "return " + color + ";"; break;
+                    case ScriptNodeKind.ShaderSplit: case ScriptNodeKind.ShaderOutput:
+                        body = "return " + color + ";";
+                        isIdentity = node.Kind == ScriptNodeKind.ShaderOutput && (!node.Shader.Inputs.TryGetValue("Color", out var colorLink) || identities[names[colorLink.Node]]);
+                        break;
                     case ScriptNodeKind.ShaderCombine: body = $"return vec4(({I("R")}).x,({I("G")}).x,({I("B")}).x,({I("A")}).x);"; break;
                     case ScriptNodeKind.ShaderHueShift: body = $"vec4 c={color};vec3 k=vec3(0.57735027);float a={P("amount")}*6.2831853;c.rgb=c.rgb*cos(a)+cross(k,c.rgb)*sin(a)+k*dot(k,c.rgb)*(1.0-cos(a));return c;"; break;
                     case ScriptNodeKind.ShaderSaturation: body = $"vec4 c={color};c.rgb=mix(vec3(dot(c.rgb,vec3(.2126,.7152,.0722))),c.rgb,{P("amount")});return c;"; break;
@@ -132,7 +146,7 @@ public static class ShaderGraphCompiler
                         body = $"vec4 c=vec4(0);for(int i=0;i<{count};i++)c+={I("Color", "uv+(float(i)/" + N(count - 1) + "-.5)*vec2(" + P("x") + "," + P("y") + ")/kneFrame.yz")};return c/{N(count)};"; break;
                     case ScriptNodeKind.ShaderChromatic: body = $"vec4 c={color};c.r=({I("Color", "uv+vec2(" + P("amount") + "/kneFrame.y,0)")}).r;c.b=({I("Color", "uv-vec2(" + P("amount") + "/kneFrame.y,0)")}).b;return c;"; samples += 3; break;
                     case ScriptNodeKind.ShaderVignette: body = $"vec4 c={color};c.rgb*=1.0-clamp(dot(uv-.5,uv-.5)*2.0*{P("amount")},0.0,1.0);return c;"; break;
-                    case ScriptNodeKind.ShaderScanlines: animated = true; body = $"vec4 c={color};c.rgb*=1.0-{P("amount")}*(.5+.5*sin((uv.y*kneFrame.z+kneFrame.x*8.0)*3.14159265));return c;"; break;
+                    case ScriptNodeKind.ShaderScanlines: isAnimated = true; body = $"vec4 c={color};c.rgb*=1.0-{P("amount")}*(.5+.5*sin((uv.y*kneFrame.z+kneFrame.x*8.0)*3.14159265));return c;"; break;
                     case ScriptNodeKind.ShaderLensDistortion: body = $"vec2 p=uv-.5;return {I("Color", "p*(1.0+" + P("amount") + "*dot(p,p))+.5")};"; break;
                     case ScriptNodeKind.ShaderPixelate: body = $"return {I("Color", "(floor(uv*kneFrame.yz/" + P("amount") + ")+.5)*" + P("amount") + "/kneFrame.yz")};"; break;
                     case ScriptNodeKind.ShaderSharpen: body = $"vec4 c={color};vec4 n=({I("Color", "uv+vec2(1,0)/kneFrame.yz")}+{I("Color", "uv-vec2(1,0)/kneFrame.yz")}+{I("Color", "uv+vec2(0,1)/kneFrame.yz")}+{I("Color", "uv-vec2(0,1)/kneFrame.yz")})*.25;return vec4(c.rgb+(c.rgb-n.rgb)*{P("amount")},c.a);"; samples += 5; break;
@@ -156,12 +170,23 @@ public static class ShaderGraphCompiler
                 cost *= loopSamples;
                 if (cost > 512) Fail(node, "больше 512 выборок текстуры на пиксель; уменьшите качество / вложенность размытия");
                 samplingCosts[names[node.Id]] = cost;
+                identities[names[node.Id]] = isIdentity;
+                animations[names[node.Id]] = isAnimated || node.Shader.Inputs.Values.Any(link => animations[names[link.Node]]);
                 source.AppendLine("// block " + Convert.ToHexString(Encoding.UTF8.GetBytes(node.Id)));
                 source.Append("vec4 ").Append(names[node.Id]).Append("(vec2 uv){").Append(body).AppendLine("}");
                 active.Remove(node.Id); done.Add(node.Id); return names[node.Id];
             }
             // Validate disconnected drafts too: a cycle must not hide outside the output branch.
-            foreach (var node in model.Nodes) Visit(node);
+            foreach (var node in data) Visit(node);
+            var reachable = new HashSet<string>(StringComparer.Ordinal);
+            void AddChildren(ScriptNode node)
+            {
+                if (!reachable.Add(node.Id)) return;
+                foreach (var link in node.Shader!.Inputs.Values) AddChildren(map[link.Node]);
+                if (children.TryGetValue(node.Id, out string? setup)) activation.Append(setup);
+            }
+            AddChildren(outputs[0]);
+            activationScripts[names[outputs[0].Id]] = activation.ToString();
             return names[outputs[0].Id];
         }
         string final = CompileGraph(graph, sourcePath == null ? "shader" : Path.GetRelativePath(root, sourcePath).Replace('\\', '/'), 0);
@@ -171,7 +196,33 @@ public static class ShaderGraphCompiler
         if (targets.Length > 1) throw new InvalidDataException("Один .kneshader применяется к одной цели. Используйте отдельный файл для другой цели.");
         var target = targets.FirstOrDefault();
         if (target.Target == "screen" && string.IsNullOrWhiteSpace(target.Screen)) throw new InvalidDataException("Укажите название экрана в блоке Texture.");
-        return new(source.ToString(), target.Target ?? "scene", target.Screen ?? "", animated, parameters);
+        return new(source.ToString(), target.Target ?? "scene", target.Screen ?? "", animations[final], parameters) { IsIdentity = identities[final], ActivationScript = activationScripts[final] };
+    }
+    private static void AppendPluginCommands(VisualScript graph, StringBuilder code)
+    {
+        var plugins = graph.Nodes.Where(node => ShaderLibrary.IsPlugin(node.Kind)).ToDictionary(node => node.Id, StringComparer.Ordinal);
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var active = new HashSet<string>(StringComparer.Ordinal);
+        void Visit(ScriptNode node)
+        {
+            if (!active.Add(node.Id)) Fail(node, "цикл плагинных команд");
+            if (!visited.Add(node.Id)) { active.Remove(node.Id); return; }
+            string extension = Path.GetExtension(node.Path).ToLowerInvariant();
+            string command = node.Kind switch { ScriptNodeKind.IncludeLua => "include_lua", ScriptNodeKind.IncludeCs => "include_cs", _ => "run_script" };
+            if (node.Path.Length == 0 || (node.Kind == ScriptNodeKind.IncludeLua && extension != ".lua") ||
+                (node.Kind == ScriptNodeKind.IncludeCs && extension != ".cs") ||
+                (node.Kind == ScriptNodeKind.Script && extension is not (".lua" or ".krl" or ".cs"))) Fail(node, "выберите файл плагина подходящего типа");
+            code.Append(command).Append('(').Append(VisualScript.Quote(node.Path)).AppendLine(")");
+            if (node.Next != null)
+            {
+                if (!plugins.TryGetValue(node.Next, out var next)) Fail(node, "выход плагина подключается только к другому плагину");
+                Visit(plugins[node.Next]);
+            }
+            active.Remove(node.Id);
+        }
+        var incoming = plugins.Values.Select(node => node.Next).Where(next => next != null).ToHashSet(StringComparer.Ordinal);
+        foreach (var node in plugins.Values.Where(node => !incoming.Contains(node.Id))) Visit(node);
+        foreach (var node in plugins.Values) if (!visited.Contains(node.Id)) Visit(node);
     }
     private static void Fail(ScriptNode node, string message) => throw new InvalidDataException($"Шейдер, блок «{node.Title}» ({node.Id}): {message}.");
     private const string Header = """

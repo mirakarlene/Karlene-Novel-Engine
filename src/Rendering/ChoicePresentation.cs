@@ -36,10 +36,12 @@ public sealed class ChoiceOptionButton : Button
     /// <summary>Whether this answer can advance the story.</summary>
     public bool IsAvailable => option.IsEnabled;
     internal bool Animated => !option.IsEnabled && option.Effect is "glitch" or "hide" or "scramble";
+    internal bool IsAnimating { get; set; }
     protected override void OnClick() { if (IsAvailable && IsEnabled) base.OnClick(); }
 
     internal void ApplyEffect(double seconds, bool animate)
     {
+        IsAnimating = animate && Animated;
         label.Text = option.Text; label.TextDecorations = null;
         label.Opacity = 1; label.RenderTransform = Transform.Identity;
         if (option.IsEnabled) return;
@@ -152,6 +154,10 @@ internal sealed class ChoicePresentation
         else animation.Stop();
     }
     internal bool IsAnimating => animation.IsEnabled;
-    internal void Stop() { animate = false; animation.Stop(); }
+    internal void Stop()
+    {
+        animate = false; animation.Stop();
+        foreach (var button in panel.Children.OfType<ChoiceOptionButton>()) button.IsAnimating = false;
+    }
     internal void Reset() { Stop(); rendered = null; panel.Children.Clear(); timer.Visibility = Visibility.Collapsed; }
 }

@@ -8,6 +8,8 @@ public sealed record ShaderConnection(string Node, int Output = 0);
 /// <summary>Persisted shader block arguments and named input links.</summary>
 public sealed class ShaderNodeSettings
 {
+    /// <summary>Whether a gameplay container enables or removes its referenced effect.</summary>
+    public bool Enabled { get; set; } = true;
     public Dictionary<string, ShaderConnection> Inputs { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, double> Values { get; set; } = new(StringComparer.Ordinal);
     public string Name { get; set; } = "parameter";
@@ -24,8 +26,11 @@ public sealed record ShaderDefinition(ScriptNodeKind Kind, string Title, string 
 /// <summary>The shader-only data-flow library, independent of Lua commands.</summary>
 public static class ShaderLibrary
 {
+    internal static bool IsPlugin(ScriptNodeKind kind) => kind is ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script;
+    internal static bool CanPlace(ScriptNodeKind kind, bool shaderGraph) => kind == ScriptNodeKind.ShaderContainer || IsPlugin(kind) || IsShader(kind) == shaderGraph;
+    internal static bool IsData(ScriptNode node) => IsShader(node.Kind) && !node.IsShaderInvocation;
     public static IReadOnlyList<ShaderDefinition> Definitions { get; } = [
-        new(ScriptNodeKind.ShaderContainer, "Контейнер GLSL/HLSL", "Вложенный .kneshader; двойной клик открывает или создаёт файл.", ["UV"]),
+        new(ScriptNodeKind.ShaderContainer, "Контейнер GLSL/HLSL", "Вызывает .kneshader в нужный момент сценария; внутри шейдера — функция значений. Двойной клик открывает файл.", ["UV"]),
         new(ScriptNodeKind.ShaderTexture, "Texture · Текстура", "Цель шейдера: фон, спрайт, UI, именованный экран или вся сцена.", ["UV"]),
         new(ScriptNodeKind.ShaderUv, "UV", "Нормализованные координаты пикселя 0…1.", []),
         new(ScriptNodeKind.ShaderTime, "Time · Время", "Время в секундах для анимации.", []),

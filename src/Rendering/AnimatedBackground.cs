@@ -14,6 +14,7 @@ public sealed class AnimatedBackground : FrameworkElement
     public double Phase { get => (double)GetValue(PhaseProperty); set => SetValue(PhaseProperty, value); }
     private GameTheme theme = new();
     private bool motion = true;
+    internal bool IsAnimating => IsVisible && motion && quality != "low" && theme.Pattern && theme.PatternStyle is not ("none" or "ornament");
     private readonly GraphicsFrameClock clock;
     private GraphicsLayer? graphics;
     private string quality = "high";
