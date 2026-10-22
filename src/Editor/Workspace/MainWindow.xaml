@@ -46,7 +46,7 @@
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-                <DockPanel Margin="0,0,0,16"><Button x:Name="AppearanceButton" DockPanel.Dock="Right" Content="Оформление" Padding="10,6" Click="BtnAppearance_Click"/><Button x:Name="SceneParametersButton" DockPanel.Dock="Right" Content="Параметры сцены" Margin="0,0,8,0" Padding="10,6" Click="SceneParameters_Click"/><Button x:Name="ProjectParametersButton" DockPanel.Dock="Right" Content="Параметры проекта" Margin="0,0,8,0" Padding="10,6" Click="ProjectParameters_Click"/><TextBlock x:Name="ProjectTitleTextBlock" FontSize="24" FontWeight="Bold"/></DockPanel>
+                <DockPanel Margin="0,0,0,16"><WrapPanel x:Name="PluginToolbar" DockPanel.Dock="Right"/><Button x:Name="AppearanceButton" DockPanel.Dock="Right" Content="Оформление" Padding="10,6" Click="BtnAppearance_Click"/><Button x:Name="SceneParametersButton" DockPanel.Dock="Right" Content="Параметры сцены" Margin="0,0,8,0" Padding="10,6" Click="SceneParameters_Click"/><Button x:Name="ProjectParametersButton" DockPanel.Dock="Right" Content="Параметры проекта" Margin="0,0,8,0" Padding="10,6" Click="ProjectParameters_Click"/><TextBlock x:Name="ProjectTitleTextBlock" FontSize="24" FontWeight="Bold"/></DockPanel>
                 <Grid Grid.Row="1">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

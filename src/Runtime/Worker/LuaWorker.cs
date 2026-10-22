@@ -8,9 +8,9 @@ namespace KNE;
 internal sealed record WorkerRequest(long Id, string Command, int Option = 0, string? Text = null, GameCheckpoint? Checkpoint = null,
     EditorPreviewSource? EditorSource = null, double Seconds = 0, bool Cancel = false);
 internal sealed record SessionSnapshot(RuntimeWindowSettings Window, StoryFrame Story, SceneVisuals Visuals,
-    PreviewLocation? Location = null, JsonElement Variables = default, bool TransitionInProgress = false, double LogicMilliseconds = 0);
+    PreviewLocation? Location = null, JsonElement Variables = default, bool TransitionInProgress = false, double LogicMilliseconds = 0, IReadOnlyList<string>? PluginScreens = null);
 internal sealed record WorkerMessage(string Type, long Id = 0, string? Text = null, SessionSnapshot? Snapshot = null,
-    GameCheckpoint? Checkpoint = null, string? Error = null, string? ErrorType = null, GameErrorReport? Report = null);
+    GameCheckpoint? Checkpoint = null, string? Error = null, string? ErrorType = null, GameErrorReport? Report = null, bool InputHandled = false);
 
 internal static class LuaWorker
 {
@@ -66,6 +66,7 @@ internal static class LuaWorker
                         variablesUpdated: value => Send(new("variables", Snapshot: new(runtime!.WindowSettings, runtime.Story, runtime.Visuals,
                             runtime.Location, value, runtime.TransitionInProgress))));
                     var logicWatch = System.Diagnostics.Stopwatch.StartNew();
+                    bool inputHandled = false;
                     switch (request.Command)
                     {
                         case "start": await runtime.StartAsync().ConfigureAwait(false); break;
@@ -77,16 +78,18 @@ internal static class LuaWorker
                         case "command": await runtime.ProcessCommandAsync(request.Text!).ConfigureAwait(false); break;
                         case "restore": await runtime.RestoreAsync(request.Checkpoint!).ConfigureAwait(false); break;
                         case "checkpoint": break;
+                        case "plugin_input": inputHandled = await runtime.InterceptInputAsync(JsonSerializer.Deserialize<PluginInput>(request.Text!)!).ConfigureAwait(false); break;
+                        case "plugin_event_input": await runtime.NotifyPluginInputAsync(JsonSerializer.Deserialize<PluginInput>(request.Text!)!).ConfigureAwait(false); break;
                         default: throw new InvalidDataException("Неизвестная команда рабочего процесса.");
                     }
                     logicWatch.Stop();
                     GameCheckpoint? checkpoint = null;
-                    try { if (request.EditorSource == null) checkpoint = await runtime.GetCheckpointAsync().ConfigureAwait(false); }
+                    try { if (request.EditorSource == null) checkpoint = await runtime.CapturePluginCheckpointAsync(request.Command == "checkpoint").ConfigureAwait(false); }
                     catch (Exception ex) when (request.Command != "checkpoint")
                     {
                         Send(new("log", Text: "Сохранение недоступно: " + ex.Message));
                     }
-                    Send(new("result", request.Id, Snapshot: new(runtime.WindowSettings, runtime.Story, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress, logicWatch.Elapsed.TotalMilliseconds), Checkpoint: checkpoint));
+                    Send(new("result", request.Id, Snapshot: new(runtime.WindowSettings, runtime.Story, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress, logicWatch.Elapsed.TotalMilliseconds, runtime.PluginScreens), Checkpoint: checkpoint, InputHandled: inputHandled));
                 }
                 catch (Exception ex) { Send(new("error", request.Id,
                     Snapshot: runtime == null ? null : new(runtime.WindowSettings, runtime.Story, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress),

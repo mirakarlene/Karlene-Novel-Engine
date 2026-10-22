@@ -11,13 +11,14 @@ public sealed class BlockLibraryPreferences
     /// <summary>Distinct entry keys ordered from most to least recently used.</summary>
     public List<string> Recent { get; set; } = [];
     /// <summary>Identifies an entry without conflating conditions from different groups.</summary>
-    public static string Key(BlockDefinition entry) => entry.Group + "/" + entry.Kind;
+    public static string Key(BlockDefinition entry) => entry.Plugin == null ? entry.Group + "/" + entry.Kind : "$plugin/" + entry.Plugin.Id;
     /// <summary>Removes obsolete entries and enforces the recent-page capacity.</summary>
     public void Normalize()
     {
         var known = BlockLibrary.Definitions.Select(Key).ToHashSet(StringComparer.Ordinal);
-        Favorites = (Favorites ?? []).Select(MigrateKey).Where(known.Contains).Distinct(StringComparer.Ordinal).ToList();
-        Recent = (Recent ?? []).Select(MigrateKey).Where(known.Contains).Distinct(StringComparer.Ordinal).Take(BlockLibraryView.PageSize).ToList();
+        bool Keep(string key) => known.Contains(key) || key.StartsWith("$plugin/", StringComparison.Ordinal) && key.Length <= 168;
+        Favorites = (Favorites ?? []).Select(MigrateKey).Where(Keep).Distinct(StringComparer.Ordinal).Take(500).ToList();
+        Recent = (Recent ?? []).Select(MigrateKey).Where(Keep).Distinct(StringComparer.Ordinal).Take(BlockLibraryView.PageSize).ToList();
     }
     private static string MigrateKey(string key) => key switch
     {

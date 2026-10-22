@@ -52,6 +52,10 @@ public sealed class ProcessGameSession : IGameSession
     }
 
     public Task StartAsync(CancellationToken cancellationToken = default) => ExecuteAsync("start", cancellationToken);
+    public IReadOnlyList<string> PluginScreens { get { lock (sync) return snapshot.PluginScreens ?? []; } }
+    public async Task<bool> InterceptInputAsync(PluginInput input, CancellationToken cancellationToken = default) =>
+        (await ExecuteAsync("plugin_input", cancellationToken, text: JsonSerializer.Serialize(input)).ConfigureAwait(false)).InputHandled;
+    public Task NotifyPluginInputAsync(PluginInput input, CancellationToken cancellationToken = default) => ExecuteAsync("plugin_event_input", cancellationToken, text: JsonSerializer.Serialize(input));
     public Task AdvanceAsync(CancellationToken cancellationToken = default) => ExecuteAsync("advance", cancellationToken);
     public Task ChooseAsync(int option, CancellationToken cancellationToken = default)
     {

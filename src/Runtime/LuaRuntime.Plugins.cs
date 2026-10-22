@@ -7,12 +7,12 @@ namespace KNE;
 
 public sealed partial class LuaRuntime
 {
-    private CSharpPluginCompiler? pluginCompiler;
+    private PluginHost? pluginHost;
 
     private void InitializePlugins()
     {
         DisposePlugins();
-        if (pluginsEnabled) pluginCompiler = new();
+        pluginHost = new(project.Path, false, this);
         lua!["kne_plugins_enabled"] = pluginsEnabled;
         Register(nameof(ReadPluginForLua), "kne_plugin_source");
         Register(nameof(ExecuteCSharpPlugin), "kne_plugin_csharp");
@@ -69,8 +69,8 @@ public sealed partial class LuaRuntime
 
     private void DisposePlugins()
     {
-        pluginCompiler?.Dispose();
-        pluginCompiler = null;
+        pluginHost?.Dispose();
+        pluginHost = null;
     }
 
     /// <summary>Reads bounded project-owned plugin source; errors cross the Lua coroutine boundary as data.</summary>
@@ -82,6 +82,7 @@ public sealed partial class LuaRuntime
         try
         {
             if (!pluginsEnabled) return ["", "", "Сторонние плагины отключены в этом запуске движка."];
+            PluginPrivileges.EnsureUserProcess();
             EngineDiagnostics.Trace("Чтение плагина", relative);
             string full = PathSafety.ResolveRelative(project.Path, relative);
             string extension = Path.GetExtension(full).ToLowerInvariant();
@@ -108,8 +109,9 @@ public sealed partial class LuaRuntime
         using var context = new PluginContext(this);
         try
         {
-            if (pluginCompiler == null) throw new InvalidOperationException("Плагины ещё не инициализированы.");
-            pluginCompiler.Execute(relative, source, context);
+            PluginPrivileges.EnsureUserProcess();
+            if (pluginHost == null) throw new InvalidOperationException("Плагины ещё не инициализированы.");
+            pluginHost.Execute(relative, source, context);
             return "";
         }
         catch (PluginSourceException error)
@@ -126,6 +128,27 @@ public sealed partial class LuaRuntime
 
     private sealed class PluginContext(LuaRuntime owner) : IPluginContext, IDisposable
     {
+        public PluginApi Api { get { Guard(); return owner.pluginHost!.Api; } }
+        public System.Text.Json.JsonElement GetJson(string name)
+        {
+            Guard(); ValidateName(name);
+            using var state = owner.lua!["state"] as LuaTable ?? throw new InvalidOperationException("state должен быть таблицей.");
+            object? value = state[name];
+            if (value is LuaTable table) { using (table) return System.Text.Json.JsonSerializer.SerializeToElement(ReadState(table, 0, allowArray: true)); }
+            return System.Text.Json.JsonSerializer.SerializeToElement(Scalar(value));
+        }
+        public void SetJson(string name, System.Text.Json.JsonElement value)
+        {
+            Guard(); ValidateName(name);
+            if (value.GetRawText().Length > 1024 * 1024) throw new ArgumentException("Структура плагина больше 1 МБ.");
+            owner.lua!.DoString("state[" + LuaQuote(name) + "]=" + StateLiteral(value), "Plugin state");
+        }
+        public int InvokeLua(string function, string parametersJson)
+        {
+            Guard(); if (!LuaSource.IsIdentifier(function)) throw new ArgumentException("Требуется имя Lua-функции.");
+            using var callback = owner.lua![function] as LuaFunction ?? throw new InvalidOperationException("Не найдена Lua-функция: " + function);
+            return Convert.ToInt32(callback.Call(parametersJson).FirstOrDefault(), CultureInfo.InvariantCulture);
+        }
         private readonly int thread = Environment.CurrentManagedThreadId;
         private bool active = true;
         public string ProjectDirectory { get { Guard(); return owner.project.Path; } }

@@ -10,7 +10,8 @@ public sealed record EditorThemeOption(string Id, string Label);
 public static class EditorTheme
 {
     private const string Marker = "KNE.ThemeLoaded";
-    public static IReadOnlyList<EditorThemeOption> Themes { get; } = [new("kne", "KNE · акварель"), new("light", "Светлая"), new("dark", "Тёмная"), new("rose", "Розовый кварц"), new("ocean", "Ночной океан"), new("forest", "Лесной туман"), new("amber", "Тёплый янтарь"), new("lavender", "Лавандовый рассвет"), new("midnight", "Полночь"), new("cherry", "Вишнёвый бархат"), new("sand", "Песчаный берег"), new("aurora", "Северное сияние"), new("sapphire", "Сапфировая ночь"), new("peach", "Персиковый рассвет"), new("graphite", "Графит"), new("mint", "Мятный сад"), new("plum", "Сливовый бархат")];
+    internal static IReadOnlyList<EditorThemeOption> BuiltInThemes { get; } = [new("kne", "KNE · акварель"), new("light", "Светлая"), new("dark", "Тёмная"), new("rose", "Розовый кварц"), new("ocean", "Ночной океан"), new("forest", "Лесной туман"), new("amber", "Тёплый янтарь"), new("lavender", "Лавандовый рассвет"), new("midnight", "Полночь"), new("cherry", "Вишнёвый бархат"), new("sand", "Песчаный берег"), new("aurora", "Северное сияние"), new("sapphire", "Сапфировая ночь"), new("peach", "Персиковый рассвет"), new("graphite", "Графит"), new("mint", "Мятный сад"), new("plum", "Сливовый бархат")];
+    public static IReadOnlyList<EditorThemeOption> Themes => BuiltInThemes.Concat(PluginCatalog.Current?.Palettes.Select(p => new EditorThemeOption(p.Id, p.Title)) ?? []).ToArray();
     public static string Normalize(string? theme) => Themes.Any(option => option.Id == theme) ? theme! : "kne";
     /// <summary>Installs a window-scoped palette and updates existing editor descendants.</summary>
     public static void Apply(Window window, string theme)
@@ -26,9 +27,23 @@ public static class EditorTheme
             }
             window.Resources[Marker] = true;
         }
-        var palette = (ResourceDictionary)window.FindResource("Theme." + Normalize(theme));
+        var extension = PluginCatalog.Current?.Palettes.FirstOrDefault(p => p.Id == theme);
+        if (PluginCatalog.Current is { } api) api.ActivePalette = extension;
+        var palette = (ResourceDictionary)window.FindResource("Theme." + (extension == null ? Normalize(theme) : "kne"));
         foreach (object key in palette.Keys)
             window.Resources[key] = palette[key] is Freezable value ? value.CloneCurrentValue() : palette[key];
+        var brandAccent = Color.FromRgb(0x7C, 0x5C, 0xFF);
+        window.Resources["KNE.AccentColor"] = brandAccent;
+        window.Resources["KNE.AccentBrush"] = new SolidColorBrush(brandAccent);
+        if (extension != null)
+        {
+            void Set(string key, string color) => window.Resources[key] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
+            Set("Editor.Background", extension.Background); Set("Editor.WelcomeBackground", extension.Background);
+            Set("Editor.Surface", extension.Surface); Set("Editor.Canvas", extension.Background); Set("Editor.Text", extension.Text);
+            Set("Editor.Muted", extension.Muted); Set("Editor.Border", extension.Muted); Set("Editor.Selection", extension.Accent);
+            Set("Editor.Hover", extension.Accent); Set("Editor.Subtitle", extension.Accent); Set("KNE.AccentBrush", extension.Accent);
+            window.Resources["KNE.AccentColor"] = (Color)ColorConverter.ConvertFromString(extension.Accent);
+        }
         window.Resources[SystemColors.WindowBrushKey] = window.Resources["Editor.Surface"];
         window.Resources[SystemColors.WindowTextBrushKey] = window.Resources["Editor.Text"];
         window.Resources[SystemColors.ControlBrushKey] = window.Resources["Editor.Surface"];

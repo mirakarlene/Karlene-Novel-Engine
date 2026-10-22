@@ -20,6 +20,7 @@ public sealed class GameScripts
     public static GameScripts Load(ProjectInfo project, EditorPreviewSource? editorSource = null, bool pluginsEnabled = true)
     {
         string init = project.InitScriptPath;
+        var extensionSources = pluginsEnabled ? PluginHost.ManifestSourcePaths(project.Path) : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var paths = ProjectLoader.EnumerateFiles(project.Path, CancellationToken.None).Files
             .Where(p => ScriptDocument.IsCodePath(p) || ScriptDocument.IsVisualPath(p))
             .Where(p => pluginsEnabled || !EngineLaunch.IsPluginPath(Path.GetRelativePath(project.Path, p)))
@@ -44,6 +45,7 @@ public sealed class GameScripts
                 }
                 else
                 {
+                    if (extensionSources.Contains(full)) { files.Add(new(path, source, null, null)); continue; }
                     var declaration = StartupScripts.Declaration(source);
                     files.Add(new(path, LuaSource.Prepare(declaration.Source), declaration.Priority ?? (full.Equals(init, StringComparison.OrdinalIgnoreCase) ? 0 : null), null));
                     functions.AddRange(LuaSource.Functions(source).Select(f => new GameFunction(f.Name, path, f.Line)));

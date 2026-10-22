@@ -15,13 +15,16 @@ public sealed partial class VisualScript
         foreach (var node in Nodes)
         {
             if (!(subsystem && node.Kind == ScriptNodeKind.End)) ValidateCommand(node);
+            int portIndex = 0;
             foreach (var (_, target) in node.Outputs())
             {
+                int outputIndex = portIndex++;
                 if (node.Kind == ScriptNodeKind.Comment && target == null) continue;
                 if (string.IsNullOrEmpty(target) || !map.ContainsKey(target))
                     Fail(node, "соедините все выходы с существующими блоками");
                 if (map[target!].Kind == ScriptNodeKind.Start) Fail(node, "нельзя соединять выход с блоком «Начало»");
                 if (map[target!].Kind == ScriptNodeKind.Comment) Fail(node, "комментарии не имеют портов и не подключаются к схеме");
+                if (node.TargetInput(outputIndex) >= (map[target!].Plugin?.Inputs.Length ?? 1)) Fail(node, "целевой входной порт отсутствует");
             }
         }
         var connectedTriggers = Nodes.SelectMany(node => node.Outputs()).Where(port => port.Target != null)
@@ -52,6 +55,7 @@ public sealed partial class VisualScript
             first = false;
             void Line(string value) => code.Append("                ").Append(value).Append('\n');
             Line($"if kne_runtime_node then kne_runtime_node({Quote(node.Id)}) end");
+            Line($"if kne_plugin_node then kne_plugin_node({Quote(node.Kind.ToString())}, {Quote(node.Id)}) end");
             if (editorPreview) Line($"kne_editor_node({Quote(node.Id)})");
             // Keep the generated line spans stable so subsystem failures use the same frame IDs.
             string command = subsystem && node.Kind == ScriptNodeKind.End && node.EndAction != ScriptEndAction.Return ? "do end" : Command(node);
@@ -60,6 +64,10 @@ public sealed partial class VisualScript
                 Line("kne_editor_pause()");
             switch (node.Kind)
             {
+                case ScriptNodeKind.Plugin:
+                    Line($"local output = kne_execute_plugin_block({Quote(node.Plugin!.BlockId)}, {Quote(node.Plugin.Parameters.ToJsonString())})");
+                    Line($"__kne_node = ({{{string.Join(", ", node.Options.Select(o => Quote(o.Target!)))}}})[output]");
+                    break;
                 case ScriptNodeKind.TriggerKey:
                 case ScriptNodeKind.TriggerButton:
                 case ScriptNodeKind.TriggerHotspot:

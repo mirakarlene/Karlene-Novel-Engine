@@ -16,7 +16,8 @@ public sealed class BlockLibraryTests
     public void Catalog_ContainsAllOldAndNewCommandsInOrderedGroups_AndPreservesConditionCategoryColors()
     {
         Assert.Equal(new[] { "Начало и конец", "Нарратив", "Логика", "Визуал", "Звук", "Потоки", "Вычисления", "Асинхронность", "Триггеры", "Конфигурации", "Шейдеры", "Плагины" }, BlockLibrary.Groups.Select(group => group.Title));
-        Assert.Equal(Enum.GetValues<ScriptNodeKind>().Where(kind => kind != ScriptNodeKind.Condition).Order(), BlockLibrary.Definitions.Select(entry => entry.Kind).Distinct().Order());
+        // Custom Plugin entries are supplied by the active project, rather than the built-in catalog.
+        Assert.Equal(Enum.GetValues<ScriptNodeKind>().Where(kind => kind is not (ScriptNodeKind.Condition or ScriptNodeKind.Plugin)).Order(), BlockLibrary.Definitions.Select(entry => entry.Kind).Distinct().Order());
         Assert.Throws<ArgumentOutOfRangeException>(() => BlockLibrary.Create(ScriptNodeKind.Condition));
         Assert.Single(BlockLibrary.Definitions, entry => entry.Kind == ScriptNodeKind.Branching && entry.Group == "narrative");
         Assert.Single(BlockLibrary.Definitions, entry => entry.Kind == ScriptNodeKind.CompareVariables && entry.Group == "logic");

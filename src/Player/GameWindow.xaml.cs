@@ -57,9 +57,11 @@ public partial class GameWindow : Window
     {
         if (loaded) return;
         loaded = true;
+        try { InitializePlayerPlugins(); ApplyEngineTheme(); }
+        catch (Exception error) { ShowStartupError(error, "Загрузка UI плагинов"); return; }
         if (project.Engine.Window.Mode == "maximized") WindowState = WindowState.Maximized;
         if (preferences.Fullscreen ?? project.Engine.Window.Mode == "fullscreen") ToggleFullscreen();
-        try { GameScripts.Load(project); }
+        try { GameScripts.Load(project, pluginsEnabled: EngineLaunch.PluginsEnabled); }
         catch (Exception ex) { ShowStartupError(ex, "Проверка сценариев перед запуском"); return; }
         if (project.Engine.Game.MainMenu && !preview && project.Engine.Screens.Find("main_menu") != null) ShowMenu();
         else await StartGameAsync();
@@ -120,6 +122,7 @@ public partial class GameWindow : Window
 
     private void ShowStartupError(Exception error, string operation = "Выполнение сценария")
     {
+        pluginOverlay.Visibility = Visibility.Collapsed;
         startupFailed = true;
         ready = false;
         activeScreen = null;
@@ -427,6 +430,7 @@ public partial class GameWindow : Window
 
     private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (ProcessPluginInput(new("key", (e.Key == Key.System ? e.SystemKey : e.Key).ToString()))) { e.Handled = true; return; }
         if (startupFailed)
         {
             if (e.Key is Key.F3 or Key.Escape or Key.Space or Key.F11) e.Handled = true;
@@ -460,6 +464,7 @@ public partial class GameWindow : Window
 
     private async void Window_Closed(object? sender, EventArgs e)
     {
+        DisposePlayerPlugins();
         closed = true; preloading?.Cancel(); preloading?.Dispose(); assets.Clear();
         CompositionTarget.Rendering -= PerformanceRendering;
         gameplayUi?.Reset(); gameplayUi = null;
@@ -487,6 +492,8 @@ public partial class GameWindow : Window
     private void RenderOutput()
     {
         if (closed || startupFailed) return;
+        try { RenderPluginScreens(); }
+        catch (Exception error) { ShowStartupError(error, "Экран плагина"); return; }
         FlushPreferences();
         if (NoticePanel.Visibility == Visibility.Visible && execution == null && DateTime.UtcNow >= noticeUntil)
             NoticePanel.Visibility = Visibility.Collapsed;

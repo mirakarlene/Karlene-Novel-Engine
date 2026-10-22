@@ -7,7 +7,7 @@ namespace KNE;
 public partial class MainWindow
 {
     private ScriptEditor ActiveEditor => (DocumentTabs?.SelectedItem as TabItem)?.Tag as ScriptEditor ?? SceneEditor;
-    private IEnumerable<ScriptEditor> OpenEditors => DocumentTabs.Items.Cast<TabItem>().Select(tab => (ScriptEditor)tab.Tag);
+    private IEnumerable<ScriptEditor> OpenEditors => DocumentTabs.Items.Cast<TabItem>().Select(tab => tab.Tag).OfType<ScriptEditor>();
     private readonly HashSet<string> expandedTreePaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<ScriptEditor, EventHandler> tabStateHandlers = [];
     private string? selectedTreePath;
@@ -20,7 +20,7 @@ public partial class MainWindow
         if (currentProject == null) return;
         path = PathSafety.EnsureInside(currentProject.Path, path);
         var existing = DocumentTabs.Items.Cast<TabItem>().FirstOrDefault(tab =>
-            ((ScriptEditor)tab.Tag).Document?.FilePath.Equals(path, StringComparison.OrdinalIgnoreCase) == true);
+            (tab.Tag as ScriptEditor)?.Document?.FilePath.Equals(path, StringComparison.OrdinalIgnoreCase) == true);
         if (existing != null) { DocumentTabs.SelectedItem = existing; ShowActiveEditor(); return; }
 
         var editor = OpenEditors.Any() ? CreateTabEditor() : SceneEditor;
@@ -67,10 +67,13 @@ public partial class MainWindow
     private void ShowActiveEditor()
     {
         if (EditorWorkspace == null) return;
+        if (!DocumentTabs.Items.Contains(DocumentTabs.SelectedItem) && DocumentTabs.Items.Count > 0) DocumentTabs.SelectedIndex = 0;
         bool any = DocumentTabs.Items.Count > 0;
         DocumentTabs.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
         foreach (var editor in EditorWorkspace.Children.OfType<ScriptEditor>())
-            editor.Visibility = any && editor == ActiveEditor ? Visibility.Visible : Visibility.Collapsed;
+            editor.Visibility = any && (DocumentTabs.SelectedItem as TabItem)?.Tag == editor ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var view in EditorWorkspace.Children.OfType<FrameworkElement>().Where(view => view.Tag is PluginEditorTab))
+            view.Visibility = any && ReferenceEquals((DocumentTabs.SelectedItem as TabItem)?.Tag, view.Tag) ? Visibility.Visible : Visibility.Collapsed;
         EditorWorkspace.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
         FilesDataGrid.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -101,6 +104,7 @@ public partial class MainWindow
     {
         var editors = OpenEditors.ToArray();
         DocumentTabs.Items.Clear();
+        foreach (var view in EditorWorkspace.Children.OfType<FrameworkElement>().Where(view => view.Tag is PluginEditorTab).ToArray()) EditorWorkspace.Children.Remove(view);
         foreach (var editor in editors)
         {
             DetachTabState(editor);

@@ -12,6 +12,10 @@ public sealed record GameCheckpoint(int Version, string ProjectPath, string Fing
 
 public interface IGameSession : IAsyncDisposable
 {
+    IReadOnlyList<string> PluginScreens => [];
+    JsonElement Variables => default;
+    Task<bool> InterceptInputAsync(PluginInput input, CancellationToken cancellationToken = default) => Task.FromResult(false);
+    Task NotifyPluginInputAsync(PluginInput input, CancellationToken cancellationToken = default) => Task.CompletedTask;
     RuntimeWindowSettings WindowSettings { get; }
     StoryFrame Story { get; }
     SceneVisuals Visuals { get; }

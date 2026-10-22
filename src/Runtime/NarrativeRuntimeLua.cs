@@ -57,6 +57,16 @@ internal static class NarrativeRuntimeLua
                 if auto_seconds ~= nil then seconds(auto_seconds) end
                 if skippable == false and auto_seconds == nil then error("Непропускаемая реплика требует время автоматического перехода", 2) end
                 speaker = speaker == nil and "" or tostring(speaker)
+                if kne_plugin_dialogue and kne_sdk_dialogue_hooks then
+                    for level = 2, 32 do
+                        local info = debug.getinfo(level, "Sl")
+                        if not info then break end
+                        if info.source:sub(1, 1) == "@" then kne_error_context(nil, info); break end
+                    end
+                    local result = kne_plugin_dialogue(tostring(text), speaker)
+                    if result[2] ~= "" then error(result[2], 2) end
+                    text, speaker = result[0], result[1]
+                end
                 if not narration and speaker == "" and (character == nil or character == "") then
                     local inherited = current_speaker()
                     if inherited and inherited ~= "" then character = inherited end

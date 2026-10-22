@@ -17,5 +17,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\KNE.csproj" />
+    <EmbeddedResource Include="..\..\examples\plugins\*" LogicalName="SdkExamples.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

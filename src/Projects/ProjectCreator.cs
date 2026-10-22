@@ -43,6 +43,7 @@ public static class ProjectCreator
                 Directory.CreateDirectory(Path.Combine(staging, "game", directory));
             Directory.CreateDirectory(Path.Combine(staging, "game", "shaders"));
             Directory.CreateDirectory(Path.Combine(staging, "engine"));
+            Directory.CreateDirectory(Path.Combine(staging, "plugins"));
             Directory.CreateDirectory(Path.Combine(staging, "saves"));
             EngineSettings.WriteTemplate(staging, options);
             Directory.CreateDirectory(Path.Combine(staging, "metadata"));

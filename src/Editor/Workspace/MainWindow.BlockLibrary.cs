@@ -27,7 +27,7 @@ public partial class MainWindow
                 body.Children.Add(new System.Windows.Controls.TextBlock { Text = "Блоки раздела «Шейдеры» нужно размещать в отдельных специальных файлах .kneshader. Создайте такой файл через «Новая блок-схема».", TextWrapping = TextWrapping.Wrap, FontSize = 16 });
                 var close = new System.Windows.Controls.Button { Content = "Понятно", Margin = new Thickness(0, 20, 0, 0), IsDefault = true, IsCancel = true }; close.Click += (_, _) => warning.Close(); body.Children.Add(close); warning.Content = body; EditorTheme.Apply(warning, settings.Theme); warning.ShowDialog(); return;
             }
-            ActiveEditor.AddBlock(entry.Kind, entry.Group); CloseBlockLibrary();
+            ActiveEditor.AddBlock(entry); CloseBlockLibrary();
             Task recordUse = LibraryView.RecordUseAsync(entry);
             if (entry.Kind == ScriptNodeKind.Script) SceneEditor_ProjectScriptRequested(ActiveEditor, EventArgs.Empty);
             await recordUse;

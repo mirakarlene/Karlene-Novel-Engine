@@ -1,0 +1,5 @@
+{
+  "id": "kne.sdk.demo",
+  "source": "plugins/Demo.cs",
+  "apiVersion": 1
+}

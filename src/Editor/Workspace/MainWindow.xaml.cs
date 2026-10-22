@@ -90,6 +90,7 @@ public partial class MainWindow : Window
     private void Window_Closed(object? sender, EventArgs e)
     {
         closed = true;
+        UnloadEditorPlugins();
         storageTimer.Stop();
         lifetime.Cancel();
         monitor?.Dispose();
@@ -150,6 +151,7 @@ public partial class MainWindow : Window
             FilesDataGrid.Visibility = Visibility.Visible;
         }
         currentProject = loaded;
+        try { LoadEditorPlugins(loaded.Path); } catch (Exception error) { identityWarning += " Не удалось загрузить расширения: " + error.Message; }
         EngineDiagnostics.Current?.SetProject(loaded.Title, loaded.Path);
         ProjectTitleTextBlock.Text = loaded.Name;
         await UpdateFileViewAsync();
@@ -201,6 +203,7 @@ public partial class MainWindow : Window
         EditorWorkspace.Visibility = ActiveEditor.Visibility = Visibility.Collapsed;
         FilesDataGrid.Visibility = Visibility.Visible;
         currentProject = null;
+        UnloadEditorPlugins();
         FilesDataGrid.ItemsSource = null;
         ProjectFilesTree.ItemsSource = null;
         monitor?.Dispose(); monitor = null; monitoredPath = null;
