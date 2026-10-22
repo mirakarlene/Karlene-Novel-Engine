@@ -6,7 +6,7 @@ using System.Threading.Channels;
 namespace KNE;
 
 internal sealed record WorkerRequest(long Id, string Command, int Option = 0, string? Text = null, GameCheckpoint? Checkpoint = null,
-    EditorPreviewSource? EditorSource = null, double Seconds = 0, bool Cancel = false);
+    EditorPreviewSource? EditorSource = null, double Seconds = 0, bool Cancel = false, string[]? ApplicationPlugins = null);
 internal sealed record SessionSnapshot(RuntimeWindowSettings Window, StoryFrame Story, SceneVisuals Visuals,
     PreviewLocation? Location = null, JsonElement Variables = default, bool TransitionInProgress = false, double LogicMilliseconds = 0, IReadOnlyList<string>? PluginScreens = null);
 internal sealed record WorkerMessage(string Type, long Id = 0, string? Text = null, SessionSnapshot? Snapshot = null,
@@ -61,6 +61,7 @@ internal static class LuaWorker
             {
                 try
                 {
+                    if (runtime == null) project.ApplicationPlugins = ApplicationPluginFiles.Normalize(request.ApplicationPlugins);
                     runtime ??= new LuaRuntime(project, line => Send(new("log", Text: line)),
                         TimeSpan.FromHours(1), interactive: true, preview: preview, editorSource: request.EditorSource,
                         variablesUpdated: value => Send(new("variables", Snapshot: new(runtime!.WindowSettings, runtime.Story, runtime.Visuals,

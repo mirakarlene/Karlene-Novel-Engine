@@ -75,11 +75,13 @@ public partial class MainWindow : Window
     private async void Window_Loaded(object sender, RoutedEventArgs e) => await RunOperationAsync(async () =>
     {
         settings = await settingsStore.LoadAsync();
+        ReloadApplicationPlugins();
+        ResetApplicationPluginDraft();
         AppGraphicsInput.Value = settings.Graphics; GraphicsEnvironment.SetSettings(this, settings.Graphics);
         TxtEditorPath.Text = settings.EditorPath;
         TxtProjectsStorage.Text = settings.ProjectsStoragePath;
         TxtUserName.Text = settings.UserName;
-        ThemeInput.SelectedValue = settings.Theme;
+        ThemeInput.SelectedValue = EditorTheme.Normalize(settings.Theme);
         EditorTheme.Apply(this, settings.Theme);
         UpdateWelcomeGreeting();
         UpdateDesignPreferences();
@@ -135,6 +137,7 @@ public partial class MainWindow : Window
     private async Task<bool> OpenProjectAsync(string path, bool remember = false)
     {
         var loaded = await ProjectLoader.LoadProjectAsync(path, lifetime.Token);
+        loaded.ApplicationPlugins = settings.ApplicationPlugins.ToArray();
         if (closed) return false;
         if (!await CheckCompatibilityAsync(loaded)) return false;
         string? identityWarning = null;
@@ -203,7 +206,7 @@ public partial class MainWindow : Window
         EditorWorkspace.Visibility = ActiveEditor.Visibility = Visibility.Collapsed;
         FilesDataGrid.Visibility = Visibility.Visible;
         currentProject = null;
-        UnloadEditorPlugins();
+        ReloadApplicationPlugins();
         FilesDataGrid.ItemsSource = null;
         ProjectFilesTree.ItemsSource = null;
         monitor?.Dispose(); monitor = null; monitoredPath = null;
@@ -215,11 +218,12 @@ public partial class MainWindow : Window
 
     private void BtnSettings_Click(object sender, RoutedEventArgs e)
     {
+        ResetApplicationPluginDraft();
         AppGraphicsInput.Value = settings.Graphics; GraphicsEnvironment.SetSettings(this, settings.Graphics);
         TxtEditorPath.Text = settings.EditorPath;
         TxtProjectsStorage.Text = settings.ProjectsStoragePath;
         TxtUserName.Text = settings.UserName;
-        ThemeInput.SelectedValue = settings.Theme;
+        ThemeInput.SelectedValue = EditorTheme.Normalize(settings.Theme);
         UpdateDesignPreferences();
         ShowPanel(SettingsPanel);
     }
@@ -239,12 +243,14 @@ public partial class MainWindow : Window
         }
         string userName = TxtUserName.Text.Trim();
         if (userName.Length > 80 || userName.Any(char.IsControl)) throw new ArgumentException("Имя пользователя: до 80 символов, без переносов строк и управляющих символов.");
-        var next = new UserSettings { Graphics = AppGraphicsInput.Value, EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = EditorTheme.Normalize((string?)ThemeInput.SelectedValue), UserName = userName, AccessibilityMode = BlockAccessibility.GetMode(this), WelcomeObjects = WelcomeBubbles.Normalize((string?)WelcomeObjectInput.SelectedValue) };
+        bool pluginsChanged = !applicationPluginDraft.SequenceEqual(settings.ApplicationPlugins, StringComparer.OrdinalIgnoreCase);
+        var next = new UserSettings { ApplicationPlugins = applicationPluginDraft.ToList(), Graphics = AppGraphicsInput.Value, EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = EditorTheme.Normalize((string?)ThemeInput.SelectedValue), UserName = userName, AccessibilityMode = BlockAccessibility.GetMode(this), WelcomeObjects = WelcomeBubbles.Normalize((string?)WelcomeObjectInput.SelectedValue) };
         await settingsStore.SaveAsync(next);
         settings = next; GraphicsEnvironment.SetSettings(this, settings.Graphics);
+        if (pluginsChanged) ReloadApplicationPlugins();
         UpdateWelcomeGreeting();
         await RefreshStoredProjectsAsync();
-        OperationStatus.Text = "Настройки сохранены.";
+        OperationStatus.Text = applicationPluginLoadError == null ? "Настройки сохранены." : "Настройки сохранены. Не удалось загрузить плагины: " + applicationPluginLoadError;
     }
 
     private async void BtnSaveSettings_Click(object sender, RoutedEventArgs e) =>

@@ -21,9 +21,11 @@ public sealed class GameScripts
     {
         string init = project.InitScriptPath;
         var extensionSources = pluginsEnabled ? PluginHost.ManifestSourcePaths(project.Path) : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var applicationSources = ApplicationPluginFiles.Normalize(project.ApplicationPlugins).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        extensionSources.UnionWith(applicationSources);
         var paths = ProjectLoader.EnumerateFiles(project.Path, CancellationToken.None).Files
             .Where(p => ScriptDocument.IsCodePath(p) || ScriptDocument.IsVisualPath(p))
-            .Where(p => pluginsEnabled || !EngineLaunch.IsPluginPath(Path.GetRelativePath(project.Path, p)))
+            .Where(p => pluginsEnabled || !EngineLaunch.IsPluginPath(Path.GetRelativePath(project.Path, p)) && !applicationSources.Contains(p))
             .Append(init).Append(project.MainScenePath).Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(p => Path.GetRelativePath(project.Path, p), StringComparer.Ordinal);
         var files = new List<GameScript>(); var functions = new List<GameFunction>();

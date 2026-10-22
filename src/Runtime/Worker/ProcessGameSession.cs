@@ -24,6 +24,7 @@ public sealed class ProcessGameSession : IGameSession
     private bool canReturnAfterError;
     private long requestId;
     private readonly bool pluginsEnabled;
+    private readonly string[] applicationPlugins;
     public TimeSpan ExecutionLimit { get; }
     public int? WorkerProcessId { get { lock (sync) return worker?.Id; } }
     public RuntimeWindowSettings WindowSettings { get { lock (sync) return snapshot.Window; } }
@@ -40,6 +41,7 @@ public sealed class ProcessGameSession : IGameSession
         EditorPreviewSource? editorSource = null, bool? pluginsEnabled = null)
     {
         this.project = project ?? throw new ArgumentNullException(nameof(project));
+        applicationPlugins = project.ApplicationPlugins.ToArray();
         this.preview = preview;
         this.pluginsEnabled = pluginsEnabled ?? EngineLaunch.PluginsEnabled;
         this.editorSource = editorSource;
@@ -216,6 +218,7 @@ public sealed class ProcessGameSession : IGameSession
 
     private async Task<WorkerMessage> SendAsync(Process process, WorkerRequest request, CancellationToken token)
     {
+        request = request with { ApplicationPlugins = applicationPlugins };
         var reader = responses!;
         await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(request).AsMemory(), token).ConfigureAwait(false);
         await process.StandardInput.FlushAsync(token).ConfigureAwait(false);

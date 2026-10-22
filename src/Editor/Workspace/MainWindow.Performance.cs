@@ -42,6 +42,7 @@ public partial class MainWindow
         try { await ProjectMaintenance.DeleteAsync(project, lifetime.Token); }
         catch { await OpenProjectAsync(project.Path); throw; }
         ClearEditorTabs(); currentProject = null;
+        ReloadApplicationPlugins();
         FilesDataGrid.ItemsSource = null; ProjectFilesTree.ItemsSource = null;
         pendingRefresh = false; settings.ForgetProject(project.Path);
         await settingsStore.SaveAsync(settings); await RefreshStoredProjectsAsync();

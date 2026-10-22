@@ -14,6 +14,8 @@ public sealed class ProjectInfo
     public ObservableCollection<ProjectFile> Files { get; } = [];
     public List<string> Warnings { get; } = [];
     public EngineSettings Engine { get; init; } = new();
+    /// <summary>User-selected application extensions for this session; never persisted into project.json.</summary>
+    public IReadOnlyList<string> ApplicationPlugins { get; internal set; } = [];
 
     public string MainScenePath => ResolveEntry(Configuration.EntryPoints?.MainScene, ["game/scenes/main.krl", "main.krl"], ".krl");
     public string InitScriptPath => ResolveEntry(Configuration.EntryPoints?.InitScript, ["game/scripts/gamelogic.lua", "game/scripts/game_init.lua", "gamelogic.lua"], null);

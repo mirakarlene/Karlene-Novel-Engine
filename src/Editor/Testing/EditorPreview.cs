@@ -47,7 +47,7 @@ public sealed class EditorPreview : IAsyncDisposable
             JsonSerializer.Serialize(project.Configuration, ProjectConfiguration.JsonOptions), ProjectConfiguration.JsonOptions)!;
         configuration.EntryPoints ??= new();
         configuration.EntryPoints.MainScene = Path.GetRelativePath(project.Path, PathSafety.EnsureInside(project.Path, selection.FilePath)).Replace('\\', '/');
-        var previewProject = new ProjectInfo { Path = project.Path, Configuration = configuration, Engine = project.Engine };
+        var previewProject = new ProjectInfo { Path = project.Path, Configuration = configuration, Engine = project.Engine, ApplicationPlugins = project.ApplicationPlugins };
         session = new ProcessGameSession(previewProject, output, preview: !selection.FromMain,
             editorSource: new EditorPreviewSource(selection.FilePath, selection.Source, selection.FromMain ? null : selection.Function));
         await session.StartAsync(token).ConfigureAwait(false);
