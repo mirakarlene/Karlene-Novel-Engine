@@ -227,13 +227,15 @@ public sealed class ApplicationPluginSettingsTests : IDisposable
             var appearance = Find<Button>(window, "AppearanceButton");
             Assert.InRange(Bounds(translations).Right, 1, width);
             Assert.Equal(Bounds(appearance).Top, Bounds(translations).Top, 1);
-            Assert.Equal(Bounds(appearance).Right, Bounds(translations).Left, 1);
+            Assert.Equal(8, Bounds(translations).Left - Bounds(appearance).Right, 1);
+            Assert.Equal(appearance.ActualHeight, translations.ActualHeight, 1);
+            Assert.Equal(appearance.Padding, translations.Padding);
             Assert.InRange(Find<FrameworkElement>(window, "ProjectHeader").ActualHeight, 25, 40);
             var text = new FormattedText((string)translations.Content, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
                 new Typeface(translations.FontFamily, translations.FontStyle, translations.FontWeight, translations.FontStretch), translations.FontSize, Brushes.White, 1);
             Assert.True(translations.ActualWidth >= text.WidthIncludingTrailingWhitespace + translations.Padding.Left + translations.Padding.Right);
-            Assert.InRange(translations.ActualWidth - text.WidthIncludingTrailingWhitespace, 0, 3);
-            Assert.Equal(0, translations.Padding.Left); Assert.Equal(0, translations.Padding.Right); Assert.Equal(0, translations.MinWidth);
+            Assert.InRange(translations.ActualWidth - text.WidthIncludingTrailingWhitespace - appearance.Padding.Left - appearance.Padding.Right, 0, 3);
+            Assert.Equal(0, translations.MinWidth);
             Snapshot(root, "header-" + width + ".png", width, 700);
             Invoke(window, "BtnBack_Click", window, new RoutedEventArgs()); await Idle(window);
             Invoke(window, "BtnSettings_Click", window, new RoutedEventArgs()); Layout(root, width, 700);

@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Windows.Media.Imaging;
 using Xunit;
 
 namespace KNE.Tests;
@@ -179,6 +180,94 @@ public sealed class ProjectFolderBrowserUiTests : IDisposable
         }
         finally { await Close(window); }
     });
+
+    [Theory]
+    [InlineData("tiles", false)]
+    [InlineData("tiles", true)]
+    [InlineData("table", false)]
+    [InlineData("table", true)]
+    public Task SaveAndDeferredTreeRefreshKeepActiveEditorAndNeighbourDraft(string mode, bool graph) => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        string activePath = fixture.Write("chapters/act1/active." + (graph ? "knegraph" : "krl"), graph ? VisualScript.Create().Serialize() : "function active() end");
+        string neighbourPath = fixture.Write("neighbour.krl", "function neighbour() end"); var window = Create(fixture, mode);
+        try
+        {
+            await WorkspaceTabsTests.Invoke(window, "OpenProjectAsync", fixture.ProjectPath, false);
+            Invoke(window, "NavigateBrowserDirectory", Path.Combine("chapters", "act1"), null!, true); Layout(window, 1100);
+            await WorkspaceTabsTests.Invoke(window, "OpenScriptAsync", neighbourPath);
+            var neighbour = Find<ScriptEditor>(window, "SceneEditor"); WorkspaceTabsTests.Find<KrlCodeEditor>(neighbour, "CodeEditor").Text += " -- neighbour draft";
+            await WorkspaceTabsTests.Invoke(window, "OpenScriptAsync", activePath);
+            var tabs = Find<TabControl>(window, "DocumentTabs"); var selected = Assert.IsType<TabItem>(tabs.SelectedItem); var active = Assert.IsType<ScriptEditor>(selected.Tag);
+            if (graph) active.AddBlock(ScriptNodeKind.Dialogue); else WorkspaceTabsTests.Find<KrlCodeEditor>(active, "CodeEditor").Text += " -- saved edit";
+            var document = active.Document; var before = window.Project; var browser = Find<Grid>(window, "FileBrowserPanel"); int browserTransitions = 0;
+            var descriptor = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(UIElement.VisibilityProperty, typeof(Grid));
+            EventHandler shown = (_, _) => { if (browser.Visibility == Visibility.Visible) browserTransitions++; };
+            descriptor.AddValueChanged(browser, shown);
+            try
+            {
+                WorkspaceTabsTests.Find<Button>(active, "SaveButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await PumpUntil(window, () => active.IsEnabled && !active.HasUnsavedChanges && !ReferenceEquals(before, window.Project));
+                Assert.Same(selected, tabs.SelectedItem); Assert.Same(document, active.Document); Assert.Equal(2, tabs.Items.Count);
+                Assert.Equal(Visibility.Visible, active.Visibility); Assert.Equal(Visibility.Visible, Find<Grid>(window, "EditorWorkspace").Visibility);
+                Assert.Equal(Visibility.Collapsed, browser.Visibility); Assert.Equal(0, browserTransitions);
+                FileBrowserDesignTests.Capture((FrameworkElement)window.Content, "saved-editor-" + mode + "-" + (graph ? "graph" : "code") + ".png", new(1100, 700));
+                if (graph) Assert.Equal(document!.Graph!.Nodes.Count, VisualScript.Parse(File.ReadAllText(activePath)).Nodes.Count);
+                else Assert.EndsWith("-- saved edit", File.ReadAllText(activePath));
+                Assert.True(neighbour.HasUnsavedChanges); Assert.EndsWith("-- neighbour draft", neighbour.Document!.Code); Assert.Equal("function neighbour() end", File.ReadAllText(neighbourPath));
+                await WorkspaceTabsTests.Invoke(window, "OpenProjectAsync", fixture.ProjectPath, false); Layout(window, 1100); await Idle(window); Layout(window, 1100);
+                Assert.Same(selected, tabs.SelectedItem); Assert.Equal(Visibility.Visible, active.Visibility); Assert.Equal(Visibility.Collapsed, browser.Visibility); Assert.Equal(0, browserTransitions);
+            }
+            finally { descriptor.RemoveValueChanged(browser, shown); }
+            var tree = Find<TreeView>(window, "ProjectFilesTree"); var game = tree.Items.Cast<ProjectTreeNode>().Single(n => n.Name == "game");
+            Assert.IsType<TreeViewItem>(tree.ItemContainerGenerator.ContainerFromItem(game)).IsSelected = true;
+            Assert.Equal(Visibility.Visible, browser.Visibility); Assert.Equal(Path.Combine(fixture.ProjectPath, "game"), Find<TextBox>(window, "FileBrowserPath").Text);
+        }
+        finally { await Close(window); }
+    });
+
+    [Theory]
+    [InlineData("kne")]
+    [InlineData("dark")]
+    [InlineData("rose")]
+    public Task TileSurfaceKeepsThemeDuringBusyRefreshAndFinalTabClose(string theme) => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject(); var window = Create(fixture);
+        try
+        {
+            await WorkspaceTabsTests.Invoke(window, "OpenProjectAsync", fixture.ProjectPath, false); EditorTheme.Apply(window, theme); Layout(window, 1100);
+            var tiles = Find<ListBox>(window, "FileTiles");
+            void CheckSurface()
+            {
+                Layout(window, 1100);
+                var image = new RenderTargetBitmap((int)Math.Ceiling(tiles.ActualWidth), (int)Math.Ceiling(tiles.ActualHeight), 96, 96, PixelFormats.Pbgra32); image.Render(tiles);
+                byte[] pixel = new byte[4]; image.CopyPixels(new Int32Rect(10, image.PixelHeight - 10, 1, 1), pixel, 4, 0);
+                Assert.Equal(WelcomeOptionsTests.BrushColor(window.FindResource("Editor.Surface")), Color.FromArgb(pixel[3], pixel[2], pixel[1], pixel[0]));
+            }
+            CheckSurface(); var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var operation = WorkspaceTabsTests.Invoke(window, "RunOperationAsync", (Func<Task>)(() => { entered.SetResult(); return release.Task; }), "Проверка обновления…");
+            await entered.Task;
+            try { Assert.False(tiles.IsEnabled); CheckSurface(); FileBrowserDesignTests.Capture((FrameworkElement)window.Content, "tiles-disabled-" + theme + ".png", new(1100, 700)); }
+            finally { release.TrySetResult(); await operation; }
+            Assert.True(tiles.IsEnabled); CheckSurface();
+            await WorkspaceTabsTests.Invoke(window, "RefreshChangedProjectAsync"); EditorTheme.Apply(window, theme); CheckSurface();
+            await WorkspaceTabsTests.Invoke(window, "OpenScriptAsync", window.Project!.MainScenePath); var editor = Find<ScriptEditor>(window, "SceneEditor");
+            await WorkspaceTabsTests.Invoke(window, "CloseEditorTabAsync", editor); CheckSurface();
+            Assert.Equal(Visibility.Visible, tiles.Visibility);
+        }
+        finally { await Close(window); }
+    });
+
+    private static async Task PumpUntil(MainWindow window, Func<bool> condition)
+    {
+        for (int i = 0; i < 500; i++)
+        {
+            Layout(window, 1100); await Idle(window);
+            if (condition()) { Layout(window, 1100); await Idle(window); return; }
+            await Task.Delay(10);
+        }
+        throw new TimeoutException("Workspace did not finish the save and watcher refresh.");
+    }
 
     private static MainWindow Create(TempProject fixture, string mode = "tiles")
     {
