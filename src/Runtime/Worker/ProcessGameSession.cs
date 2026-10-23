@@ -262,7 +262,12 @@ public sealed class ProcessGameSession : IGameSession
         nameof(TimeoutException) => new TimeoutException(message.Error),
             _ => new InvalidOperationException("Ошибка Lua: " + message.Error)
         };
-        if (message.Report != null) GameErrorReport.Attach(error, message.Report);
+        if (message.Report != null)
+        {
+            GameErrorReport.Attach(error, message.Report);
+            if (message.Report.PluginFailure)
+                PluginFailure.Report(error, message.Report.File ?? "Игровой worker", message.Report.Operation);
+        }
         return error;
     }
 

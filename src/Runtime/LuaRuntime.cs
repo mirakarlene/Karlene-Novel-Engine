@@ -44,6 +44,7 @@ public sealed partial class LuaRuntime : IGameSession
     private bool transitionPending;
     private (string? File, int? Line, string Trace, string Problem, FrameIdentity? Frame)? scriptFailure;
     private bool pluginFailureCaptured;
+    private bool pluginOperationFailed;
     public TimeSpan ExecutionLimit { get; }
 
     public LuaRuntime(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool interactive = false, bool preview = false,
@@ -549,6 +550,7 @@ public sealed partial class LuaRuntime : IGameSession
                 deadline = Stopwatch.GetTimestamp() + (long)(ExecutionLimit.TotalSeconds * Stopwatch.Frequency);
                 scriptFailure = null;
                 pluginFailureCaptured = false;
+                pluginOperationFailed = false;
                 currentScriptFrame = null;
             }
             await Task.Run(() =>
@@ -566,7 +568,7 @@ public sealed partial class LuaRuntime : IGameSession
             AttachScriptReport(timeout, operation);
             throw timeout;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException && (ex is NLua.Exceptions.LuaScriptException || scriptFailure != null))
+        catch (Exception ex) when (ex is not OperationCanceledException && (ex is NLua.Exceptions.LuaScriptException or PluginFailureException || scriptFailure != null))
         {
             AttachScriptReport(ex, operation);
             throw;
@@ -582,7 +584,7 @@ public sealed partial class LuaRuntime : IGameSession
     private void AttachScriptReport(Exception error, string operation)
     {
         var report = GameErrorReport.Create(project, error, operation);
-        report = report with { TransitionFailure = transitionPending };
+        report = report with { TransitionFailure = transitionPending, PluginFailure = report.PluginFailure || pluginOperationFailed };
         if (scriptFailure is { } failure)
             report = report with { File = failure.File, Line = failure.Line, Details = failure.Trace + "\n\n" + error,
                 Frame = failure.Frame ?? frames?.Resolve(failure.File, failure.Line) };

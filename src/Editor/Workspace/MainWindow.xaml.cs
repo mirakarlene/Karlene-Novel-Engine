@@ -218,6 +218,7 @@ public partial class MainWindow : Window
 
     private void BtnSettings_Click(object sender, RoutedEventArgs e)
     {
+        SetSettingsPage(0);
         ResetApplicationPluginDraft();
         AppGraphicsInput.Value = settings.Graphics; GraphicsEnvironment.SetSettings(this, settings.Graphics);
         TxtEditorPath.Text = settings.EditorPath;

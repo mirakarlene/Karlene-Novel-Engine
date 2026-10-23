@@ -68,9 +68,9 @@ internal sealed class EngineDiagnostics
                 return first;
             }
             var cause = exception.GetBaseException();
-            var report = new EngineFailureReport(clock.GetUtcNow(), kind, Limit(cause.Message, 4096),
+            var report = new EngineFailureReport(clock.GetUtcNow(), kind, Limit(exception is PluginFailureException ? exception.Message : cause.Message, 4096),
                 cause.TargetSite?.DeclaringType?.FullName + "." + cause.TargetSite?.Name is { Length: > 1 } component ? component : cause.GetType().FullName ?? "Неизвестный компонент",
-                Limit(exception.ToString(), 32768), RuntimeInformation.OSDescription, RuntimeInformation.FrameworkDescription,
+                Limit(GameErrorReport.TryGet(exception) is { } workerReport ? workerReport.ToDisplayText() + "\n\n" + exception : exception.ToString(), 32768), RuntimeInformation.OSDescription, RuntimeInformation.FrameworkDescription,
                 journal.ProcessId, journal.PluginsDisabled, journal.Project, GC.GetTotalMemory(false), journal.Trace);
             journal = journal with { Failure = report };
             Persist();

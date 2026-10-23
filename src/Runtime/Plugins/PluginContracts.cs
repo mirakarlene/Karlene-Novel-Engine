@@ -5,7 +5,23 @@ using System.Windows;
 namespace KNE;
 
 /// <summary>A versioned project extension, discovered from plugins/*.kneplugin.json.</summary>
-public sealed record PluginManifest(string Id, string Source, int ApiVersion = 1);
+public sealed record PluginManifest(string Id, string Source, int ApiVersion = 1)
+{
+    /// <summary>Optional human-readable plugin name.</summary>
+    public string? Name { get; init; }
+    /// <summary>Plugin author, as supplied by the publisher.</summary>
+    public string? Author { get; init; }
+    /// <summary>Author-supplied creation date in ISO format (yyyy-MM-dd).</summary>
+    public DateOnly? CreatedAt { get; init; }
+    /// <summary>Usage instructions displayed as plain text.</summary>
+    public string? Readme { get; init; }
+    /// <summary>Optional UTF-8 instructions file relative to the manifest directory.</summary>
+    public string? ReadmeFile { get; init; }
+    /// <summary>License name or full license text.</summary>
+    public string? License { get; init; }
+    /// <summary>Optional UTF-8 license file relative to the manifest directory.</summary>
+    public string? LicenseFile { get; init; }
+}
 
 /// <summary>A configurable value in a plugin block.</summary>
 public sealed record PluginParameter(string Id, string Label, string Kind = "text", string Default = "",

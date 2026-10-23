@@ -25,7 +25,7 @@ internal sealed class EngineRecoveryWindow : Window
         var grid = new Grid { Margin = new Thickness(24) };
         grid.RowDefinitions.Add(new() { Height = GridLength.Auto }); grid.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
         grid.RowDefinitions.Add(new() { Height = GridLength.Auto }); grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
-        var title = new TextBlock { Text = "Движок остановлен из-за ошибки", FontSize = 25, Margin = new Thickness(0, 0, 0, 16), TextWrapping = TextWrapping.Wrap };
+        var title = new TextBlock { Text = report.Kind == "Ошибка плагина" ? "Работа остановлена из-за ошибки плагина" : "Движок остановлен из-за ошибки", FontSize = 25, Margin = new Thickness(0, 0, 0, 16), TextWrapping = TextWrapping.Wrap };
         grid.Children.Add(title);
         ReportText.Text = report.ToDisplayText() + "\n\nОтчёт: " + reportPath;
         ReportText.Background = new SolidColorBrush(Color.FromRgb(36, 29, 51)); ReportText.Foreground = Brushes.GhostWhite;

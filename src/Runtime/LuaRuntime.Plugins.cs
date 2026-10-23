@@ -16,6 +16,7 @@ public sealed partial class LuaRuntime
         lua!["kne_plugins_enabled"] = pluginsEnabled;
         Register(nameof(ReadPluginForLua), "kne_plugin_source");
         Register(nameof(ExecuteCSharpPlugin), "kne_plugin_csharp");
+        Register(nameof(MarkPluginFailure), "kne_mark_plugin_failure");
         lua!.DoString("""
             do
                 if not kne_plugins_enabled then
@@ -36,11 +37,11 @@ public sealed partial class LuaRuntime
                         if info.source:sub(1, 1) == "@" then kne_error_context(nil, info); break end
                     end
                     local result = kne_plugin_source(path, kind)
-                    if result[2] ~= "" then error(result[2], 0) end
+                    if result[2] ~= "" then kne_mark_plugin_failure(); error(result[2], 0) end
                     local source, canonical = result[0], result[1]
                     local key = canonical:lower()
                     if once and loaded[key] then return end
-                    if loading[key] then error("Циклическое подключение плагина: " .. canonical, 0) end
+                    if loading[key] then kne_mark_plugin_failure(); error("Циклическое подключение плагина: " .. canonical, 0) end
                     loading[key] = true
                     local function run()
                         if canonical:lower():sub(-3) == ".cs" then
@@ -57,7 +58,7 @@ public sealed partial class LuaRuntime
                     end
                     local ok, problem = xpcall(run, function(problem) return kne_capture_error(nil, problem) end)
                     loading[key] = nil
-                    if not ok then error(problem, 0) end
+                    if not ok then kne_mark_plugin_failure(); error(problem, 0) end
                     if once then loaded[key] = true end
                 end
                 function include_lua(path) execute(path, "lua", true); kne_editor_pause() end
@@ -66,6 +67,9 @@ public sealed partial class LuaRuntime
             end
             """, "KNE plugins");
     }
+
+    /// <summary>Marks a plugin error before the Lua coroutine converts it into script error data.</summary>
+    public void MarkPluginFailure() => pluginOperationFailed = true;
 
     private void DisposePlugins()
     {
@@ -114,14 +118,14 @@ public sealed partial class LuaRuntime
             pluginHost.Execute(relative, source, context);
             return "";
         }
-        catch (PluginSourceException error)
-        {
-            RecordScriptError(error.File, error.Line ?? 0, error.ToString(), error.Message);
-            return error.Message;
-        }
         catch (Exception error) when (error is not OperationCanceledException)
         {
-            RecordScriptError(relative, 0, error.ToString(), error.Message);
+            pluginOperationFailed = true;
+            PluginSourceException? sourceError = null;
+            for (Exception? cause = error; cause != null; cause = cause.InnerException)
+                if (cause is PluginSourceException found) { sourceError = found; break; }
+            RecordScriptError(sourceError?.File ?? relative, sourceError?.Line ?? 0, error.ToString(), error.Message);
+            pluginFailureCaptured = true;
             return error.Message;
         }
     }

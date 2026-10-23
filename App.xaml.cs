@@ -9,6 +9,7 @@ namespace KNE
     {
         private EngineDiagnostics? diagnostics;
         private int recovering;
+        private int pluginRecoveryQueued;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -44,9 +45,11 @@ namespace KNE
                 Shutdown(exitCode);
                 return;
             }
+            PluginFailure.Detected += PresentPluginFailure;
             DispatcherUnhandledException += (_, problem) =>
             {
                 problem.Handled = true;
+                if (Volatile.Read(ref pluginRecoveryQueued) != 0) return;
                 PresentFailure(problem.Exception, "Необработанная ошибка интерфейса");
             };
             AppDomain.CurrentDomain.UnhandledException += (_, problem) =>
@@ -78,6 +81,14 @@ namespace KNE
                 diagnostics.Record("Интерфейс готов");
             }
             catch (Exception error) { PresentFailure(error, "Ошибка запуска движка"); }
+        }
+
+        private void PresentPluginFailure(PluginFailureException error)
+        {
+            if (Dispatcher.HasShutdownStarted || Volatile.Read(ref recovering) != 0 || Interlocked.Exchange(ref pluginRecoveryQueued, 1) != 0) return;
+            // Persist before dispatching: an unhandled plugin exception on another thread may terminate the CLR first.
+            diagnostics?.Report(error, "Ошибка плагина");
+            Dispatcher.BeginInvoke(new Action(() => PresentFailure(error, "Ошибка плагина")), System.Windows.Threading.DispatcherPriority.Send);
         }
 
         private void PresentFailure(Exception error, string kind)
@@ -115,6 +126,7 @@ namespace KNE
 
         protected override void OnExit(ExitEventArgs e)
         {
+            PluginFailure.Detected -= PresentPluginFailure;
             diagnostics?.Complete();
             EngineDiagnostics.Current = null;
             base.OnExit(e);

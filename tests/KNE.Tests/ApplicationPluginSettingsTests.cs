@@ -10,8 +10,12 @@ using Xunit;
 
 namespace KNE.Tests;
 
-public sealed class ApplicationPluginSettingsTests
+public sealed class ApplicationPluginSettingsTests : IDisposable
 {
+    private readonly PluginApi? previousCatalog = PluginCatalog.Current;
+    public ApplicationPluginSettingsTests() => PluginCatalog.Current = null;
+    public void Dispose() => PluginCatalog.Current = previousCatalog;
+
     private const string CSharpSource = """
         using KNE;
         public sealed class GlobalExtension : IKnePlugin
@@ -228,17 +232,193 @@ public sealed class ApplicationPluginSettingsTests
             Snapshot(root, "header-" + width + ".png", width, 700);
             Invoke(window, "BtnBack_Click", window, new RoutedEventArgs()); await Idle(window);
             Invoke(window, "BtnSettings_Click", window, new RoutedEventArgs()); Layout(root, width, 700);
-            foreach (string name in new[] { "PluginsSettingsGroup", "ApplicationPluginsList", "AddApplicationPluginButton", "RemoveApplicationPluginButton" })
+            Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "GeneralSettingsPage").Visibility);
+            Assert.Equal(Visibility.Collapsed, Find<FrameworkElement>(window, "PluginsSettingsPage").Visibility);
+            Assert.False(Find<Button>(window, "PreviousSettingsPageButton").IsEnabled);
+            Snapshot(root, "settings-general-" + width + ".png", width, 700);
+            Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(root, width, 700);
+            Assert.Equal(Visibility.Collapsed, Find<FrameworkElement>(window, "GeneralSettingsPage").Visibility);
+            Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "PluginsSettingsPage").Visibility);
+            Assert.False(Find<Button>(window, "NextSettingsPageButton").IsEnabled);
+            Assert.True(Find<Button>(window, "PreviousSettingsPageButton").IsEnabled);
+            foreach (string name in new[] { "PluginsSettingsGroup", "ApplicationPluginsList", "AddApplicationPluginButton", "RemoveApplicationPluginButton", "PluginDetailsGroup" })
             {
                 var element = Find<FrameworkElement>(window, name); var bounds = Bounds(element);
                 Assert.True(element.ActualWidth > 0 && element.ActualHeight > 0); Assert.InRange(bounds.Left, 0, width); Assert.InRange(bounds.Right, 0, width);
                 Assert.InRange(bounds.Top, 0, 700); Assert.InRange(bounds.Bottom, 0, 700);
             }
-            Assert.Equal(ScrollBarVisibility.Hidden, ScrollViewer.GetVerticalScrollBarVisibility(Find<ListBox>(window, "ApplicationPluginsList")));
+            Assert.Equal(ScrollBarVisibility.Auto, ScrollViewer.GetVerticalScrollBarVisibility(Find<ListBox>(window, "ApplicationPluginsList")));
             Snapshot(root, "settings-" + width + ".png", width, 700);
+            Find<Button>(window, "PreviousSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(root, width, 700);
+            Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "GeneralSettingsPage").Visibility);
         }
         finally { window.Close(); }
     });
+
+    [Fact]
+    public Task Settings_PluginPagesKeepDraftAndDisplayPublisherMetadataWithoutExecutingSource() => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject(); var store = Store(fixture); var window = Window(store);
+        string cs = External(fixture, "documented.cs", "invalid source must not execute on selection");
+        string lua = External(fixture, "plain.lua", "error('must not run')");
+        File.WriteAllText(Path.ChangeExtension(cs, ".kneplugin.json"), JsonSerializer.Serialize(new PluginManifest("documented", "documented.cs")
+        { Name = "Документированный плагин", Author = "Автор KNE", CreatedAt = new(2026, 10, 20), ReadmeFile = "usage.md", LicenseFile = "LICENSE.plugin" }));
+        External(fixture, "usage.md", "# Инструкция\nДобавьте блок в сцену."); External(fixture, "LICENSE.plugin", "MIT\nCopyright Автор KNE");
+        try
+        {
+            await LoadSettings(window); Invoke(window, "BtnSettings_Click", window, new RoutedEventArgs());
+            Invoke(window, "AddApplicationPluginFiles", (object)new[] { cs, lua });
+            Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var list = Find<ListBox>(window, "ApplicationPluginsList"); list.SelectedIndex = 0;
+            Assert.Equal("Документированный плагин", Find<TextBlock>(window, "PluginNameText").Text);
+            Assert.Equal("Автор KNE", Find<TextBlock>(window, "PluginAuthorText").Text);
+            Assert.Equal("2026-10-20", Find<TextBlock>(window, "PluginCreatedAtText").Text);
+            Assert.Equal("C#", Find<TextBlock>(window, "PluginLanguageText").Text);
+            Assert.Equal("# Инструкция\nДобавьте блок в сцену.", Find<TextBox>(window, "PluginReadmeText").Text);
+            Assert.Equal("MIT\nCopyright Автор KNE", Find<TextBox>(window, "PluginLicenseText").Text);
+            var root = (FrameworkElement)window.Content; Layout(root, 1100, 700); Snapshot(root, "plugin-metadata-1100.png", 1100, 700);
+            Find<Button>(window, "PreviousSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(0, list.SelectedIndex); Assert.Equal(2, list.Items.Count); Assert.Empty((await store.LoadAsync()).ApplicationPlugins);
+            list.SelectedIndex = 1;
+            Assert.Equal("Lua", Find<TextBlock>(window, "PluginLanguageText").Text);
+            Assert.Equal("Не указан", Find<TextBlock>(window, "PluginAuthorText").Text);
+            Assert.Equal("Не указана", Find<TextBlock>(window, "PluginCreatedAtText").Text);
+            Assert.Equal("Инструкция не предоставлена.", Find<TextBox>(window, "PluginReadmeText").Text);
+            Assert.Equal("Лицензия не указана.", Find<TextBox>(window, "PluginLicenseText").Text);
+            list.SelectedIndex = -1; Assert.Equal("Выберите плагин", Find<TextBlock>(window, "PluginNameText").Text);
+            Assert.Empty(Find<TextBox>(window, "PluginReadmeText").Text);
+        }
+        finally { window.Close(); }
+    });
+
+    [Theory]
+    [InlineData("{bad json")]
+    [InlineData("{\"readmeFile\":\"../outside.md\"}")]
+    [InlineData("{\"createdAt\":\"yesterday\"}")]
+    public Task Settings_InvalidMetadataShowsLocalDiagnosticAndKeepsDraft(string json) => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject(); var window = Window(Store(fixture));
+        string source = External(fixture, "broken.lua", ""); File.WriteAllText(Path.ChangeExtension(source, ".kneplugin.json"), json);
+        try
+        {
+            await LoadSettings(window); Invoke(window, "AddApplicationPluginFiles", (object)new[] { source });
+            Assert.Contains("Не удалось прочитать", Find<TextBlock>(window, "PluginMetadataStatus").Text);
+            Assert.Single(Find<ListBox>(window, "ApplicationPluginsList").Items.Cast<object>());
+            Assert.Empty(Find<TextBox>(window, "PluginReadmeText").Text);
+        }
+        finally { window.Close(); }
+    });
+
+    [Theory]
+    [InlineData("missing.cs", "", false)]
+    [InlineData("broken.cs", "not C#", true)]
+    [InlineData("broken.lua", "function (", true)]
+    [InlineData("incompatible.lua", "", true)]
+    public void PluginLoadFailuresNotifyRecoveryWithSourceAndCause(string name, string code, bool exists)
+    {
+        using var fixture = new TempProject(); string source = Path.Combine(fixture.Root, name);
+        if (exists) File.WriteAllText(source, code);
+        if (name == "incompatible.lua") File.WriteAllText(Path.ChangeExtension(source, ".kneplugin.json"), "{\"apiVersion\":2}");
+        using var host = new PluginHost(fixture.Root, true, new object()); var failures = new List<PluginFailureException>();
+        PluginFailure.Detected += failures.Add;
+        try
+        {
+            var error = Assert.Throws<PluginFailureException>(() => host.Load(() => new EditorPluginContext(host.Api), applicationPlugins: [source]));
+            Assert.Same(error, Assert.Single(failures)); Assert.Equal(source, error.SourcePath);
+            Assert.Contains(name, error.Message); Assert.NotNull(error.InnerException); Assert.Empty(host.Api.Blocks);
+            var diagnostics = new EngineDiagnostics(Path.Combine(fixture.Root, "failure.json"), 1, 1, false);
+            var report = diagnostics.Report(error, "Ошибка плагина");
+            Assert.Contains(name, report.Message); Assert.Contains(error.InnerException!.Message, report.Exception);
+            Assert.Equal("Ошибка плагина", EngineDiagnostics.Read(diagnostics.SessionPath).Failure!.Kind);
+        }
+        finally { PluginFailure.Detected -= failures.Add; }
+    }
+
+    [Fact]
+    public void ConflictingPluginsAndDeferredCommandsNotifyRecoveryExactlyOnce()
+    {
+        using var fixture = new TempProject();
+        string first = External(fixture, "first.cs", CSharpSource), second = External(fixture, "second.cs", CSharpSource);
+        using var host = new PluginHost(fixture.Root, true, new object()); var failures = new List<PluginFailureException>();
+        PluginFailure.Detected += failures.Add;
+        try
+        {
+            var conflict = Assert.Throws<PluginFailureException>(() => host.Load(() => new EditorPluginContext(host.Api), applicationPlugins: [first, second]));
+            Assert.Equal(second, conflict.SourcePath); Assert.Same(conflict, Assert.Single(failures)); Assert.Contains("уже зарегистрирован", conflict.Message);
+            failures.Clear(); host.Api.SourcePath = first;
+            host.Api.RegisterCommand(new("test.failure", "Сбой", _ => throw new InvalidOperationException("command failed")));
+            host.Api.SourcePath = second; // Attribution must retain the source that registered the callback.
+            var commandError = Assert.Throws<PluginFailureException>(() => host.Api.commands.Single(c => c.Id == "test.failure").Execute(new(fixture.Root, () => null, _ => { })));
+            Assert.Equal(first, commandError.SourcePath); Assert.Same(commandError, Assert.Single(failures)); Assert.Contains("command failed", commandError.Message);
+            failures.Clear();
+            host.Api.RegisterCommand(new("test.cancel", "Отмена", _ => throw new OperationCanceledException()));
+            Assert.Throws<OperationCanceledException>(() => host.Api.commands.Single(c => c.Id == "test.cancel").Execute(new(fixture.Root, () => null, _ => { })));
+            Assert.Empty(failures);
+        }
+        finally { PluginFailure.Detected -= failures.Add; }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WorkerPluginFailureRetainsRecoveryFlagSourceAndOriginalDetails(bool lua)
+    {
+        using var fixture = new TempProject();
+        string source = External(fixture, lua ? "event.lua" : "event.cs", lua
+            ? "function fail_text(text, speaker) error('plugin worker failure') end\nkne.before_text('fail_text')"
+            : "using KNE; public class Failure : IKnePlugin { public void Execute(IPluginContext c) { c.Api.BeforeExecute(\"Dialogue\", e => throw new System.InvalidOperationException(\"plugin worker failure\")); } }");
+        var project = await fixture.LoadAsync(); project.ApplicationPlugins = [source];
+        await using var session = new ProcessGameSession(project, _ => { }, TimeSpan.FromSeconds(30));
+        var failures = new List<PluginFailureException>(); PluginFailure.Detected += failures.Add;
+        try
+        {
+            var error = await Assert.ThrowsAnyAsync<Exception>(() => session.StartAsync());
+            var report = GameErrorReport.TryGet(error)!;
+            Assert.True(report.PluginFailure); Assert.Contains("plugin worker failure", report.Details);
+            Assert.Contains(Path.GetFileName(source), report.Details);
+            var recovery = Assert.Single(failures); Assert.Same(error, recovery.InnerException);
+            var diagnostics = new EngineDiagnostics(Path.Combine(fixture.Root, "worker-failure.json"), 1, 1, false);
+            var engineReport = diagnostics.Report(recovery, "Ошибка плагина");
+            Assert.Contains("plugin worker failure", engineReport.Exception); Assert.Contains(Path.GetFileName(source), engineReport.Exception);
+        }
+        finally { PluginFailure.Detected -= failures.Add; }
+    }
+
+    [Fact]
+    public Task PluginFailureRecoveryShowsOriginalReportAndOffersRestartWithoutPlugins() => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        var diagnostics = new EngineDiagnostics(Path.Combine(fixture.Root, "recovery.json"), 1, 1, false);
+        var report = diagnostics.Report(new PluginFailureException("broken.cs", "Загрузка плагина", new InvalidOperationException("Plugin registration conflict")), "Ошибка плагина");
+        EngineRecoveryAction? selected = null;
+        var recovery = new EngineRecoveryWindow(report, diagnostics.ReportPath, action => selected = action);
+        try
+        {
+            Assert.Contains("broken.cs", recovery.ReportText.Text); Assert.Contains("Plugin registration conflict", recovery.ReportText.Text);
+            Assert.Contains(diagnostics.ReportPath, recovery.ReportText.Text);
+            var root = (FrameworkElement)recovery.Content; Layout(root, 960, 680); Snapshot(root, "plugin-recovery.png", 960, 680);
+            recovery.SafeRestartButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(EngineRecoveryAction.RestartWithoutPlugins, selected);
+            Assert.Contains("--disable-plugins", EngineLaunch.RestartInfo(true).ArgumentList);
+        }
+        finally { recovery.Close(); }
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public async Task WorkerScriptErrorDoesNotRequestPluginRecovery()
+    {
+        using var fixture = new TempProject(); fixture.Write("game/scenes/main.krl", "function main() error('ordinary script failure') end");
+        var project = await fixture.LoadAsync(); await using var session = new ProcessGameSession(project, _ => { }, TimeSpan.FromSeconds(30));
+        var failures = new List<PluginFailureException>(); PluginFailure.Detected += failures.Add;
+        try
+        {
+            var error = await Assert.ThrowsAnyAsync<Exception>(() => session.StartAsync());
+            Assert.False(GameErrorReport.TryGet(error)!.PluginFailure); Assert.Empty(failures);
+        }
+        finally { PluginFailure.Detected -= failures.Add; }
+    }
 
     private static UserSettingsStore Store(TempProject fixture) => new(Path.Combine(fixture.Root, "profile", "settings.json"));
     private static string External(TempProject fixture, string name, string source) { string path = Path.Combine(fixture.Root, name); File.WriteAllText(path, source); return path; }
