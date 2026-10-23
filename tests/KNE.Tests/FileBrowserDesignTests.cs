@@ -75,6 +75,8 @@ public sealed class FileBrowserDesignTests
                 await WorkspaceTabsTests.Invoke(window, "OpenProjectAsync", fixture.ProjectPath, false); Layout((FrameworkElement)window.Content, new Size(1460, 900));
                 await window.Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle); Layout((FrameworkElement)window.Content, new Size(1460, 900));
                 var table = WorkspaceTabsTests.Find<DataGrid>(window, "FilesDataGrid");
+                typeof(MainWindow).GetField("settings", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(window, new UserSettings { ProjectBrowserView = "table" });
+                typeof(MainWindow).GetMethod("ApplyBrowserView", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
                 Assert.Equal(DataGridHeadersVisibility.Column, table.HeadersVisibility); Assert.Equal(0, table.RowHeaderWidth);
                 var search = WorkspaceTabsTests.Find<TextBox>(window, "FileSearch");
                 Assert.Equal("", search.Text);
@@ -96,7 +98,7 @@ public sealed class FileBrowserDesignTests
                         Assert.InRange(header.ActualWidth, 50, table.ActualWidth);
                         Assert.Contains(Descendants(header).OfType<TextBlock>(), text => text.Text == header.Column.Header.ToString() && text.ActualWidth > 0);
                     }
-                    var combos = Descendants(table).OfType<ComboBox>().ToArray(); Assert.NotEmpty(combos);
+                    var combos = Descendants(table).OfType<ComboBox>().Where(combo => combo.Tag is ProjectFile).ToArray(); Assert.NotEmpty(combos);
                     foreach (var combo in combos)
                     {
                         Assert.Equal(new[] { "Редактировать", "Переименовать", "Дублировать", "Переместить", "Удалить" }, combo.Items.Cast<ComboBoxItem>().Select(item => (string)item.Content));
@@ -106,7 +108,7 @@ public sealed class FileBrowserDesignTests
                     foreach (var row in rows)
                     {
                         Assert.All(Descendants(row).OfType<DataGridCell>(), cell => Assert.InRange(cell.ActualWidth, 50, table.ActualWidth));
-                        string fileName = Assert.IsType<ProjectFile>(row.Item).FileName;
+                        string fileName = Assert.IsType<ProjectBrowserEntry>(row.Item).Name;
                         Assert.Contains(Descendants(row).OfType<TextBlock>(), text => text.Text == fileName && text.ActualWidth > 0 && text.ActualHeight > 0);
                     }
                     Assert.DoesNotContain(Descendants(table).OfType<DataGridRowHeader>(), header => header.ActualWidth > 0 && header.Visibility == Visibility.Visible);
@@ -127,7 +129,7 @@ public sealed class FileBrowserDesignTests
         await WorkspaceTabsTests.Sta(async () =>
         {
             var launches = new List<System.Diagnostics.ProcessStartInfo>(); var window = new MainWindow(null, null, null, launches.Add);
-            typeof(MainWindow).GetField("settings", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(window, new UserSettings { EditorPath = editorProgram });
+            typeof(MainWindow).GetField("settings", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(window, new UserSettings { EditorPath = editorProgram, ProjectBrowserView = "table" });
             try
             {
                 await WorkspaceTabsTests.Invoke(window, "OpenProjectAsync", fixture.ProjectPath, false);
@@ -135,7 +137,8 @@ public sealed class FileBrowserDesignTests
                 {
                     var table = WorkspaceTabsTests.Find<DataGrid>(window, "FilesDataGrid");
                     table.Visibility = Visibility.Visible; FileBrowserDesignTests.Layout((FrameworkElement)window.Content);
-                    var file = table.Items.Cast<ProjectFile>().Single(entry => entry.FilePath == path); table.ScrollIntoView(file); table.UpdateLayout();
+                    typeof(MainWindow).GetMethod("ShowFileBrowser", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
+                    var file = table.Items.Cast<ProjectBrowserEntry>().Single(entry => entry.File?.FilePath == path); table.ScrollIntoView(file); table.UpdateLayout();
                     var row = Assert.IsType<DataGridRow>(table.ItemContainerGenerator.ContainerFromItem(file));
                     var action = Assert.Single(Descendants(row).OfType<ComboBox>());
                     action.SelectedItem = action.Items.Cast<ComboBoxItem>().Single(item => Equals(item.Content, "Редактировать"));
@@ -153,7 +156,8 @@ public sealed class FileBrowserDesignTests
                 }
                 var files = WorkspaceTabsTests.Find<DataGrid>(window, "FilesDataGrid"); files.Visibility = Visibility.Visible;
                 FileBrowserDesignTests.Layout((FrameworkElement)window.Content);
-                var assetFile = files.Items.Cast<ProjectFile>().Single(entry => entry.FilePath == asset); files.ScrollIntoView(assetFile); files.UpdateLayout();
+                typeof(MainWindow).GetMethod("ShowFileBrowser", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
+                var assetFile = files.Items.Cast<ProjectBrowserEntry>().Single(entry => entry.File?.FilePath == asset); files.ScrollIntoView(assetFile); files.UpdateLayout();
                 var assetRow = Assert.IsType<DataGridRow>(files.ItemContainerGenerator.ContainerFromItem(assetFile));
                 var assetAction = Assert.Single(Descendants(assetRow).OfType<ComboBox>());
                 assetAction.SelectedItem = assetAction.Items.Cast<ComboBoxItem>().Single(item => Equals(item.Content, "Редактировать"));

@@ -75,6 +75,8 @@ public partial class MainWindow : Window
     private async void Window_Loaded(object sender, RoutedEventArgs e) => await RunOperationAsync(async () =>
     {
         settings = await settingsStore.LoadAsync();
+        ProjectBrowserViewInput.SelectedValue = settings.ProjectBrowserView;
+        ApplyBrowserView();
         ReloadApplicationPlugins();
         ResetApplicationPluginDraft();
         AppGraphicsInput.Value = settings.Graphics; GraphicsEnvironment.SetSettings(this, settings.Graphics);
@@ -153,6 +155,8 @@ public partial class MainWindow : Window
             EditorWorkspace.Visibility = ActiveEditor.Visibility = Visibility.Collapsed;
             FilesDataGrid.Visibility = Visibility.Visible;
         }
+        if (currentProject == null || !currentProject.Path.Equals(loaded.Path, StringComparison.OrdinalIgnoreCase))
+        { browserDirectory = ""; FileSearch.Clear(); }
         currentProject = loaded;
         try { LoadEditorPlugins(loaded.Path); } catch (Exception error) { identityWarning += " Не удалось загрузить расширения: " + error.Message; }
         EngineDiagnostics.Current?.SetProject(loaded.Title, loaded.Path);
@@ -218,6 +222,7 @@ public partial class MainWindow : Window
 
     private void BtnSettings_Click(object sender, RoutedEventArgs e)
     {
+        ProjectBrowserViewInput.SelectedValue = settings.ProjectBrowserView;
         SetSettingsPage(0);
         ResetApplicationPluginDraft();
         AppGraphicsInput.Value = settings.Graphics; GraphicsEnvironment.SetSettings(this, settings.Graphics);
@@ -245,9 +250,10 @@ public partial class MainWindow : Window
         string userName = TxtUserName.Text.Trim();
         if (userName.Length > 80 || userName.Any(char.IsControl)) throw new ArgumentException("Имя пользователя: до 80 символов, без переносов строк и управляющих символов.");
         bool pluginsChanged = !applicationPluginDraft.SequenceEqual(settings.ApplicationPlugins, StringComparer.OrdinalIgnoreCase);
-        var next = new UserSettings { ApplicationPlugins = applicationPluginDraft.ToList(), Graphics = AppGraphicsInput.Value, EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = EditorTheme.Normalize((string?)ThemeInput.SelectedValue), UserName = userName, AccessibilityMode = BlockAccessibility.GetMode(this), WelcomeObjects = WelcomeBubbles.Normalize((string?)WelcomeObjectInput.SelectedValue) };
+        var next = new UserSettings { ProjectBrowserView = ProjectBrowserViewInput.SelectedValue as string == "table" ? "table" : "tiles", ApplicationPlugins = applicationPluginDraft.ToList(), Graphics = AppGraphicsInput.Value, EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = EditorTheme.Normalize((string?)ThemeInput.SelectedValue), UserName = userName, AccessibilityMode = BlockAccessibility.GetMode(this), WelcomeObjects = WelcomeBubbles.Normalize((string?)WelcomeObjectInput.SelectedValue) };
         await settingsStore.SaveAsync(next);
         settings = next; GraphicsEnvironment.SetSettings(this, settings.Graphics);
+        ApplyBrowserView();
         if (pluginsChanged) ReloadApplicationPlugins();
         UpdateWelcomeGreeting();
         await RefreshStoredProjectsAsync();
@@ -295,7 +301,7 @@ public partial class MainWindow : Window
         int revision = ++viewRevision;
         string query = FileSearch.Text.Trim().Replace('/', Path.DirectorySeparatorChar);
         var files = project.Files.ToArray();
-        var tree = await Task.Run(() => ProjectTree.Build(project.Path, files, query), lifetime.Token);
+        var tree = await Task.Run(() => ProjectTree.Build(project.Path, files, query, project.Directories), lifetime.Token);
         if (revision != viewRevision || closed || currentProject != project) return;
         RememberTreeState();
         foreach (var node in FlattenTree(tree))
@@ -303,17 +309,16 @@ public partial class MainWindow : Window
             node.IsExpanded = expandedTreePaths.Contains(node.RelativePath);
             node.IsSelected = node.RelativePath.Equals(selectedTreePath, StringComparison.OrdinalIgnoreCase);
         }
-        ProjectFilesTree.ItemsSource = tree;
-        FilesDataGrid.ItemsSource = files.Where(f => Path.GetRelativePath(project.Path, f.FilePath).Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
+        updatingBrowserTree = true;
+        try { browserTree = tree; ProjectFilesTree.ItemsSource = tree; }
+        finally { updatingBrowserTree = false; }
+        RefreshBrowserEntries();
     }
 
     private void ProjectFilesTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
-        if (e.NewValue is ProjectTreeNode { File: { } file })
-        {
-            FilesDataGrid.SelectedItem = file;
-            FilesDataGrid.ScrollIntoView(file);
-        }
+        if (updatingBrowserTree || e.NewValue is not ProjectTreeNode node) return;
+        TryNavigateBrowserDirectory(node.File == null ? node.RelativePath : Path.GetDirectoryName(node.RelativePath) ?? "", node.RelativePath, node.File == null);
     }
 
     private void WatchProject(string path)
@@ -361,6 +366,11 @@ public partial class MainWindow : Window
         string action = item.Content?.ToString() ?? "";
         // Reset before awaiting or changing ItemsSource: virtualized rows may be recycled.
         combo.SelectedItem = null;
+        await PerformFileActionAsync(file, action);
+    }
+
+    private async Task PerformFileActionAsync(ProjectFile file, string action)
+    {
         if (busy || currentProject is not { } project) return;
         var operations = new ProjectFiles(project);
         await RunOperationAsync(async () =>
@@ -453,7 +463,7 @@ public partial class MainWindow : Window
 
     private async void BtnOpenScript_Click(object sender, RoutedEventArgs e)
     {
-        if (currentProject is not { } project || FilesDataGrid.SelectedItem is not ProjectFile file) return;
+        if (currentProject is not { } project || (FilesDataGrid.SelectedItem as ProjectBrowserEntry)?.File is not { } file) return;
         await RunOperationAsync(() => OpenScriptAsync(new ProjectFiles(project).ValidateSource(file)), "Открытие сценария…");
     }
 
@@ -485,6 +495,8 @@ public partial class MainWindow : Window
 
     private async void OpenScript_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
+        if (BrowserItemAtDoubleClick(sender, e.OriginalSource as DependencyObject) is ProjectBrowserEntry entry)
+        { e.Handled = true; await OpenBrowserEntryAsync(entry); return; }
         if (currentProject is not { } project || FileAtDoubleClick(sender, e.OriginalSource as DependencyObject) is not { } file ||
             !(ScriptDocument.IsCodePath(file.FilePath) || ScriptDocument.IsGraphPath(file.FilePath))) return;
         e.Handled = true;
@@ -493,8 +505,7 @@ public partial class MainWindow : Window
 
     private void BtnFileList_Click(object sender, RoutedEventArgs e)
     {
-        FilesDataGrid.Visibility = Visibility.Visible;
-        EditorWorkspace.Visibility = ActiveEditor.Visibility = Visibility.Collapsed;
+        ShowFileBrowser();
     }
 
     private async void BtnNewVisualScene_Click(object sender, RoutedEventArgs e)

@@ -10,6 +10,8 @@ public sealed class UserSettings
     public string EditorPath { get; set; } = "";
     /// <summary>The single directory whose immediate children are KNE projects.</summary>
     public string ProjectsStoragePath { get; set; } = "";
+    /// <summary>Embedded project explorer display mode: tiles (default) or table.</summary>
+    public string ProjectBrowserView { get; set; } = "tiles";
     public List<string> RecentProjects { get; set; } = [];
     public Dictionary<string, DateTimeOffset> ProjectLastOpened { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> HiddenProjects { get; set; } = [];
@@ -64,6 +66,7 @@ public sealed class UserSettingsStore
                     ?? throw new InvalidDataException("Файл настроек содержит null.");
                 settings.EditorPath ??= "";
                 settings.ProjectsStoragePath ??= "";
+                settings.ProjectBrowserView = settings.ProjectBrowserView == "table" ? "table" : "tiles";
                 settings.ApplicationPlugins = ApplicationPluginFiles.Normalize(settings.ApplicationPlugins).ToList();
                 settings.Theme = settings.ApplicationPlugins.Count > 0 && !string.IsNullOrWhiteSpace(settings.Theme) && settings.Theme.Length <= 160 ? settings.Theme : EditorTheme.Normalize(settings.Theme);
                 settings.UserName = (settings.UserName ?? "").Trim();

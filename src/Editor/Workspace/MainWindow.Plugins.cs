@@ -26,7 +26,7 @@ public partial class MainWindow
             EditorTheme.Apply(this, settings.Theme);
             applicationPluginLoadError = null;
             if (projectDirectory == null) return;
-            AddPluginButton("Диалоги / переводы", ShowPluginTranslations, 210);
+            AddPluginButton("Диалоги / переводы", ShowPluginTranslations, 0);
             foreach (var command in host.Api.commands.Where(c => c.Location == "toolbar")) AddPluginButton(command.Title, () => command.Execute(PluginEditor()));
             foreach (var tab in host.Api.tabs) AddPluginButton(tab.Title, () => OpenPluginTab(tab));
             if (host.Api.commands.Any(c => c.Location == "context"))
@@ -44,9 +44,9 @@ public partial class MainWindow
         catch (Exception error) { UnloadEditorPlugins(); host.Dispose(); applicationPluginLoadError = error.Message; throw; }
     }
     private PluginEditorContext PluginEditor() => new(currentProject!.Path, () => ActiveEditor.GetPluginGraph(), graph => ActiveEditor.ReplacePluginGraph(graph));
-    private void AddPluginButton(string title, Action execute, double minimumWidth = 0)
+    private void AddPluginButton(string title, Action execute, double horizontalPadding = 14)
     {
-        var button = new Button { Content = title, MinWidth = minimumWidth, Margin = new Thickness(0, 0, 8, 4), Padding = new Thickness(14, 6, 14, 6) };
+        var button = new Button { Content = title, Margin = new Thickness(0, 0, 8, 0), Padding = new Thickness(horizontalPadding, 6, horizontalPadding, 6) };
         button.Click += async (_, _) => await RunOperationAsync(() => { execute(); return Task.CompletedTask; }, title);
         PluginToolbar.Children.Add(button);
     }

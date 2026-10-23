@@ -80,7 +80,7 @@ public sealed class ScenePreviewUiTests
                 Assert.True(tree.ActualWidth >= 200); Assert.True(editor.ActualHeight >= 500);
                 Capture(content, "editor-workspace.png");
                 typeof(MainWindow).GetMethod("BtnFileList_Click", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, [window, new RoutedEventArgs()]);
-                Assert.Equal(Visibility.Collapsed, workspace.Visibility); Assert.Equal(Visibility.Visible, Find<DataGrid>(window, "FilesDataGrid").Visibility);
+                Assert.Equal(Visibility.Collapsed, workspace.Visibility); Assert.Equal(Visibility.Visible, Find<Grid>(window, "FileBrowserPanel").Visibility);
                 Assert.NotEmpty(tree.Items);
             }
             finally { window.Close(); }

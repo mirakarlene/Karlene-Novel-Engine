@@ -75,7 +75,8 @@ public partial class MainWindow
         foreach (var view in EditorWorkspace.Children.OfType<FrameworkElement>().Where(view => view.Tag is PluginEditorTab))
             view.Visibility = any && ReferenceEquals((DocumentTabs.SelectedItem as TabItem)?.Tag, view.Tag) ? Visibility.Visible : Visibility.Collapsed;
         EditorWorkspace.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
-        FilesDataGrid.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+        FileBrowserPanel.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+        ApplyBrowserView();
     }
 
     private async Task CloseEditorTabAsync(ScriptEditor editor)
