@@ -56,7 +56,8 @@ public partial class GameWindow
                 var definition = playerPlugins.Api.screens.FirstOrDefault(s => s.Id == id); if (definition == null) continue;
                 view = definition.Create(runtime.Variables); pluginViews.Add(id, view); pluginOverlay.Children.Add(view);
             }
-            if (view is IPluginScreenView live) live.UpdateState(runtime.Variables);
+            if (view is IPluginScreenView live)
+                PluginFailure.Invoke(id, "Обновление игрового экрана", () => { live.UpdateState(runtime.Variables); return true; });
         }
         pluginOverlay.Visibility = pluginViews.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }

@@ -10,6 +10,35 @@ public partial class MainWindow
     private readonly List<string> applicationPluginDraft = [];
     private string? applicationPluginLoadError;
     private sealed record ApplicationPluginEntry(string Name, string Path, string Status);
+    private void SetSettingsPage(int page)
+    {
+        bool plugins = page == 1;
+        GeneralSettingsPage.Visibility = plugins ? Visibility.Collapsed : Visibility.Visible;
+        PluginsSettingsPage.Visibility = plugins ? Visibility.Visible : Visibility.Collapsed;
+        PreviousSettingsPageButton.IsEnabled = plugins;
+        NextSettingsPageButton.IsEnabled = !plugins;
+        SettingsPageLabel.Text = plugins ? "2 / 2 · Плагины" : "1 / 2 · Основные";
+    }
+    private void PreviousSettingsPage_Click(object sender, RoutedEventArgs e) => SetSettingsPage(0);
+    private void NextSettingsPage_Click(object sender, RoutedEventArgs e) => SetSettingsPage(1);
+    private void ApplicationPluginsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (PluginNameText == null) return; // Selection may change while XAML is being initialized.
+        PluginNameText.Text = "Выберите плагин";
+        PluginAuthorText.Text = PluginCreatedAtText.Text = PluginLanguageText.Text = PluginReadmeText.Text = PluginLicenseText.Text = PluginMetadataStatus.Text = "";
+        if (ApplicationPluginsList.SelectedItem is not ApplicationPluginEntry entry) return;
+        PluginNameText.Text = entry.Name;
+        PluginLanguageText.Text = Path.GetExtension(entry.Path).Equals(".lua", StringComparison.OrdinalIgnoreCase) ? "Lua" : "C#";
+        try
+        {
+            var metadata = PluginMetadata.Read(entry.Path);
+            PluginNameText.Text = metadata.Name; PluginAuthorText.Text = metadata.Author;
+            PluginCreatedAtText.Text = metadata.CreatedAt; PluginLanguageText.Text = metadata.Language;
+            PluginReadmeText.Text = metadata.Readme; PluginLicenseText.Text = metadata.License;
+        }
+        catch (Exception error) when (error is IOException or ArgumentException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        { PluginMetadataStatus.Text = "Не удалось прочитать сведения о плагине: " + error.Message; }
+    }
     private void ResetApplicationPluginDraft()
     {
         applicationPluginDraft.Clear(); applicationPluginDraft.AddRange(settings.ApplicationPlugins);
@@ -22,7 +51,7 @@ public partial class MainWindow
         var entries = applicationPluginDraft.Select(path => new ApplicationPluginEntry(Path.GetFileName(path), path,
             !File.Exists(path) ? "Файл не найден" : !EngineLaunch.PluginsEnabled ? "Безопасный режим" : pending ? "Ожидает сохранения" : applicationPluginLoadError != null ? "Ошибка загрузки" : "Подключён")).ToArray();
         ApplicationPluginsList.ItemsSource = entries;
-        ApplicationPluginsList.SelectedItem = entries.FirstOrDefault(entry => entry.Path == selected);
+        ApplicationPluginsList.SelectedItem = entries.FirstOrDefault(entry => entry.Path.Equals(selected, StringComparison.OrdinalIgnoreCase)) ?? entries.FirstOrDefault();
         ApplicationPluginsStatus.Text = applicationPluginLoadError != null && !pending ? "Не удалось загрузить плагины: " + applicationPluginLoadError
             : entries.Length == 0 ? "Плагины не подключены. Добавьте файл .lua или .cs."
             : $"Подключено файлов: {entries.Length}." + (pending ? " Есть несохранённые изменения." : "");

@@ -10,6 +10,18 @@ public sealed class PluginApi : IDisposable
 {
     private readonly List<IDisposable> resources = [];
     private bool disposed;
+    internal string SourcePath { get; set; } = "Плагин";
+    private Func<T, TResult> Protect<T, TResult>(string operation, Func<T, TResult> callback)
+    {
+        string source = SourcePath;
+        return value => PluginFailure.Invoke(source, operation, () => callback(value));
+    }
+    private Action<T> Protect<T>(string operation, Action<T> callback)
+    {
+        ArgumentNullException.ThrowIfNull(callback);
+        var invoke = Protect<T, bool>(operation, value => { callback(value); return true; });
+        return value => invoke(value);
+    }
     private readonly Dictionary<string, Func<IPluginContext, JsonObject, int>> executors = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<Action<PluginExecution>>> hooks = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<Action<PluginEvent>>> events = new(StringComparer.Ordinal);
@@ -105,7 +117,8 @@ public sealed class PluginApi : IDisposable
             if (p.Kind == "choice" && (p.Choices is not { Length: > 0 and <= 100 } || !p.Choices.Contains(p.Default))) throw new ArgumentException("Выпадающий список требует варианты и допустимое значение по умолчанию.");
         }
         block = block with { Inputs = block.Inputs?.ToArray(), Outputs = block.Outputs?.ToArray(), Parameters = parameters.Select(p => p with { Choices = p.Choices?.ToArray() }).ToArray() };
-        blocks.Add(block); libraryDefinitions = null; executors.Add(block.Id, execute);
+        string source = SourcePath;
+        blocks.Add(block); libraryDefinitions = null; executors.Add(block.Id, (context, values) => PluginFailure.Invoke(source, "Блок " + block.Id, () => execute(context, values)));
     }
 
     /// <summary>Register a Lua-backed block. Its function receives the parameters as JSON and returns a 1-based output index.</summary>
@@ -118,13 +131,13 @@ public sealed class PluginApi : IDisposable
 
     /// <summary>Intercepts a block kind or all kinds using '*'; dialogue hooks may replace text and speaker.</summary>
     /// <param name="kind">ScriptNodeKind name, Dialogue, or '*'.</param><param name="hook">Synchronous worker callback.</param>
-    public void BeforeExecute(string kind, Action<PluginExecution> hook) { Guard(); Add(hooks, kind, hook); BindingsChanged?.Invoke(); }
+    public void BeforeExecute(string kind, Action<PluginExecution> hook) { Guard(); Add(hooks, kind, Protect("Hook " + kind, hook)); BindingsChanged?.Invoke(); }
     /// <summary>Subscribes to runtime events, including save/load, scene, text and input notifications.</summary>
     /// <param name="name">Event name, such as on_save.</param><param name="handler">Callback receiving a lifetime-bound execution context.</param>
-    public void On(string name, Action<PluginEvent> handler) { Guard(); Add(events, name, handler); BindingsChanged?.Invoke(); }
+    public void On(string name, Action<PluginEvent> handler) { Guard(); Add(events, name, Protect("Событие " + name, handler)); BindingsChanged?.Invoke(); }
     /// <summary>Intercepts player input synchronously before built-in WPF/engine handling.</summary>
     /// <param name="handler">Sets Handled to consume an input event.</param>
-    public void InterceptInput(Action<PluginInput> handler) { Guard(); ArgumentNullException.ThrowIfNull(handler); input.Add(handler); }
+    public void InterceptInput(Action<PluginInput> handler) { Guard(); ArgumentNullException.ThrowIfNull(handler); input.Add(Protect("Перехват ввода", handler)); }
     /// <summary>Registers the JSON contract of a plugin-defined .NET structure.</summary>
     /// <typeparam name="T">Serializable data type.</typeparam><param name="id">Unique structure ID.</param>
     public void RegisterStructure<T>(string id)
@@ -165,16 +178,20 @@ public sealed class PluginApi : IDisposable
     /// <summary>Imports a PNG into the project and uses it as the initial scene background.</summary><param name="path">Local PNG path.</param>
     public void SetGameTexture(string path) { Guard(); GameTexture = Assets.ImportLocal(Assets.Local(path, ".png")); }
     /// <summary>Registers an openable editor tab; its factory runs on the editor Dispatcher.</summary><param name="tab">Unique tab and view factory.</param>
-    public void RegisterTab(PluginEditorTab tab) { Guard(); Unique(tabs.Select(t => t.Id), tab.Id); tabs.Add(tab); }
+    public void RegisterTab(PluginEditorTab tab)
+    {
+        Guard(); Unique(tabs.Select(t => t.Id), tab.Id); string source = SourcePath;
+        tabs.Add(tab with { Create = () => PluginFailure.Invoke(source, "Вкладка " + tab.Id, tab.Create) });
+    }
     /// <summary>Registers a toolbar/context command, including undo-aware graph generators.</summary><param name="command">Command definition.</param>
     public void RegisterCommand(PluginEditorCommand command)
     {
         Guard(); Unique(commands.Select(c => c.Id), command.Id);
         if (command.Location is not ("toolbar" or "context")) throw new ArgumentException("Расположение команды: toolbar или context.");
-        commands.Add(command);
+        commands.Add(command with { Execute = Protect("Команда " + command.Id, command.Execute) });
     }
     /// <summary>Registers a game overlay factory; use ShowScreen to activate it.</summary><param name="screen">Unique screen and WPF factory.</param>
-    public void RegisterScreen(PluginGameScreen screen) { Guard(); Unique(screens.Select(s => s.Id), screen.Id); screens.Add(screen); }
+    public void RegisterScreen(PluginGameScreen screen) { Guard(); Unique(screens.Select(s => s.Id), screen.Id); screens.Add(screen with { Create = Protect("Экран " + screen.Id, screen.Create) }); }
     /// <summary>Changes overlay visibility in persistent runtime state.</summary>
     /// <param name="context">Current runtime callback context.</param><param name="id">Screen ID.</param><param name="visible">Whether to display it.</param>
     public void ShowScreen(IPluginContext context, string id, bool visible = true)
@@ -195,14 +212,18 @@ public sealed class PluginApi : IDisposable
     /// <summary>Stores plugin data in state for the next checkpoint.</summary><typeparam name="T">Serializable type.</typeparam><param name="context">Runtime context.</param><param name="pluginId">Owner ID.</param><param name="data">Payload.</param>
     public void SetSaveData<T>(IPluginContext context, string pluginId, T data) { Guard(); Id(pluginId); context.SetJson("__plugin_" + pluginId, JsonSerializer.SerializeToElement(data)); }
     /// <summary>Adds a static graph validator to project analysis.</summary><param name="validator">Receives a detached graph; return actionable diagnostics.</param>
-    public void RegisterValidator(Func<VisualScript, IEnumerable<PluginDiagnostic>> validator) { Guard(); ArgumentNullException.ThrowIfNull(validator); validators.Add(validator); }
+    public void RegisterValidator(Func<VisualScript, IEnumerable<PluginDiagnostic>> validator)
+    {
+        Guard(); ArgumentNullException.ThrowIfNull(validator);
+        validators.Add(Protect<VisualScript, IEnumerable<PluginDiagnostic>>("Проверка проекта", graph => validator(graph).Take(1000).ToArray()));
+    }
     /// <summary>Adds or overrides a dialogue interchange format.</summary><param name="format">Extension and paired import/export callbacks.</param>
     public void RegisterDialogueFormat(PluginDialogueFormat format)
     {
         Guard();
         if (!Regex.IsMatch(format.Extension, "^\\.[a-z0-9]{1,12}$", RegexOptions.CultureInvariant)) throw new ArgumentException("Расширение формата: .json, .docx и т. п.");
         if (formats.Any(f => f.Extension == format.Extension)) throw new ArgumentException("Формат уже зарегистрирован.");
-        formats.Add(format);
+        formats.Add(format with { Export = Protect("Экспорт " + format.Extension, format.Export), Import = Protect("Импорт " + format.Extension, format.Import) });
     }
     /// <summary>Exports dialogue using a custom format or built-in JSON/DOCX/PDF.</summary><param name="graph">Source graph.</param><param name="extension">Dot-prefixed format.</param><returns>File bytes.</returns>
     public byte[] ExportDialogues(VisualScript graph, string extension)

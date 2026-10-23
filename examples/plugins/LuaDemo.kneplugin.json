@@ -1,5 +1,9 @@
 {
   "id": "kne.sdk.lua_demo",
   "source": "plugins/LuaDemo.lua",
-  "apiVersion": 1
+  "apiVersion": 1,
+  "name": "Пример KNE SDK для Lua",
+  "author": "KNE contributors",
+  "readme": "Подключите LuaDemo.lua в настройках KNE или скопируйте исходник и манифест в plugins проекта. Пример добавляет счётчик и hook текста. Подробности: docs/plugin-api.md в репозитории KNE.",
+  "license": "GPL-3.0-or-later (см. LICENSE в репозитории KNE)"
 }

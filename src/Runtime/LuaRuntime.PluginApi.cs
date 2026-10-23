@@ -122,6 +122,7 @@ public sealed partial class LuaRuntime
     }
     private void CapturePluginError(Exception error)
     {
+        pluginOperationFailed = true;
         for (Exception? cause = error; cause != null; cause = cause.InnerException)
             foreach (var frame in new StackTrace(cause, true).GetFrames() ?? [])
             {

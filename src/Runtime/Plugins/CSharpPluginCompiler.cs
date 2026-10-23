@@ -26,7 +26,7 @@ internal sealed class CSharpPluginCompiler : IDisposable
             cache.Add(key, plugin);
         }
         try { plugin.Instance.Execute(context); }
-        catch (Exception error)
+        catch (Exception error) when (error is not OperationCanceledException)
         {
             throw new PluginSourceException(relativePath, FindLine(error, relativePath),
                 "Ошибка C#-плагина: " + error.Message, error);

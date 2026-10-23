@@ -132,8 +132,15 @@
             <Grid x:Name="SettingsPanel" Visibility="Collapsed" MaxWidth="1380" Margin="4">
                 <Grid.Resources><local:AccessibilitySelectedConverter x:Key="AccessibilitySelected"/></Grid.Resources>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <TextBlock Text="Настройки" FontSize="28" FontWeight="Bold" Margin="0,0,0,16"/>
-                <Viewbox x:Name="SettingsLayout" Grid.Row="1" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Stretch" VerticalAlignment="Top">
+                <DockPanel Margin="0,0,0,16">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="PreviousSettingsPageButton" Content="←" IsEnabled="False" Padding="14,8" Click="PreviousSettingsPage_Click" ToolTip="Предыдущая страница" AutomationProperties.Name="Предыдущая страница настроек"/>
+                        <TextBlock x:Name="SettingsPageLabel" Text="1 / 2 · Основные" VerticalAlignment="Center" Margin="14,0"/>
+                        <Button x:Name="NextSettingsPageButton" Content="→" Padding="14,8" Click="NextSettingsPage_Click" ToolTip="Следующая страница" AutomationProperties.Name="Следующая страница настроек"/>
+                    </StackPanel>
+                    <TextBlock Text="Настройки" FontSize="28" FontWeight="Bold"/>
+                </DockPanel>
+                <Viewbox x:Name="GeneralSettingsPage" Grid.Row="1" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Stretch" VerticalAlignment="Top">
                     <Grid Width="1300">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="0.9*" MinWidth="280"/><ColumnDefinition Width="18"/><ColumnDefinition Width="1.6*" MinWidth="610"/></Grid.ColumnDefinitions>
                         <StackPanel x:Name="LeftSettingsColumn"><Border x:Name="ProjectsSettingsGroup" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18" VerticalAlignment="Top">
@@ -148,8 +155,7 @@
                             </StackPanel>
                         </Border>
                         <Border x:Name="RenderSettingsGroup" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18" Margin="0,12,0,0"><StackPanel><TextBlock Text="Рендер" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,12"/><local:GraphicsSettingsEditor x:Name="AppGraphicsInput"/></StackPanel></Border></StackPanel>
-                        <StackPanel Grid.Column="2">
-                        <Border x:Name="DesignSettingsGroup" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18" VerticalAlignment="Top">
+                        <Border x:Name="DesignSettingsGroup" Grid.Column="2" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18">
                             <StackPanel>
                                 <TextBlock Text="Дизайн KNE" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,18"/>
                                 <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -172,27 +178,44 @@
                                 </ItemsControl>
                             </StackPanel>
                         </Border>
-                        <Border x:Name="PluginsSettingsGroup" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18" Margin="0,12,0,0">
-                            <StackPanel>
-                                <DockPanel Margin="0,0,0,10">
-                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    </Grid>
+                </Viewbox>
+                <Grid x:Name="PluginsSettingsPage" Grid.Row="1" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="1.25*"/></Grid.ColumnDefinitions>
+                    <Border x:Name="PluginsSettingsGroup" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18">
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Top" Text="Плагины" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,16"/>
+                                    <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,12">
                                         <Button x:Name="AddApplicationPluginButton" Content="Добавить…" Padding="12,6" Margin="0,0,8,0" Click="AddApplicationPlugin_Click"/>
                                         <Button x:Name="RemoveApplicationPluginButton" Content="Убрать из списка" Padding="12,6" Click="RemoveApplicationPlugin_Click">
                                             <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="IsEnabled" Value="True"/><Style.Triggers><DataTrigger Binding="{Binding SelectedIndex, ElementName=ApplicationPluginsList}" Value="-1"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></Button.Style>
                                         </Button>
-                                    </StackPanel>
-                                    <TextBlock Text="Плагины" FontSize="21" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                </DockPanel>
-                                <ListBox x:Name="ApplicationPluginsList" Height="118" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Hidden" AutomationProperties.Name="Подключённые плагины KNE">
+                                    </WrapPanel>
+                                <StackPanel DockPanel.Dock="Bottom">
+                                    <TextBlock x:Name="ApplicationPluginsStatus" Foreground="{DynamicResource Editor.Muted}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                    <TextBlock Text="C# и Lua. Изменения применяются после сохранения настроек. Удаление из списка оставляет файл на диске." Foreground="{DynamicResource Editor.Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                </StackPanel>
+                                <ListBox x:Name="ApplicationPluginsList" SelectionChanged="ApplicationPluginsList_SelectionChanged" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Подключённые плагины KNE">
                                     <ListBox.ItemTemplate><DataTemplate><StackPanel Margin="6,3" ToolTip="{Binding Path}"><DockPanel><TextBlock DockPanel.Dock="Right" Text="{Binding Status}" Foreground="{DynamicResource Editor.Muted}" FontSize="11" Margin="12,0,0,0"/><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/></DockPanel><TextBlock Text="{Binding Path}" Foreground="{DynamicResource Editor.Muted}" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/></StackPanel></DataTemplate></ListBox.ItemTemplate>
                                 </ListBox>
-                                <TextBlock x:Name="ApplicationPluginsStatus" Foreground="{DynamicResource Editor.Muted}" TextWrapping="Wrap" Margin="0,8,0,0"/>
-                                <TextBlock Text="C# и Lua. Изменения применяются после сохранения настроек. Удаление из списка оставляет файл на диске." Foreground="{DynamicResource Editor.Muted}" FontSize="11" TextWrapping="Wrap" Margin="0,5,0,0"/>
-                            </StackPanel>
+                            </DockPanel>
                         </Border>
-                        </StackPanel>
-                    </Grid>
-                </Viewbox>
+                    <Border x:Name="PluginDetailsGroup" Grid.Column="2" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel>
+                                <TextBlock x:Name="PluginNameText" Text="Выберите плагин" FontSize="21" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                                <TextBlock Text="Автор" FontWeight="SemiBold"/><TextBlock x:Name="PluginAuthorText" TextWrapping="Wrap" Margin="0,4,0,12"/>
+                                <TextBlock Text="Дата создания" FontWeight="SemiBold"/><TextBlock x:Name="PluginCreatedAtText" Margin="0,4,0,12"/>
+                                <TextBlock Text="Язык программирования" FontWeight="SemiBold"/><TextBlock x:Name="PluginLanguageText" Margin="0,4,0,12"/>
+                                <TextBlock Text="Инструкция по использованию" FontSize="17" FontWeight="SemiBold" Margin="0,8,0,8"/>
+                                <TextBox x:Name="PluginReadmeText" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Background="Transparent" Padding="0"/>
+                                <TextBlock Text="Лицензия" FontSize="17" FontWeight="SemiBold" Margin="0,20,0,8"/>
+                                <TextBox x:Name="PluginLicenseText" IsReadOnly="True" TextWrapping="Wrap" BorderThickness="0" Background="Transparent" Padding="0"/>
+                                <TextBlock x:Name="PluginMetadataStatus" Foreground="{DynamicResource Editor.Muted}" TextWrapping="Wrap" Margin="0,16,0,0"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
                 <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,16,0,0"><Button Content="Сохранить" Padding="18,10" Margin="0,0,10,0" Click="BtnSaveSettings_Click" Style="{StaticResource KNE.PrimaryButton}"/><Button Content="Назад" Padding="18,10" Click="BtnSettingsBack_Click"/></StackPanel>
             </Grid>
         </Grid>

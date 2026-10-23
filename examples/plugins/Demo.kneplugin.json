@@ -1,5 +1,9 @@
 {
   "id": "kne.sdk.demo",
   "source": "plugins/Demo.cs",
-  "apiVersion": 1
+  "apiVersion": 1,
+  "name": "Пример KNE SDK для C#",
+  "author": "KNE contributors",
+  "readme": "Подключите Demo.cs в настройках KNE или скопируйте исходник и манифест в plugins проекта. Пример добавляет квест, палитру, вкладку редактора, генератор, игровой экран и данные сохранения. Подробности: docs/plugin-api.md в репозитории KNE.",
+  "license": "GPL-3.0-or-later (см. LICENSE в репозитории KNE)"
 }

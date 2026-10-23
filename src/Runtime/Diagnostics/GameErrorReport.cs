@@ -12,6 +12,8 @@ public sealed record GameErrorReport(string ProjectName, string ProjectTitle, st
     string ErrorType, string Message, string? File, int? Line, string Details, string Operation)
 {
     public bool TransitionFailure { get; init; }
+    /// <summary>Whether a plugin failure requires engine recovery, including after worker transport.</summary>
+    public bool PluginFailure { get; init; }
     public FrameIdentity? Frame { get; init; }
     private const string DataKey = "KNE.GameErrorReport";
 
@@ -34,7 +36,15 @@ public sealed record GameErrorReport(string ProjectName, string ProjectTitle, st
         string? file = location.File ?? (error as FileNotFoundException)?.FileName;
         return new(project.Name, project.Title, project.Path, DateTimeOffset.Now,
             RuntimeInformation.OSDescription, Environment.MachineName, RuntimeInformation.OSArchitecture.ToString(),
-            error.GetType().Name, error.Message, file, location.Line, error.ToString(), operation);
+            error.GetType().Name, error.Message, file, location.Line, error.ToString(), operation)
+        { PluginFailure = IsPluginFailure(error) };
+    }
+
+    private static bool IsPluginFailure(Exception error)
+    {
+        for (Exception? cause = error; cause != null; cause = cause.InnerException)
+            if (cause is PluginFailureException) return true;
+        return false;
     }
 
     private static (string? File, int? Line) FindLocation(ProjectInfo project, string message)
