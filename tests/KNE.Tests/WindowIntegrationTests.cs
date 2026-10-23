@@ -42,29 +42,30 @@ public sealed class WindowIntegrationTests
             bool searching = false;
             EventHandler changed = (_, _) =>
             {
-                var files = grid.ItemsSource?.Cast<ProjectFile>().ToArray() ?? [];
-                if (searching && files.Length == 1 && files[0].FileName == "forest.krl") filtered.TrySetResult();
-                else if (!searching && files.Any(f => f.FileName == "forest.krl")) external.TrySetResult();
+                var files = grid.ItemsSource?.Cast<ProjectBrowserEntry>().ToArray() ?? [];
+                if (searching && files.Length == 1 && files[0].Name == "forest.krl") filtered.TrySetResult();
+                else if (!searching && files.Any(f => f.Name == "forest.krl")) external.TrySetResult();
             };
             itemsProperty.AddValueChanged(grid, changed);
             try
             {
                 var open = typeof(MainWindow).GetMethod("OpenProjectAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
                 await (Task)open.Invoke(window, new object[] { fixture.ProjectPath, false })!;
-                Assert.DoesNotContain(grid.ItemsSource.Cast<ProjectFile>(), f => f.FileName == "forest.krl");
+                Assert.DoesNotContain(grid.ItemsSource.Cast<ProjectBrowserEntry>(), f => f.Name == "forest.krl");
+                typeof(MainWindow).GetMethod("NavigateBrowserDirectory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(window, [System.IO.Path.Combine("game", "scenes"), null, true]);
                 fixture.Write("game/scenes/forest.krl", "function main() d(nil, 'Forest') end");
                 await external.Task.WaitAsync(TimeSpan.FromSeconds(10));
                 searching = true;
                 ((TextBox)window.FindName("FileSearch")).Text = "SCENES/FOREST";
                 await filtered.Task.WaitAsync(TimeSpan.FromSeconds(10));
-                var file = Assert.Single(grid.ItemsSource.Cast<ProjectFile>());
-                Assert.Equal("forest.krl", file.FileName);
+                var file = Assert.Single(grid.ItemsSource.Cast<ProjectBrowserEntry>());
+                Assert.Equal("forest.krl", file.Name);
                 var tree = (TreeView)window.FindName("ProjectFilesTree");
                 var game = Assert.Single(tree.ItemsSource.Cast<ProjectTreeNode>());
                 Assert.Equal("game", game.Name);
                 var scenes = Assert.Single(game.Children);
                 Assert.Equal("scenes", scenes.Name);
-                Assert.Same(file, Assert.Single(scenes.Children).File);
+                Assert.Same(file.File, Assert.Single(scenes.Children).File);
             }
             finally { itemsProperty.RemoveValueChanged(grid, changed); window.Close(); }
         });

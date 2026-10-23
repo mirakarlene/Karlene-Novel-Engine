@@ -225,10 +225,15 @@ public sealed class ApplicationPluginSettingsTests : IDisposable
             var toolbar = Find<Panel>(window, "PluginToolbar");
             var translations = Assert.Single(toolbar.Children.OfType<Button>(), b => Equals(b.Content, "Диалоги / переводы"));
             var appearance = Find<Button>(window, "AppearanceButton");
-            Assert.InRange(Bounds(translations).Right, 1, width); Assert.True(Bounds(translations).Left - Bounds(appearance).Right >= 15);
+            Assert.InRange(Bounds(translations).Right, 1, width);
+            Assert.Equal(Bounds(appearance).Top, Bounds(translations).Top, 1);
+            Assert.Equal(Bounds(appearance).Right, Bounds(translations).Left, 1);
+            Assert.InRange(Find<FrameworkElement>(window, "ProjectHeader").ActualHeight, 25, 40);
             var text = new FormattedText((string)translations.Content, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
                 new Typeface(translations.FontFamily, translations.FontStyle, translations.FontWeight, translations.FontStretch), translations.FontSize, Brushes.White, 1);
             Assert.True(translations.ActualWidth >= text.WidthIncludingTrailingWhitespace + translations.Padding.Left + translations.Padding.Right);
+            Assert.InRange(translations.ActualWidth - text.WidthIncludingTrailingWhitespace, 0, 3);
+            Assert.Equal(0, translations.Padding.Left); Assert.Equal(0, translations.Padding.Right); Assert.Equal(0, translations.MinWidth);
             Snapshot(root, "header-" + width + ".png", width, 700);
             Invoke(window, "BtnBack_Click", window, new RoutedEventArgs()); await Idle(window);
             Invoke(window, "BtnSettings_Click", window, new RoutedEventArgs()); Layout(root, width, 700);

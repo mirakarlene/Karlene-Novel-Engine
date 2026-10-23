@@ -12,6 +12,8 @@ public sealed class ProjectInfo
     public string Name => Configuration.DisplayName(System.IO.Path.GetFileName(Path));
     public string Title => string.IsNullOrWhiteSpace(Configuration.GameInfo?.Title) ? Name : Configuration.GameInfo.Title;
     public ObservableCollection<ProjectFile> Files { get; } = [];
+    /// <summary>Project directories, including empty ones, excluding ignored paths and symbolic links.</summary>
+    public IReadOnlyList<string> Directories { get; internal set; } = [];
     public List<string> Warnings { get; } = [];
     public EngineSettings Engine { get; init; } = new();
     /// <summary>User-selected application extensions for this session; never persisted into project.json.</summary>
@@ -83,13 +85,15 @@ public static class ProjectLoader
         var result = new ProjectInfo { Path = root, Configuration = configuration, Engine = engine };
         var snapshot = await Task.Run(() => EnumerateFiles(root, cancellationToken), cancellationToken);
         foreach (string file in snapshot.Files) result.Files.Add(new ProjectFile { FilePath = file });
+        result.Directories = snapshot.Directories;
         result.Warnings.AddRange(snapshot.Warnings);
         return result;
     }
 
-    internal static (List<string> Files, List<string> Warnings) EnumerateFiles(string root, CancellationToken cancellationToken)
+    internal static (List<string> Files, List<string> Directories, List<string> Warnings) EnumerateFiles(string root, CancellationToken cancellationToken)
     {
         var files = new List<string>();
+        var directories = new List<string>();
         var warnings = new List<string>();
         var pending = new Stack<string>();
         string savesDirectory = PerformanceSettingsStore.LoadProject(root).ResolveSavesPath(root);
@@ -110,11 +114,12 @@ public static class ProjectLoader
                     warnings.Add("Пропущена символическая ссылка: " + entry);
                     continue;
                 }
-                if ((attributes & FileAttributes.Directory) != 0) pending.Push(entry);
+                if ((attributes & FileAttributes.Directory) != 0) { directories.Add(entry); pending.Push(entry); }
                 else files.Add(entry);
             }
         }
         files.Sort(StringComparer.OrdinalIgnoreCase);
-        return (files, warnings);
+        directories.Sort(StringComparer.OrdinalIgnoreCase);
+        return (files, directories, warnings);
     }
 }

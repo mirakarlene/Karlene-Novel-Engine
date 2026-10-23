@@ -11,7 +11,7 @@
     </Grid>
     <DockPanel Margin="20" Background="Transparent">
         <TextBlock x:Name="OperationStatus" DockPanel.Dock="Bottom" Margin="0,12,0,0" TextWrapping="Wrap"/>
-        <TextBlock x:Name="FileCountStatus" DockPanel.Dock="Bottom" Margin="0,8,0,0" Foreground="{DynamicResource Editor.Muted}"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Visibility, ElementName=ProjectPanel}" Value="Visible"/><Condition Binding="{Binding Visibility, ElementName=FilesDataGrid}" Value="Visible"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+        <TextBlock x:Name="FileCountStatus" DockPanel.Dock="Bottom" Margin="0,8,0,0" Foreground="{DynamicResource Editor.Muted}"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Visibility, ElementName=ProjectPanel}" Value="Visible"/><Condition Binding="{Binding Visibility, ElementName=FileBrowserPanel}" Value="Visible"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
         <Grid>
             <StackPanel x:Name="WelcomePanel" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <local:WatercolorLogo x:Name="WelcomeLogo" Height="125" Width="960" HorizontalAlignment="Center" StartColor="{DynamicResource KNE.AccentColor}" EndColor="{DynamicResource KNE.PinkColor}" Margin="0,0,0,12" AutomationProperties.Name="Karlene Novel Engine"/>
@@ -46,16 +46,13 @@
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-                <Grid x:Name="ProjectHeader" Margin="0,0,0,12">
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <TextBlock x:Name="ProjectTitleTextBlock" FontSize="24" FontWeight="Bold" TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>
-                    <WrapPanel x:Name="ProjectActions" Grid.Row="1" HorizontalAlignment="Right">
-                        <Button x:Name="ProjectParametersButton" Content="Параметры проекта" Margin="0,0,8,4" Padding="10,6" Click="ProjectParameters_Click"/>
-                        <Button x:Name="SceneParametersButton" Content="Параметры сцены" Margin="0,0,8,4" Padding="10,6" Click="SceneParameters_Click"/>
-                        <Button x:Name="AppearanceButton" Content="Оформление" Margin="0,0,16,4" Padding="10,6" Click="BtnAppearance_Click"/>
-                        <WrapPanel x:Name="PluginToolbar"/>
-                    </WrapPanel>
-                </Grid>
+                <DockPanel x:Name="ProjectHeader" Margin="0,0,0,16">
+                    <WrapPanel x:Name="PluginToolbar" DockPanel.Dock="Right"/>
+                    <Button x:Name="AppearanceButton" DockPanel.Dock="Right" Content="Оформление" Padding="10,6" Click="BtnAppearance_Click"/>
+                    <Button x:Name="SceneParametersButton" DockPanel.Dock="Right" Content="Параметры сцены" Margin="0,0,8,0" Padding="10,6" Click="SceneParameters_Click"/>
+                    <Button x:Name="ProjectParametersButton" DockPanel.Dock="Right" Content="Параметры проекта" Margin="0,0,8,0" Padding="10,6" Click="ProjectParameters_Click"/>
+                    <TextBlock x:Name="ProjectTitleTextBlock" FontSize="24" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
+                </DockPanel>
                 <Grid Grid.Row="1">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -71,19 +68,28 @@
                         </HierarchicalDataTemplate></TreeView.ItemTemplate>
                     </TreeView>
                     <GridSplitter Grid.Row="1" Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
-                <DataGrid x:Name="FilesDataGrid" Grid.Row="1" Grid.Column="2" AutoGenerateColumns="False"
-                          MouseDoubleClick="OpenScript_DoubleClick"
+                <Grid x:Name="FileBrowserPanel" Grid.Row="1" Grid.Column="2">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <TextBlock x:Name="FileBrowserIntroduction" Text="В этом окне можно выбрать папку и файл, который вы хотите отредактировать. Чтоб перемещаться по папкам вы можете использовать либо файловый инспектор в панели слева, либо проводник в этом окне" TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{DynamicResource Editor.Muted}"/>
+                    <DockPanel Grid.Row="1" Margin="0,0,0,10">
+                        <Button x:Name="FileBrowserBackButton" Content="← Назад" Visibility="Collapsed" DockPanel.Dock="Left" Padding="10,6" Margin="0,0,10,0" Click="FileBrowserBack_Click" ToolTip="На одну папку вверх"/>
+                        <TextBox x:Name="FileBrowserPath" IsReadOnly="True" Padding="8,6" VerticalContentAlignment="Center" AutomationProperties.Name="Текущая папка проекта"/>
+                    </DockPanel>
+                <DataGrid x:Name="FilesDataGrid" Grid.Row="2" AutoGenerateColumns="False" Visibility="Collapsed"
+                          MouseDoubleClick="OpenScript_DoubleClick" KeyDown="FileBrowser_KeyDown" SelectionChanged="BrowserSelection_Changed"
                           IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False"
                           SelectionMode="Single" EnableRowVirtualization="True" EnableColumnVirtualization="True">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Имя файла" Binding="{Binding FileName, Mode=OneWay}" Width="*"/>
-                        <DataGridTextColumn Header="Путь" Binding="{Binding FilePath, Mode=OneWay}" Width="2*"/>
-                        <DataGridTextColumn Header="Тип" Binding="{Binding FileType, Mode=OneWay}" Width="*"/>
+                        <DataGridTemplateColumn Header="Имя файла" Width="*" SortMemberPath="DisplayName"><DataGridTemplateColumn.CellTemplate><DataTemplate>
+                            <DockPanel><Image Source="{Binding Icon}" Width="20" Height="20" Margin="0,0,8,0"/><TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/></DockPanel>
+                        </DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Путь" Binding="{Binding PathLabel, Mode=OneWay}" Width="2*"/>
+                        <DataGridTextColumn Header="Тип" Binding="{Binding Kind, Mode=OneWay}" Width="*"/>
                         <DataGridTemplateColumn Header="Действия" Width="180">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Grid>
-                                    <ComboBox x:Name="FileActionInput" HorizontalAlignment="Stretch" SelectionChanged="FileActionsComboBox_SelectionChanged" Tag="{Binding}"
+                                    <Grid><Grid.Style><Style TargetType="Grid"><Style.Triggers><DataTrigger Binding="{Binding ProjectFile}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Grid.Style>
+                                    <ComboBox x:Name="FileActionInput" HorizontalAlignment="Stretch" SelectionChanged="FileActionsComboBox_SelectionChanged" Tag="{Binding ProjectFile}"
                                               ToolTip="Действия с файлом" AutomationProperties.Name="Действия с файлом">
                                         <ComboBoxItem Content="Редактировать"/>
                                         <ComboBoxItem Content="Переименовать"/>
@@ -98,6 +104,24 @@
                         </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
+                    <ListBox x:Name="FileTiles" Grid.Row="2" SelectionChanged="BrowserSelection_Changed" MouseDoubleClick="OpenScript_DoubleClick" KeyDown="FileBrowser_KeyDown" PreviewMouseRightButtonDown="FileTiles_PreviewMouseRightButtonDown" ContextMenuOpening="FileTiles_ContextMenuOpening" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Файлы и папки проекта">
+                        <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ListBox.ItemsPanel>
+                        <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
+                            <Setter Property="Width" Value="150"/><Setter Property="Margin" Value="4"/><Setter Property="Padding" Value="8"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="Tile" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="4" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border><ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Tile" Property="Background" Value="{DynamicResource Editor.Hover}"/></Trigger>
+                                <Trigger Property="IsSelected" Value="True"><Setter TargetName="Tile" Property="Background" Value="{DynamicResource Editor.Selection}"/><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource KNE.AccentBrush}"/></Trigger>
+                            </ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+                        </Style></ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate><DataTemplate><StackPanel ToolTip="{Binding PathLabel}">
+                            <Image Source="{Binding Icon}" Width="48" Height="48" Margin="0,0,0,8"/>
+                            <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" TextAlignment="Center" MinHeight="32"/>
+                        </StackPanel></DataTemplate></ListBox.ItemTemplate>
+                        <ListBox.ContextMenu><ContextMenu>
+                            <MenuItem Header="Редактировать" Click="TileFileAction_Click"/><MenuItem Header="Переименовать" Click="TileFileAction_Click"/><MenuItem Header="Дублировать" Click="TileFileAction_Click"/><MenuItem Header="Переместить" Click="TileFileAction_Click"/><MenuItem Header="Удалить" Click="TileFileAction_Click"/>
+                        </ContextMenu></ListBox.ContextMenu>
+                    </ListBox>
+                </Grid>
                     <Grid x:Name="EditorWorkspace" Grid.Row="1" Grid.Column="2" Visibility="Collapsed">
                         <local:ScriptEditor x:Name="SceneEditor" Visibility="Collapsed"
                             BlockLibraryRequested="SceneEditor_BlockLibraryRequested" TestSceneRequested="SceneEditor_TestSceneRequested" ExternalEditorRequested="SceneEditor_ExternalEditorRequested"
@@ -176,6 +200,8 @@
                                         </RadioButton>
                                     </DataTemplate></ItemsControl.ItemTemplate>
                                 </ItemsControl>
+                                <TextBlock Text="Отображение файлов проекта" Margin="0,12,0,7"/>
+                                <ComboBox x:Name="ProjectBrowserViewInput" SelectedIndex="0" SelectedValuePath="Tag"><ComboBoxItem Content="Плитки" Tag="tiles"/><ComboBoxItem Content="Таблица" Tag="table"/></ComboBox>
                             </StackPanel>
                         </Border>
                     </Grid>

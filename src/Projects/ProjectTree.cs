@@ -1,32 +1,42 @@
 using System.IO;
+using System.ComponentModel;
 
 namespace KNE;
 
-public sealed class ProjectTreeNode
+public sealed class ProjectTreeNode : INotifyPropertyChanged
 {
     public required string Name { get; init; }
     public required string RelativePath { get; init; }
     public ProjectFile? File { get; init; }
     /// <summary>Folder expansion retained when refreshing the file tree.</summary>
-    public bool IsExpanded { get; set; }
+    public bool IsExpanded { get => expanded; set { if (expanded == value) return; expanded = value; PropertyChanged?.Invoke(this, new(nameof(IsExpanded))); } }
     /// <summary>Selection retained by relative path.</summary>
-    public bool IsSelected { get; set; }
+    public bool IsSelected { get => selected; set { if (selected == value) return; selected = value; PropertyChanged?.Invoke(this, new(nameof(IsSelected))); } }
+    private bool expanded, selected;
+    /// <summary>Updates the inspector when navigation changes folder selection or ancestor expansion.</summary>
+    public event PropertyChangedEventHandler? PropertyChanged;
     public List<ProjectTreeNode> Children { get; } = [];
 }
 
 public static class ProjectTree
 {
-    public static IReadOnlyList<ProjectTreeNode> Build(string root, IEnumerable<ProjectFile> files, string query = "")
+    public static IReadOnlyList<ProjectTreeNode> Build(string root, IEnumerable<ProjectFile> files, string query = "", IEnumerable<string>? directories = null)
     {
         var top = new ProjectTreeNode { Name = "", RelativePath = "" };
         var nodes = new Dictionary<string, ProjectTreeNode>(StringComparer.OrdinalIgnoreCase);
         query = query.Replace('/', Path.DirectorySeparatorChar);
+        foreach (string directory in directories ?? []) Add(directory, null);
         foreach (var file in files.OrderBy(f => f.FilePath, StringComparer.OrdinalIgnoreCase))
+            Add(file.FilePath, file);
+        Sort(top);
+        return top.Children;
+
+        void Add(string fullPath, ProjectFile? file)
         {
-            string relative = Path.GetRelativePath(root, file.FilePath);
+            string relative = Path.GetRelativePath(root, fullPath);
             if (Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
                 throw new ArgumentException("Файл дерева должен принадлежать проекту.");
-            if (!relative.Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
+            if (relative == "." || !relative.Contains(query, StringComparison.OrdinalIgnoreCase)) return;
             var parts = relative.Split(Path.DirectorySeparatorChar);
             var parent = top;
             string path = "";
@@ -42,8 +52,6 @@ public static class ProjectTree
                 parent = node;
             }
         }
-        Sort(top);
-        return top.Children;
     }
 
     private static void Sort(ProjectTreeNode node)

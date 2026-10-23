@@ -22,7 +22,7 @@ public sealed class RenderingSettingsUiRegressionTests
             {
                 await WorkspaceTabsTests.Invoke(window, "OpenProjectAsync", fixture.ProjectPath, false); await Pump(window);
                 var status = Find<TextBlock>(window, "FileCountStatus"); var table = Find<DataGrid>(window, "FilesDataGrid");
-                Assert.Equal(Visibility.Visible, status.Visibility); Assert.StartsWith("Файлов: ", status.Text); Assert.Equal(Visibility.Visible, table.Visibility);
+                Assert.Equal(Visibility.Visible, status.Visibility); Assert.StartsWith("Файлов: ", status.Text); Assert.Equal(Visibility.Visible, Find<Grid>(window, "FileBrowserPanel").Visibility);
                 await WorkspaceTabsTests.Invoke(window, "OpenScriptAsync", parent); await Pump(window);
                 var tabs = Find<TabControl>(window, "DocumentTabs"); var editor = (ScriptEditor)((TabItem)tabs.Items[0]).Tag;
                 Assert.Equal(Visibility.Collapsed, status.Visibility);
@@ -40,7 +40,7 @@ public sealed class RenderingSettingsUiRegressionTests
                     var open = (ScriptEditor)tab.Tag; open.ConfirmSave = _ => MessageBoxResult.No;
                     await WorkspaceTabsTests.Invoke(window, "CloseEditorTabAsync", open);
                 }
-                await Pump(window); Assert.Equal(Visibility.Visible, status.Visibility); Assert.Equal(Visibility.Visible, table.Visibility);
+                await Pump(window); Assert.Equal(Visibility.Visible, status.Visibility); Assert.Equal(Visibility.Visible, Find<Grid>(window, "FileBrowserPanel").Visibility);
                 Assert.Equal("Файлов: " + (await fixture.LoadAsync()).Files.Count, status.Text);
                 typeof(MainWindow).GetMethod("BtnSettings_Click", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, [new Button(), new RoutedEventArgs()]);
                 await Pump(window); Assert.Equal(Visibility.Collapsed, status.Visibility);

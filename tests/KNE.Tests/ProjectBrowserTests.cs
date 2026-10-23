@@ -6,6 +6,30 @@ namespace KNE.Tests;
 public sealed class ProjectBrowserTests
 {
     [Fact]
+    public async Task SnapshotAndTree_IncludeEmptyDirectoriesAndOnlyDirectChildren_WithoutMovingFiles()
+    {
+        using var fixture = new TempProject();
+        string leaf = fixture.Write("chapters/act1/scene.krl", "function scene() end");
+        string empty = Path.Combine(fixture.ProjectPath, "chapters", "empty"); Directory.CreateDirectory(empty);
+        string ignored = Path.Combine(fixture.ProjectPath, "saves"); Directory.CreateDirectory(ignored);
+        string backup = Path.Combine(fixture.ProjectPath, ".kne-backups"); Directory.CreateDirectory(backup);
+        var project = await fixture.LoadAsync();
+        Assert.Contains(empty, project.Directories); Assert.DoesNotContain(ignored, project.Directories); Assert.DoesNotContain(backup, project.Directories);
+        var tree = ProjectTree.Build(project.Path, project.Files, directories: project.Directories);
+        var chapters = Assert.Single(tree, node => node.Name == "chapters");
+        Assert.Null(chapters.File); Assert.Equal(new[] { "act1", "empty" }, chapters.Children.Select(node => node.Name));
+        Assert.Empty(chapters.Children.Single(node => node.Name == "empty").Children);
+        Assert.Equal(leaf, Assert.Single(chapters.Children.Single(node => node.Name == "act1").Children).File!.FilePath);
+        Assert.DoesNotContain(tree, node => node.Name == "scene.krl");
+        Assert.Equal("function scene() end", File.ReadAllText(leaf));
+        var filtered = ProjectTree.Build(project.Path, project.Files, "act1/scene", project.Directories);
+        Assert.Equal("chapters", Assert.Single(filtered).Name);
+        Assert.Equal("act1", Assert.Single(filtered[0].Children).Name);
+        Assert.Equal(leaf, Assert.Single(filtered[0].Children[0].Children).File!.FilePath);
+        Assert.Throws<ArgumentException>(() => ProjectTree.Build(project.Path, [], directories: [fixture.Root]));
+    }
+
+    [Fact]
     public async Task Tree_SearchKeepsFolderHierarchyAndMatchesCaseInsensitivePaths()
     {
         using var fixture = new TempProject();

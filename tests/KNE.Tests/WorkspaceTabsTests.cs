@@ -141,7 +141,8 @@ public sealed class WorkspaceTabsTests
                 Assert.Empty(tabs.Items);
                 Assert.Equal(Visibility.Collapsed, tabs.Visibility);
                 Assert.Equal(Visibility.Collapsed, Find<Grid>(window, "EditorWorkspace").Visibility);
-                Assert.Equal(Visibility.Visible, Find<DataGrid>(window, "FilesDataGrid").Visibility);
+                Assert.Equal(Visibility.Visible, Find<Grid>(window, "FileBrowserPanel").Visibility);
+                Assert.Equal(Visibility.Visible, Find<ListBox>(window, "FileTiles").Visibility);
             }
             finally { await Cleanup(window); }
         });
