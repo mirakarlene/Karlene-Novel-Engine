@@ -317,7 +317,9 @@ public partial class MainWindow : Window
 
     private void ProjectFilesTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
-        if (updatingBrowserTree || e.NewValue is not ProjectTreeNode node) return;
+        // Expanded descendants may restore selection on a later layout pass, after ItemsSource was assigned.
+        // Restoring the same path is not a user request to leave the active editor.
+        if (updatingBrowserTree || e.NewValue is not ProjectTreeNode node || node.RelativePath.Equals(selectedTreePath, StringComparison.OrdinalIgnoreCase)) return;
         TryNavigateBrowserDirectory(node.File == null ? node.RelativePath : Path.GetDirectoryName(node.RelativePath) ?? "", node.RelativePath, node.File == null);
     }
 

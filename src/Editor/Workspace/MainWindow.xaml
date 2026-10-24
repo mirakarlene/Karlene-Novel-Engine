@@ -105,6 +105,16 @@
                     </DataGrid.Columns>
                 </DataGrid>
                     <ListBox x:Name="FileTiles" Grid.Row="2" SelectionChanged="BrowserSelection_Changed" MouseDoubleClick="OpenScript_DoubleClick" KeyDown="FileBrowser_KeyDown" PreviewMouseRightButtonDown="FileTiles_PreviewMouseRightButtonDown" ContextMenuOpening="FileTiles_ContextMenuOpening" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Файлы и папки проекта">
+                        <ListBox.Style><Style TargetType="ListBox" BasedOn="{StaticResource {x:Type ListBox}}">
+                            <!-- The stock disabled template paints a white background while workspace operations run. -->
+                            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBox">
+                                <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True">
+                                    <ScrollViewer Focusable="False" Padding="{TemplateBinding Padding}" CanContentScroll="{TemplateBinding ScrollViewer.CanContentScroll}" HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}" VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}">
+                                        <ItemsPresenter SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </ControlTemplate></Setter.Value></Setter>
+                        </Style></ListBox.Style>
                         <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ListBox.ItemsPanel>
                         <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
                             <Setter Property="Width" Value="150"/><Setter Property="Margin" Value="4"/><Setter Property="Padding" Value="8"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
