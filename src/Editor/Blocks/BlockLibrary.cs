@@ -51,6 +51,9 @@ public static class BlockLibrary
         Add("narrative", ScriptNodeKind.Title, "Титр", "Текст поверх сцены вне диалогового окна. Пустой текст скрывает титр.");
         Add("flows", ScriptNodeKind.GotoScene, "Перейти на сцену", "goto: перейти в другую функцию без возврата в эту ветку.");
         Add("flows", ScriptNodeKind.CallScene, "Вызвать сцену", "call: выполнить другую функцию и продолжить после вызова.");
+        Add("flows", ScriptNodeKind.Anchor, "Якорь", "Именованная точка возврата внутри текущего потока и сцены.");
+        Add("flows", ScriptNodeKind.SendFlow, "Отправить поток", "Перейти к выбранному якорю своего потока, не переходя в другую сцену.");
+        Add("flows", ScriptNodeKind.ConditionalGoto, "Условный переход", "Если условие истинно — перейти в указанную функцию; иначе продолжить эту ветку.");
         Add("flows", ScriptNodeKind.Subsystem, "Подсистема", "Вложенная блок-схема из файла: ждать завершения или продолжать параллельно. Двойной клик открывает / создаёт файл.");
         foreach (var kind in Enum.GetValues<ScriptNodeKind>().Where(CalculationCompiler.IsCalculation))
         {
@@ -132,6 +135,8 @@ public static class BlockLibrary
         if (category != null && !Definitions.Any(entry => entry.Kind == kind && entry.Group == category))
             throw new ArgumentException("Блок недоступен в выбранной группе.", nameof(category));
         var node = new ScriptNode { Kind = kind };
+        if (kind == ScriptNodeKind.Anchor) node.Text = "Якорь";
+        if (kind == ScriptNodeKind.SendFlow) node.Target = "";
         if (kind == ScriptNodeKind.RemoveLayerShaders) node.Target = "background";
         if (ShaderLibrary.IsShader(kind)) node.Shader = new ShaderNodeSettings();
         if (CalculationCompiler.IsCalculation(kind))

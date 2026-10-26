@@ -109,7 +109,7 @@ public static class ProjectAnalyzer
                         if (node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script or ScriptNodeKind.Subsystem && !string.IsNullOrWhiteSpace(node.Path))
                             CheckResource(root, path, null, node.Path, findings, node.Id);
                         if (node.Ui?.Texture is { Length: > 0 } texture) CheckResource(root, path, null, texture, findings, node.Id);
-                        if (node.Kind is ScriptNodeKind.CallScene or ScriptNodeKind.GotoScene)
+                        if (node.Kind is ScriptNodeKind.CallScene or ScriptNodeKind.GotoScene or ScriptNodeKind.ConditionalGoto)
                             references.Add(new(node.Path, path, 1, node.Id));
                     }
                     AnalyzeGraph(visual, path, findings);
@@ -345,8 +345,12 @@ public static class ProjectAnalyzer
         foreach (var trigger in graph.Nodes.Where(node => node.IsTrigger)) pending.Push(trigger.Id);
         while (pending.TryPop(out string? id))
             if (visited.Add(id))
+            {
                 foreach (var (_, next) in map[id].Outputs())
                     if (next != null && map.ContainsKey(next)) pending.Push(next);
+                if (map[id].Kind == ScriptNodeKind.SendFlow && map.TryGetValue(map[id].Target, out var anchor) && anchor.Kind == ScriptNodeKind.Anchor)
+                    pending.Push(anchor.Id);
+            }
         foreach (var node in graph.Nodes.Where(n => n.Kind != ScriptNodeKind.Comment && !visited.Contains(n.Id)))
             findings.Add(new(ProjectDiagnosticSeverity.Warning, "KNE304", path, null, "Блок недостижим из «Начала».", node.Id));
     }

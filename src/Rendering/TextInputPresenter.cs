@@ -56,7 +56,8 @@ public sealed class TextInputPresenter : StackPanel
         bool fresh = settings is null || presentation != frame.PresentationId || identity != frame.Identity || settings != frame.Input;
         settings = frame.Input; presentation = frame.PresentationId; identity = frame.Identity;
         Visibility = Visibility.Visible; IsEnabled = interactive;
-        prompt.Text = settings.Prompt; Placeholder.Text = settings.Placeholder; Feedback.Text = frame.InputFeedback;
+        InlineTextPresentation.Apply(prompt, settings.Prompt); InlineTextPresentation.Apply(Placeholder, settings.Placeholder);
+        InlineTextPresentation.Apply(Feedback, frame.InputFeedback);
         maskHint.Text = settings.InputMask.Length == 0 ? "" : "Формат: " + settings.InputMask;
         maskHint.Visibility = settings.InputMask.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         Answer.Visibility = settings.IsPassword ? Visibility.Collapsed : Visibility.Visible;

@@ -123,7 +123,7 @@ internal sealed class SceneAssetCache
                         { var target = tokens[i + 2]; targetNames.Add(text[target.Start..target.End].Trim('"', '\'')); }
                 }
             }
-            if (source != null) foreach (var node in source.Nodes.Where(node => node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene)) targetNames.Add(node.Path);
+            if (source != null) foreach (var node in source.Nodes.Where(node => node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ConditionalGoto)) targetNames.Add(node.Path);
             IEnumerable<VisualScript> candidates = (source == null ? Enumerable.Empty<VisualScript>() : new[] { source }).Concat(targetNames.Select(name => graphs.GetValueOrDefault(name)).OfType<VisualScript>()).Take(4);
             foreach (var graph in candidates)
                 foreach (var node in graph.Nodes.Where(node => node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character).Take(24))

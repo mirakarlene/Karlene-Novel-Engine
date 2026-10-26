@@ -29,7 +29,7 @@ public sealed partial class LuaRuntime
                     lock (stateLock) visuals = visuals with { Character = null, CharacterMotion = new(), CharacterAnimation = new() };
                     break;
                 case "show_title":
-                    string title = Text(1);
+                    string title = InlineText.ToMarkup(ResolveInline(Text(1)));
                     if (title.Length > 10000) throw new ArgumentException("Титр слишком длинный.");
                     lock (stateLock) visuals = visuals with { Title = title };
                     break;
@@ -75,9 +75,12 @@ public sealed partial class LuaRuntime
                         break;
                     }
                     var screen = project.Engine.Screens.ResolveReference(id);
+                    var screenTexts = screen.Elements.Select(element => element.Text).Distinct(StringComparer.Ordinal).ToDictionary(text => text,
+                        text => InlineText.ToMarkup(ResolveInline(text.Replace("{{title}}", project.Title).Replace("{{subtitle}}", project.Engine.Game.Subtitle)
+                            .Replace("{{start_label}}", project.Engine.Game.StartLabel).Replace("{{continue_label}}", project.Engine.Game.ContinueLabel).Replace("{{exit_label}}", project.Engine.Game.ExitLabel))), StringComparer.Ordinal);
                     foreach (var element in screen.Elements.Where(element => element.Type == "image"))
                         if (!string.IsNullOrWhiteSpace(element.Image)) ResourcePaths.Resolve(project.Path, element.Image);
-                    lock (stateLock) visuals = visuals with { OverlayScreen = screen.Id, ScreenOpacity = opacity, ScreenLayer = layer, ScreenVersion = visuals.ScreenVersion + 1 };
+                    lock (stateLock) visuals = visuals with { OverlayScreen = screen.Id, ScreenOpacity = opacity, ScreenLayer = layer, ScreenTexts = screenTexts, ScreenVersion = visuals.ScreenVersion + 1 };
                     break;
                 case "set_audio_channel":
                     string channel = AudioChannel(Text(1)); double volume = Number(2, 0, 1); bool loop = Flag(3, false);

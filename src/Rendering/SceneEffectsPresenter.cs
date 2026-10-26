@@ -34,7 +34,7 @@ internal sealed class SceneEffectsPresenter
 
     public void Apply(SceneVisuals state, bool animate, bool postProcessing = true)
     {
-        title.Text = state.Title; title.Visibility = state.Title.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        InlineTextPresentation.Apply(title, state.Title); title.Visibility = state.Title.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         if (previous?.BackgroundMotion != state.BackgroundMotion) Move(background, state.BackgroundMotion, animate);
         if (previous?.CharacterMotion != state.CharacterMotion) Move(character, state.CharacterMotion, animate);
         if (previous?.BackgroundAnimation != state.BackgroundAnimation) Animate(background, state.BackgroundAnimation, animate);

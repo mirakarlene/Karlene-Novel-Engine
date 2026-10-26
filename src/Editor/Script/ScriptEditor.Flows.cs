@@ -24,6 +24,18 @@ public partial class ScriptEditor
 
     private void AddFlowFields(ScriptNode node)
     {
+        if (node.Kind == ScriptNodeKind.Anchor)
+            Text("AnchorNameInput", "Имя якоря", node.Text, (value, text) => value.Text = text.Trim());
+        if (node.Kind == ScriptNodeKind.SendFlow)
+        {
+            ExtendedProperties.Children.Add(new TextBlock { Text = "Якорь в этой сцене" });
+            var anchors = Document!.Graph!.Nodes.Where(candidate => candidate.Kind == ScriptNodeKind.Anchor)
+                .Select(candidate => new { Id = candidate.Id, Name = candidate.Text }).ToArray();
+            var target = new ComboBox { Name = "FlowAnchorInput", ItemsSource = anchors, DisplayMemberPath = "Name", SelectedValuePath = "Id", SelectedValue = node.Target, Margin = new(0, 3, 0, 8) };
+            target.SelectionChanged += (_, _) => TrackProperties(); ExtendedProperties.Children.Add(target);
+            extendedEdits.Add(value => value.Target = target.SelectedValue as string ?? "");
+            Hint("Переход разрешён только к якорю своего потока. Якоря других параллельных веток и сцен недоступны.");
+        }
         if (node.Kind == ScriptNodeKind.Subsystem)
         {
             Text("SubsystemPathInput", "Файл .knegraph от корня проекта", node.Path, (value, text) => value.Path = text.Trim());

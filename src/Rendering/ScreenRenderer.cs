@@ -26,6 +26,9 @@ public static class ScreenRenderer
                 Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(theme.ButtonColor)), Foreground = TextBrush(),
                 BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(theme.AccentColor)) }
         };
+        if (view is TextBlock text) InlineTextPresentation.Apply(text, label);
+        else if (view is ContentControl control && control.Content is string content && (content.Contains('{') || content.Contains('}')))
+            control.Content = InlineTextPresentation.Label(content);
         view.Tag = element;
         view.Width = element.Width; view.Height = element.Height;
         view.FontFamilyIfControl(theme.FontFamily);
@@ -36,7 +39,8 @@ public static class ScreenRenderer
     private static FrameworkElement SliderView(string text, Brush brush, double fontSize)
     {
         var stack = new StackPanel();
-        stack.Children.Add(new TextBlock { Text = text, Foreground = brush, FontSize = fontSize });
+        var label = InlineTextPresentation.Label(text); label.Foreground = brush; label.FontSize = fontSize;
+        stack.Children.Add(label);
         stack.Children.Add(new Slider { Minimum = 0, Maximum = 1, Value = 0.8, Margin = new Thickness(0, 8, 0, 0) });
         return stack;
     }

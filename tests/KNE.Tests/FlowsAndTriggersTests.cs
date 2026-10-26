@@ -9,7 +9,7 @@ public sealed class FlowsAndTriggersTests
     public void Catalog_FlowsAndTriggersFollowAudioAndAsync_AndLegacyTransitionsMigrateWithPreferences()
     {
         Assert.Equal(new[] { "audio", "flows", "calculations", "async", "triggers", "configurations" }, BlockLibrary.Groups.Skip(4).Take(6).Select(group => group.Id));
-        Assert.Equal(new[] { ScriptNodeKind.GotoScene, ScriptNodeKind.CallScene, ScriptNodeKind.Subsystem }, BlockLibrary.Definitions.Where(entry => entry.Group == "flows").Select(entry => entry.Kind));
+        Assert.Equal(new[] { ScriptNodeKind.GotoScene, ScriptNodeKind.CallScene, ScriptNodeKind.Anchor, ScriptNodeKind.SendFlow, ScriptNodeKind.ConditionalGoto, ScriptNodeKind.Subsystem }, BlockLibrary.Definitions.Where(entry => entry.Group == "flows").Select(entry => entry.Kind));
         Assert.Equal(new[] { ScriptNodeKind.TriggerKey, ScriptNodeKind.TriggerButton, ScriptNodeKind.TriggerHotspot, ScriptNodeKind.TriggerTextClosed, ScriptNodeKind.TriggerCombination }, BlockLibrary.Definitions.Where(entry => entry.Group == "triggers").Select(entry => entry.Kind));
         foreach (var kind in new[] { ScriptNodeKind.GotoScene, ScriptNodeKind.CallScene })
         {

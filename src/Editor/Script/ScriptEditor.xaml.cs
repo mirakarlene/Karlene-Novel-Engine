@@ -31,6 +31,19 @@ public partial class ScriptEditor : UserControl
     /// <summary>Requests creating or opening the selected project script in the configured external editor.</summary>
     public event EventHandler? ProjectScriptRequested;
 
+    internal string CaptureNavigationSource()
+    {
+        ApplyProperties(); return Document?.Graph?.Serialize() ?? Document?.Code ?? "";
+    }
+
+    internal void NavigateToSceneLine(int line)
+    {
+        if (Document?.IsVisual != false) return;
+        int target = Math.Clamp(line, 1, CodeEditor.Document.LineCount);
+        CodeEditor.CaretIndex = CodeEditor.Document.GetLineByNumber(target).Offset;
+        CodeEditor.ScrollToLine(target); CodeEditor.Focus();
+    }
+
     /// <summary>Captures unsaved edits for an isolated editor worker.</summary>
     public EditorSelection? CapturePreview() => CapturePreview(false);
     public EditorSelection? CapturePreview(bool sceneTest)
@@ -418,18 +431,20 @@ public partial class ScriptEditor : UserControl
             OptionsLabel.Text = node.Kind == ScriptNodeKind.RandomBranch ? "Названия случайных веток — по одному на строку" : node.Kind == ScriptNodeKind.Switch ? "Значения case — по одному на строку" : node.Kind is ScriptNodeKind.Parallel or ScriptNodeKind.Async ? "Названия веток — по одному на строку" : "Ответы — по одному на строку";
             Visible(PathField,
                 node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music
-                    or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script);
-            bool sceneTarget = node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene;
+                    or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ConditionalGoto or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script);
+            bool sceneTarget = node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ConditionalGoto;
             PathLabel.Text = sceneTarget ? "Имя функции" : node.Kind == ScriptNodeKind.ForEach ? "Имя коллекции в state" : node.Kind == ScriptNodeKind.ShowScreen ? "Название экрана (пусто — скрыть)" : "Путь от корня проекта";
             BrowsePathButton.Content = sceneTarget ? "Выбрать сцену…" : "Выбрать ресурс…";
             Visible(BrowsePathButton, !sceneTarget && node.Kind is not (ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen));
             Visible(PositionField, node.Kind == ScriptNodeKind.Character);
             Visible(LoopInput, node.Kind is ScriptNodeKind.Music or ScriptNodeKind.AudioChannel);
             LoopInput.Content = "Повторять аудио";
-            Visible(VariableField, node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable or ScriptNodeKind.Switch or ScriptNodeKind.While or ScriptNodeKind.ForEach or ScriptNodeKind.TryCatch or ScriptNodeKind.SetFlag or ScriptNodeKind.CheckFlag or ScriptNodeKind.Random or ScriptNodeKind.Async or ScriptNodeKind.Join or ScriptNodeKind.WaitCondition);
-            Visible(ComparisonField, node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.While or ScriptNodeKind.WaitCondition);
+            Visible(VariableField, node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.ConditionalGoto or ScriptNodeKind.SetVariable or ScriptNodeKind.Switch or ScriptNodeKind.While or ScriptNodeKind.ForEach or ScriptNodeKind.TryCatch or ScriptNodeKind.SetFlag or ScriptNodeKind.CheckFlag or ScriptNodeKind.Random or ScriptNodeKind.Async or ScriptNodeKind.Join or ScriptNodeKind.WaitCondition);
+            Visible(ComparisonField, node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.ConditionalGoto or ScriptNodeKind.While or ScriptNodeKind.WaitCondition);
             Visible(TransitionHelp, sceneTarget);
-            TransitionHelp.Text = node.Kind == ScriptNodeKind.CallScene
+            TransitionHelp.Text = node.Kind == ScriptNodeKind.ConditionalGoto
+                ? "Истинно — перейти в указанную функцию; ложно — продолжить со следующего блока."
+                : node.Kind == ScriptNodeKind.CallScene
                 ? "call — вызвать функцию, затем продолжить со следующего блока этой ветки."
                 : "goto — перейти в функцию навсегда. Продолжение этой ветки не выполняется.";
         }
@@ -466,18 +481,18 @@ public partial class ScriptEditor : UserControl
         ApplyExtendedProperties(changed);
         if (CalculationCompiler.IsCalculation(changed.Kind)) _ = CalculationCompiler.Compile(changed.Kind, changed.Calculation ?? new CalculationSettings(), changed.Variable);
         if (node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music
-            or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script) changed.Path = PathInput.Text.Trim();
+            or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ConditionalGoto or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script) changed.Path = PathInput.Text.Trim();
         if (node.Kind == ScriptNodeKind.Character)
             changed.Position = (PositionInput.SelectedItem as ComboBoxItem)?.Content.ToString() ?? "center";
         if (node.Kind is ScriptNodeKind.Music or ScriptNodeKind.AudioChannel) changed.Loop = LoopInput.IsChecked == true;
-        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.SetVariable or ScriptNodeKind.Switch or ScriptNodeKind.While or ScriptNodeKind.ForEach or ScriptNodeKind.TryCatch or ScriptNodeKind.SetFlag or ScriptNodeKind.CheckFlag or ScriptNodeKind.Random or ScriptNodeKind.Async or ScriptNodeKind.Join or ScriptNodeKind.WaitCondition)
+        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.ConditionalGoto or ScriptNodeKind.SetVariable or ScriptNodeKind.Switch or ScriptNodeKind.While or ScriptNodeKind.ForEach or ScriptNodeKind.TryCatch or ScriptNodeKind.SetFlag or ScriptNodeKind.CheckFlag or ScriptNodeKind.Random or ScriptNodeKind.Async or ScriptNodeKind.Join or ScriptNodeKind.WaitCondition)
         {
             changed.Variable = VariableInput.Text.Trim();
             changed.Value = ValueInput.Text;
             changed.ValueKind = ValueTypeInput.SelectedValue is ScriptValueKind value ? value : ScriptValueKind.Number;
         }
 
-        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.While or ScriptNodeKind.WaitCondition && ComparisonInput.SelectedValue is ScriptComparison comparison)
+        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.ConditionalGoto or ScriptNodeKind.While or ScriptNodeKind.WaitCondition && ComparisonInput.SelectedValue is ScriptComparison comparison)
             changed.Comparison = comparison;
         if (copy.Serialize() == model.Serialize())
         {
@@ -517,7 +532,7 @@ public partial class ScriptEditor : UserControl
 
     private void RenderGraph() => RenderCanvasGraph();
 
-    private static string Summary(ScriptNode node) => node.Kind switch
+    private string Summary(ScriptNode node) => node.Kind switch
     {
         _ when ShaderLibrary.IsShader(node.Kind) => node.Kind == ScriptNodeKind.ShaderContainer ? node.Path : node.Kind == ScriptNodeKind.ShaderTexture ? "Цель: " + node.Shader?.Target + " " + node.Shader?.Screen : ShaderLibrary.Get(node.Kind).Description,
         _ when CalculationCompiler.IsCalculation(node.Kind) => "state." + node.Variable + " ← " + (node.Kind == ScriptNodeKind.Formula ? node.Calculation?.FormulaName : node.Calculation?.A),
@@ -538,7 +553,10 @@ public partial class ScriptEditor : UserControl
         ScriptNodeKind.TriggerKey or ScriptNodeKind.TriggerCombination => node.Trigger?.Keys ?? "Выберите клавиши",
         ScriptNodeKind.TriggerButton => node.Trigger?.Button ?? "Выберите кнопку",
         ScriptNodeKind.TriggerHotspot => $"Зона {node.Trigger?.X}, {node.Trigger?.Y} · {node.Trigger?.Width} × {node.Trigger?.Height}",
+        ScriptNodeKind.ConditionalGoto => "state." + node.Variable + " / " + node.Value + " → " + node.Path,
         ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene => node.Path.Length == 0 ? "Функция не выбрана" : node.Path,
+        ScriptNodeKind.Anchor => node.Text,
+        ScriptNodeKind.SendFlow => Document?.Graph?.Nodes.FirstOrDefault(candidate => candidate.Id == node.Target && candidate.Kind == ScriptNodeKind.Anchor)?.Text ?? "Якорь не выбран",
         ScriptNodeKind.Switch => "state." + node.Variable + " · " + node.Options.Count + " вариантов",
         ScriptNodeKind.While or ScriptNodeKind.WaitCondition => "state." + node.Variable + " / " + node.Value,
         ScriptNodeKind.ForEach => "state." + node.Path + " → " + node.Variable,
@@ -618,7 +636,7 @@ public partial class ScriptEditor : UserControl
 
     private void BrowseResource_Click(object sender, RoutedEventArgs e) => Guard(() =>
     {
-        bool scene = Selected?.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene;
+        bool scene = Selected?.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ConditionalGoto;
         var dialog = new OpenFileDialog
         {
             InitialDirectory = projectRoot, Title = scene ? "Выберите игровую сцену" : "Выберите ресурс внутри проекта",

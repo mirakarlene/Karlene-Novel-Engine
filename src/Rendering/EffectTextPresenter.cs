@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Shapes;
@@ -19,6 +20,8 @@ public sealed class EffectTextPresenter : Canvas
     private readonly List<Ellipse> drops = [];
     private readonly List<GlyphAnimation> animations = [];
     private readonly List<(string Text, Point Position, double Width)> layoutGlyphs = [];
+    private readonly List<Brush> glyphColors = [];
+    private readonly List<bool> glyphExplicitColors = [];
     private ScrollViewer? scroll;
     private int firstVisible = -1, lastVisible = -1;
     private double lineHeight;
@@ -37,11 +40,13 @@ public sealed class EffectTextPresenter : Canvas
     public string PlainText { get; private set; } = "";
 
     private sealed record LayoutSignature(string Text, string Font, double Size, FontWeight Weight,
-        FontStyle Style, FontStretch Stretch, string Color, TextAlignment Alignment);
+        FontStyle Style, FontStretch Stretch, string Color, TextAlignment Alignment, string InlineColors);
 
     private sealed class GlyphAnimation
     {
         public required string Original { get; init; }
+        public required Brush OriginalColor { get; init; }
+        public bool HasInlineColor { get; init; }
         public TranslateTransform Translation { get; } = new();
         public RotateTransform Rotation { get; } = new();
         public ScaleTransform Scale { get; } = new();
@@ -78,7 +83,8 @@ public sealed class EffectTextPresenter : Canvas
         Visibility = effect is not null && text.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         text.Opacity = Visibility == Visibility.Visible && !IsEffectSuppressedForCapacity ? 0 : 1;
         var key = new LayoutSignature(text.Text, text.FontFamily.Source, text.FontSize, text.FontWeight,
-            text.FontStyle, text.FontStretch, text.Foreground.ToString(), text.TextAlignment);
+            text.FontStyle, text.FontStretch, text.Foreground.ToString(), text.TextAlignment,
+            string.Join(";", text.Inlines.OfType<Run>().Select(run => run.Text.Length + ":" + run.Foreground)));
         if (layoutKey != key)
         {
             layoutKey = key; measuredWidth = double.NaN; InvalidateMeasure();
@@ -126,8 +132,10 @@ public sealed class EffectTextPresenter : Canvas
     private void BuildLayout(double width)
     {
         if (source is null) return;
-        measuredWidth = width; layoutGlyphs.Clear(); firstVisible = lastVisible = -1;
+        measuredWidth = width; layoutGlyphs.Clear(); glyphColors.Clear(); glyphExplicitColors.Clear(); firstVisible = lastVisible = -1;
         elements = TextElements(PlainText);
+        var ranges = source.Inlines.OfType<Run>().ToArray();
+        int range = 0, rangeEnd = ranges.Length == 0 ? 0 : ranges[0].Text.Length, textOffset = 0;
         double x = 0, y = 0;
         var typeface = new Typeface(source.FontFamily, source.FontStyle, source.FontWeight, source.FontStretch);
         double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
@@ -148,6 +156,9 @@ public sealed class EffectTextPresenter : Canvas
         for (int elementIndex = 0; elementIndex < elements.Length; elementIndex++)
         {
             string element = elements[elementIndex];
+            while (range + 1 < ranges.Length && textOffset >= rangeEnd) rangeEnd += ranges[++range].Text.Length;
+            Brush color = range < ranges.Length ? ranges[range].Foreground : source.Foreground;
+            textOffset += element.Length;
             if (element is "\n" or "\r" or "\r\n")
             {
                 lines.Add((start, layoutGlyphs.Count - start, x)); start = layoutGlyphs.Count; x = 0; y += lineHeight; continue;
@@ -171,6 +182,8 @@ public sealed class EffectTextPresenter : Canvas
                 lines.Add((start, layoutGlyphs.Count - start, x)); start = layoutGlyphs.Count; x = 0; y += lineHeight;
             }
             layoutGlyphs.Add((element, new Point(x, y), advance));
+            glyphColors.Add(color);
+            glyphExplicitColors.Add(range < ranges.Length && ranges[range].ReadLocalValue(TextElement.ForegroundProperty) != DependencyProperty.UnsetValue);
             x += advance;
         }
         lines.Add((start, layoutGlyphs.Count - start, x));
@@ -224,18 +237,18 @@ public sealed class EffectTextPresenter : Canvas
         for (int i = first; i < last; i++)
         {
             var glyph = layoutGlyphs[i];
-            var animation = new GlyphAnimation { Original = glyph.Text };
+            var animation = new GlyphAnimation { Original = glyph.Text, OriginalColor = glyphColors[i], HasInlineColor = glyphExplicitColors[i] };
             animations.Add(animation);
             var letter = new TextBlock
             {
                 Text = glyph.Text, Tag = glyph.Text, FontFamily = source.FontFamily, FontSize = source.FontSize, FontWeight = source.FontWeight,
-                FontStyle = source.FontStyle, FontStretch = source.FontStretch, Foreground = source.Foreground,
+                FontStyle = source.FontStyle, FontStretch = source.FontStretch, Foreground = animation.OriginalColor,
                 RenderTransformOrigin = new Point(.5, .5), RenderTransform = animation.Transform, IsHitTestVisible = false
             };
             letter.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             letters.Add(letter); positions.Add(glyph.Position); Children.Add(letter);
             SetLeft(letter, glyph.Position.X); SetTop(letter, glyph.Position.Y);
-            var drop = new Ellipse { Width = 3, Height = 7, Fill = source.Foreground, Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+            var drop = new Ellipse { Width = 3, Height = 7, Fill = animation.OriginalColor, Visibility = Visibility.Collapsed, IsHitTestVisible = false };
             drops.Add(drop); Children.Add(drop);
         }
         RenderAt(phase); UpdateClock();
@@ -264,7 +277,7 @@ public sealed class EffectTextPresenter : Canvas
             var animation = animations[i];
             animation.Translation.X = animation.Translation.Y = 0; animation.Rotation.Angle = 0;
             animation.Scale.ScaleX = animation.Scale.ScaleY = 1;
-            glyph.Opacity = 1; glyph.Effect = null; glyph.Foreground = source.Foreground;
+            glyph.Opacity = 1; glyph.Effect = null; glyph.Foreground = animation.OriginalColor;
             string original = animation.Original;
             glyph.Text = original;
             drops[i].Visibility = Visibility.Collapsed;
@@ -290,18 +303,21 @@ public sealed class EffectTextPresenter : Canvas
                 case "dissolve": glyph.Opacity = ended ? 0 : Math.Max(0, 1 - cycle); break;
                 case "scramble":
                     if (cycle < .7 && (animate || time > TimeSpan.Zero) && !string.IsNullOrWhiteSpace(original)) glyph.Text = "@#$%&?!+*"[(int)(Math.Floor(cycle * 40) + sequence * 7) % 9].ToString(); break;
-                case "rainbow": animation.Color.Color = Hue(cycle + sequence * .075); glyph.Foreground = animation.Color; break;
+                case "rainbow":
+                    if (!animation.HasInlineColor) { animation.Color.Color = Hue(cycle + sequence * .075); glyph.Foreground = animation.Color; }
+                    break;
                 case "color_cycle":
                     Color first = (Color)ColorConverter.ConvertFromString(settings.Color1), second = (Color)ColorConverter.ConvertFromString(settings.Color2);
                     double blend = (Math.Sin(t) + 1) / 2;
-                    animation.Color.Color = Color.FromArgb(Mix(first.A, second.A, blend), Mix(first.R, second.R, blend), Mix(first.G, second.G, blend), Mix(first.B, second.B, blend)); glyph.Foreground = animation.Color; break;
+                    if (!animation.HasInlineColor) { animation.Color.Color = Color.FromArgb(Mix(first.A, second.A, blend), Mix(first.R, second.R, blend), Mix(first.G, second.G, blend), Mix(first.B, second.B, blend)); glyph.Foreground = animation.Color; }
+                    break;
                 case "drip":
                     if (!string.IsNullOrWhiteSpace(original))
                     {
                         double progress = (cycle + sequence * .17) % 1;
                         var drop = drops[i]; drop.Visibility = Visibility.Visible; drop.Opacity = 1 - progress;
                         SetLeft(drop, positions[i].X + glyph.DesiredSize.Width / 2); SetTop(drop, positions[i].Y + source.FontSize * .8 + progress * 25);
-                        drop.Fill = source.Foreground;
+                        drop.Fill = animation.OriginalColor;
                     }
                     break;
             }

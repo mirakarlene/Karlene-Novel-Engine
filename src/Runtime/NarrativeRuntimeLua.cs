@@ -74,14 +74,28 @@ internal static class NarrativeRuntimeLua
                 if narration then speaker, character = "", nil end
                 local result = kne_prepare_dialogue(speaker, character, effect)
                 if result[3] ~= "" then error(result[3], 2) end
-                local event = {kind = "dialogue", speaker = result[0], text = tostring(text),
-                    character = result[1], effect = result[2], seconds = auto_seconds, skippable = skippable ~= false}
-                if not kne_interactive or not coroutine.isyieldable() then
-                    last = event
-                    print_to_ui(event.speaker == "" and event.text or event.speaker .. ": " .. event.text)
-                    return
+                local parts = kne_prepare_inline_dialogue(tostring(text))
+                if parts[0] ~= "" then error(parts[0], 2) end
+                local name = kne_inline_text(result[0])
+                local count, presentation = tonumber(parts[1]), nil
+                for index = 1, count do
+                    local duration = parts[index * 2 + 1]
+                    local final = duration == "final"
+                    local wait = final and auto_seconds or tonumber(duration)
+                    if wait and wait < 0 then wait = nil end
+                    local event = {kind = "dialogue", speaker = name, text = parts[index * 2],
+                        character = result[1], effect = result[2], seconds = wait,
+                        skippable = final and skippable ~= false or not final and wait == nil, presentation_id = presentation}
+                    if not kne_interactive or not coroutine.isyieldable() then
+                        if index == count then
+                            last = event
+                            print_to_ui(kne_inline_plain(event.speaker == "" and event.text or event.speaker .. ": " .. event.text))
+                        end
+                    else
+                        emit(event)
+                        presentation = event.presentation_id
+                    end
                 end
-                return emit(event)
             end
             function d(speaker, text) return kne_say(speaker, text) end
             function text_pause(duration, skippable)
@@ -104,7 +118,7 @@ internal static class NarrativeRuntimeLua
                 kne_notify_text_closed()
                 kne_editor_pause()
             end
-            function console_write(text) print(text); kne_editor_pause() end
+            function console_write(text) print(kne_inline_plain(kne_inline_text(text))); kne_editor_pause() end
             function kne_random_branch(weights)
                 if type(weights) ~= "table" or #weights < 2 or #weights > 20 then error("Случайная ветка требует от 2 до 20 весов", 2) end
                 local total = 0

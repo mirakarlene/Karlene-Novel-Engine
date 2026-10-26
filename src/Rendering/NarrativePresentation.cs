@@ -32,19 +32,20 @@ internal static class NarrativePresentation
         speaker.Foreground = cache.NameBrush; text.Foreground = cache.TextBrush;
         speaker.TextAlignment = text.TextAlignment = (character?.TextAlignment ?? style?.TextAlignment) switch
         { "center" => TextAlignment.Center, "right" => TextAlignment.Right, "justify" => TextAlignment.Justify, _ => TextAlignment.Left };
-        speaker.Text = story.Speaker;
+        InlineTextPresentation.Apply(speaker, story.Speaker);
         speaker.Visibility = story.Speaker.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-        string visible = story.Text;
+        int? visible = null;
         if (story.Kind == "clear_text")
         {
-            string[] elements = EffectTextPresenter.TextElements(story.Text);
+            string[] elements = EffectTextPresenter.TextElements(InlineText.Parse(story.Text).Text);
             int count = Math.Clamp((int)Math.Ceiling(elements.Length * (1 - story.EraseProgress)), 0, elements.Length);
-            visible = string.Concat(elements.Take(count));
+            visible = elements.Take(count).Sum(element => element.Length);
         }
-        text.Text = visible;
+        InlineTextPresentation.Apply(text, story.Text, visible);
+        bool continuation = story.PresentationId > 0 && Equals(cache.SpokenFrame, story.PresentationId);
         if (story.PresentationId > 0) cache.SpokenFrame = story.PresentationId;
         else if (story.Kind == "dialogue") cache.SpokenFrame = story.Identity;
-        effects.Present(text, story.TextEffect, animate, cache.SpokenFrame, story.Kind is "text_pause" or "clear_text");
+        effects.Present(text, story.TextEffect, animate, cache.SpokenFrame, continuation || story.Kind is "text_pause" or "clear_text");
     }
 
     private static Brush Brush(string value)
