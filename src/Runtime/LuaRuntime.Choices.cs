@@ -33,9 +33,10 @@ public sealed partial class LuaRuntime
             var request = JsonSerializer.Deserialize<ChoiceRequest>(json, NarrativeValidation.JsonOptions) ?? throw new ArgumentException("Выбор не может быть null.");
             request.Validate();
             using var state = lua!["state"] as LuaTable ?? throw new ArgumentException("state должен оставаться таблицей.");
-            var options = request.Options.Select(option => new ChoiceOptionState(option.Text,
+            string Text(string text) => InlineText.ToMarkup(ResolveInline(text));
+            var options = request.Options.Select(option => new ChoiceOptionState(Text(option.Text),
                 option.Lock == null || !IsLocked(option.Lock, state), option.Lock?.Effect ?? "dim",
-                option.Lock is { ShowHint: true } locked ? locked.Hint : "", option.Lock?.HintPlacement ?? "side")).ToArray();
+                option.Lock is { ShowHint: true } locked ? Text(locked.Hint) : "", option.Lock?.HintPlacement ?? "side")).ToArray();
             int firstEnabled = Array.FindIndex(options, option => option.IsEnabled);
             if (firstEnabled < 0) throw new ArgumentException("Все варианты выбора заблокированы. Оставьте хотя бы один доступный ответ.");
             int fallback = request.Timer?.DefaultOption ?? 1;
@@ -43,9 +44,9 @@ public sealed partial class LuaRuntime
             return new[] { "", JsonSerializer.Serialize(options, EngineSettings.JsonOptions),
                 (request.Timer?.Seconds ?? -1).ToString("R", CultureInfo.InvariantCulture), fallback.ToString(CultureInfo.InvariantCulture),
                 request.Timer?.TimerDisplay ?? "", options.Length.ToString(CultureInfo.InvariantCulture) }
-                .Concat(options.Select(option => option.Text)).Append(request.Prompt).ToArray();
+                .Concat(options.Select(option => option.Text)).Append(Text(request.Prompt)).ToArray();
         }
-        catch (Exception error) when (error is ArgumentException or JsonException)
+        catch (Exception error) when (error is ArgumentException or JsonException or System.IO.InvalidDataException)
         { return ["kne_choice: " + error.Message]; }
     }
 

@@ -42,11 +42,23 @@ public sealed partial class VisualScript
         }
         Visit(starts[0]);
         foreach (var trigger in Nodes.Where(node => node.IsTrigger)) Visit(trigger);
+        bool anchorTransfers = Nodes.Any(node => node.Kind == ScriptNodeKind.SendFlow);
+        bool added;
+        do
+        {
+            added = false;
+            foreach (var send in Nodes.Where(node => node.Kind == ScriptNodeKind.SendFlow && visited.Contains(node.Id)))
+            {
+                if (!map.TryGetValue(send.Target, out var anchor) || anchor.Kind != ScriptNodeKind.Anchor) Fail(send, "выберите существующий якорь этой сцены");
+                if (!visited.Contains(send.Target)) { Visit(map[send.Target]); added = true; }
+            }
+        } while (added);
         if (Nodes.Any(n => !visited.Contains(n.Id) && n.Kind != ScriptNodeKind.Comment))
             throw new InvalidDataException("Есть блоки, недостижимые из «Начала». Соедините или удалите их.");
+        if (anchorTransfers) ValidateAnchorScopes(map, starts[0].Id, connectedTriggers);
 
         var code = new StringBuilder("-- Сгенерировано из блок-схемы KNE.\nfunction ").Append(FunctionName).Append("()\n");
-        code.Append("    local __kne_run\n    __kne_run = function(__kne_node, __kne_stop)\n")
+        code.Append(anchorTransfers ? "    local __kne_run, __kne_flow\n    __kne_run = function(__kne_node, __kne_stop)\n" : "    local __kne_run\n    __kne_run = function(__kne_node, __kne_stop)\n")
             .Append("        while __kne_node and __kne_node ~= __kne_stop do\n");
         bool first = true;
         foreach (var node in Nodes.OrderBy(n => n.Id, StringComparer.Ordinal))
@@ -67,6 +79,9 @@ public sealed partial class VisualScript
                 case ScriptNodeKind.Plugin:
                     Line($"local output = kne_execute_plugin_block({Quote(node.Plugin!.BlockId)}, {Quote(node.Plugin.Parameters.ToJsonString())})");
                     Line($"__kne_node = ({{{string.Join(", ", node.Options.Select(o => Quote(o.Target!)))}}})[output]");
+                    break;
+                case ScriptNodeKind.SendFlow:
+                    Line($"return {Quote(node.Target)}");
                     break;
                 case ScriptNodeKind.TriggerKey:
                 case ScriptNodeKind.TriggerButton:
@@ -107,9 +122,9 @@ public sealed partial class VisualScript
                     {
                         var option = node.Options[i];
                         Line($"{(i == 0 ? "if" : "elseif")} state[{Quote(node.Variable)}] == {CaseLiteral(node, option.Text)} then");
-                        Line($"    __kne_run({Quote(option.Target!)}, {Quote(node.Next!)})");
+                        Line($"    {RunBody(option.Target!, node.Next!)}");
                     }
-                    Line($"else __kne_run({Quote(node.False!)}, {Quote(node.Next!)}) end");
+                    Line($"else {RunBody(node.False!, node.Next!)} end");
                     Line($"__kne_node = {Quote(node.Next!)}");
                     break;
                 case ScriptNodeKind.While:
@@ -119,7 +134,7 @@ public sealed partial class VisualScript
                     Line($"    if not ({Comparison(node)}) then break end");
                     Line("    __kne_iterations = __kne_iterations + 1");
                     Line("    if __kne_iterations > 10000 then error('Цикл While превысил 10000 итераций') end");
-                    Line($"    __kne_run({Quote(node.True!)}, {Quote(node.Next!)})");
+                    Line($"    {RunBody(node.True!, node.Next!)}");
                     Line("end");
                     Line($"__kne_node = {Quote(node.Next!)}");
                     break;
@@ -134,21 +149,23 @@ public sealed partial class VisualScript
                     Line("for __kne_index = 1, __kne_size do if __kne_collection[__kne_index] == nil then error('For Each не допускает пропущенных индексов') end end");
                     Line("for __kne_index, __kne_value in ipairs(__kne_collection) do");
                     Line($"    state[{Quote(node.Variable)}] = __kne_value; state[{Quote(node.IterationKey)}] = __kne_index");
-                    Line($"    __kne_run({Quote(node.True!)}, {Quote(node.Next!)})");
+                    Line($"    {RunBody(node.True!, node.Next!)}");
                     Line("end");
                     Line($"__kne_node = {Quote(node.Next!)}");
                     break;
                 case ScriptNodeKind.TryCatch:
-                    Line($"local __kne_ok, __kne_error = pcall(function() __kne_run({Quote(node.True!)}, {Quote(node.Next!)}) end)");
+                    Line($"local __kne_ok, __kne_error = pcall(function() {(anchorTransfers ? "return " : "")}__kne_run({Quote(node.True!)}, {Quote(node.Next!)}) end)");
+                    if (anchorTransfers)
+                        Line("if __kne_ok and __kne_error then return __kne_error end");
                     Line("if not __kne_ok then");
                     Line($"    state[{Quote(node.Variable)}] = tostring(__kne_error)");
-                    Line($"    __kne_run({Quote(node.False!)}, {Quote(node.Next!)})");
+                    Line($"    {RunBody(node.False!, node.Next!)}");
                     Line("end");
                     Line($"__kne_node = {Quote(node.Next!)}");
                     break;
                 case ScriptNodeKind.Parallel:
                 case ScriptNodeKind.Async:
-                    string branches = string.Join(", ", node.Options.Select(o => $"function() __kne_run({Quote(o.Target!)}, {Quote(node.Next!)}) end"));
+                    string branches = string.Join(", ", node.Options.Select(o => anchorTransfers ? $"function() __kne_flow({Quote(o.Target!)}, {Quote(node.Next!)}) end" : $"function() __kne_run({Quote(o.Target!)}, {Quote(node.Next!)}) end"));
                     Line(node.Kind == ScriptNodeKind.Parallel ? $"kne_parallel({{{branches}}})" : $"state[{Quote(node.Variable)}] = kne_async({{{branches}}})");
                     Line($"__kne_node = {Quote(node.Next!)}");
                     break;
@@ -158,11 +175,16 @@ public sealed partial class VisualScript
             }
         }
         code.Append("            else\n                error('Неизвестный блок')\n            end\n        end\n    end\n");
+        if (anchorTransfers) code.Append("    __kne_flow = function(entry, stop)\n        while entry do entry = __kne_run(entry, stop) end\n    end\n");
         foreach (var trigger in Nodes.Where(node => node.IsTrigger && !connectedTriggers.Contains(node.Id)))
             code.Append("    kne_on_event(").Append(Quote(System.Text.Json.JsonSerializer.Serialize(trigger.Trigger, EngineSettings.JsonOptions)))
-                .Append(", function() __kne_run(").Append(Quote(trigger.Next!)).Append(", nil) end)\n");
-        code.Append("    __kne_run(").Append(Quote(starts[0].Id)).Append(", nil)\nend\n");
+                .Append(anchorTransfers ? ", function() __kne_flow(" : ", function() __kne_run(").Append(Quote(trigger.Next!)).Append(", nil) end)\n");
+        code.Append(anchorTransfers ? "    __kne_flow(" : "    __kne_run(").Append(Quote(starts[0].Id)).Append(", nil)\nend\n");
         return code.ToString();
+
+        string RunBody(string entry, string stop) => anchorTransfers
+            ? $"local __kne_jump = __kne_run({Quote(entry)}, {Quote(stop)}); if __kne_jump then return __kne_jump end"
+            : $"__kne_run({Quote(entry)}, {Quote(stop)})";
     }
 
     private static string Number(double value) => value.ToString("R", CultureInfo.InvariantCulture);
@@ -194,6 +216,8 @@ public sealed partial class VisualScript
         ScriptNodeKind.MasterVolume => $"set_master_volume({Number(node.Amount)})",
         ScriptNodeKind.GotoScene => $"goto_scene({Quote(node.Path)})",
         ScriptNodeKind.CallScene => $"call_scene({Quote(node.Path)})",
+        ScriptNodeKind.ConditionalGoto => $"if {Comparison(node)} then goto_scene({Quote(node.Path)}) end",
+        ScriptNodeKind.Anchor => "",
         ScriptNodeKind.Subsystem => $"kne_subsystem({Quote(node.Path)}, {(node.WaitForSubsystem ? "true" : "false")})",
         ScriptNodeKind.Title => $"show_title({Quote(node.Text)})",
         ScriptNodeKind.MoveBackground => $"move_visual('background', {Number(node.OffsetX)}, {Number(node.OffsetY)}, {Number(node.Duration)})",
@@ -308,10 +332,10 @@ public sealed partial class VisualScript
             try { (node.ChoiceSettings ?? new ChoiceSettings()).Validate(node.Options.Count); }
             catch (ArgumentException error) { Fail(node, error.Message); }
         }
-        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.Branching or ScriptNodeKind.CompareVariables or ScriptNodeKind.SetVariable or ScriptNodeKind.Switch or ScriptNodeKind.While or
+        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.ConditionalGoto or ScriptNodeKind.Branching or ScriptNodeKind.CompareVariables or ScriptNodeKind.SetVariable or ScriptNodeKind.Switch or ScriptNodeKind.While or
             ScriptNodeKind.ForEach or ScriptNodeKind.TryCatch or ScriptNodeKind.SetFlag or ScriptNodeKind.CheckFlag or ScriptNodeKind.Random or
             ScriptNodeKind.Async or ScriptNodeKind.Join or ScriptNodeKind.WaitCondition) RequireKey(node, node.Variable);
-        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.Branching or ScriptNodeKind.SetVariable or ScriptNodeKind.While or ScriptNodeKind.WaitCondition)
+        if (node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.Branching or ScriptNodeKind.ConditionalGoto or ScriptNodeKind.SetVariable or ScriptNodeKind.While or ScriptNodeKind.WaitCondition)
         {
             _ = Literal(node);
             if (node.Kind != ScriptNodeKind.SetVariable && node.Comparison is not (ScriptComparison.Equal or ScriptComparison.NotEqual) && node.ValueKind != ScriptValueKind.Number)
@@ -361,12 +385,14 @@ public sealed partial class VisualScript
             Fail(node, "укажите путь к ресурсу");
         if (node.Kind == ScriptNodeKind.End && node.EndAction == ScriptEndAction.Screen)
             if (string.IsNullOrWhiteSpace(node.Path)) Fail(node, "укажите идентификатор экрана");
-        if (node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene)
+        if (node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ConditionalGoto)
         {
             if (string.IsNullOrWhiteSpace(node.Path)) Fail(node, "укажите имя функции");
             if (!LuaSource.IsIdentifier(node.Path)) Fail(node, "цель перехода должна быть именем функции, например chapter, без пути к файлу");
         }
         if (node.Kind == ScriptNodeKind.GotoScene && node.Next != null) Fail(node, "у постоянного перехода нет продолжения в этой сцене");
+        if (node.Kind == ScriptNodeKind.Anchor && (string.IsNullOrWhiteSpace(node.Text) || node.Text.Length > 160)) Fail(node, "задайте имя якоря длиной до 160 символов");
+        if (node.Kind == ScriptNodeKind.SendFlow && node.Next != null) Fail(node, "у отправки потока нет обычного продолжения");
         if (node.Kind == ScriptNodeKind.Character && node.Position is not ("left" or "center" or "right")) Fail(node, "позиция персонажа: left, center или right");
     }
 }

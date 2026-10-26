@@ -46,7 +46,7 @@ public partial class GameWindow
                 foreach (var element in layout.Elements)
                 {
                     FrameworkElement view;
-                    try { view = ScreenRenderer.Create(element, project.Engine.Theme, project.Path, ResolveScreenText, path => assets.Load(path)); }
+                    try { view = ScreenRenderer.Create(element, project.Engine.Theme, project.Path, text => scene.ScreenTexts.GetValueOrDefault(text) ?? ResolveScreenText(text), path => assets.Load(path)); }
                     catch (Exception error) when (error is System.IO.IOException or NotSupportedException or ArgumentException or FormatException)
                     { QueueOutput("Ошибка элемента экрана: " + error.Message); continue; }
                     view.Width = element.Width; view.Height = element.Height; Canvas.SetLeft(view, element.X); Canvas.SetTop(view, element.Y);

@@ -171,7 +171,8 @@ public sealed class PluginSdkIntegrationTests
                 var toolbar = Find<Panel>(window, "PluginToolbar"); var tabs = Find<TabControl>(window, "DocumentTabs");
                 var editor = (ScriptEditor)((TabItem)tabs.Items[0]).Tag;
                 Assert.Single(toolbar.Children.OfType<Button>(), button => Equals(button.Content, "Диалоги / переводы"));
-                var commands = toolbar.Children.OfType<Button>().Where(button => !Equals(button.Content, "Диалоги / переводы")).ToArray();
+                Assert.Single(toolbar.Children.OfType<Button>(), button => button.Name == "SceneNavigatorButton");
+                var commands = toolbar.Children.OfType<Button>().Where(button => !Equals(button.Content, "Диалоги / переводы") && button.Name != "SceneNavigatorButton").ToArray();
                 Assert.Equal(new[] { "Создать NPC", "Инвентарь" }, commands.Select(button => button.Content));
                 Click(commands[0]); await Drain();
                 Assert.Equal("NPC Анна", editor.Document!.Graph!.Nodes.Single(node => node.Id == "generated-npc").Text);

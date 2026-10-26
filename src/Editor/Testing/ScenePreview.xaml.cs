@@ -267,7 +267,7 @@ public partial class ScenePreview : UserControl
             if (layout != null)
                 foreach (var element in layout.Elements)
                 {
-                    var view = ScreenRenderer.Create(element, theme, project.Path, text => text.Replace("{{title}}", project.Title)
+                    var view = ScreenRenderer.Create(element, theme, project.Path, text => visuals.ScreenTexts.GetValueOrDefault(text) ?? text.Replace("{{title}}", project.Title)
                         .Replace("{{subtitle}}", project.Engine.Game.Subtitle).Replace("{{start_label}}", project.Engine.Game.StartLabel)
                         .Replace("{{continue_label}}", project.Engine.Game.ContinueLabel).Replace("{{exit_label}}", project.Engine.Game.ExitLabel), path => assets.Load(path));
                     view.Width = element.Width; view.Height = element.Height; Canvas.SetLeft(view, element.X); Canvas.SetTop(view, element.Y);

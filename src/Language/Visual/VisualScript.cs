@@ -227,7 +227,8 @@ public enum ScriptNodeKind
     Subsystem, TriggerKey, TriggerButton, TriggerHotspot, TriggerTextClosed, TriggerCombination,
     Arithmetic, Modulo, Increment, Decrement, Pow, Sqrt, Trigonometry, Absolute, Clamp, Round, Floor, Ceil, Lerp, Remap, WeightedRandom, Constant, Formula,
     ShaderContainer, ShaderTexture, ShaderUv, ShaderTime, ShaderScreenPosition, ShaderFloat, ShaderVector, ShaderColor, ShaderTilingOffset, ShaderRotate, ShaderPolar, ShaderFlipbook, ShaderTwirl, ShaderSimplex, ShaderVoronoi, ShaderCheckerboard, ShaderLinearGradient, ShaderRadialGradient, ShaderSplit, ShaderCombine, ShaderHueShift, ShaderSaturation, ShaderContrast, ShaderBrightness, ShaderInvert, ShaderGrayscale, ShaderPosterize, ShaderGaussianBlur, ShaderBoxBlur, ShaderMotionBlur, ShaderBloom, ShaderChromatic, ShaderVignette, ShaderScanlines, ShaderLensDistortion, ShaderPixelate, ShaderSharpen, ShaderSobel, ShaderDithering, ShaderMix, ShaderAdd, ShaderSubtract, ShaderMultiply, ShaderScreen, ShaderStep, ShaderSmoothstep, ShaderOutput,
-    RemoveLayerShaders, RemoveAllShaders, Plugin
+    RemoveLayerShaders, RemoveAllShaders, Plugin,
+    Anchor, SendFlow, ConditionalGoto
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -403,6 +404,7 @@ public sealed class ScriptNode
         ScriptNodeKind.Music => "Музыка",
         ScriptNodeKind.StopMusic => "Остановить музыку", ScriptNodeKind.Sound => "Звук",
         ScriptNodeKind.GotoScene => "Перейти на сцену", ScriptNodeKind.CallScene => "Вызвать сцену",
+        ScriptNodeKind.Anchor => "Якорь", ScriptNodeKind.SendFlow => "Отправить поток", ScriptNodeKind.ConditionalGoto => "Условный переход",
         ScriptNodeKind.Comment => "Комментарий", ScriptNodeKind.Title => "Титр", ScriptNodeKind.Switch => "Switch / Case",
         ScriptNodeKind.While => "Цикл While", ScriptNodeKind.ForEach => "Цикл For Each", ScriptNodeKind.TryCatch => "Try / Catch",
         ScriptNodeKind.SetFlag => "Установить флаг", ScriptNodeKind.CheckFlag => "Проверить флаг", ScriptNodeKind.Random => "Случайное значение",
@@ -432,7 +434,7 @@ public sealed class ScriptNode
     {
         if (Kind == ScriptNodeKind.Plugin) { foreach (var port in Options) yield return (port.Text, port.Target); yield break; }
         if (ShaderLibrary.IsData(this)) { foreach (string output in ShaderLibrary.Get(Kind).Outputs) yield return (output, null); yield break; }
-        if (Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.Comment) yield break;
+        if (Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.SendFlow or ScriptNodeKind.Comment) yield break;
         if (Kind == ScriptNodeKind.TextInput)
         {
             yield return (Input?.BranchOnResult == true ? "Успех" : "Далее", Next);

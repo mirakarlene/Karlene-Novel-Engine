@@ -338,7 +338,7 @@ internal static class SceneRuntimeLua
                         if task.detached then
                             if event.kind == "choice" then return fail(task, "Выбор недоступен в фоновой асинхронной ветке; используйте Параллель") end
                             if event.kind == "input" then return fail(task, "Ввод текста недоступен в фоновой асинхронной ветке; используйте Параллель") end
-                            if event.kind == "dialogue" then print_to_ui(event.speaker == "" and event.text or event.speaker .. ": " .. event.text) end
+                            if event.kind == "dialogue" then print_to_ui(kne_inline_plain(event.speaker == "" and event.text or event.speaker .. ": " .. event.text)) end
                             if event.seconds and event.seconds > 0 then task.wake = clock + event.seconds end
                         else
                             if event.kind ~= "preview" then kne_transition_pending(false) end

@@ -89,6 +89,7 @@ public partial class ScriptEditor
         foreach (var node in nodes)
         {
             node.Next = Keep(node.Next); node.True = Keep(node.True); node.False = Keep(node.False);
+            if (node.Kind == ScriptNodeKind.SendFlow) node.Target = Keep(node.Target) ?? "";
             foreach (var option in node.Options) option.Target = Keep(option.Target);
             if (node.Shader != null) foreach (string key in node.Shader.Inputs.Where(pair => !included.Contains(pair.Value.Node)).Select(pair => pair.Key).ToArray()) node.Shader.Inputs.Remove(key);
         }
@@ -123,6 +124,7 @@ public partial class ScriptEditor
         foreach (var node in pasted.Nodes)
         {
             node.Next = Remap(node.Next); node.True = Remap(node.True); node.False = Remap(node.False);
+            if (node.Kind == ScriptNodeKind.SendFlow) node.Target = Remap(node.Target) ?? "";
             foreach (var option in node.Options) option.Target = Remap(option.Target);
             if (node.Shader != null) foreach (string key in node.Shader.Inputs.Keys.ToArray()) { var link = node.Shader.Inputs[key]; if (Remap(link.Node) is { } target) node.Shader.Inputs[key] = link with { Node = target }; else node.Shader.Inputs.Remove(key); }
             node.Id = identities[node.Id];

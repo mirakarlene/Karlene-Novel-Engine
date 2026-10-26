@@ -26,9 +26,11 @@ public sealed partial class LuaRuntime
         {
             var settings = ReadNarrative<TextInputSettings>(json);
             settings.Validate();
+            settings = settings with { Prompt = InlineText.ToMarkup(ResolveInline(settings.Prompt)),
+                Placeholder = InlineText.ToMarkup(ResolveInline(settings.Placeholder)), FailureMessage = InlineText.ToMarkup(ResolveInline(settings.FailureMessage)) };
             return [JsonSerializer.Serialize(settings, EngineSettings.JsonOptions), ""];
         }
-        catch (Exception error) when (error is ArgumentException or JsonException)
+        catch (Exception error) when (error is ArgumentException or JsonException or System.IO.InvalidDataException)
         { return ["", "text_input: " + error.Message]; }
     }
 

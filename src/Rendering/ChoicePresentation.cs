@@ -24,7 +24,8 @@ public sealed class ChoiceOptionButton : Button
         Padding = new Thickness(12, 8, 12, 8); Margin = new Thickness(0, 0, 0, 8);
         if (!option.IsEnabled && option.Hint.Length > 0)
         {
-            ToolTip = new ToolTip { Content = new TextBlock { Text = option.Hint, TextWrapping = TextWrapping.Wrap, MaxWidth = 320 },
+            var hint = InlineTextPresentation.Label(option.Hint); hint.TextWrapping = TextWrapping.Wrap; hint.MaxWidth = 320;
+            ToolTip = new ToolTip { Content = hint,
                 Placement = option.HintPlacement == "overlay" ? PlacementMode.Center : PlacementMode.Right,
                 PlacementTarget = this, StaysOpen = true };
             ToolTipService.SetShowOnDisabled(this, true);
@@ -42,7 +43,7 @@ public sealed class ChoiceOptionButton : Button
     internal void ApplyEffect(double seconds, bool animate)
     {
         IsAnimating = animate && Animated;
-        label.Text = option.Text; label.TextDecorations = null;
+        InlineTextPresentation.Apply(label, option.Text); label.TextDecorations = null;
         label.Opacity = 1; label.RenderTransform = Transform.Identity;
         if (option.IsEnabled) return;
         switch (option.Effect)
@@ -53,8 +54,12 @@ public sealed class ChoiceOptionButton : Button
                 if (animate) label.RenderTransform = new TranslateTransform(Math.Sin(seconds * 57) * 3, Math.Cos(seconds * 43));
                 label.Opacity = animate ? .65 + .3 * Math.Abs(Math.Sin(seconds * 31)) : .7;
                 break;
-            case "hide": label.Text = Conceal(option.Text, animate && Math.Sin(seconds * 2.5) > .65, animate ? seconds : 0, false); break;
-            case "scramble": label.Text = Conceal(option.Text, animate && Math.Sin(seconds * 2) > .4, animate ? seconds : 0, true); break;
+            case "hide":
+                if (!(animate && Math.Sin(seconds * 2.5) > .65)) label.Text = Conceal(InlineText.Parse(option.Text).Text, false, animate ? seconds : 0, false);
+                break;
+            case "scramble":
+                if (!(animate && Math.Sin(seconds * 2) > .4)) label.Text = Conceal(InlineText.Parse(option.Text).Text, false, animate ? seconds : 0, true);
+                break;
         }
     }
 

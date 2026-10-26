@@ -72,7 +72,7 @@ public partial class MainWindow
         DocumentTabs.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
         foreach (var editor in EditorWorkspace.Children.OfType<ScriptEditor>())
             editor.Visibility = any && (DocumentTabs.SelectedItem as TabItem)?.Tag == editor ? Visibility.Visible : Visibility.Collapsed;
-        foreach (var view in EditorWorkspace.Children.OfType<FrameworkElement>().Where(view => view.Tag is PluginEditorTab))
+        foreach (var view in EditorWorkspace.Children.OfType<FrameworkElement>().Where(view => view.Tag is PluginEditorTab or SceneNavigatorTab))
             view.Visibility = any && ReferenceEquals((DocumentTabs.SelectedItem as TabItem)?.Tag, view.Tag) ? Visibility.Visible : Visibility.Collapsed;
         EditorWorkspace.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
         FileBrowserPanel.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
@@ -105,7 +105,7 @@ public partial class MainWindow
     {
         var editors = OpenEditors.ToArray();
         DocumentTabs.Items.Clear();
-        foreach (var view in EditorWorkspace.Children.OfType<FrameworkElement>().Where(view => view.Tag is PluginEditorTab).ToArray()) EditorWorkspace.Children.Remove(view);
+        foreach (var view in EditorWorkspace.Children.OfType<FrameworkElement>().Where(view => view.Tag is PluginEditorTab or SceneNavigatorTab).ToArray()) EditorWorkspace.Children.Remove(view);
         foreach (var editor in editors)
         {
             DetachTabState(editor);
