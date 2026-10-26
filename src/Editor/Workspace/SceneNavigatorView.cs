@@ -6,16 +6,23 @@ using System.Windows.Shapes;
 
 namespace KNE;
 
-/// <summary>A read-only scene graph. Nodes expose only navigation, with no editing or drag handlers.</summary>
+/// <summary>A read-only scene graph with viewport panning and zoom; nodes only open their source.</summary>
 public sealed class SceneNavigatorView : UserControl
 {
     public event EventHandler<SceneNavigationNode>? SceneRequested;
     public event EventHandler? RefreshRequested;
     private readonly Canvas graph = new() { Name = "SceneNavigationCanvas", Margin = new Thickness(20) };
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+    private readonly ScrollViewer viewport;
+    private readonly ScaleTransform zoom = new(1, 1);
+    private readonly Func<bool> captureMouse;
+    private bool panning;
+    private Point panStart, panOrigin;
     public SceneNavigationIndex? Index { get; private set; }
 
-    public SceneNavigatorView()
+    public SceneNavigatorView() : this(null) { }
+
+    internal SceneNavigatorView(Func<bool>? captureMouse)
     {
         Name = "SceneNavigator";
         var panel = new DockPanel();
@@ -24,8 +31,64 @@ public sealed class SceneNavigatorView : UserControl
         DockPanel.SetDock(refresh, Dock.Right); refresh.Click += (_, _) => RefreshRequested?.Invoke(this, EventArgs.Empty);
         header.Children.Add(refresh); header.Children.Add(status); panel.Children.Add(header);
         graph.SetResourceReference(Panel.BackgroundProperty, "Editor.Background");
-        panel.Children.Add(new ScrollViewer { Content = graph, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        graph.LayoutTransform = zoom;
+        viewport = new ScrollViewer { Content = graph, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Background = Brushes.Transparent, Focusable = true, ToolTip = "ПКМ + перетаскивание — обзор · Ctrl + колесо — масштаб" };
+        this.captureMouse = captureMouse ?? viewport.CaptureMouse;
+        viewport.PreviewMouseRightButtonDown += (_, args) => { BeginPan(args.GetPosition(viewport)); args.Handled = panning; };
+        viewport.PreviewMouseMove += (_, args) => { if (panning) { PanTo(args.GetPosition(viewport)); args.Handled = true; } };
+        viewport.PreviewMouseRightButtonUp += (_, args) => { if (panning) { EndPan(); args.Handled = true; } };
+        viewport.LostMouseCapture += (_, _) => EndPan();
+        viewport.PreviewMouseWheel += (_, args) =>
+        {
+            if (ZoomWithWheel(args.Delta, Keyboard.Modifiers, args.GetPosition(viewport))) args.Handled = true;
+        };
+        Unloaded += (_, _) => EndPan();
+        panel.Children.Add(viewport);
         Content = panel;
+    }
+
+    internal void BeginPan(Point position)
+    {
+        viewport.Focus();
+        if (!captureMouse()) return;
+        panning = true; panStart = position; panOrigin = new(viewport.HorizontalOffset, viewport.VerticalOffset);
+        viewport.Cursor = Cursors.SizeAll;
+    }
+
+    internal void PanTo(Point position)
+    {
+        if (!panning) return;
+        viewport.ScrollToHorizontalOffset(panOrigin.X + panStart.X - position.X);
+        viewport.ScrollToVerticalOffset(panOrigin.Y + panStart.Y - position.Y);
+    }
+
+    private void EndPan()
+    {
+        panning = false;
+        if (viewport.IsMouseCaptured) viewport.ReleaseMouseCapture();
+        viewport.Cursor = null;
+    }
+
+    internal bool ZoomWithWheel(int delta, ModifierKeys modifiers, Point anchor)
+    {
+        if (!modifiers.HasFlag(ModifierKeys.Control)) return false;
+        if (delta != 0) ChangeZoom(delta > 0 ? 1 : -1, anchor);
+        return true;
+    }
+
+    private void ChangeZoom(int steps, Point anchor)
+    {
+        double next = Math.Clamp(Math.Round(zoom.ScaleX + steps * .1, 2), .4, 1.5);
+        if (next == zoom.ScaleX) return;
+        Point logical = viewport.TranslatePoint(anchor, graph);
+        zoom.ScaleX = zoom.ScaleY = next;
+        viewport.UpdateLayout();
+        Point moved = graph.TranslatePoint(logical, viewport);
+        viewport.ScrollToHorizontalOffset(viewport.HorizontalOffset + moved.X - anchor.X);
+        viewport.ScrollToVerticalOffset(viewport.VerticalOffset + moved.Y - anchor.Y);
+        viewport.UpdateLayout();
+        if (panning) { panStart = anchor; panOrigin = new(viewport.HorizontalOffset, viewport.VerticalOffset); }
     }
 
     public void Present(SceneNavigationIndex index)
