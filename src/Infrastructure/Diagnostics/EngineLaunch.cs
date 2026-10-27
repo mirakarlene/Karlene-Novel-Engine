@@ -13,6 +13,12 @@ internal static class EngineLaunch
 
     internal static ProcessStartInfo CreateStartInfo(string assembly, IReadOnlyList<string> arguments)
     {
+        if (string.IsNullOrEmpty(assembly) || Path.GetFileNameWithoutExtension(Environment.ProcessPath) == Path.GetFileNameWithoutExtension(assembly) && !File.Exists(Path.ChangeExtension(assembly, ".exe")))
+        {
+            var bundled = new ProcessStartInfo(Environment.ProcessPath ?? throw new IOException("Не найден исполняемый файл игры.")) { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden };
+            foreach (string argument in arguments) bundled.ArgumentList.Add(argument);
+            return bundled;
+        }
         string executable = Path.ChangeExtension(assembly, ".exe");
         bool appHost = File.Exists(executable);
         var info = new ProcessStartInfo(appHost ? executable : "dotnet")

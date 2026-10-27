@@ -37,6 +37,7 @@ internal static class LuaWorker
                 project.Configuration.EntryPoints.MainScene = scenePath;
             }
             LuaRuntime? runtime = null;
+            using var debug = WorkerDebugConnection.Connect(paused => Send(new(paused ? "debug_paused" : "debug_running")));
             var queue = Channel.CreateBounded<WorkerRequest>(1);
             _ = Task.Run(async () =>
             {
@@ -65,7 +66,7 @@ internal static class LuaWorker
                     runtime ??= new LuaRuntime(project, line => Send(new("log", Text: line)),
                         TimeSpan.FromHours(1), interactive: true, preview: preview, editorSource: request.EditorSource,
                         variablesUpdated: value => Send(new("variables", Snapshot: new(runtime!.WindowSettings, runtime.Story, runtime.Visuals,
-                            runtime.Location, value, runtime.TransitionInProgress))));
+                            runtime.Location, value, runtime.TransitionInProgress))), debugger: debug?.Debugger);
                     var logicWatch = System.Diagnostics.Stopwatch.StartNew();
                     bool inputHandled = false;
                     switch (request.Command)
@@ -84,6 +85,7 @@ internal static class LuaWorker
                         default: throw new InvalidDataException("Неизвестная команда рабочего процесса.");
                     }
                     logicWatch.Stop();
+                    debug?.Publish(new(false, runtime.Location, runtime.Variables, "Выполнение · " + runtime.Story.Kind));
                     GameCheckpoint? checkpoint = null;
                     try { if (request.EditorSource == null) checkpoint = await runtime.CapturePluginCheckpointAsync(request.Command == "checkpoint").ConfigureAwait(false); }
                     catch (Exception ex) when (request.Command != "checkpoint")

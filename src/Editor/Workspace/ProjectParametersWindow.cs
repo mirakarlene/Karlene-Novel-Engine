@@ -26,9 +26,16 @@ public sealed class ProjectParametersWindow : Window
     internal Func<bool> ConfirmResetProgress { get; set; }
     private readonly Dictionary<string, CheckBox> switches = [];
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, Margin = new(0, 6, 0, 0), FontSize = 11 };
-    public ProjectParametersWindow(ProjectInfo project)
+    internal ProjectBuildSettingsEditor BuildInput { get; }
+    internal int Page { get; private set; }
+    internal Button PreviousPage { get; } = new() { Content = "‹", Padding = new(12, 3, 12, 3), IsEnabled = false };
+    internal Button NextPage { get; } = new() { Content = "›", Padding = new(12, 3, 12, 3) };
+    internal Func<Task> BeforeBuildAsync { get; set; } = () => Task.CompletedTask;
+    private readonly CancellationTokenSource buildLifetime = new();
+    public ProjectParametersWindow(ProjectInfo project, string? projectsStoragePath = null)
     {
         this.project = project; Title = "Параметры проекта · " + project.Title;
+        BuildInput = new(project, projectsStoragePath) { Visibility = Visibility.Collapsed };
         Width = 780; Height = 840; MinWidth = 540; MinHeight = 500; WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ConfirmProjectDeletion = () => MessageBox.Show(this, $"Удалить проект «{project.Title}» и все файлы в папке?\n{project.Path}\n\nНесохранённые изменения будут потеряны. После подтверждения нажмите кнопку ещё 72 раза. Внешняя папка сохранений не удаляется.", "Удаление проекта", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
         ConfirmResetProgress = () => MessageBox.Show(this, "Удалить сохранения этого проекта из сохранённой папки? Настройки и посторонние файлы останутся. Действие нельзя отменить.", "Сброс прогресса", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
@@ -97,7 +104,35 @@ public sealed class ProjectParametersWindow : Window
             DeleteCounter.Text = "Осталось нажатий: " + DeletionConfirmation.Remaining; DeleteCounter.Visibility = Visibility.Visible;
         };
         DangerZone.Content = danger; DangerZone.Collapsed += (_, _) => ResetDeletion(); body.Children.Add(DangerZone); body.Children.Add(status);
-        Closed += (_, _) => { if (!DeletionRequested) ResetDeletion(); };
+        var firstPage = body.Children.OfType<UIElement>().Where(item => item != status).ToArray();
+        body.Children.Insert(body.Children.Count - 1, BuildInput);
+        var pageLabel = new TextBlock { Text = "1 / 2 · Проект", VerticalAlignment = VerticalAlignment.Center, Margin = new(14, 0, 14, 0) };
+        var pager = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new(0, 10, 0, 0) };
+        pager.Children.Add(PreviousPage); pager.Children.Add(pageLabel); pager.Children.Add(NextPage); body.Children.Add(pager);
+        void ShowPage(int page)
+        {
+            Page = page; ResetDeletion(); DangerZone.IsExpanded = false;
+            foreach (var child in firstPage) child.Visibility = page == 0 ? Visibility.Visible : Visibility.Collapsed;
+            BuildInput.Visibility = page == 1 ? Visibility.Visible : Visibility.Collapsed;
+            if (footer.Parent is Panel parent) parent.Children.Remove(footer);
+            (page == 0 ? storage.Children : BuildInput.Children).Add(footer);
+            PreviousPage.IsEnabled = page == 1; NextPage.IsEnabled = page == 0; pageLabel.Text = page == 0 ? "1 / 2 · Проект" : "2 / 2 · Сборки";
+        }
+        PreviousPage.Click += (_, _) => ShowPage(0); NextPage.Click += (_, _) => ShowPage(1);
+        BuildInput.BuildButton.Click += async (_, _) =>
+        {
+            BuildInput.IsEnabled = false; save.IsEnabled = false; PreviousPage.IsEnabled = false;
+            try
+            {
+                await BeforeBuildAsync(); await SaveAsync(); var options = ProjectBuildSettingsStore.Load(project.Path); var loaded = await ProjectLoader.LoadProjectAsync(project.Path, buildLifetime.Token);
+                var built = await new GameBuildExporter().BuildAsync(loaded, options, options.ReleasePath, log: line => Dispatcher.BeginInvoke(() => status.Text = line), token: buildLifetime.Token);
+                status.Text = "Готово: " + (built.Package ?? built.Executable);
+            }
+            catch (OperationCanceledException) { status.Text = "Сборка отменена."; }
+            catch (Exception error) { status.Text = error.Message; }
+            finally { BuildInput.IsEnabled = true; save.IsEnabled = true; PreviousPage.IsEnabled = Page == 1; }
+        };
+        Closed += (_, _) => { buildLifetime.Cancel(); if (!DeletionRequested) ResetDeletion(); };
         // Keep the requested window dimensions, including a smaller manually resized window and expanded danger zone.
         Content = new Viewbox { Child = body, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Top, Margin = new(20) };
         foreach (var input in new[] { GraphicsInput.ApiInput, GraphicsInput.FpsInput, GraphicsInput.MsaaInput, TextureInput, GraphicsInput.CacheLimitInput, AsyncTasksInput, AudioBufferInput, CornerInput }) input.Margin = new(0, 3, 0, 5);
@@ -120,10 +155,22 @@ public sealed class ProjectParametersWindow : Window
         string title = ProjectMaintenance.ValidateName(TitleInput.Text);
         var value = new ProjectPerformanceSettings { Graphics = GraphicsInput.Value, FpsCounter = switches["fps"].IsChecked == true, FpsCorner = (string?)CornerInput.SelectedValue ?? "top_right", StatisticsOverlay = switches["stats"].IsChecked == true, LoadingIndicator = switches["loading"].IsChecked == true, DebugMode = switches["debug"].IsChecked == true, Preloading = switches["preload"].IsChecked == true, UnloadPreviousScene = switches["unload"].IsChecked == true, MaxAsyncTasks = (int?)AsyncTasksInput.SelectedValue ?? 128, AudioBuffer = (string?)AudioBufferInput.SelectedValue ?? "balanced", SavesPath = SavesInput.Text.Trim() };
         value.Validate(project.Path);
+        var build = BuildInput.Value; build.Validate();
+        string buildFile = System.IO.Path.Combine(project.Path, "engine", "build.json");
+        byte[]? previousBuild = System.IO.File.Exists(buildFile) ? await System.IO.File.ReadAllBytesAsync(buildFile) : null;
         var previous = PerformanceSettingsStore.LoadProject(project.Path);
-        await PerformanceSettingsStore.SaveProjectAsync(project.Path, value);
-        if (title == project.Title) return;
-        try { await ProjectMaintenance.RenameAsync(project, title); }
-        catch { await PerformanceSettingsStore.SaveProjectAsync(project.Path, previous); throw; }
+        try
+        {
+            await ProjectBuildSettingsStore.SaveAsync(project.Path, build);
+            await PerformanceSettingsStore.SaveProjectAsync(project.Path, value);
+            if (title != project.Title) await ProjectMaintenance.RenameAsync(project, title);
+            BuildInput.Saved(ProjectBuildSettingsStore.Load(project.Path));
+        }
+        catch
+        {
+            await PerformanceSettingsStore.SaveProjectAsync(project.Path, previous);
+            if (previousBuild == null) System.IO.File.Delete(buildFile); else await System.IO.File.WriteAllBytesAsync(buildFile, previousBuild);
+            throw;
+        }
     }
 }
