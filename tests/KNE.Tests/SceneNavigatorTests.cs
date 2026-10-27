@@ -112,6 +112,7 @@ public sealed class SceneNavigatorTests
                 await Action(() => navigation.RaiseEvent(new RoutedEventArgs(Button.ClickEvent))); Layout();
                 var workspace = Find<Grid>("EditorWorkspace"); var view = Assert.Single(workspace.Children.OfType<SceneNavigatorView>());
                 Assert.Equal(Visibility.Visible, view.Visibility); Assert.NotNull(view.Index);
+                Assert.True(view.ZoomWithWheel(120, ModifierKeys.Control, new(180, 120))); Layout();
                 Capture((FrameworkElement)window.Content, "navigator-" + width + ".png", width, height);
                 var second = Assert.Single(view.Index!.Nodes, node => node.Function == "second");
                 var sceneCanvas = Assert.IsType<Canvas>(((DockPanel)view.Content).Children.OfType<ScrollViewer>().Single().Content);
