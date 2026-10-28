@@ -1,0 +1,13 @@
+<Project>
+  <!-- A published editor can export games without a checkout of the KNE repository. -->
+  <ItemGroup Condition="'$(KnePlayerBuild)' != 'true' and '$(DesignTimeBuild)' != 'true'">
+    <EmbeddedResource Include="$(IntermediateOutputPath)kne-build-source.zip" LogicalName="KNE.BuildSource.zip" />
+    <KneBuildSource Include="KNE.csproj;BuildSource.targets;global.json;App.xaml;App.xaml.cs;src/**/*.cs;src/**/*.xaml;Resources/**/*" />
+  </ItemGroup>
+  <Target Name="CreateKneBuildSource" BeforeTargets="AssignTargetPaths" Condition="'$(KnePlayerBuild)' != 'true' and '$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup><KneSourceStage>$(IntermediateOutputPath)kne-build-source</KneSourceStage></PropertyGroup>
+    <RemoveDir Directories="$(KneSourceStage)" />
+    <Copy SourceFiles="@(KneBuildSource)" DestinationFiles="@(KneBuildSource->'$(KneSourceStage)/%(Identity)')" />
+    <ZipDirectory SourceDirectory="$(KneSourceStage)" DestinationFile="$(IntermediateOutputPath)kne-build-source.zip" Overwrite="true" />
+  </Target>
+</Project>

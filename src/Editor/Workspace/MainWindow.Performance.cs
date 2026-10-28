@@ -9,7 +9,7 @@ public partial class MainWindow
         if (currentProject is not { } project) return;
         await RunOperationAsync(async () =>
         {
-            var window = new ProjectParametersWindow(project) { Owner = this }; EditorTheme.Apply(window, settings.Theme);
+            var window = new ProjectParametersWindow(project, settings.ProjectsStoragePath) { Owner = this, BeforeBuildAsync = SaveAllEditorsAsync }; EditorTheme.Apply(window, settings.Theme);
             bool? saved = window.ShowDialog();
             if (window.DeletionRequested) await DeleteCurrentProjectAsync(project);
             else if (saved == true) { RefreshOpenGamePerformance(project.Path); await OpenProjectAsync(project.Path); }

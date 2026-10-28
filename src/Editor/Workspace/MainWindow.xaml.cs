@@ -93,6 +93,7 @@ public partial class MainWindow : Window
 
     private void Window_Closed(object? sender, EventArgs e)
     {
+        foreach (var debug in EditorWorkspace.Children.OfType<RemoteDebugView>().ToArray()) _ = debug.DisposeAsync();
         closed = true;
         UnloadEditorPlugins();
         storageTimer.Stop();
@@ -458,8 +459,7 @@ public partial class MainWindow : Window
             if (closed || currentProject == null) return;
             _ = currentProject.MainScenePath;
             _ = currentProject.InitScriptPath;
-            var game = new GameWindow(currentProject);
-            game.Show();
+            await RunConfiguredProjectAsync(currentProject);
         }, "Запуск проекта…");
     }
 

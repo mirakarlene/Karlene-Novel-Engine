@@ -11,7 +11,7 @@ namespace KNE
         private int recovering;
         private int pluginRecoveryQueued;
 
-        protected override void OnStartup(StartupEventArgs e)
+        protected override async void OnStartup(StartupEventArgs e)
         {
             if (e.Args.Contains("--disable-plugins", StringComparer.Ordinal))
                 Environment.SetEnvironmentVariable(EngineLaunch.PluginsEnvironment, "1");
@@ -45,6 +45,26 @@ namespace KNE
                 Shutdown(exitCode);
                 return;
             }
+#if KNE_PLAYER
+            ProjectInfo standaloneProject;
+            try { standaloneProject = await StandalonePlayer.LoadAsync(); }
+            catch (Exception error) { MessageBox.Show(error.Message, "Ошибка запуска игры"); Shutdown(1); return; }
+            if (e.Args.Contains("--verify-player", StringComparer.Ordinal))
+            {
+                try
+                {
+                    ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                    var window = new GameWindow(standaloneProject, StandalonePlayer.Saves(standaloneProject));
+                    await window.CloseForProjectDeletionAsync(); // Validate WPF resources without displaying a window.
+                    await using var session = new ProcessGameSession(standaloneProject, _ => { }); await session.StartAsync();
+                    var checkpoint = await session.GetCheckpointAsync(); await session.RestoreAsync(checkpoint);
+                    using var output = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
+                    output.WriteLine(System.Text.Json.JsonSerializer.Serialize(new { standaloneProject.Title, session.Story, Saves = StandalonePlayer.Current!.SavesDirectory(AppContext.BaseDirectory), SaveIdentity = checkpoint.ProjectPath })); Shutdown();
+                }
+                catch (Exception error) { using var output = new StreamWriter(Console.OpenStandardError()) { AutoFlush = true }; output.WriteLine(error); Shutdown(1); }
+                return;
+            }
+#endif
             PluginFailure.Detected += PresentPluginFailure;
             DispatcherUnhandledException += (_, problem) =>
             {
@@ -66,7 +86,7 @@ namespace KNE
             try
             {
                 using var process = Process.GetCurrentProcess();
-                string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KNE", "diagnostics");
+                string directory = StandalonePlayer.DiagnosticsDirectory;
                 diagnostics = new(Path.Combine(directory, $"engine-{process.Id}-{Guid.NewGuid():N}.json"), process.Id, process.StartTime.ToUniversalTime().Ticks, !EngineLaunch.PluginsEnabled);
                 EngineDiagnostics.Current = diagnostics;
                 try
@@ -75,7 +95,11 @@ namespace KNE
                 }
                 catch (Exception helperError) { diagnostics.Record("Наблюдатель недоступен", helperError.Message); }
                 base.OnStartup(e);
+#if KNE_PLAYER
+                MainWindow = new GameWindow(standaloneProject, StandalonePlayer.Saves(standaloneProject));
+#else
                 MainWindow = new MainWindow();
+#endif
                 if (!EngineLaunch.PluginsEnabled) MainWindow.Title += " · Без плагинов";
                 MainWindow.Show();
                 diagnostics.Record("Интерфейс готов");

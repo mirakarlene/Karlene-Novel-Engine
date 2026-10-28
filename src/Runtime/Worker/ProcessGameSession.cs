@@ -23,8 +23,10 @@ public sealed class ProcessGameSession : IGameSession
     private readonly EditorPreviewSource? editorSource;
     private bool canReturnAfterError;
     private long requestId;
+    private volatile bool debuggerPaused;
     private readonly bool pluginsEnabled;
     private readonly string[] applicationPlugins;
+    private readonly string? debuggerPipe;
     public TimeSpan ExecutionLimit { get; }
     public int? WorkerProcessId { get { lock (sync) return worker?.Id; } }
     public RuntimeWindowSettings WindowSettings { get { lock (sync) return snapshot.Window; } }
@@ -38,13 +40,14 @@ public sealed class ProcessGameSession : IGameSession
     public bool CanReturnAfterError { get { lock (sync) return canReturnAfterError && recovery != null; } }
 
     public ProcessGameSession(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool preview = false,
-        EditorPreviewSource? editorSource = null, bool? pluginsEnabled = null)
+        EditorPreviewSource? editorSource = null, bool? pluginsEnabled = null, string? debuggerPipe = null)
     {
         this.project = project ?? throw new ArgumentNullException(nameof(project));
         applicationPlugins = project.ApplicationPlugins.ToArray();
         this.preview = preview;
         this.pluginsEnabled = pluginsEnabled ?? EngineLaunch.PluginsEnabled;
         this.editorSource = editorSource;
+        this.debuggerPipe = debuggerPipe ?? Environment.GetEnvironmentVariable(RemoteDebugConnection.EnvironmentName);
         this.output = output ?? throw new ArgumentNullException(nameof(output));
         ExecutionLimit = executionLimit ?? TimeSpan.FromSeconds(project.Engine.Game.ExecutionTimeoutSeconds);
         if (ExecutionLimit <= TimeSpan.Zero || ExecutionLimit > TimeSpan.FromHours(1))
@@ -126,7 +129,7 @@ public sealed class ProcessGameSession : IGameSession
             token.ThrowIfCancellationRequested();
             var exchange = ExchangeAsync(command, option, text, checkpoint, linked.Token, seconds, cancel);
             WorkerMessage message;
-            try { message = await exchange.WaitAsync(ExecutionLimit, linked.Token).ConfigureAwait(false); }
+            try { message = await WaitForExecutionAsync(exchange, linked.Token).ConfigureAwait(false); }
             catch
             {
                 linked.Cancel();
@@ -181,23 +184,11 @@ public sealed class ProcessGameSession : IGameSession
             if (restart)
             {
                 worker?.Dispose();
-                string assembly = typeof(App).Assembly.Location;
-                string executable = Path.ChangeExtension(assembly, ".exe");
-                var info = new ProcessStartInfo(File.Exists(executable) ? executable : "dotnet")
-                {
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden,
-                    RedirectStandardInput = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    StandardInputEncoding = new UTF8Encoding(false),
-                    StandardOutputEncoding = Encoding.UTF8,
-                    StandardErrorEncoding = Encoding.UTF8,
-                    WorkingDirectory = Path.GetDirectoryName(assembly)!
-                };
-                if (!File.Exists(executable)) info.ArgumentList.Add(assembly);
+                var info = EngineLaunch.CreateStartInfo();
+                info.RedirectStandardInput = true; info.RedirectStandardOutput = true; info.RedirectStandardError = true;
+                info.StandardInputEncoding = new UTF8Encoding(false); info.StandardOutputEncoding = Encoding.UTF8; info.StandardErrorEncoding = Encoding.UTF8;
                 info.Environment[EngineLaunch.PluginsEnvironment] = pluginsEnabled ? "0" : "1";
+                if (string.IsNullOrEmpty(debuggerPipe)) info.Environment.Remove(RemoteDebugConnection.EnvironmentName); else info.Environment[RemoteDebugConnection.EnvironmentName] = debuggerPipe;
                 info.ArgumentList.Add("--lua-worker");
                 info.ArgumentList.Add(project.Path);
                 info.ArgumentList.Add(Path.GetRelativePath(project.Path, project.MainScenePath));
@@ -229,6 +220,7 @@ public sealed class ProcessGameSession : IGameSession
             var message = JsonSerializer.Deserialize<WorkerMessage>(line)
                 ?? throw new InvalidDataException("Некорректный ответ Lua.");
             if (message.Type == "log") { output(message.Text ?? ""); continue; }
+            if (message.Type is "debug_paused" or "debug_running") { debuggerPaused = message.Type == "debug_paused"; continue; }
             if (message.Type == "variables")
             {
                 if (message.Snapshot != null) lock (sync) snapshot = message.Snapshot;
@@ -248,6 +240,19 @@ public sealed class ProcessGameSession : IGameSession
             if (message.Type != "result" || message.Snapshot == null) throw new InvalidDataException("Некорректный ответ Lua.");
             return message;
         }
+    }
+
+    private async Task<WorkerMessage> WaitForExecutionAsync(Task<WorkerMessage> exchange, CancellationToken token)
+    {
+        if (string.IsNullOrEmpty(debuggerPipe)) return await exchange.WaitAsync(ExecutionLimit, token).ConfigureAwait(false);
+        var remaining = ExecutionLimit; long last = Stopwatch.GetTimestamp();
+        while (!exchange.IsCompleted)
+        {
+            await Task.WhenAny(exchange, Task.Delay(50, token)).ConfigureAwait(false); token.ThrowIfCancellationRequested();
+            long now = Stopwatch.GetTimestamp(); if (!debuggerPaused) remaining -= Stopwatch.GetElapsedTime(last, now); last = now;
+            if (remaining <= TimeSpan.Zero) throw new TimeoutException("Превышено время выполнения игрового worker.");
+        }
+        return await exchange.ConfigureAwait(false);
     }
 
     private static Exception CreateException(WorkerMessage message)

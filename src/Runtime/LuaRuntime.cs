@@ -38,6 +38,7 @@ public sealed partial class LuaRuntime : IGameSession
     private readonly bool preview;
     private readonly EditorPreviewSource? editorSource;
     private readonly Action<JsonElement>? variablesUpdated;
+    private readonly RuntimeDebugger? debugger;
     private JsonElement variables = JsonSerializer.SerializeToElement(new { Globals = new { }, Frames = new { } });
     private PreviewLocation? location;
     private long nextVariablesAt;
@@ -48,7 +49,7 @@ public sealed partial class LuaRuntime : IGameSession
     public TimeSpan ExecutionLimit { get; }
 
     public LuaRuntime(ProjectInfo project, Action<string> output, TimeSpan? executionLimit = null, bool interactive = false, bool preview = false,
-        EditorPreviewSource? editorSource = null, Action<JsonElement>? variablesUpdated = null, bool? pluginsEnabled = null)
+        EditorPreviewSource? editorSource = null, Action<JsonElement>? variablesUpdated = null, bool? pluginsEnabled = null, RuntimeDebugger? debugger = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(output);
@@ -60,6 +61,7 @@ public sealed partial class LuaRuntime : IGameSession
         this.editorSource = editorSource;
         if (editorSource?.Seed is { } previewSeed) seed = previewSeed;
         this.variablesUpdated = variablesUpdated;
+        this.debugger = debugger;
         ExecutionLimit = executionLimit ?? TimeSpan.FromSeconds(project.Engine.Game.ExecutionTimeoutSeconds);
         if (ExecutionLimit <= TimeSpan.Zero || ExecutionLimit > TimeSpan.FromHours(1))
             throw new ArgumentOutOfRangeException(nameof(executionLimit));
@@ -111,6 +113,9 @@ public sealed partial class LuaRuntime : IGameSession
         Register(nameof(TriggerMatchesForLua), "kne_trigger_matches");
         Register(nameof(TriggerOnceForLua), "kne_trigger_once");
         Register(nameof(ShaderSourceForLua), "kne_shader_source");
+        Register(nameof(DebugShouldPause), "kne_debug_should_pause");
+        Register(nameof(DebugWait), "kne_debug_wait");
+        lua["kne_debug_enabled"] = debugger != null;
         lua["project_dir"] = project.Path;
         lua["kne_interactive"] = interactive;
         lua["kne_editor"] = editorSource?.StepCommands == true;
@@ -371,14 +376,14 @@ public sealed partial class LuaRuntime : IGameSession
             using var table = lua!["state"] as LuaTable ?? throw new InvalidDataException("state должен оставаться таблицей.");
             if (saving) PublishPluginEvent("on_save");
             JsonElement state = JsonSerializer.SerializeToElement(ReadState(table, 0));
-            checkpoint = new GameCheckpoint(1, project.Path, fingerprint, seed, history.ToArray(), Story, state);
+            checkpoint = new GameCheckpoint(1, StandalonePlayer.SaveIdentity(project.Path), fingerprint, seed, history.ToArray(), Story, state);
         }, cancellationToken).ConfigureAwait(false);
         return checkpoint!;
     }
 
     public Task RestoreAsync(GameCheckpoint checkpoint, CancellationToken cancellationToken = default) => RunAsync(() =>
     {
-        if (checkpoint.Version != 1 || !project.Path.Equals(checkpoint.ProjectPath, StringComparison.OrdinalIgnoreCase) ||
+        if (checkpoint.Version != 1 || !StandalonePlayer.SaveIdentity(project.Path).Equals(checkpoint.ProjectPath, StringComparison.OrdinalIgnoreCase) ||
             checkpoint.Fingerprint != ComputeFingerprint() || checkpoint.History == null || checkpoint.History.Count > 10_000 ||
             checkpoint.State.ValueKind != JsonValueKind.Object)
             throw new InvalidDataException("Сохранение относится к другому проекту или сценарии изменились.");
@@ -663,16 +668,34 @@ public sealed partial class LuaRuntime : IGameSession
     private void InstallHook() => lua!.DoString("""
         do
             local stop, fail = kne_should_stop, error
-            local function hook()
+            local function hook(event, line)
                 if stop() then fail("KNE_EXECUTION_CANCELLED", 0) end
                 if kne_should_publish_variables() then kne_publish_variables(coroutine.running()) end
+                if kne_debug_enabled and event == "line" then
+                    local info = debug.getinfo(2, "S")
+                    if info and info.source:sub(1, 1) == "@" then
+                        local file = info.source:sub(2)
+                        if kne_debug_should_pause(file, line, "") then
+                            kne_publish_variables(coroutine.running())
+                            kne_debug_wait(file, line, "")
+                        end
+                    end
+                end
             end
-            debug.sethook(hook, "", 10000)
+            local mask = kne_debug_enabled and "l" or ""
+            debug.sethook(hook, mask, 10000)
             if kne_story and coroutine.status(kne_story) ~= "dead" then
-                debug.sethook(kne_story, hook, "", 10000)
+                debug.sethook(kne_story, hook, mask, 10000)
             end
         end
         """, "KNE execution limit");
+
+    public bool DebugShouldPause(string file, int line, string node) => !replaying && debugger?.ShouldPause(file, line, node) == true;
+    public void DebugWait(string file, int line, string node)
+    {
+        if (debugger == null) return;
+        deadline += debugger.Wait(new(file, line, node.Length == 0 ? null : node), Variables, executionToken);
+    }
 
     public bool ShouldStop() => executionToken.IsCancellationRequested || Stopwatch.GetTimestamp() >= deadline;
     public bool ShouldPublishVariables()

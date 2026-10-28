@@ -96,6 +96,10 @@ internal static class RuntimeDiagnosticsLua
                 if kne_scene_owned and kne_scene_owned(running()) then
                     local file, line, functionline = location()
                     nodes[running()] = {id = text_value(id), file = file, functionline = functionline}
+                    if kne_debug_enabled and kne_debug_should_pause(file, line, text_value(id)) then
+                        kne_publish_variables(running())
+                        kne_debug_wait(file, line, text_value(id))
+                    end
                 end
             end
             function kne_editor_node(id)
