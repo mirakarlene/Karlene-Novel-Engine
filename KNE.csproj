@@ -8,13 +8,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="System.Speech" Version="10.0.0" />
-    <PackageReference Include="PDFsharp-MigraDoc-WPF" Version="6.2.3" />
+    <PackageReference Include="System.Speech" Version="10.0.14" />
+    <!-- Keep the selected MIT release; PDFsharp 6.5+ requires AGPL or a commercial license. -->
+    <PackageReference Include="PDFsharp-MigraDoc-WPF" Version="6.2.4" />
     <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
-    <PackageReference Include="NLua" Version="1.7.5" />
-    <PackageReference Include="NAudio.WinMM" Version="3.0.0" />
-    <PackageReference Include="NAudio.Wasapi" Version="3.0.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+    <PackageReference Include="NLua" Version="1.7.9" />
+    <PackageReference Include="NAudio.WinMM" Version="3.3.0" />
+    <PackageReference Include="NAudio.Wasapi" Version="3.3.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
     <PackageReference Include="Veldrid" Version="4.9.0" />
     <PackageReference Include="Veldrid.StartupUtilities" Version="4.9.0" />
     <PackageReference Include="Veldrid.SPIRV" Version="1.0.15" />
