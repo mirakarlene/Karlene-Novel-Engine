@@ -246,9 +246,11 @@ public sealed class ErrorActionsUiTests
                 string report = Find<TextBox>(window, "StartupErrorMessage").Text;
                 string details = report[(report.IndexOf("Подробности:", StringComparison.Ordinal) + "Подробности:".Length)..].TrimStart('\r', '\n');
                 Click(window, "ErrorMarkdownButton");
-                Assert.Equal(ErrorReportMarkdown.FormatDetails(details), Clipboard.GetText());
-                Assert.Contains("MARKDOWN_FAILURE", Clipboard.GetText());
-                Assert.DoesNotContain("Название проекта:", Clipboard.GetText());
+                // The system clipboard can change outside this process; validate one captured value.
+                string markdown = Clipboard.GetText();
+                Assert.Equal(ErrorReportMarkdown.FormatDetails(details), markdown);
+                Assert.Contains("MARKDOWN_FAILURE", markdown);
+                Assert.DoesNotContain("Название проекта:", markdown);
                 Assert.Contains("скопированы", Find<TextBlock>(window, "ErrorActionStatus").Text);
                 Assert.Equal(Visibility.Visible, Find<Border>(window, "StartupErrorOverlay").Visibility);
             }

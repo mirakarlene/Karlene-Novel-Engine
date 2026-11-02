@@ -99,6 +99,7 @@ namespace KNE
                 MainWindow = new GameWindow(standaloneProject, StandalonePlayer.Saves(standaloneProject));
 #else
                 MainWindow = new MainWindow();
+                ShutdownMode = ShutdownMode.OnMainWindowClose;
 #endif
                 if (!EngineLaunch.PluginsEnabled) MainWindow.Title += " · Без плагинов";
                 MainWindow.Show();

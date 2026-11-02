@@ -37,8 +37,14 @@ public partial class MainWindow
     private void Library_CloseRequested(object? sender, EventArgs e) => CloseBlockLibrary();
     private void BlockLibraryBackdrop_Click(object sender, MouseButtonEventArgs e) { CloseBlockLibrary(); e.Handled = true; }
     private void BlockLibraryPanel_Click(object sender, MouseButtonEventArgs e) => e.Handled = true;
-    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    private async void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape && BlockLibraryOverlay.Visibility == Visibility.Visible) { CloseBlockLibrary(); e.Handled = true; }
+        if (e.Handled || BlockLibraryOverlay.Visibility == Visibility.Visible) return;
+        if (SessionClock.IsOnBreak) { e.Handled = true; return; }
+        string? action = EditorHotkeys.Match(e.Key == Key.System ? e.SystemKey : e.Key, Keyboard.Modifiers, settings.Hotkeys);
+        if (action == null || action is "file.save" || action.StartsWith("edit.") || action is "blocks.search" or "blocks.delete" or "blocks.duplicate") return;
+        e.Handled = true;
+        await ExecuteWorkspaceActionAsync(action);
     }
 }

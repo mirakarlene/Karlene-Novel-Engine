@@ -24,6 +24,7 @@ public partial class MainWindow
             var built = await new GameBuildExporter().BuildAsync(loaded, options, options.ReleasePath,
                 log: line => Dispatcher.BeginInvoke(() => OperationStatus.Text = line), token: lifetime.Token);
             OperationStatus.Text = "Готово: " + (built.Package ?? built.Executable);
+            notifications.Add(new("build", "Релизная сборка завершена: " + project.Title, Critical: true));
         }, "Сборка релиза…");
     }
 
@@ -38,6 +39,7 @@ public partial class MainWindow
         {
             var build = await new GameBuildExporter().BuildAsync(project, options, options.TestPath, test: true,
                 log: line => Dispatcher.BeginInvoke(() => OperationStatus.Text = line), token: lifetime.Token);
+            notifications.Add(new("build", "Тестовая сборка завершена: " + project.Title, Critical: true));
             var start = new ProcessStartInfo(build.Executable) { UseShellExecute = false, WorkingDirectory = System.IO.Path.GetDirectoryName(build.Executable)!, WindowStyle = ProcessWindowStyle.Normal };
             // A release executable exposes no listening port; only this explicit editor launch enables the worker's JSON client.
             start.Environment.Remove(RemoteDebugConnection.EnvironmentName);

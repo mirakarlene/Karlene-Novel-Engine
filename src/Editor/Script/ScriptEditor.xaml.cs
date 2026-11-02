@@ -243,6 +243,7 @@ public partial class ScriptEditor : UserControl
     {
         if (Document == null) return;
         if (saving) throw new InvalidOperationException("Сохранение ещё не завершено.");
+        bool changed = HasUnsavedChanges;
         saving = true;
         IsEnabled = false;
         try
@@ -264,7 +265,10 @@ public partial class ScriptEditor : UserControl
             saving = false;
             IsEnabled = true;
         }
+        Saved?.Invoke(this, changed);
     }
+    internal bool IsSaving => saving;
+    internal event Action<ScriptEditor, bool>? Saved;
 
     /// <summary>Notifies workspace tabs when a draft or its saved baseline changes.</summary>
     public event EventHandler? DocumentStateChanged;
@@ -710,28 +714,16 @@ public partial class ScriptEditor : UserControl
             return;
         }
 
-        if (e.Key == Key.Tab && Keyboard.Modifiers == ModifierKeys.None && Document?.IsVisual == true &&
-            GraphMode.IsChecked == true && !IsTextEditingSource(e.OriginalSource as DependencyObject) && IsGraphSource(e.OriginalSource as DependencyObject))
+        var profile = EditorHotkeys.GetProfile(this);
+        Key key = e.Key == Key.System ? e.SystemKey : e.Key;
+        string? action = EditorHotkeys.Match(key, Keyboard.Modifiers, profile);
+        // Ctrl+X remains native Cut in text fields; it is the historical Redo alias only on graphs.
+        if (action == "edit.redo" && key == Key.X && IsTextEditingSource(e.OriginalSource as DependencyObject) && EditorHotkeys.Keys(EditorHotkeys.Actions.Single(item => item.Id == "edit.redo"), profile) == "Ctrl+X;Ctrl+Y") return;
+        if (action != null) { e.Handled = true; e.Handled = await ExecuteEditorActionAsync(action, e.OriginalSource as DependencyObject); }
+        else
         {
-            e.Handled = true;
-            Guard(OpenQuickSearch);
-            return;
-        }
-
-        if (Document?.IsVisual == true && GraphMode.IsChecked == true && !IsTextEditingSource(e.OriginalSource as DependencyObject) &&
-            ((e.Key == Key.Delete && Keyboard.Modifiers == ModifierKeys.None) ||
-             (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && e.Key is Key.C or Key.V or Key.D or Key.Z or Key.X or Key.Y)))
-        {
-            e.Handled = true;
-            Guard(() => HandleGraphShortcut(e.Key, Keyboard.Modifiers, e.OriginalSource as DependencyObject));
-            return;
-        }
-
-        if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) return;
-        if (e.Key == Key.S)
-        {
-            e.Handled = true;
-            await GuardAsync(SaveAsync);
+            string? original = EditorHotkeys.Match(key, Keyboard.Modifiers, null);
+            if (original != null && profile?.ContainsKey(original) == true && original.StartsWith("edit.")) e.Handled = true;
         }
     }
 

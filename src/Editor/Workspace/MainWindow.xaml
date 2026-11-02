@@ -9,7 +9,8 @@
     <Grid x:Name="WelcomeBackdrop" IsHitTestVisible="False" Visibility="{Binding Visibility, ElementName=WelcomePanel}" Background="{DynamicResource Editor.WelcomeBackground}">
         <local:WelcomeBubbles x:Name="WelcomeBubbleField" Ink="{DynamicResource KNE.PinkBrush}" Accent="{DynamicResource KNE.AccentBrush}"/>
     </Grid>
-    <DockPanel Margin="20" Background="Transparent">
+    <DockPanel x:Name="EditorMainSurface" Margin="20" Background="Transparent">
+        <TextBlock x:Name="WorkTimeStatus" DockPanel.Dock="Bottom" Margin="0,8,0,0" Visibility="Collapsed" Foreground="{DynamicResource Editor.Muted}"/>
         <TextBlock x:Name="OperationStatus" DockPanel.Dock="Bottom" Margin="0,12,0,0" TextWrapping="Wrap"/>
         <TextBlock x:Name="FileCountStatus" DockPanel.Dock="Bottom" Margin="0,8,0,0" Foreground="{DynamicResource Editor.Muted}"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Visibility, ElementName=ProjectPanel}" Value="Visible"/><Condition Binding="{Binding Visibility, ElementName=FileBrowserPanel}" Value="Visible"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
         <Grid>
@@ -172,12 +173,13 @@
                 <DockPanel Margin="0,0,0,16">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button x:Name="PreviousSettingsPageButton" Content="←" IsEnabled="False" Padding="14,8" Click="PreviousSettingsPage_Click" ToolTip="Предыдущая страница" AutomationProperties.Name="Предыдущая страница настроек"/>
-                        <TextBlock x:Name="SettingsPageLabel" Text="1 / 2 · Основные" VerticalAlignment="Center" Margin="14,0"/>
+                        <TextBlock x:Name="SettingsPageLabel" Text="1 / 3 · Основное" VerticalAlignment="Center" Margin="14,0"/>
                         <Button x:Name="NextSettingsPageButton" Content="→" Padding="14,8" Click="NextSettingsPage_Click" ToolTip="Следующая страница" AutomationProperties.Name="Следующая страница настроек"/>
                     </StackPanel>
                     <TextBlock Text="Настройки" FontSize="28" FontWeight="Bold"/>
                 </DockPanel>
-                <Viewbox x:Name="GeneralSettingsPage" Grid.Row="1" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Stretch" VerticalAlignment="Top">
+                <local:GeneralSettingsEditor x:Name="GeneralSettingsPage" Grid.Row="1"/>
+                <Viewbox x:Name="ProjectsRenderSettingsPage" Grid.Row="1" Visibility="Collapsed" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Stretch" VerticalAlignment="Top">
                     <Grid Width="1300">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="0.9*" MinWidth="280"/><ColumnDefinition Width="18"/><ColumnDefinition Width="1.6*" MinWidth="610"/></Grid.ColumnDefinitions>
                         <StackPanel x:Name="LeftSettingsColumn"><Border x:Name="ProjectsSettingsGroup" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18" VerticalAlignment="Top">
@@ -259,6 +261,9 @@
             </Grid>
         </Grid>
     </DockPanel>
+        <Border x:Name="BreakOverlay" Panel.ZIndex="100" Visibility="Collapsed" Background="{DynamicResource Editor.Background}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock Text="Пора сделать перерыв" FontSize="28" TextAlignment="Center"/><TextBlock x:Name="BreakCountdown" FontSize="22" Margin="0,16,0,0" TextAlignment="Center"/></StackPanel>
+        </Border>
         <Border x:Name="BlockLibraryOverlay" Visibility="Collapsed" Background="#B9181420" Padding="36" MouseDown="BlockLibraryBackdrop_Click"
                 KeyboardNavigation.TabNavigation="Cycle">
             <ScrollViewer x:Name="BlockLibraryScroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
