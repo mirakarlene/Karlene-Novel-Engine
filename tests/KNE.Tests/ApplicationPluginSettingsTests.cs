@@ -245,6 +245,10 @@ public sealed class ApplicationPluginSettingsTests : IDisposable
             Snapshot(root, "settings-general-" + width + ".png", width, 700);
             Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(root, width, 700);
             Assert.Equal(Visibility.Collapsed, Find<FrameworkElement>(window, "GeneralSettingsPage").Visibility);
+            Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "ProjectsRenderSettingsPage").Visibility);
+            Assert.True(Find<Button>(window, "NextSettingsPageButton").IsEnabled);
+            Snapshot(root, "settings-projects-render-" + width + ".png", width, 700);
+            Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(root, width, 700);
             Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "PluginsSettingsPage").Visibility);
             Assert.False(Find<Button>(window, "NextSettingsPageButton").IsEnabled);
             Assert.True(Find<Button>(window, "PreviousSettingsPageButton").IsEnabled);
@@ -256,6 +260,8 @@ public sealed class ApplicationPluginSettingsTests : IDisposable
             }
             Assert.Equal(ScrollBarVisibility.Auto, ScrollViewer.GetVerticalScrollBarVisibility(Find<ListBox>(window, "ApplicationPluginsList")));
             Snapshot(root, "settings-" + width + ".png", width, 700);
+            Find<Button>(window, "PreviousSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(root, width, 700);
+            Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "ProjectsRenderSettingsPage").Visibility);
             Find<Button>(window, "PreviousSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(root, width, 700);
             Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "GeneralSettingsPage").Visibility);
         }
@@ -275,6 +281,7 @@ public sealed class ApplicationPluginSettingsTests : IDisposable
         {
             await LoadSettings(window); Invoke(window, "BtnSettings_Click", window, new RoutedEventArgs());
             Invoke(window, "AddApplicationPluginFiles", (object)new[] { cs, lua });
+            Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var list = Find<ListBox>(window, "ApplicationPluginsList"); list.SelectedIndex = 0;
             Assert.Equal("Документированный плагин", Find<TextBlock>(window, "PluginNameText").Text);

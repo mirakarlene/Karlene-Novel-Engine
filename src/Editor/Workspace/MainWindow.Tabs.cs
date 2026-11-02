@@ -47,6 +47,7 @@ public partial class MainWindow
     private ScriptEditor CreateTabEditor()
     {
         var editor = new ScriptEditor();
+        editor.Saved += EditorSaved;
         editor.BlockLibraryRequested += SceneEditor_BlockLibraryRequested;
         editor.TestSceneRequested += SceneEditor_TestSceneRequested;
         editor.ExternalEditorRequested += SceneEditor_ExternalEditorRequested;
@@ -99,6 +100,7 @@ public partial class MainWindow
     private async Task SaveAllEditorsAsync()
     {
         foreach (var editor in OpenEditors.ToArray()) await editor.SaveAsync();
+        QueueProjectBackup();
     }
 
     private void ClearEditorTabs()

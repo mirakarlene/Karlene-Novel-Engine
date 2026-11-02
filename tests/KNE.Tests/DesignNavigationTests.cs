@@ -99,6 +99,7 @@ public sealed class DesignNavigationTests
         try
         {
             typeof(MainWindow).GetMethod("BtnSettings_Click", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, [new Button(), new RoutedEventArgs()]);
+            WorkspaceTabsTests.Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             FileBrowserDesignTests.Layout((FrameworkElement)window.Content, new Size(1460, 1000));
             var themes = WorkspaceTabsTests.Find<ComboBox>(window, "ThemeInput");
             var welcomeColors = new HashSet<Color>();

@@ -23,7 +23,7 @@ public sealed class AccessibilityUiTests
         try
         {
             Invoke(window, "Window_Loaded", window, new RoutedEventArgs()); await Idle(window);
-            Invoke(window, "BtnSettings_Click", new Button(), new RoutedEventArgs()); Layout(window);
+            Invoke(window, "BtnSettings_Click", new Button(), new RoutedEventArgs()); Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(window);
             var projects = Find<Border>(window, "ProjectsSettingsGroup"); var design = Find<Border>(window, "DesignSettingsGroup");
             var settings = Find<FrameworkElement>(window, "SettingsPanel");
             Assert.Contains(Find<TextBox>(window, "TxtEditorPath"), AccessibilityPresentationTests.Descendants(projects));
@@ -71,7 +71,7 @@ public sealed class AccessibilityUiTests
                 Assert.Equal("aurora", Find<ComboBox>(restored, "ThemeInput").SelectedValue);
                 Assert.Equal("Добро пожаловать, Карлена", Find<TextBlock>(restored, "WelcomeGreeting").Text);
                 Assert.Equal(graphics.Value, Find<GraphicsSettingsEditor>(restored, "AppGraphicsInput").Value);
-                Invoke(restored, "BtnSettings_Click", new Button(), new RoutedEventArgs()); Layout(restored);
+                Invoke(restored, "BtnSettings_Click", new Button(), new RoutedEventArgs()); Find<Button>(restored, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(restored);
                 var restoredRadios = AccessibilityPresentationTests.Descendants(Find<ItemsControl>(restored, "AccessibilityCards")).OfType<RadioButton>().ToArray();
                 Assert.Single(restoredRadios, radio => radio.IsChecked == true && Mode(radio) == "tritanopia");
                 Assert.Equal("stars", Find<ComboBox>(restored, "WelcomeObjectInput").SelectedValue);
@@ -89,7 +89,7 @@ public sealed class AccessibilityUiTests
         try
         {
             Invoke(window, "Window_Loaded", window, new RoutedEventArgs()); await Idle(window);
-            Invoke(window, "BtnSettings_Click", new Button(), new RoutedEventArgs()); Layout(window, size);
+            Invoke(window, "BtnSettings_Click", new Button(), new RoutedEventArgs()); Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(window, size);
             var root = (FrameworkElement)window.Content;
             var settings = Find<FrameworkElement>(window, "SettingsPanel");
             var projects = Find<Border>(window, "ProjectsSettingsGroup"); var design = Find<Border>(window, "DesignSettingsGroup");

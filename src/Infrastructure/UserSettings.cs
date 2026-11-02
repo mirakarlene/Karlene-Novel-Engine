@@ -25,6 +25,8 @@ public sealed class UserSettings
     public GraphicsSettings Graphics { get; set; } = new();
     /// <summary>Absolute C# and Lua extension paths enabled for this KNE user profile.</summary>
     public List<string> ApplicationPlugins { get; set; } = [];
+    public EditorPreferences Editor { get; set; } = new();
+    public Dictionary<string, string> Hotkeys { get; set; } = [];
 
     public void RememberProject(string path)
     {
@@ -73,6 +75,9 @@ public sealed class UserSettingsStore
                 settings.AccessibilityMode = BlockAccessibility.Normalize(settings.AccessibilityMode);
                 settings.WelcomeObjects = WelcomeBubbles.Normalize(settings.WelcomeObjects);
                 settings.Graphics = GraphicsSettings.Normalize(settings.Graphics);
+                settings.Editor ??= new();
+                settings.Editor.Validate();
+                settings.Hotkeys = EditorHotkeys.Validate(settings.Hotkeys ?? []);
                 settings.HiddenProjects = (settings.HiddenProjects ?? []).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 settings.ProjectLastOpened = new(settings.ProjectLastOpened ?? [], StringComparer.OrdinalIgnoreCase);
                 settings.RecentProjects = (settings.RecentProjects ?? []).Where(p => !string.IsNullOrWhiteSpace(p))

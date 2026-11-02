@@ -9,10 +9,10 @@ public partial class MainWindow
         if (currentProject is not { } project) return;
         await RunOperationAsync(async () =>
         {
-            var window = new ProjectParametersWindow(project, settings.ProjectsStoragePath) { Owner = this, BeforeBuildAsync = SaveAllEditorsAsync }; EditorTheme.Apply(window, settings.Theme);
+            var window = new ProjectParametersWindow(project, settings.ProjectsStoragePath) { Owner = this }; EditorTheme.Apply(window, settings.Theme);
             bool? saved = window.ShowDialog();
             if (window.DeletionRequested) await DeleteCurrentProjectAsync(project);
-            else if (saved == true) { RefreshOpenGamePerformance(project.Path); await OpenProjectAsync(project.Path); }
+            else if (saved == true) { RefreshOpenGamePerformance(project.Path); await OpenProjectAsync(project.Path); QueueProjectBackup(); }
         }, "Параметры проекта…");
     }
     private async void SceneParameters_Click(object sender, RoutedEventArgs e)
@@ -21,7 +21,7 @@ public partial class MainWindow
         await RunOperationAsync(async () =>
         {
             var window = new SceneParametersWindow(project) { Owner = this }; EditorTheme.Apply(window, settings.Theme);
-            if (window.ShowDialog() == true) { RefreshOpenGamePerformance(project.Path); await OpenProjectAsync(project.Path); }
+            if (window.ShowDialog() == true) { RefreshOpenGamePerformance(project.Path); await OpenProjectAsync(project.Path); QueueProjectBackup(); }
         }, "Параметры сцены…");
     }
     private static void RefreshOpenGamePerformance(string path)

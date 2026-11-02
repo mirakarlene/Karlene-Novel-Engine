@@ -10,17 +10,19 @@ public partial class MainWindow
     private readonly List<string> applicationPluginDraft = [];
     private string? applicationPluginLoadError;
     private sealed record ApplicationPluginEntry(string Name, string Path, string Status);
+    private int settingsPage;
     private void SetSettingsPage(int page)
     {
-        bool plugins = page == 1;
-        GeneralSettingsPage.Visibility = plugins ? Visibility.Collapsed : Visibility.Visible;
-        PluginsSettingsPage.Visibility = plugins ? Visibility.Visible : Visibility.Collapsed;
-        PreviousSettingsPageButton.IsEnabled = plugins;
-        NextSettingsPageButton.IsEnabled = !plugins;
-        SettingsPageLabel.Text = plugins ? "2 / 2 · Плагины" : "1 / 2 · Основные";
+        settingsPage = Math.Clamp(page, 0, 2);
+        GeneralSettingsPage.Visibility = settingsPage == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ProjectsRenderSettingsPage.Visibility = settingsPage == 1 ? Visibility.Visible : Visibility.Collapsed;
+        PluginsSettingsPage.Visibility = settingsPage == 2 ? Visibility.Visible : Visibility.Collapsed;
+        PreviousSettingsPageButton.IsEnabled = settingsPage > 0;
+        NextSettingsPageButton.IsEnabled = settingsPage < 2;
+        SettingsPageLabel.Text = $"{settingsPage + 1} / 3 · " + new[] { "Основное", "Проекты и Рендер", "Плагины" }[settingsPage];
     }
-    private void PreviousSettingsPage_Click(object sender, RoutedEventArgs e) => SetSettingsPage(0);
-    private void NextSettingsPage_Click(object sender, RoutedEventArgs e) => SetSettingsPage(1);
+    private void PreviousSettingsPage_Click(object sender, RoutedEventArgs e) => SetSettingsPage(settingsPage - 1);
+    private void NextSettingsPage_Click(object sender, RoutedEventArgs e) => SetSettingsPage(settingsPage + 1);
     private void ApplicationPluginsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (PluginNameText == null) return; // Selection may change while XAML is being initialized.

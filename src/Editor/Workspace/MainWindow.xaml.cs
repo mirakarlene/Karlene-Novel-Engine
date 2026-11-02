@@ -32,6 +32,8 @@ public partial class MainWindow : Window
         Func<Window, string, string?>? selectProjectScript, Action<ProcessStartInfo>? openProjectScript)
     {
         InitializeComponent();
+        InitializeAutomation();
+        SceneEditor.Saved += EditorSaved;
         EditorTheme.Apply(this, settings.Theme);
         ThemeInput.ItemsSource = EditorTheme.Themes;
         WelcomeObjectInput.ItemsSource = WelcomeBubbles.Objects;
@@ -75,6 +77,7 @@ public partial class MainWindow : Window
     private async void Window_Loaded(object sender, RoutedEventArgs e) => await RunOperationAsync(async () =>
     {
         settings = await settingsStore.LoadAsync();
+        LoadGeneralSettings(); ApplyEditorPreferences();
         ProjectBrowserViewInput.SelectedValue = settings.ProjectBrowserView;
         ApplyBrowserView();
         ReloadApplicationPlugins();
@@ -89,6 +92,8 @@ public partial class MainWindow : Window
         UpdateDesignPreferences();
         await RefreshStoredProjectsAsync();
         storageTimer.Start();
+        lastClockTick = sessionTime.Elapsed; automationTimer.Start();
+        await ApplyStartupBehaviorAsync();
     }, "Загрузка настроек…");
 
     private void Window_Closed(object? sender, EventArgs e)
@@ -97,6 +102,7 @@ public partial class MainWindow : Window
         closed = true;
         UnloadEditorPlugins();
         storageTimer.Stop();
+        automationTimer.Stop(); notificationDelivery.Dispose(); sessionTime.Stop();
         lifetime.Cancel();
         monitor?.Dispose();
     }
@@ -119,6 +125,7 @@ public partial class MainWindow : Window
             if (!closed)
             {
                 OperationStatus.Text = "Операция не завершена. " + ex.Message;
+                notifications.Add(new("error", ex.Message, Critical: true));
                 if (IsVisible) MessageBox.Show(this, ex.Message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -159,6 +166,7 @@ public partial class MainWindow : Window
         if (currentProject == null || !currentProject.Path.Equals(loaded.Path, StringComparison.OrdinalIgnoreCase))
         { browserDirectory = ""; FileSearch.Clear(); }
         currentProject = loaded;
+        ScheduleProjectAutomation(loaded.Path);
         try { LoadEditorPlugins(loaded.Path); } catch (Exception error) { identityWarning += " Не удалось загрузить расширения: " + error.Message; }
         EngineDiagnostics.Current?.SetProject(loaded.Title, loaded.Path);
         ProjectTitleTextBlock.Text = loaded.Name;
@@ -223,6 +231,7 @@ public partial class MainWindow : Window
 
     private void BtnSettings_Click(object sender, RoutedEventArgs e)
     {
+        LoadGeneralSettings();
         ProjectBrowserViewInput.SelectedValue = settings.ProjectBrowserView;
         SetSettingsPage(0);
         ResetApplicationPluginDraft();
@@ -251,9 +260,12 @@ public partial class MainWindow : Window
         string userName = TxtUserName.Text.Trim();
         if (userName.Length > 80 || userName.Any(char.IsControl)) throw new ArgumentException("Имя пользователя: до 80 символов, без переносов строк и управляющих символов.");
         bool pluginsChanged = !applicationPluginDraft.SequenceEqual(settings.ApplicationPlugins, StringComparer.OrdinalIgnoreCase);
+        var editor = GeneralSettingsPage.Value; editor.Validate(); ValidateBackupStorage(editor, storage);
         var next = new UserSettings { ProjectBrowserView = ProjectBrowserViewInput.SelectedValue as string == "table" ? "table" : "tiles", ApplicationPlugins = applicationPluginDraft.ToList(), Graphics = AppGraphicsInput.Value, EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = EditorTheme.Normalize((string?)ThemeInput.SelectedValue), UserName = userName, AccessibilityMode = BlockAccessibility.GetMode(this), WelcomeObjects = WelcomeBubbles.Normalize((string?)WelcomeObjectInput.SelectedValue) };
+        next.Editor = editor; next.Hotkeys = EditorHotkeys.Validate(GeneralSettingsPage.Hotkeys);
         await settingsStore.SaveAsync(next);
         settings = next; GraphicsEnvironment.SetSettings(this, settings.Graphics);
+        ApplyEditorPreferences();
         ApplyBrowserView();
         if (pluginsChanged) ReloadApplicationPlugins();
         UpdateWelcomeGreeting();
