@@ -32,6 +32,7 @@ public partial class MainWindow : Window
         Func<Window, string, string?>? selectProjectScript, Action<ProcessStartInfo>? openProjectScript)
     {
         InitializeComponent();
+        BehaviorSettingsPage.Content = GeneralSettingsPage.BehaviorPage;
         InitializeAutomation();
         SceneEditor.Saved += EditorSaved;
         EditorTheme.Apply(this, settings.Theme);

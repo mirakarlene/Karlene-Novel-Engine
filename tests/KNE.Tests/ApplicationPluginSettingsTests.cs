@@ -244,6 +244,8 @@ public sealed class ApplicationPluginSettingsTests : IDisposable
             Assert.False(Find<Button>(window, "PreviousSettingsPageButton").IsEnabled);
             Snapshot(root, "settings-general-" + width + ".png", width, 700);
             Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(root, width, 700);
+            Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "BehaviorSettingsPage").Visibility);
+            Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(root, width, 700);
             Assert.Equal(Visibility.Collapsed, Find<FrameworkElement>(window, "GeneralSettingsPage").Visibility);
             Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "ProjectsRenderSettingsPage").Visibility);
             Assert.True(Find<Button>(window, "NextSettingsPageButton").IsEnabled);
@@ -263,6 +265,8 @@ public sealed class ApplicationPluginSettingsTests : IDisposable
             Find<Button>(window, "PreviousSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(root, width, 700);
             Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "ProjectsRenderSettingsPage").Visibility);
             Find<Button>(window, "PreviousSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(root, width, 700);
+            Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "BehaviorSettingsPage").Visibility);
+            Find<Button>(window, "PreviousSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(root, width, 700);
             Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "GeneralSettingsPage").Visibility);
         }
         finally { window.Close(); }
@@ -281,6 +285,7 @@ public sealed class ApplicationPluginSettingsTests : IDisposable
         {
             await LoadSettings(window); Invoke(window, "BtnSettings_Click", window, new RoutedEventArgs());
             Invoke(window, "AddApplicationPluginFiles", (object)new[] { cs, lua });
+            Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var list = Find<ListBox>(window, "ApplicationPluginsList"); list.SelectedIndex = 0;

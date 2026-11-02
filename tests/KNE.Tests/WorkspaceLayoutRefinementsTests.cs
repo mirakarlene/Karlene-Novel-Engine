@@ -12,6 +12,47 @@ namespace KNE.Tests;
 public sealed class WorkspaceLayoutRefinementsTests
 {
     [Theory]
+    [InlineData(1500, 950)] [InlineData(1100, 700)]
+    public Task SettingsPages_KeepAssignedGroupsFullSizeAndPreserveDraftsAcrossAllFourPages(double width, double height) => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject(); var window = new MainWindow(); var store = new UserSettingsStore(Path.Combine(fixture.Root, "settings.json"));
+        typeof(MainWindow).GetField("settingsStore", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(window, store);
+        try
+        {
+            typeof(MainWindow).GetMethod("BtnSettings_Click", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, [window, new RoutedEventArgs()]);
+            var root = (FrameworkElement)window.Content; var general = Find<GeneralSettingsEditor>(window, "GeneralSettingsPage");
+            void Layout() { root.Measure(new Size(width - 20, height - 40)); root.Arrange(new Rect(0, 0, width - 20, height - 40)); root.UpdateLayout(); }
+            Rect Bounds(FrameworkElement item) => item.TransformToAncestor(root).TransformBounds(new Rect(item.RenderSize));
+            void Fits(FrameworkElement item)
+            {
+                var bounds = Bounds(item); Assert.True(item.ActualWidth > 0 && item.ActualHeight > 0);
+                Assert.InRange(bounds.Left, 0, root.ActualWidth); Assert.InRange(bounds.Right, 0, root.ActualWidth); Assert.InRange(bounds.Top, 0, root.ActualHeight); Assert.InRange(bounds.Bottom, 0, root.ActualHeight);
+            }
+            void Next() { Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(); }
+            general.BackupPath.Text = Path.Combine(fixture.Root, "backups"); general.AutosaveInterval.SelectedValue = 10; general.BackupCopies.SelectedValue = 10; Layout();
+            Assert.Equal("1 / 4 · Сохранение и горячие клавиши", Find<TextBlock>(window, "SettingsPageLabel").Text); Assert.Equal(0, general.ScrollableHeight); Assert.Equal(1, general.LayoutTransform.Value.M11);
+            var first = LogicalChildren(general).ToArray(); var second = LogicalChildren(general.BehaviorPage).ToArray();
+            foreach (var control in new FrameworkElement[] { general.BackupPath, general.BackupFrequency, general.BackupCopies, general.AutosaveInterval, general.HistoryLimit, general.KeepHistory }) { Assert.Contains(control, first); Assert.DoesNotContain(control, second); Fits(control); }
+            Assert.Contains(first.OfType<Button>(), button => Equals(button.Content, "Настроить горячие клавиши"));
+            foreach (var control in new FrameworkElement[] { general.Startup, general.StartupProject, general.Toasts, general.Breaks, general.WorkTime }) { Assert.DoesNotContain(control, first); Assert.Contains(control, second); }
+            Fits(Find<TextBlock>(window, "SettingsPageLabel")); Capture(root, "saving-" + width);
+            Next(); Assert.Equal("2 / 4 · Поведение и уведомления", Find<TextBlock>(window, "SettingsPageLabel").Text);
+            general.Startup.SelectedValue = "project"; general.StartupProject.Text = fixture.ProjectPath; general.Tips.IsChecked = true; general.Breaks.IsChecked = true; general.BreakType.SelectedValue = "strict"; general.BreakInterval.SelectedValue = 90; general.WorkTime.IsChecked = true;
+            general.Status.Text = "Проверка обратной связи"; Layout(); Assert.Equal(general.Status.Text, general.BehaviorStatus.Text);
+            if (height == 950) Assert.Equal(0, general.BehaviorPage.ScrollableHeight);
+            Fits(general.Startup); Fits(general.Toasts); Capture(root, "behavior-top-" + width);
+            general.BehaviorPage.ScrollToEnd(); Layout(); Fits(general.WorkTime); Capture(root, "behavior-bottom-" + width);
+            var expected = general.Value;
+            Next(); Assert.Equal("3 / 4 · Проекты и Рендер", Find<TextBlock>(window, "SettingsPageLabel").Text); Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "ProjectsRenderSettingsPage").Visibility);
+            Next(); Assert.Equal("4 / 4 · Плагины", Find<TextBlock>(window, "SettingsPageLabel").Text); Assert.False(Find<Button>(window, "NextSettingsPageButton").IsEnabled);
+            for (int i = 0; i < 3; i++) Find<Button>(window, "PreviousSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout();
+            Assert.Equal(expected, general.Value); Assert.False(Find<Button>(window, "PreviousSettingsPageButton").IsEnabled);
+            await WorkspaceTabsTests.Invoke(window, "SaveSettingsAsync"); Assert.Equal(expected, (await store.LoadAsync()).Editor);
+        }
+        finally { window.Close(); }
+    });
+
+    [Theory]
     [InlineData(1500, 950)]
     [InlineData(1100, 700)]
     public Task WorkCounter_UsesReleaseRowWithoutMovingEditorOrToolbarWhenToggled(double width, double height) => WorkspaceTabsTests.Sta(async () =>
@@ -52,6 +93,11 @@ public sealed class WorkspaceLayoutRefinementsTests
     });
 
     private static T Find<T>(FrameworkElement root, string name) where T : class => WorkspaceTabsTests.Find<T>(root, name);
+    private static IEnumerable<DependencyObject> LogicalChildren(DependencyObject parent)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(parent).OfType<DependencyObject>())
+        { yield return child; foreach (var nested in LogicalChildren(child)) yield return nested; }
+    }
     private static void Capture(FrameworkElement root, string name)
     {
         if (Environment.GetEnvironmentVariable("KNE_SETTINGS_REFINEMENTS_RENDER") is not { } directory) return;

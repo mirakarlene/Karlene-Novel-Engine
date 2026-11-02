@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text;
 
 namespace KNE;
 
@@ -43,25 +44,65 @@ public sealed record ProjectBuildSettings
     }
 }
 
-/// <summary>Atomic optional engine/build.json persistence; older projects keep VM defaults without migration writes.</summary>
+/// <summary>Build-profile persistence with canonical project.json metadata and read-only legacy fallback.</summary>
 public static class ProjectBuildSettingsStore
 {
     public static ProjectBuildSettings Load(string root)
     {
         string file = PathSafety.ResolveRelative(root, "engine/build.json");
-        if (!File.Exists(file)) return new();
-        if (new FileInfo(file).Length > 32768) throw new InvalidDataException("Параметры сборки больше 32 КБ.");
-        try { var value = JsonSerializer.Deserialize<ProjectBuildSettings>(File.ReadAllText(file), EngineSettings.JsonOptions) ?? throw new InvalidDataException("Параметры сборки не должны быть null."); value.Validate(); return value; }
+        if (File.Exists(file) && new FileInfo(file).Length > 32768) throw new InvalidDataException("Параметры сборки больше 32 КБ.");
+        var value = ProjectBuildMetadata.Resolve(root, ReadBuild(File.Exists(file) ? File.ReadAllBytes(file) : null));
+        value.Validate(); return value;
+    }
+
+    private static ProjectBuildSettings ReadBuild(byte[]? bytes)
+    {
+        if (bytes == null) return new();
+        if (bytes.Length > 32768) throw new InvalidDataException("Параметры сборки больше 32 КБ.");
+        try
+        {
+            using var reader = new StreamReader(new MemoryStream(bytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+            return JsonSerializer.Deserialize<ProjectBuildSettings>(reader.ReadToEnd(), EngineSettings.JsonOptions) ?? throw new InvalidDataException("Параметры сборки не должны быть null.");
+        }
         catch (JsonException error) { throw new InvalidDataException("Ошибка engine/build.json: " + error.Message, error); }
     }
 
-    public static async Task SaveAsync(string root, ProjectBuildSettings value, CancellationToken token = default)
+    public static Task SaveAsync(string root, ProjectBuildSettings value, CancellationToken token = default) => SaveCoreAsync(root, value, null, null, token);
+
+    internal static Task<ProjectBuildWrite> SaveCheckedAsync(string root, ProjectBuildSettings value, ProjectExeMetadata expected, string? title = null, CancellationToken token = default) => SaveCoreAsync(root, value, expected, title, token);
+
+    private static async Task<ProjectBuildWrite> SaveCoreAsync(string root, ProjectBuildSettings value, ProjectExeMetadata? expected, string? title, CancellationToken token)
     {
         value.Validate();
         if (value.GameId == "") value = value with { GameId = Guid.NewGuid().ToString("N") };
-        string file = PathSafety.ResolveRelative(root, "engine/build.json"); Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        if (title != null) title = ProjectMaintenance.ValidateName(title);
+        var project = ProjectBuildMetadata.Read(root);
+        string file = PathSafety.ResolveRelative(root, "engine/build.json");
+        byte[]? previousBuild = File.Exists(file) ? await File.ReadAllBytesAsync(file, token) : null;
+        if (expected != null && expected != ProjectExeMetadata.From(project.Apply(ReadBuild(previousBuild))))
+            throw new IOException("Метаданные проекта изменены вне окна параметров. Откройте параметры заново, чтобы загрузить изменения.");
+        byte[] nextBuild = JsonSerializer.SerializeToUtf8Bytes(value, EngineSettings.JsonOptions), nextProject = project.Updated(value, title);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         string temp = file + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try { await File.WriteAllTextAsync(temp, JsonSerializer.Serialize(value, EngineSettings.JsonOptions), token); token.ThrowIfCancellationRequested(); File.Move(temp, file, true); }
-        finally { if (File.Exists(temp)) File.Delete(temp); }
+        string projectTemp = project.Path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        bool buildCommitted = false;
+        try
+        {
+            await File.WriteAllBytesAsync(temp, nextBuild, token); await File.WriteAllBytesAsync(projectTemp, nextProject, token); token.ThrowIfCancellationRequested();
+            ProjectBuildMetadata.CheckCurrent(file, previousBuild); ProjectBuildMetadata.CheckCurrent(project.Path, project.Original);
+            File.Move(temp, file, true); buildCommitted = true;
+            ProjectBuildMetadata.CheckCurrent(project.Path, project.Original); File.Move(projectTemp, project.Path, true);
+            return new(value, nextBuild, nextProject);
+        }
+        catch (Exception error)
+        {
+            if (buildCommitted)
+            {
+                try { ProjectBuildMetadata.CheckCurrent(file, nextBuild); await ProjectBuildMetadata.ReplaceAsync(file, previousBuild); }
+                catch (Exception rollback) { throw new AggregateException("Сохранение метаданных не завершено; не удалось отменить изменение профиля сборки.", error, rollback); }
+            }
+            throw;
+        }
+        finally { if (File.Exists(temp)) File.Delete(temp); if (File.Exists(projectTemp)) File.Delete(projectTemp); }
     }
 }

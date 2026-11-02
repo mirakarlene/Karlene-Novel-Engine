@@ -52,6 +52,7 @@ public sealed class FlowAuthoringUiTests
                 Find<StackPanel>(window, "WelcomePanel").Visibility = Visibility.Collapsed;
                 var settings = Find<FrameworkElement>(window, "SettingsPanel"); settings.Visibility = Visibility.Visible;
                 Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Find<Button>(window, "NextSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var editor = Find<TextBox>(window, "TxtEditorPath"); var storage = Find<TextBox>(window, "TxtProjectsStorage");
                 storage.Text = Path.Combine(fixture.Root, "projects"); Layout(content);
                 Assert.True(editor.TranslatePoint(new Point(), settings).Y < storage.TranslatePoint(new Point(), settings).Y);

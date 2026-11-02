@@ -178,12 +178,13 @@
                 <DockPanel Margin="0,0,0,16">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button x:Name="PreviousSettingsPageButton" Content="←" IsEnabled="False" Padding="14,8" Click="PreviousSettingsPage_Click" ToolTip="Предыдущая страница" AutomationProperties.Name="Предыдущая страница настроек"/>
-                        <TextBlock x:Name="SettingsPageLabel" Text="1 / 3 · Основное" VerticalAlignment="Center" Margin="14,0"/>
+                        <TextBlock x:Name="SettingsPageLabel" Text="1 / 4 · Сохранение и горячие клавиши" VerticalAlignment="Center" Margin="14,0"/>
                         <Button x:Name="NextSettingsPageButton" Content="→" Padding="14,8" Click="NextSettingsPage_Click" ToolTip="Следующая страница" AutomationProperties.Name="Следующая страница настроек"/>
                     </StackPanel>
                     <TextBlock Text="Настройки" FontSize="28" FontWeight="Bold"/>
                 </DockPanel>
                 <local:GeneralSettingsEditor x:Name="GeneralSettingsPage" Grid.Row="1"/>
+                <ContentControl x:Name="BehaviorSettingsPage" Grid.Row="1" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
                 <Viewbox x:Name="ProjectsRenderSettingsPage" Grid.Row="1" Visibility="Collapsed" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Stretch" VerticalAlignment="Top">
                     <Grid Width="1300">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="0.9*" MinWidth="280"/><ColumnDefinition Width="18"/><ColumnDefinition Width="1.6*" MinWidth="610"/></Grid.ColumnDefinitions>

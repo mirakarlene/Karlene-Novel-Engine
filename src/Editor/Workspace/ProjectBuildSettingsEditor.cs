@@ -16,11 +16,12 @@ internal sealed class ProjectBuildSettingsEditor : StackPanel
     internal ComboBox Saves { get; } = GraphicsSettingsEditor.Choice([new GraphicsOption<string>("appdata", "AppData (для текущего пользователя)"), new("local", "Папка игры (saves)")]);
     private readonly TextBlock testHint = Hint(""), releaseHint = Hint("");
     private string gameId = "";
+    internal ProjectExeMetadata InitialMetadata { get; private set; }
     internal ProjectBuildSettings Value => new() { GameId = gameId, TestMode = (string?)TestMode.SelectedValue ?? "vm", TestPath = TestPath.Text.Trim(), ReleaseMode = (string?)ReleaseMode.SelectedValue ?? "self_contained", ReleasePath = ReleasePath.Text.Trim(), Author = Author.Text.Trim(), Team = Team.Text.Trim(), Version = Version.Text.Trim(), SaveLocation = (string?)Saves.SelectedValue ?? "appdata" };
 
     internal ProjectBuildSettingsEditor(ProjectInfo project, string? storagePath)
     {
-        var value = ProjectBuildSettingsStore.Load(project.Path); gameId = value.GameId;
+        var value = ProjectBuildSettingsStore.Load(project.Path); gameId = value.GameId; InitialMetadata = ProjectExeMetadata.From(value);
         string defaultPath = ProjectBuildSettings.DefaultOutput(project.Path, storagePath);
         TestMode.SelectedValue = value.TestMode; ReleaseMode.SelectedValue = value.ReleaseMode;
         TestPath.Text = value.TestPath == "" ? System.IO.Path.Combine(defaultPath, "test") : value.TestPath;
@@ -36,7 +37,7 @@ internal sealed class ProjectBuildSettingsEditor : StackPanel
         Children.Add(Hint("Для сборки нужен .NET 10 SDK и доступ к пакетам NuGet. Тестовый EXE использует выбранный релизный профиль; MSIX тестируется как EXE до упаковки. Сценарии и ресурсы входят в билд, сохранения разработчика — нет."));
         TestMode.SelectionChanged += (_, _) => Refresh(); ReleaseMode.SelectionChanged += (_, _) => Refresh(); Refresh();
     }
-    internal void Saved(ProjectBuildSettings settings) => gameId = settings.GameId;
+    internal void Saved(ProjectBuildSettings settings) { gameId = settings.GameId; InitialMetadata = ProjectExeMetadata.From(settings); }
     private void Refresh()
     {
         TestPath.IsEnabled = (string?)TestMode.SelectedValue != "vm";
