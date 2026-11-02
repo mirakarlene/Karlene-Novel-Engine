@@ -9,10 +9,43 @@ namespace KNE.Tests;
 
 public sealed class ProjectBuildUiTests
 {
+    [Fact]
+    public async Task ReleaseAction_SavesDraftInitializesDefaultBuildSettingsAndKeepsTabOnValidationFailure()
+    {
+        using var fixture = new TempProject();
+        await WorkspaceTabsTests.Sta(async () =>
+        {
+            var window = new MainWindow();
+            try
+            {
+                await WorkspaceTabsTests.Invoke(window, "OpenProjectAsync", fixture.ProjectPath, false);
+                string path = Path.Combine(fixture.ProjectPath, "game", "scenes", "main.krl");
+                await WorkspaceTabsTests.Invoke(window, "OpenScriptAsync", path);
+                var tabs = WorkspaceTabsTests.Find<TabControl>(window, "DocumentTabs");
+                var selected = (TabItem)tabs.SelectedItem; var editor = (ScriptEditor)selected.Tag;
+                const string source = "function chapter() end"; // No main: fail validation before invoking dotnet publish.
+                WorkspaceTabsTests.Find<KrlCodeEditor>(editor, "CodeEditor").Text = source;
+                Click(WorkspaceTabsTests.Find<Button>(window, "BuildReleaseButton"));
+                var status = WorkspaceTabsTests.Find<TextBlock>(window, "OperationStatus");
+                for (int i = 0; i < 500 && !status.Text.StartsWith("Операция не завершена."); i++) await Task.Delay(10);
+                Assert.Contains("нужна одна функция main()", status.Text);
+                Assert.Equal(source, File.ReadAllText(path)); Assert.False(editor.HasUnsavedChanges);
+                Assert.Same(selected, tabs.SelectedItem); Assert.Single(tabs.Items.Cast<TabItem>());
+                Assert.Equal(Visibility.Collapsed, WorkspaceTabsTests.Find<Grid>(window, "FileBrowserPanel").Visibility);
+                var options = ProjectBuildSettingsStore.Load(fixture.ProjectPath);
+                Assert.True(Guid.TryParseExact(options.GameId, "N", out _));
+                Assert.Equal(ProjectBuildSettings.DefaultOutput(fixture.ProjectPath), options.ReleasePath);
+                Assert.Equal("self_contained", options.ReleaseMode);
+                Assert.False(Directory.Exists(options.ReleasePath));
+            }
+            finally { window.Close(); }
+        });
+    }
+
     [Theory]
     [InlineData(780, 840)]
     [InlineData(540, 500)]
-    public async Task Pages_KeepFirstPageDesignAndBothDrafts_SaveCancelAndBuildControlsFit(double width, double height)
+    public async Task Pages_KeepFirstPageDesignAndBothDrafts_SaveCancelAndBuildSettingsFit(double width, double height)
     {
         using var fixture = new TempProject(); var project = await fixture.LoadAsync();
         await WorkspaceTabsTests.Sta(async () =>
@@ -33,7 +66,8 @@ public sealed class ProjectBuildUiTests
                 window.BuildInput.TestMode.SelectedValue = "remote_debug"; Assert.True(window.BuildInput.TestPath.IsEnabled);
                 window.BuildInput.ReleaseMode.SelectedValue = "portable"; Assert.Equal("local", window.BuildInput.Value.EffectiveSaveLocation); Assert.False(window.BuildInput.Saves.IsEnabled);
                 Layout(window, width, height);
-                foreach (FrameworkElement control in new FrameworkElement[] { window.BuildInput.TestMode, window.BuildInput.TestPath, window.BuildInput.ReleaseMode, window.BuildInput.ReleasePath, window.BuildInput.Author, window.BuildInput.Team, window.BuildInput.Version, window.BuildInput.Saves, window.BuildInput.BuildButton, window.PreviousPage, window.NextPage }) Fits(control, (FrameworkElement)window.Content);
+                foreach (FrameworkElement control in new FrameworkElement[] { window.BuildInput.TestMode, window.BuildInput.TestPath, window.BuildInput.ReleaseMode, window.BuildInput.ReleasePath, window.BuildInput.Author, window.BuildInput.Team, window.BuildInput.Version, window.BuildInput.Saves, window.PreviousPage, window.NextPage }) Fits(control, (FrameworkElement)window.Content);
+                Assert.DoesNotContain(window.BuildInput.Children.OfType<Button>(), button => Equals(button.Content, "Собрать релиз"));
                 Capture(window, width, height, "builds");
                 Click(window.PreviousPage); Layout(window, width, height); Assert.Equal("draft/saves", window.SavesInput.Text); Assert.Equal("Draft author", window.BuildInput.Author.Text);
                 Assert.Equal(x, window.TitleInput.TransformToAncestor((Visual)window.Content).Transform(new Point()).X, 3);

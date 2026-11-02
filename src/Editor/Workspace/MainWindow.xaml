@@ -140,8 +140,11 @@
                 </Grid>
                 <DockPanel Grid.Row="2" Margin="0,12,0,0" LastChildFill="False">
                     <WrapPanel x:Name="RunActionsGroup" DockPanel.Dock="Right" Margin="8,0,0,0">
-                        <Button x:Name="AnalyzeProjectButton" Content="Анализ проекта" Padding="10,8" Margin="0,0,6,4" Click="BtnAnalyzeProject_Click"/>
-                        <Button Content="Запустить проект" Padding="10,8" Margin="0,0,0,4" Click="BtnRunProject_Click"/>
+                        <Button x:Name="AnalyzeProjectButton" Content="Анализ проекта" Padding="10,8" Margin="0,0,6,4" VerticalAlignment="Top" Click="BtnAnalyzeProject_Click"/>
+                        <StackPanel>
+                            <Button x:Name="RunProjectButton" Content="Запустить проект" Padding="10,8" Margin="0,0,0,4" Click="BtnRunProject_Click"/>
+                            <Button x:Name="BuildReleaseButton" Content="Собрать релиз" Padding="10,8" Margin="0,0,0,4" Click="BtnBuildRelease_Click"/>
+                        </StackPanel>
                     </WrapPanel>
                     <WrapPanel>
                         <WrapPanel x:Name="ExitActionsGroup" Margin="0,0,12,0">

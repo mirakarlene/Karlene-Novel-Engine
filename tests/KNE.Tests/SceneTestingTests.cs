@@ -163,17 +163,23 @@ public sealed class SceneTestingTests
                 Assert.Equal(new[] { "Главный экран", "Сохранить всё и выйти" }, Labels(window, "ExitActionsGroup"));
                 Assert.Equal(new[] { "Создать файл", "Импорт файла", "Новая блок-схема", "Импорт .rpy", "Импорт .docx" }, Labels(window, "ImportActionsGroup"));
                 Assert.Equal(new[] { "Список файлов", "Обновить" }, Labels(window, "FileViewActionsGroup"));
-                Assert.Equal(new[] { "Анализ проекта", "Запустить проект" }, Labels(window, "RunActionsGroup"));
-                foreach (double width in new[] { 1100d, 1460d })
+                Assert.Equal(new[] { "Анализ проекта", "Запустить проект", "Собрать релиз" }, Labels(window, "RunActionsGroup"));
+                foreach (var size in new[] { new Size(1060, 620), new Size(1460, 870) })
                 {
                     var content = (FrameworkElement)window.Content;
-                    content.Measure(new Size(width, 900)); content.Arrange(new Rect(0, 0, width, 900)); content.UpdateLayout();
+                    content.Measure(size); content.Arrange(new Rect(size)); content.UpdateLayout();
                     foreach (string group in new[] { "ExitActionsGroup", "ImportActionsGroup", "FileViewActionsGroup", "RunActionsGroup" })
-                        foreach (Button button in Find<WrapPanel>(window, group).Children)
+                        foreach (Button button in Buttons(Find<WrapPanel>(window, group)))
                         {
                             var point = button.TranslatePoint(new Point(button.ActualWidth, button.ActualHeight), content);
-                            Assert.InRange(point.X, 0, width); Assert.InRange(point.Y, 0, 900);
+                            Assert.InRange(point.X, 0, size.Width); Assert.InRange(point.Y, 0, size.Height);
                         }
+                    var run = Find<Button>(window, "RunProjectButton"); var build = Find<Button>(window, "BuildReleaseButton");
+                    Point runPosition = run.TranslatePoint(new Point(), content), buildPosition = build.TranslatePoint(new Point(), content);
+                    Assert.Equal(runPosition.X, buildPosition.X, 3); Assert.True(buildPosition.Y >= runPosition.Y + run.ActualHeight);
+                    Assert.Equal(run.ActualWidth, build.ActualWidth); Assert.Equal(run.ActualHeight, build.ActualHeight);
+                    Assert.Equal(run.ActualHeight, Find<Button>(window, "AnalyzeProjectButton").ActualHeight);
+                    Capture(content, "workspace-release-" + size.Width + ".png", size);
                 }
                 Capture((FrameworkElement)window.Content, "studio-workspace.png");
                 Assert.DoesNotContain("unsaved", File.ReadAllText(editor.Document!.FilePath)); editor.Clear();
@@ -294,7 +300,8 @@ public sealed class SceneTestingTests
             Window = (MainWindow)Activator.CreateInstance(typeof(MainWindow), BindingFlags.Instance | BindingFlags.NonPublic, null, [show, open], null)!;
         }
     }
-    private static string[] Labels(FrameworkElement owner, string group) => Find<WrapPanel>(owner, group).Children.Cast<Button>().Select(button => (string)button.Content).ToArray();
+    private static IEnumerable<Button> Buttons(Panel panel) => panel.Children.Cast<UIElement>().SelectMany(child => child is Button button ? new[] { button } : child is Panel nested ? Buttons(nested) : []);
+    private static string[] Labels(FrameworkElement owner, string group) => Buttons(Find<WrapPanel>(owner, group)).Select(button => (string)button.Content).ToArray();
     private static T Find<T>(FrameworkElement owner, string name) => (T)owner.FindName(name);
     private static T Field<T>(object target, string name) => (T)target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(target)!;
     private static Task InvokeAsync(object target, string name, params object[] arguments) => (Task)typeof(MainWindow).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(target, arguments)!;
@@ -304,12 +311,13 @@ public sealed class SceneTestingTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         while (!condition()) await Task.Delay(10, timeout.Token);
     }
-    private static void Capture(FrameworkElement view, string file)
+    private static void Capture(FrameworkElement view, string file, Size? layout = null)
     {
         string? directory = Environment.GetEnvironmentVariable("KNE_EDITOR_RENDER"); if (directory == null) return;
         if (view is Window window) view = (FrameworkElement)window.Content;
-        view.Measure(new Size(1280, 800)); view.Arrange(new Rect(0, 0, 1280, 800)); view.UpdateLayout();
-        Directory.CreateDirectory(directory); var image = new RenderTargetBitmap(1280, 800, 96, 96, PixelFormats.Pbgra32);
+        Size size = layout ?? new Size(1280, 800);
+        view.Measure(size); view.Arrange(new Rect(size)); view.UpdateLayout();
+        Directory.CreateDirectory(directory); var image = new RenderTargetBitmap((int)size.Width, (int)size.Height, 96, 96, PixelFormats.Pbgra32);
         image.Render(view); var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image));
         using var output = File.Create(Path.Combine(directory, file)); encoder.Save(output);
     }

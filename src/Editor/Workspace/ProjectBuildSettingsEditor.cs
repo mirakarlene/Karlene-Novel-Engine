@@ -14,7 +14,6 @@ internal sealed class ProjectBuildSettingsEditor : StackPanel
     internal TextBox Team { get; } = new() { MaxLength = 128 };
     internal TextBox Version { get; } = new() { MaxLength = 24 };
     internal ComboBox Saves { get; } = GraphicsSettingsEditor.Choice([new GraphicsOption<string>("appdata", "AppData (для текущего пользователя)"), new("local", "Папка игры (saves)")]);
-    internal Button BuildButton { get; } = new() { Content = "Собрать релиз", ToolTip = "Сохранить сценарии и параметры проекта, затем собрать релиз.", Padding = new(12, 6, 12, 6), HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBlock testHint = Hint(""), releaseHint = Hint("");
     private string gameId = "";
     internal ProjectBuildSettings Value => new() { GameId = gameId, TestMode = (string?)TestMode.SelectedValue ?? "vm", TestPath = TestPath.Text.Trim(), ReleaseMode = (string?)ReleaseMode.SelectedValue ?? "self_contained", ReleasePath = ReleasePath.Text.Trim(), Author = Author.Text.Trim(), Team = Team.Text.Trim(), Version = Version.Text.Trim(), SaveLocation = (string?)Saves.SelectedValue ?? "appdata" };
@@ -35,7 +34,6 @@ internal sealed class ProjectBuildSettingsEditor : StackPanel
         var right = new StackPanel(); Field(right, "Команда разработчиков (необязательно)", Team); right.Children.Add(Hint("Эти поля записываются в свойства EXE. Цифровая подпись сертификатом не создаётся."));
         row.Children.Add(left); Grid.SetColumn(right, 2); row.Children.Add(right); metadata.Children.Add(row); Children.Add(Card(metadata));
         Children.Add(Hint("Для сборки нужен .NET 10 SDK и доступ к пакетам NuGet. Тестовый EXE использует выбранный релизный профиль; MSIX тестируется как EXE до упаковки. Сценарии и ресурсы входят в билд, сохранения разработчика — нет."));
-        Children.Add(BuildButton);
         TestMode.SelectionChanged += (_, _) => Refresh(); ReleaseMode.SelectionChanged += (_, _) => Refresh(); Refresh();
     }
     internal void Saved(ProjectBuildSettings settings) => gameId = settings.GameId;

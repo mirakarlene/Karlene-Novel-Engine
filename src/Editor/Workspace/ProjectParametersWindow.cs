@@ -30,8 +30,6 @@ public sealed class ProjectParametersWindow : Window
     internal int Page { get; private set; }
     internal Button PreviousPage { get; } = new() { Content = "‹", Padding = new(12, 3, 12, 3), IsEnabled = false };
     internal Button NextPage { get; } = new() { Content = "›", Padding = new(12, 3, 12, 3) };
-    internal Func<Task> BeforeBuildAsync { get; set; } = () => Task.CompletedTask;
-    private readonly CancellationTokenSource buildLifetime = new();
     public ProjectParametersWindow(ProjectInfo project, string? projectsStoragePath = null)
     {
         this.project = project; Title = "Параметры проекта · " + project.Title;
@@ -119,20 +117,7 @@ public sealed class ProjectParametersWindow : Window
             PreviousPage.IsEnabled = page == 1; NextPage.IsEnabled = page == 0; pageLabel.Text = page == 0 ? "1 / 2 · Проект" : "2 / 2 · Сборки";
         }
         PreviousPage.Click += (_, _) => ShowPage(0); NextPage.Click += (_, _) => ShowPage(1);
-        BuildInput.BuildButton.Click += async (_, _) =>
-        {
-            BuildInput.IsEnabled = false; save.IsEnabled = false; PreviousPage.IsEnabled = false;
-            try
-            {
-                await BeforeBuildAsync(); await SaveAsync(); var options = ProjectBuildSettingsStore.Load(project.Path); var loaded = await ProjectLoader.LoadProjectAsync(project.Path, buildLifetime.Token);
-                var built = await new GameBuildExporter().BuildAsync(loaded, options, options.ReleasePath, log: line => Dispatcher.BeginInvoke(() => status.Text = line), token: buildLifetime.Token);
-                status.Text = "Готово: " + (built.Package ?? built.Executable);
-            }
-            catch (OperationCanceledException) { status.Text = "Сборка отменена."; }
-            catch (Exception error) { status.Text = error.Message; }
-            finally { BuildInput.IsEnabled = true; save.IsEnabled = true; PreviousPage.IsEnabled = Page == 1; }
-        };
-        Closed += (_, _) => { buildLifetime.Cancel(); if (!DeletionRequested) ResetDeletion(); };
+        Closed += (_, _) => { if (!DeletionRequested) ResetDeletion(); };
         // Keep the requested window dimensions, including a smaller manually resized window and expanded danger zone.
         Content = new Viewbox { Child = body, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Top, Margin = new(20) };
         foreach (var input in new[] { GraphicsInput.ApiInput, GraphicsInput.FpsInput, GraphicsInput.MsaaInput, TextureInput, GraphicsInput.CacheLimitInput, AsyncTasksInput, AudioBufferInput, CornerInput }) input.Margin = new(0, 3, 0, 5);

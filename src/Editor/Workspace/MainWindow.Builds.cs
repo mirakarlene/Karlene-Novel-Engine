@@ -6,6 +6,27 @@ namespace KNE;
 
 public partial class MainWindow
 {
+    private async void BtnBuildRelease_Click(object sender, RoutedEventArgs e)
+    {
+        if (currentProject is not { } project) return;
+        await RunOperationAsync(async () =>
+        {
+            await SaveAllEditorsAsync();
+            var options = ProjectBuildSettingsStore.Load(project.Path);
+            var loaded = await ProjectLoader.LoadProjectAsync(project.Path, lifetime.Token);
+            if (options.GameId == "" || string.IsNullOrWhiteSpace(options.ReleasePath))
+            {
+                if (string.IsNullOrWhiteSpace(options.ReleasePath))
+                    options.ReleasePath = ProjectBuildSettings.DefaultOutput(project.Path, settings.ProjectsStoragePath);
+                await ProjectBuildSettingsStore.SaveAsync(project.Path, options, lifetime.Token);
+                options = ProjectBuildSettingsStore.Load(project.Path);
+            }
+            var built = await new GameBuildExporter().BuildAsync(loaded, options, options.ReleasePath,
+                log: line => Dispatcher.BeginInvoke(() => OperationStatus.Text = line), token: lifetime.Token);
+            OperationStatus.Text = "Готово: " + (built.Package ?? built.Executable);
+        }, "Сборка релиза…");
+    }
+
     private sealed class RemoteDebugTab;
     private async Task RunConfiguredProjectAsync(ProjectInfo project)
     {
