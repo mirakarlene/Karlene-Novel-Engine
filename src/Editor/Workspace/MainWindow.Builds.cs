@@ -18,7 +18,7 @@ public partial class MainWindow
             {
                 if (string.IsNullOrWhiteSpace(options.ReleasePath))
                     options.ReleasePath = ProjectBuildSettings.DefaultOutput(project.Path, settings.ProjectsStoragePath);
-                await ProjectBuildSettingsStore.SaveAsync(project.Path, options, lifetime.Token);
+                await ProjectBuildSettingsStore.SaveCheckedAsync(project.Path, options, ProjectExeMetadata.From(options), token: lifetime.Token);
                 options = ProjectBuildSettingsStore.Load(project.Path);
             }
             var built = await new GameBuildExporter().BuildAsync(loaded, options, options.ReleasePath,

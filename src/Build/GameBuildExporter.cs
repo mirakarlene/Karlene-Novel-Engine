@@ -19,6 +19,7 @@ public sealed class GameBuildExporter
     private async Task<GameBuildResult> BuildCoreAsync(ProjectInfo project, ProjectBuildSettings settings, string outputRoot,
         bool test, Action<string>? log, CancellationToken token)
     {
+        settings = ProjectBuildMetadata.Read(project.Path).Apply(settings);
         settings.Validate();
         if (settings.GameId == "") throw new InvalidDataException("Сначала сохраните параметры сборки проекта.");
         outputRoot = ValidateOutput(project.Path, outputRoot);

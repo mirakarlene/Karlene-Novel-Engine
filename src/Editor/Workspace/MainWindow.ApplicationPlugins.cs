@@ -13,13 +13,14 @@ public partial class MainWindow
     private int settingsPage;
     private void SetSettingsPage(int page)
     {
-        settingsPage = Math.Clamp(page, 0, 2);
+        settingsPage = Math.Clamp(page, 0, 3);
         GeneralSettingsPage.Visibility = settingsPage == 0 ? Visibility.Visible : Visibility.Collapsed;
-        ProjectsRenderSettingsPage.Visibility = settingsPage == 1 ? Visibility.Visible : Visibility.Collapsed;
-        PluginsSettingsPage.Visibility = settingsPage == 2 ? Visibility.Visible : Visibility.Collapsed;
+        BehaviorSettingsPage.Visibility = settingsPage == 1 ? Visibility.Visible : Visibility.Collapsed;
+        ProjectsRenderSettingsPage.Visibility = settingsPage == 2 ? Visibility.Visible : Visibility.Collapsed;
+        PluginsSettingsPage.Visibility = settingsPage == 3 ? Visibility.Visible : Visibility.Collapsed;
         PreviousSettingsPageButton.IsEnabled = settingsPage > 0;
-        NextSettingsPageButton.IsEnabled = settingsPage < 2;
-        SettingsPageLabel.Text = $"{settingsPage + 1} / 3 · " + new[] { "Основное", "Проекты и Рендер", "Плагины" }[settingsPage];
+        NextSettingsPageButton.IsEnabled = settingsPage < 3;
+        SettingsPageLabel.Text = $"{settingsPage + 1} / 4 · " + new[] { "Сохранение и горячие клавиши", "Поведение и уведомления", "Проекты и Рендер", "Плагины" }[settingsPage];
     }
     private void PreviousSettingsPage_Click(object sender, RoutedEventArgs e) => SetSettingsPage(settingsPage - 1);
     private void NextSettingsPage_Click(object sender, RoutedEventArgs e) => SetSettingsPage(settingsPage + 1);

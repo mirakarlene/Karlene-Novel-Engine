@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using Microsoft.Win32;
 
 namespace KNE;
@@ -34,37 +35,40 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     internal Action? ResetWorkRequested { get; set; }
     internal Func<string>? ThemeProvider { get; set; }
     internal TextBlock Status { get; } = new() { TextWrapping = TextWrapping.Wrap, Margin = new(0, 8, 0, 0) };
+    internal ScrollViewer BehaviorPage { get; } = new() { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+    internal TextBlock BehaviorStatus { get; } = new() { TextWrapping = TextWrapping.Wrap, Margin = new(0, 8, 0, 0) };
     private readonly FrameworkElement projectRow, soundRow;
     public GeneralSettingsEditor()
     {
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto; HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
-        var grid = new Grid { Margin = new(0, 0, 12, 0) }; grid.ColumnDefinitions.Add(new()); grid.ColumnDefinitions.Add(new() { Width = new GridLength(18) }); grid.ColumnDefinitions.Add(new());
-        var left = new StackPanel(); var right = new StackPanel(); Grid.SetColumn(right, 2); grid.Children.Add(left); grid.Children.Add(right); Content = grid;
+        var (grid, left, right) = Columns(); Content = grid;
+        var (behaviorGrid, behaviorLeft, behaviorRight) = Columns(); BehaviorPage.Content = behaviorGrid;
         var backup = Section(left, "Резервное копирование"); Field(backup, "Путь хранения", PathRow(BackupPath, "Выбрать…", () => BrowseFolder(BackupPath)));
         backup.Children.Add(Hint("Резервные копии хранятся отдельно от проектов. При перемещении хранилища проекты не перемещаются автоматически"));
         Field(backup, "Частота создания", BackupFrequency); Field(backup, "Хранить последних копий", BackupCopies);
         backup.Children.Add(Hint("Старые копии автоматически удаляются. Это не влияет на историю версий автосохранения"));
         Button(backup, "Создать резервную копию", () => BackupRequested?.Invoke() ?? Task.CompletedTask);
-        var autosave = Section(left, "Автосохранение"); Field(autosave, "Интервал автосохранения", AutosaveInterval); Field(autosave, "Максимум версий на проект", HistoryLimit); autosave.Children.Add(KeepHistory);
+        var autosave = Section(right, "Автосохранение"); Field(autosave, "Интервал автосохранения", AutosaveInterval); Field(autosave, "Максимум версий на проект", HistoryLimit); autosave.Children.Add(KeepHistory);
         Button(autosave, "Просмотреть историю", () => HistoryRequested?.Invoke() ?? Task.CompletedTask);
-        var keys = Section(left, "Горячие клавиши"); Button(keys, "Настроить горячие клавиши", () =>
+        var keys = Section(right, "Горячие клавиши"); Button(keys, "Настроить горячие клавиши", () =>
         {
             var window = new HotkeySettingsWindow(Hotkeys) { Owner = Window.GetWindow(this) };
             EditorTheme.Apply(window, ThemeProvider?.Invoke() ?? "kne"); if (window.ShowDialog() == true) Hotkeys = window.Profile; return Task.CompletedTask;
         });
-        var startup = Section(left, "Поведение при запуске"); Field(startup, "При запуске KNE…", Startup);
+        var startup = Section(behaviorLeft, "Поведение при запуске"); Field(startup, "При запуске KNE…", Startup);
         projectRow = PathRow(StartupProject, "Выбрать проект…", () => BrowseFolder(StartupProject)); startup.Children.Add(projectRow);
         startup.Children.Add(Hint("Если выбран проект, но он был удалён или перемещён, KNE откроет главный экран и покажет предупреждение"));
-        var notifications = Section(right, "Уведомления"); notifications.Children.Add(SoundEnabled); Field(notifications, "Звук уведомления", Sound);
+        var notifications = Section(behaviorRight, "Уведомления"); notifications.Children.Add(SoundEnabled); Field(notifications, "Звук уведомления", Sound);
         soundRow = PathRow(SoundFile, "Выбрать WAV…", () => { var dialog = new OpenFileDialog { Filter = "Звук WAV (*.wav)|*.wav" }; if (dialog.ShowDialog(Window.GetWindow(this)) == true) SoundFile.Text = dialog.FileName; }); notifications.Children.Add(soundRow);
         notifications.Children.Add(Toasts); notifications.Children.Add(Aggregate); notifications.Children.Add(new TextBlock { Text = "Когда показывать уведомления", FontWeight = FontWeights.SemiBold, Margin = new(0, 10, 0, 3) }); notifications.Children.Add(Minimized); notifications.Children.Add(Tips);
         notifications.Children.Add(Hint("После закрытия KNE работа завершается; новые уведомления не отправляются."));
         Button(notifications, "Проверить уведомления", () => TestNotificationRequested?.Invoke() ?? Task.CompletedTask);
         notifications.Children.Add(Hint("Уведомления используют Windows Action Center. Убедитесь, что KNE разрешён в параметрах уведомлений Windows"));
-        var breaks = Section(right, "Ограничение по времени"); breaks.Children.Add(Breaks); Field(breaks, "Интервал напоминания", BreakInterval); Field(breaks, "Тип напоминания", BreakType);
+        var breaks = Section(behaviorLeft, "Ограничение по времени"); breaks.Children.Add(Breaks); Field(breaks, "Интервал напоминания", BreakInterval); Field(breaks, "Тип напоминания", BreakType);
         breaks.Children.Add(Hint("Мягкие напоминания используют настройки некритичных уведомлений."));
         Field(breaks, "Длительность строгого перерыва", BreakDuration); breaks.Children.Add(WorkTime);
         Button(breaks, "Сбросить статистику", () => { ResetWorkRequested?.Invoke(); return Task.CompletedTask; }); right.Children.Add(Status);
+        BehaviorStatus.SetBinding(TextBlock.TextProperty, new Binding(nameof(TextBlock.Text)) { Source = Status }); behaviorRight.Children.Add(BehaviorStatus);
         Startup.SelectionChanged += (_, _) => Refresh(); Sound.SelectionChanged += (_, _) => Refresh(); SoundEnabled.Click += (_, _) => Refresh(); Breaks.Click += (_, _) => Refresh(); BreakType.SelectionChanged += (_, _) => Refresh();
         Load(new(), [], "");
     }
@@ -100,6 +104,11 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     {
         var panel = new StackPanel(); panel.Children.Add(new TextBlock { Text = title, FontSize = 21, FontWeight = FontWeights.SemiBold, Margin = new(0, 0, 0, 12) });
         var border = new Border { Child = panel, Padding = new(18), BorderThickness = new(1), CornerRadius = new(10), Margin = new(0, 0, 0, 12) }; border.SetResourceReference(BackgroundProperty, "Editor.Surface"); border.SetResourceReference(Border.BorderBrushProperty, "Editor.Border"); parent.Children.Add(border); return panel;
+    }
+    private static (Grid Grid, StackPanel Left, StackPanel Right) Columns()
+    {
+        var grid = new Grid { Margin = new(0, 0, 12, 0) }; grid.ColumnDefinitions.Add(new()); grid.ColumnDefinitions.Add(new() { Width = new GridLength(18) }); grid.ColumnDefinitions.Add(new());
+        var left = new StackPanel(); var right = new StackPanel(); Grid.SetColumn(right, 2); grid.Children.Add(left); grid.Children.Add(right); return (grid, left, right);
     }
     private static void Field(Panel panel, string label, FrameworkElement input) { panel.Children.Add(new TextBlock { Text = label, Margin = new(0, 4, 0, 5) }); input.Margin = new(0, 0, 0, 5); panel.Children.Add(input); }
     private static TextBlock Hint(string text) { var hint = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontSize = 11, Margin = new(0, 3, 0, 7) }; hint.SetResourceReference(TextBlock.ForegroundProperty, "Editor.Muted"); return hint; }

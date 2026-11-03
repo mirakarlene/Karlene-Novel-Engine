@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace KNE.Tests;
@@ -96,13 +97,18 @@ public sealed class ProjectBuildTests
         fixture.Write("saves/private.json", "developer-progress"); fixture.Write(".kne/private.txt", "private"); fixture.Write(".git/config", "private"); fixture.Write(".kne/plugin-assets/resource.txt", "asset");
         var settings = new ProjectBuildSettings { GameId = Guid.NewGuid().ToString("N"), ReleaseMode = mode, Author = "Автор $(UNDEFINED); 100%", Team = "Команда", Version = "2.3.4", ReleasePath = Path.Combine(fixture.Root, "output") };
         await ProjectBuildSettingsStore.SaveAsync(fixture.ProjectPath, settings);
+        var project = await fixture.LoadAsync();
+        const string jsonAuthor = "Из project.json $(UNDEFINED); 100%", jsonTeam = "JSON team", jsonVersion = "3.4.5";
+        string projectFile = Path.Combine(fixture.ProjectPath, "project.json"); var projectJson = JsonNode.Parse(File.ReadAllText(projectFile))!;
+        projectJson["metadata"]!["author"] = jsonAuthor; projectJson["metadata"]!["team"] = jsonTeam; projectJson["metadata"]!["version"] = jsonVersion;
+        File.WriteAllText(projectFile, projectJson.ToJsonString(ProjectConfiguration.JsonOptions));
         var logs = new List<string>();
         GameBuildResult built;
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-        try { built = await new GameBuildExporter().BuildAsync(await fixture.LoadAsync(), settings, settings.ReleasePath, log: line => { lock (logs) logs.Add(line); }, token: timeout.Token); }
+        try { built = await new GameBuildExporter().BuildAsync(project, settings, settings.ReleasePath, log: line => { lock (logs) logs.Add(line); }, token: timeout.Token); }
         catch (Exception error) { throw new Exception(error + "\n" + string.Join("\n", logs)); }
         var metadata = FileVersionInfo.GetVersionInfo(built.Executable);
-        Assert.Equal("2.3.4.0", metadata.FileVersion); Assert.Equal(settings.Author, metadata.LegalCopyright); Assert.Equal("Команда", metadata.CompanyName); Assert.Equal("Новелла с пробелами", metadata.ProductName);
+        Assert.Equal("3.4.5.0", metadata.FileVersion); Assert.Equal(jsonAuthor, metadata.LegalCopyright); Assert.Equal(jsonTeam, metadata.CompanyName); Assert.Equal("Новелла с пробелами", metadata.ProductName);
         Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(built.Executable)!, "project", "saves", "private.json")));
         Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(built.Executable)!, "project", "engine", "build.json")));
         if (mode == "single_file") Assert.Single(Directory.GetFiles(Path.GetDirectoryName(built.Executable)!));

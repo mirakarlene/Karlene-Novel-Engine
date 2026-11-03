@@ -3,6 +3,8 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
+using System.IO;
+using System.Text.Json;
 
 namespace KNE;
 
@@ -143,18 +145,29 @@ public sealed class ProjectParametersWindow : Window
         var build = BuildInput.Value; build.Validate();
         string buildFile = System.IO.Path.Combine(project.Path, "engine", "build.json");
         byte[]? previousBuild = System.IO.File.Exists(buildFile) ? await System.IO.File.ReadAllBytesAsync(buildFile) : null;
-        var previous = PerformanceSettingsStore.LoadProject(project.Path);
+        string projectFile = PathSafety.ResolveRelative(project.Path, "project.json"), performanceFile = PathSafety.ResolveRelative(project.Path, "engine/performance.json");
+        byte[] previousProject = await File.ReadAllBytesAsync(projectFile);
+        byte[]? previousPerformance = File.Exists(performanceFile) ? await File.ReadAllBytesAsync(performanceFile) : null;
+        ProjectBuildWrite? written = null; bool performanceSaved = false;
         try
         {
-            await ProjectBuildSettingsStore.SaveAsync(project.Path, build);
+            written = await ProjectBuildSettingsStore.SaveCheckedAsync(project.Path, build, BuildInput.InitialMetadata, title == project.Title ? null : title);
             await PerformanceSettingsStore.SaveProjectAsync(project.Path, value);
-            if (title != project.Title) await ProjectMaintenance.RenameAsync(project, title);
-            BuildInput.Saved(ProjectBuildSettingsStore.Load(project.Path));
+            performanceSaved = true;
+            var configuration = JsonSerializer.Deserialize<ProjectConfiguration>(written.ProjectJson, ProjectConfiguration.JsonOptions)!;
+            project.Configuration.Metadata = configuration.Metadata; project.Configuration.GameInfo = configuration.GameInfo; project.Configuration.LegacyName = configuration.LegacyName;
+            BuildInput.Saved(written.Settings);
         }
-        catch
+        catch (Exception error)
         {
-            await PerformanceSettingsStore.SaveProjectAsync(project.Path, previous);
-            if (previousBuild == null) System.IO.File.Delete(buildFile); else await System.IO.File.WriteAllBytesAsync(buildFile, previousBuild);
+            var failures = new List<Exception>();
+            if (performanceSaved) try { await ProjectBuildMetadata.ReplaceAsync(performanceFile, previousPerformance); } catch (Exception rollback) { failures.Add(rollback); }
+            if (written != null)
+            {
+                try { ProjectBuildMetadata.CheckCurrent(buildFile, written.BuildJson); await ProjectBuildMetadata.ReplaceAsync(buildFile, previousBuild); } catch (Exception rollback) { failures.Add(rollback); }
+                try { ProjectBuildMetadata.CheckCurrent(projectFile, written.ProjectJson); await ProjectBuildMetadata.ReplaceAsync(projectFile, previousProject); } catch (Exception rollback) { failures.Add(rollback); }
+            }
+            if (failures.Count > 0) throw new AggregateException("Не удалось полностью отменить сохранение параметров проекта.", new[] { error }.Concat(failures));
             throw;
         }
     }
