@@ -129,9 +129,9 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
         var current = System.Windows.Input.Mouse.DirectlyOver;
         if (!ReferenceEquals(current, hovered)) { hovered = current; NotifyContentChanged(); }
     }
-    internal void SetScene(string? scene)
+    internal void SetScene(string? scene, string? function = null)
     {
-        bool value = project.Engine.ScenePerformance.For(scene).HideShaders;
+        bool value = project.Engine.ScenePerformance.For(scene, function).HideShaders;
         if (value == disabled) return;
         disabled = value; NotifyContentChanged();
         if (disabled) { timer.Stop(); Restore(); ReleaseGpu(); }

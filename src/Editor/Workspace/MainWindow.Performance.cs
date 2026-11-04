@@ -21,6 +21,12 @@ public partial class MainWindow
         await RunOperationAsync(async () =>
         {
             var window = new SceneParametersWindow(project) { Owner = this }; EditorTheme.Apply(window, settings.Theme);
+            window.ValidateWrites = paths =>
+            {
+                var affected = paths.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                if (OpenEditors.Any(editor => editor.HasUnsavedChanges && editor.Document != null && affected.Contains(editor.Document.FilePath)))
+                    throw new InvalidOperationException("Сохраните открытые сценарии перед переименованием функции сцены.");
+            };
             if (window.ShowDialog() == true) { RefreshOpenGamePerformance(project.Path); await OpenProjectAsync(project.Path); QueueProjectBackup(); }
         }, "Параметры сцены…");
     }

@@ -18,7 +18,7 @@ public partial class GameWindow
         await PumpSceneTimeAsync(seconds);
     }
 
-    // A clock tick never saves a new slot or steals input focus.
+    // A clock tick only writes an explicitly requested scene-entry checkpoint; it never steals focus.
     private async Task PumpSceneTimeAsync(double seconds = .1)
     {
         if (pumpingSceneTime || clockSuspended || closed || startupFailed || !ready || execution != null ||
@@ -29,8 +29,19 @@ public partial class GameWindow
         var current = runtime;
         try
         {
+            var previous = current.Visuals.Scene;
             await current.TickAsync(seconds, operation.Token);
-            if (!closed && ReferenceEquals(current, runtime)) RenderOutput();
+            var image = NeedsSceneTransition(previous) ? SceneTransitionPresenter.Capture(SceneArea) : null;
+            using var cover = image == null ? null : SceneTransitionPresenter.Hold(SceneArea, image);
+            if (!closed && ReferenceEquals(current, runtime))
+            {
+                try { await SaveSceneEntryAsync(operation.Token); }
+                catch (Exception error) when (error is not OperationCanceledException && GameErrorReport.TryGet(error) == null) { Notify("Точка входа не сохранена: " + error.Message); }
+                cover?.Dispose();
+                PresentSceneOutput();
+                if (image != null && runtime.Visuals.Scene is { } scene && SceneChanged(previous))
+                    await SceneTransitionPresenter.PlayAsync(this, project, SceneArea, image, previous?.Settings.ExitTransition ?? new(), scene.Exited ? new() : scene.Settings.EntryTransition, operation.Token);
+            }
         }
         catch (OperationCanceledException) { if (!closed) StatusText.Text = "Фоновое выполнение остановлено"; }
         catch (Exception error)
@@ -39,6 +50,7 @@ public partial class GameWindow
         }
         finally
         {
+            lastSceneTick = System.Diagnostics.Stopwatch.GetTimestamp();
             clockTickOperation = null; pumpingSceneTime = false;
             if (!closed) StopButton.IsEnabled = execution != null;
         }

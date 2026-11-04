@@ -13,12 +13,17 @@ public partial class GameWindow
         await ExecuteAsync(async () =>
         {
             await runtime.RestoreAsync(previous, execution!.Token); rollback.Pop();
+            sceneSaves.Reset(); sceneSaves.MarkRestored(runtime.Visuals.Scene);
             renderedStory = null; renderedSettings = null; renderedVisuals = null;
             triggerInput.Reset(); pendingTriggerSignals.Clear(); gameplayUi?.Reset(); DialogueEffects.Reset(); choicePresentation?.Reset();
             CloseAudio(); sceneEffects?.Stop(); ShowGameplay(); autosave.Reset();
         }, operation: "Откат игры");
     }
-    private async Task<GameCheckpoint> CheckpointAsync(CancellationToken token) => rollback.Attach(await runtime.GetCheckpointAsync(token));
+    private async Task<GameCheckpoint> CheckpointAsync(CancellationToken token)
+    {
+        if (!CanSaveInScene) throw new InvalidOperationException("Сохранения в этой сцене запрещены.");
+        return rollback.Attach(await runtime.GetCheckpointAsync(token));
+    }
     private bool menuMusicPlaying;
     private void StartMenuMusic()
     {

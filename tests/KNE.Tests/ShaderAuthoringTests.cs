@@ -109,12 +109,13 @@ public sealed class ShaderAuthoringTests
             try
             {
                 var scenes = window.SceneInput;
-                scenes.SelectedValue = Path.GetRelativePath(project.Path, project.MainScenePath).Replace('\\', '/');
+                string main = Path.GetRelativePath(project.Path, project.MainScenePath).Replace('\\', '/');
+                scenes.SelectedValue = main + "::main";
                 Assert.False(window.HideShadersInput.IsChecked);
-                window.HideShadersInput.IsChecked = true; scenes.SelectedValue = "other.knegraph"; Assert.False(window.HideShadersInput.IsChecked);
-                scenes.SelectedValue = Path.GetRelativePath(project.Path, project.MainScenePath).Replace('\\', '/'); Assert.True(window.HideShadersInput.IsChecked);
+                window.HideShadersInput.IsChecked = true; scenes.SelectedValue = "other.knegraph::main"; Assert.False(window.HideShadersInput.IsChecked);
+                scenes.SelectedValue = main + "::main"; Assert.True(window.HideShadersInput.IsChecked);
                 await window.SaveAsync();
-                var saved = PerformanceSettingsStore.LoadScenes(project.Path); Assert.True(saved.For(scenes.SelectedValue as string).HideShaders); Assert.False(saved.For("other.knegraph").HideShaders);
+                var saved = PerformanceSettingsStore.LoadScenes(project.Path); Assert.True(saved.For(main, "main").HideShaders); Assert.False(saved.For("other.knegraph", "main").HideShaders);
                 string json = File.ReadAllText(Path.Combine(project.Path, "engine", "scene-performance.json")); Assert.Contains("\"hide_shaders\": true", json);
                 window.HideShadersInput.IsChecked = false; window.Close(); Assert.Equal(json, File.ReadAllText(Path.Combine(project.Path, "engine", "scene-performance.json")));
             }

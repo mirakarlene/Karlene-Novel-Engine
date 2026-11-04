@@ -11,6 +11,7 @@ public partial class GameWindow
     private readonly SceneAssetCache assets = new();
     private ScenePerformanceSettings activeScenePerformance = new();
     private string? performanceScene;
+    private string? performanceFunction;
     private bool scenePolicyChanged;
     private CancellationTokenSource? preloading;
     private readonly TextBlock performanceText = new() { Foreground = Brushes.White, FontFamily = new("Consolas"), FontSize = 12 };
@@ -30,6 +31,7 @@ public partial class GameWindow
         active.FpsCounter = saved.FpsCounter; active.StatisticsOverlay = saved.StatisticsOverlay;
         active.FpsCorner = saved.FpsCorner; active.LoadingIndicator = saved.LoadingIndicator;
         project.Engine.ScenePerformance.Scenes = scenes.Scenes;
+        project.Engine.ScenePerformance.Functions = scenes.Functions;
         preloading?.Cancel(); preloading?.Dispose(); preloading = null;
         bool textureChanged = GraphicsEnvironment.GetSettings(this).TextureQuality != saved.Graphics.TextureQuality;
         assets.Configure(saved.Graphics); GraphicsEnvironment.SetSettings(this, saved.Graphics);
@@ -62,16 +64,17 @@ public partial class GameWindow
     }
     private void UpdatePerformance()
     {
-        string? path = (runtime as ProcessGameSession)?.Location?.File;
+        string? path = runtime.Visuals.Scene?.File ?? (runtime as ProcessGameSession)?.Location?.File;
+        string? function = runtime.Visuals.Scene?.Function;
         if (path != null && Path.IsPathFullyQualified(path)) path = Path.GetRelativePath(project.Path, path);
         path = path?.Replace('\\', '/');
-        shaders?.SetScene(path);
+        shaders?.SetScene(path, function);
         if (shaders != null) _ = shaders.SetActiveAsync(runtime.Visuals.ShaderSuppressions.Length == 0 ? runtime.Visuals.Shaders : []);
-        if (path != performanceScene)
+        if (path != performanceScene || function != performanceFunction)
         {
             preloading?.Cancel(); preloading?.Dispose(); preloading = null;
             if (performanceScene != null && project.Engine.Performance.UnloadPreviousScene) assets.RetainForScene(project, runtime.Visuals);
-            performanceScene = path; activeScenePerformance = project.Engine.ScenePerformance.For(path);
+            performanceScene = path; performanceFunction = function; activeScenePerformance = project.Engine.ScenePerformance.For(path, function);
             AnimatedBackdrop.SetQuality(activeScenePerformance.EffectsQuality);
             sceneEffects?.Stop(); scenePolicyChanged = true;
             if (project.Engine.Performance.Preloading && path != null)

@@ -197,6 +197,7 @@ public partial class GameWindow : Window
         await runtime.DisposeAsync();
         if (closed) { await candidate.DisposeAsync(); return; }
         runtime = candidate;
+        sceneSaves.Reset();
         rollback.Clear(); autosave.Reset();
         triggerInput.Reset(); pendingTriggerSignals.Clear();
         gameplayUi?.Reset();
@@ -298,10 +299,11 @@ public partial class GameWindow : Window
 
     private async Task ExecuteAsync(Func<Task> action, bool starting = false, string operation = "Выполнение сценария", bool playerAction = false)
     {
-        if (closed || startupFailed || execution != null) return;
+        if (closed || startupFailed || execution != null || pumpingSceneTime) return;
         clockSuspended = false;
         execution = new CancellationTokenSource();
         string? operationNotice = null;
+        IDisposable? transitionCover = null;
         StopButton.IsEnabled = true;
         CommandInput.IsEnabled = false;
         NextButton.IsEnabled = false;
@@ -312,6 +314,7 @@ public partial class GameWindow : Window
         StatusText.Text = starting ? "Загрузка сценария…" : "Выполнение команды…";
         try
         {
+            var previousScene = runtime.Visuals.Scene;
             string previousKind = runtime.Story.Kind;
             GameCheckpoint? before = null;
             if (playerAction && ready && project.Engine.Game.RollbackDepth > 0)
@@ -321,14 +324,30 @@ public partial class GameWindow : Window
                 { operationNotice = "Откат для этого действия недоступен: " + error.Message; QueueOutput(operationNotice); }
             }
             await action();
+            var previousImage = NeedsSceneTransition(previousScene, starting) ? SceneTransitionPresenter.Capture(SceneArea) : null;
+            if (previousImage != null) transitionCover = SceneTransitionPresenter.Hold(SceneArea, previousImage);
             if (before != null) rollback.Push(before);
             if (closed) return;
             if (starting) ready = true;
-            if (ready && (starting && project.Engine.Game.AutoSave && !saves.Exists("auto") || playerAction && autosave.Completed(project.Engine.Game, previousKind)))
+            if (ready && SceneSavePolicy.AllowAuto(runtime.Visuals.Scene) && (starting && project.Engine.Game.AutoSave && !saves.Exists("auto") || playerAction && autosave.Completed(project.Engine.Game, previousKind)))
             {
                 try { await saves.SaveAsync("auto", await CheckpointAsync(execution.Token), execution.Token); }
                 catch (Exception ex) when (GameErrorReport.TryGet(ex) == null)
                 { operationNotice = "Автосохранение не выполнено: " + ex.Message; QueueOutput(operationNotice); }
+            }
+            if (ready)
+            {
+                try { await SaveSceneEntryAsync(execution.Token); }
+                catch (Exception error) when (GameErrorReport.TryGet(error) == null && error is not OperationCanceledException)
+                { operationNotice = "Точка входа не сохранена: " + error.Message; QueueOutput(operationNotice); }
+            }
+            var currentScene = runtime.Visuals.Scene;
+            transitionCover?.Dispose(); transitionCover = null;
+            if (previousImage != null && currentScene != null && SceneChanged(previousScene, starting))
+            {
+                PresentSceneOutput();
+                if (!closed && !startupFailed) await SceneTransitionPresenter.PlayAsync(this, project, SceneArea, previousImage,
+                    previousScene?.Settings.ExitTransition ?? new(), currentScene.Exited ? new() : currentScene.Settings.EntryTransition, execution.Token);
             }
             StatusText.Text = "Готово";
             if (operationNotice == null) NoticePanel.Visibility = Visibility.Collapsed; else Notify(operationNotice);
@@ -348,6 +367,7 @@ public partial class GameWindow : Window
         }
         finally
         {
+            transitionCover?.Dispose();
             execution.Dispose();
             execution = null;
             _ = Dispatcher.BeginInvoke(new Action(async () => await DrainTriggerSignalsAsync()));
@@ -389,7 +409,7 @@ public partial class GameWindow : Window
     private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         if (await TryButtonTriggerAsync(sender)) { e.Handled = true; return; }
-        if (execution != null || !ready) return;
+        if (execution != null || !ready || !CanSaveInScene) return;
         bool saved = false;
         await ExecuteAsync(async () =>
         {
@@ -417,6 +437,7 @@ public partial class GameWindow : Window
             try { await candidate.RestoreAsync(checkpoint, execution.Token); }
             catch { await candidate.DisposeAsync(); throw; }
             await ReplaceSessionAsync(candidate);
+            sceneSaves.MarkRestored(runtime.Visuals.Scene);
             QueueOutput("Сохранение загружено.");
             rollback.Restore(checkpoint);
         }, operation: "Загрузка сохранения");
@@ -508,6 +529,7 @@ public partial class GameWindow : Window
     private void RenderOutput()
     {
         if (closed || startupFailed) return;
+        if ((execution != null || pumpingSceneTime) && !presentDuringOperation) { RenderConsole(); return; }
         try { RenderPluginScreens(); }
         catch (Exception error) { ShowStartupError(error, "Экран плагина"); return; }
         FlushPreferences();
@@ -578,7 +600,8 @@ public partial class GameWindow : Window
         NextButton.Visibility = frame.Kind == "input" && !HasButtonTrigger("next") ? Visibility.Collapsed : Visibility.Visible;
         ChoicePanel.IsEnabled = execution == null && frame.Kind == "choice";
         ChoicePanel.Visibility = frame.Kind == "choice" ? Visibility.Visible : Visibility.Collapsed;
-        SaveButton.IsEnabled = execution == null && ready;
+        SaveButton.IsEnabled = execution == null && ready && CanSaveInScene;
+        SaveSelectedButton.IsEnabled = execution == null && ready && CanSaveInScene;
         LoadButton.IsEnabled = execution == null && (saves.Exists("quick") || HasButtonTrigger("load"));
         LoadAutoButton.IsEnabled = execution == null && (saves.Exists("auto") || HasButtonTrigger("auto_save"));
         ContinueButton.IsEnabled = execution == null && (saves.Exists("auto") || saves.Exists("quick"));

@@ -6,6 +6,8 @@ internal static class SceneRuntimeLua
     public const string Source = """
         do
             local definitions, loaded = {}, {}
+            local function_paths, identities = {}, setmetatable({}, {__mode = "k"})
+            local scene_contexts = setmetatable({}, {__mode = "k"})
             local subsystem_entries = {}
             local owned = setmetatable({}, {__mode = "k"})
             local shader_flows = setmetatable({}, {__mode = "k"})
@@ -66,6 +68,8 @@ internal static class SceneRuntimeLua
                 end
                 if definitions[name] then error("Сцена уже объявлена: " .. name) end
                 definitions[name] = entry
+                local info = debug.getinfo(entry, "S")
+                if info.source:sub(1, 1) == "@" then identities[entry] = {file = info.source:sub(2), name = name} end
             end
             function kne_load_script(path)
                 if loaded[path] then return end
@@ -83,8 +87,13 @@ internal static class SceneRuntimeLua
                 end
                 local ok, result = xpcall(chunk, handle_error)
                 if not ok then error(result, 0) end
+                for name, declared in pairs(function_paths) do
+                    local entry = rawget(_G, name)
+                    if declared == path and type(entry) == "function" then identities[entry] = {file = path, name = name} end
+                end
             end
             function kne_declare_function(name, path)
+                function_paths[name] = path
                 if rawget(_G, name) ~= nil then return end
                 local placeholder
                 placeholder = function(...)
@@ -93,6 +102,7 @@ internal static class SceneRuntimeLua
                     if type(entry) ~= "function" or entry == placeholder then error("Не найдена функция " .. name .. " в " .. path) end
                     return entry(...)
                 end
+                identities[placeholder] = {file = path, name = name}
                 rawset(_G, name, placeholder)
             end
             local function resolve(target)
@@ -190,9 +200,21 @@ internal static class SceneRuntimeLua
             function kne_run_scene(entry)
                 local tasks, groups, clock, group_id, visible = {}, {}, 0, 0, nil
                 local presentation_id = 0
+                local visit = 0
                 local subscriptions = {}
+                local function fresh_scene(fn, parent, depth)
+                    local identity = identities[fn]
+                    if not identity then kne_scene_retain(parent or 0); return {token = parent or 0, parent = parent or 0, depth = depth, owned = false} end
+                    visit = visit + 1
+                    local problem = kne_scene_enter(identity.file, identity.name, visit, parent or 0, depth)
+                    if problem ~= "" then error(problem, 0) end
+                    return {token = visit, parent = parent or 0, depth = depth, owned = true}
+                end
                 local function create(fn, detached, group, parent)
                     local task = {stack = {kne_scene_thread(fn, parent)}, input = table.pack(), detached = detached, group = group, transitions = 0}
+                    local inherited = parent and scene_contexts[parent]
+                    if inherited then kne_scene_retain(inherited.token) end
+                    scene_contexts[task.stack[1]] = inherited and {token = inherited.token, parent = inherited.parent, depth = inherited.depth, owned = false} or fresh_scene(fn, 0, 1)
                     next_shader_flow = next_shader_flow + 1
                     shader_flows[task.stack[1]] = "flow:" .. next_shader_flow
                     tasks[#tasks + 1] = task
@@ -206,6 +228,8 @@ internal static class SceneRuntimeLua
                     if task.done then return end
                     task.done = true
                     for _, thread in ipairs(task.stack) do
+                        local context = scene_contexts[thread]
+                        if context then if context.owned then kne_scene_exit(context.token) else kne_scene_release(context.token) end end
                         owned[thread] = nil
                         if coroutine.status(thread) ~= "dead" then pcall(coroutine.close, thread) end
                     end
@@ -251,7 +275,7 @@ internal static class SceneRuntimeLua
                     prune_subscriptions()
                     for _, subscription in ipairs(subscriptions) do
                         if not subscription.owner.done and coroutine.status(subscription.thread) ~= "dead" and not subscription.used and
-                            (not subscription.active or subscription.active.done) and kne_trigger_matches(subscription.specification, signal) then
+                            (not subscription.active or subscription.active.done) and kne_scene_trigger(subscription.token, subscription.specification) and kne_trigger_matches(subscription.specification, signal) then
                             if subscription.waiter then
                                 subscription.waiter.wait_event = nil
                                 subscription.used = true
@@ -268,6 +292,8 @@ internal static class SceneRuntimeLua
                 end
                 local function step(task)
                     local stack, thread = task.stack, task.stack[#task.stack]
+                    local context = scene_contexts[thread] or {token = 0, parent = 0, depth = 1, owned = false}
+                    kne_scene_select(context.token)
                     owned[thread] = true
                     local values = table.pack(coroutine.resume(thread, table.unpack(task.input, 1, task.input.n)))
                     task.input = table.pack()
@@ -275,7 +301,10 @@ internal static class SceneRuntimeLua
                     if coroutine.status(thread) == "dead" then
                         kne_transition_pending(#stack > 1)
                         owned[thread] = nil
+                        if context.owned then kne_scene_exit(context.token) else kne_scene_release(context.token) end
                         table.remove(stack)
+                        local caller = stack[#stack] and scene_contexts[stack[#stack]]
+                        if caller then kne_scene_restore(caller.token) end
                         task.input = table.pack(table.unpack(values, 2, values.n))
                         task.done = #stack == 0
                         return
@@ -286,7 +315,8 @@ internal static class SceneRuntimeLua
                         kne_transition_pending(true)
                         task.transitions = task.transitions + 1
                         if task.transitions > 10000 then return fail(task, "Больше 10000 переходов между репликами") end
-                        if event.kind == "call" and #stack >= 64 then return fail(task, "Глубина вызовов сцен больше 64") end
+                        if event.kind == "call" and (#stack >= 64 or context.depth >= 64) then return fail(task, "Глубина вызовов сцен больше 64") end
+                        if event.kind == "call" then local problem = kne_scene_check_call(context.token, context.depth); if problem ~= "" then return fail(task, problem) end end
                         local ok, next_entry = pcall(resolve, event.target)
                         if not ok then return fail(task, next_entry) end
                         if kne_plugin_scene then
@@ -298,8 +328,21 @@ internal static class SceneRuntimeLua
                             close_others()
                             if scene_test then close_task(root); return end
                         end
-                        if event.kind == "goto" then owned[thread] = nil; table.remove(stack); pcall(coroutine.close, thread) end
-                        stack[#stack + 1], task.input = kne_scene_thread(next_entry, thread), event.args
+                        kne_scene_leave(context.token)
+                        local parent_token = context.token
+                        if event.kind == "goto" then
+                            parent_token = context.owned and context.parent or context.token
+                            kne_scene_retain(parent_token)
+                            owned[thread] = nil; table.remove(stack); pcall(coroutine.close, thread)
+                            if context.owned then kne_scene_exit(context.token) end
+                        end
+                        local child = kne_scene_thread(next_entry, thread)
+                        scene_contexts[child] = fresh_scene(next_entry, parent_token, event.kind == "call" and context.depth + 1 or context.depth)
+                        if event.kind == "goto" then
+                            kne_scene_release(parent_token)
+                            if not context.owned then kne_scene_release(context.token) end
+                        end
+                        stack[#stack + 1], task.input = child, event.args
                     elseif event.kind == "spawn" then
                         local count = 0
                         for _, current in ipairs(tasks) do if not current.done then count = count + 1 end end
@@ -319,7 +362,7 @@ internal static class SceneRuntimeLua
                     elseif event.kind == "subscribe" or event.kind == "await_event" then
                         prune_subscriptions()
                         if #subscriptions >= 512 then return fail(task, "Не более 512 триггеров в активной сцене") end
-                        subscriptions[#subscriptions + 1] = {specification = event.specification, entry = event.entry, thread = thread, owner = task, waiter = event.kind == "await_event" and task or nil}
+                        subscriptions[#subscriptions + 1] = {specification = event.specification, entry = event.entry, thread = thread, token = context.token, owner = task, waiter = event.kind == "await_event" and task or nil}
                         if event.kind == "await_event" then task.wait_event = true end
                     elseif event.kind == "signal" then
                         dispatch(event.signal)
@@ -392,10 +435,15 @@ internal static class SceneRuntimeLua
                     local background = false
                     for _, task in ipairs(tasks) do if not task.done and (task.detached or task.wake or task.join) then background = true; break end end
                     local event = visible and visible.event or {kind = "wait"}
+                    local presented = visible or root
+                    if not visible and root.join then for _, task in ipairs(tasks) do if not task.done and not task.detached and task ~= root then presented = task; break end end end
+                    local presented_context = presented.stack[#presented.stack] and scene_contexts[presented.stack[#presented.stack]]
+                    if presented_context then kne_scene_present(presented_context.token, visit) end
                     event.triggers = {}
                     for _, subscription in ipairs(subscriptions) do
                         if not subscription.owner.done and coroutine.status(subscription.thread) ~= "dead" and not subscription.used and
-                            (not subscription.active or subscription.active.done) then event.triggers[#event.triggers + 1] = subscription.specification end
+                            (not subscription.active or subscription.active.done) and kne_scene_trigger(subscription.token, subscription.specification) and
+                            (not presented_context or kne_scene_trigger(presented_context.token, subscription.specification)) then event.triggers[#event.triggers + 1] = subscription.specification end
                     end
                     if visible and event.seconds ~= nil and not visible.event_deadline then
                         visible.event_started, visible.event_deadline = clock, clock + event.seconds
