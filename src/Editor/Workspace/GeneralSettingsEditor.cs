@@ -65,7 +65,7 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         Button(notifications, "Проверить уведомления", () => TestNotificationRequested?.Invoke() ?? Task.CompletedTask);
         notifications.Children.Add(Hint("Уведомления используют Windows Action Center. Убедитесь, что KNE разрешён в параметрах уведомлений Windows"));
         var breaks = Section(behaviorLeft, "Ограничение по времени"); breaks.Children.Add(Breaks); Field(breaks, "Интервал напоминания", BreakInterval); Field(breaks, "Тип напоминания", BreakType);
-        breaks.Children.Add(Hint("Мягкие напоминания используют настройки некритичных уведомлений."));
+        breaks.Children.Add(Hint("Мягкое напоминание предлагает взять перерыв для вашего здоровья и использует настройки некритичных уведомлений."));
         Field(breaks, "Длительность строгого перерыва", BreakDuration); breaks.Children.Add(WorkTime);
         Button(breaks, "Сбросить статистику", () => { ResetWorkRequested?.Invoke(); return Task.CompletedTask; }); right.Children.Add(Status);
         BehaviorStatus.SetBinding(TextBlock.TextProperty, new Binding(nameof(TextBlock.Text)) { Source = Status }); behaviorRight.Children.Add(BehaviorStatus);

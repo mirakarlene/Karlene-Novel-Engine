@@ -267,8 +267,15 @@
             </Grid>
         </Grid>
     </DockPanel>
-        <Border x:Name="BreakOverlay" Panel.ZIndex="100" Visibility="Collapsed" Background="{DynamicResource Editor.Background}">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock Text="Пора сделать перерыв" FontSize="28" TextAlignment="Center"/><TextBlock x:Name="BreakCountdown" FontSize="22" Margin="0,16,0,0" TextAlignment="Center"/></StackPanel>
+        <Border x:Name="BreakOverlay" Panel.ZIndex="100" Visibility="Collapsed" Background="{DynamicResource Editor.Background}" KeyboardNavigation.TabNavigation="Cycle">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="Пора сделать перерыв" FontSize="28" TextAlignment="Center"/>
+                <TextBlock x:Name="BreakCountdown" FontSize="22" Margin="0,16,0,0" TextAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,24,0,0">
+                    <Button x:Name="MinimizeBreakButton" Content="Свернуть окно" Padding="16,10" Click="MinimizeBreak_Click"/>
+                    <Button x:Name="EndBreakButton" Content="Снять досрочно" Padding="16,10" Margin="12,0,0,0" Click="EndBreak_Click"/>
+                </StackPanel>
+            </StackPanel>
         </Border>
         <Border x:Name="BlockLibraryOverlay" Visibility="Collapsed" Background="#B9181420" Padding="36" MouseDown="BlockLibraryBackdrop_Click"
                 KeyboardNavigation.TabNavigation="Cycle">

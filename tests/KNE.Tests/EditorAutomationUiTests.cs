@@ -167,6 +167,46 @@ public sealed class EditorAutomationUiTests
         finally { window.Close(); }
     });
 
+    [Theory]
+    [InlineData(1500, 950)] [InlineData(1100, 700)]
+    public Task StrictBreakButtonsMinimizeWithoutUnlocking_ThenRestoreWorkspaceAndOwnedWindows(double width, double height) => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        var window = Create(fixture, new() { BreakReminders = true, StrictBreak = true });
+        _ = new System.Windows.Interop.WindowInteropHelper(window).EnsureHandle();
+        var enabled = new Window { Owner = window, Title = "Enabled" };
+        var disabled = new Window { Owner = window, Title = "Disabled", IsEnabled = false };
+        try
+        {
+            var root = (FrameworkElement)window.Content;
+            Assert.True(window.SessionClock.Advance(TimeSpan.FromHours(1), Settings(window).Editor));
+            Call(window, "UpdateBreakUi"); Layout(root, width - 20, height - 40);
+            var overlay = Find<Border>(window, "BreakOverlay");
+            var minimize = Find<Button>(window, "MinimizeBreakButton"); var finish = Find<Button>(window, "EndBreakButton");
+            foreach (var button in new[] { minimize, finish })
+            {
+                var bounds = button.TransformToAncestor(overlay).TransformBounds(new Rect(button.RenderSize));
+                Assert.True(button.IsEnabled); Assert.True(bounds.Width > 100);
+                Assert.InRange(bounds.Left, 0, overlay.ActualWidth - bounds.Width);
+                Assert.InRange(bounds.Top, 0, overlay.ActualHeight - bounds.Height);
+            }
+            Assert.False(enabled.IsEnabled); Assert.False(disabled.IsEnabled);
+            Assert.StartsWith("Перерыв", enabled.Title); Assert.StartsWith("Перерыв", disabled.Title);
+            Capture(root, "strict-break-" + width);
+            Click(minimize);
+            Assert.Equal(WindowState.Minimized, window.WindowState);
+            Assert.True(window.SessionClock.IsOnBreak); Assert.False(Find<DockPanel>(window, "EditorMainSurface").IsEnabled);
+            Assert.False(await window.ExecuteWorkspaceActionAsync("general.settings"));
+            window.WindowState = WindowState.Normal; Click(finish);
+            Assert.False(window.SessionClock.IsOnBreak); Assert.Equal(Visibility.Collapsed, overlay.Visibility);
+            Assert.True(Find<DockPanel>(window, "EditorMainSurface").IsEnabled);
+            Assert.True(enabled.IsEnabled); Assert.False(disabled.IsEnabled);
+            Assert.Equal("Enabled", enabled.Title); Assert.Equal("Disabled", disabled.Title);
+            Assert.Equal(TimeSpan.FromHours(1), window.SessionClock.WorkTime);
+        }
+        finally { enabled.Close(); disabled.Close(); window.Close(); }
+    });
+
     [Fact]
     public async Task ReboundEditorAndWorkspaceActionsExecuteSaveAndGraphCommands()
     {

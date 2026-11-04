@@ -17,5 +17,6 @@ internal sealed class EditorSessionClock
         if (preferences.StrictBreak) BreakRemaining = TimeSpan.FromMinutes(preferences.BreakDuration);
         return true;
     }
+    internal void EndBreak() { BreakRemaining = TimeSpan.Zero; SinceBreak = TimeSpan.Zero; }
     internal void Reset() { WorkTime = TimeSpan.Zero; SinceBreak = TimeSpan.Zero; }
 }

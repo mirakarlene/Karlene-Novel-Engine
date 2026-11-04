@@ -63,6 +63,24 @@ public sealed class EditorPreferencesTests
         string xml = WindowsEditorNotifications.Payload("<test>&\"русский"); Assert.Contains("&lt;test&gt;&amp;", xml); Assert.Contains("ToastGeneric", xml); Assert.Contains("silent=\"true\"", xml);
     }
 
+    [Fact]
+    public void EarlyBreakEndPreservesWorkTimeAndRestartsFullReminderInterval()
+    {
+        var preferences = new EditorPreferences { BreakReminders = true, BreakMinutes = 60, StrictBreak = true, BreakDuration = 10 };
+        var clock = new EditorSessionClock();
+        Assert.True(clock.Advance(TimeSpan.FromHours(1), preferences));
+        clock.Advance(TimeSpan.FromMinutes(2), preferences);
+        Assert.Equal(TimeSpan.FromMinutes(8), clock.BreakRemaining);
+        clock.EndBreak();
+        Assert.False(clock.IsOnBreak);
+        Assert.Equal(TimeSpan.FromHours(1), clock.WorkTime);
+        Assert.Equal(TimeSpan.Zero, clock.SinceBreak);
+        Assert.False(clock.Advance(TimeSpan.FromMinutes(60) - TimeSpan.FromTicks(1), preferences));
+        Assert.True(clock.Advance(TimeSpan.FromTicks(1), preferences));
+        Assert.Equal(TimeSpan.FromHours(2), clock.WorkTime);
+        Assert.Equal(TimeSpan.FromMinutes(10), clock.BreakRemaining);
+    }
+
     [Theory]
     [InlineData(false)] [InlineData(true)]
     public void WorkClock_RemindsAtBoundary_StrictBreakBlocksForSelectedDuration_AndResetClearsSession(bool strict)
