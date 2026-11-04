@@ -79,7 +79,7 @@ internal static class LuaWorker
                         case "trigger": await runtime.TriggerAsync(JsonSerializer.Deserialize<TriggerSignal>(request.Text!, EngineSettings.JsonOptions)!).ConfigureAwait(false); break;
                         case "command": await runtime.ProcessCommandAsync(request.Text!).ConfigureAwait(false); break;
                         case "restore": await runtime.RestoreAsync(request.Checkpoint!).ConfigureAwait(false); break;
-                        case "checkpoint": break;
+                        case "checkpoint": case "capture": break;
                         case "plugin_input": inputHandled = await runtime.InterceptInputAsync(JsonSerializer.Deserialize<PluginInput>(request.Text!)!).ConfigureAwait(false); break;
                         case "plugin_event_input": await runtime.NotifyPluginInputAsync(JsonSerializer.Deserialize<PluginInput>(request.Text!)!).ConfigureAwait(false); break;
                         default: throw new InvalidDataException("Неизвестная команда рабочего процесса.");
@@ -88,7 +88,7 @@ internal static class LuaWorker
                     debug?.Publish(new(false, runtime.Location, runtime.Variables, "Выполнение · " + runtime.Story.Kind));
                     GameCheckpoint? checkpoint = null;
                     try { if (request.EditorSource == null) checkpoint = await runtime.CapturePluginCheckpointAsync(request.Command == "checkpoint").ConfigureAwait(false); }
-                    catch (Exception ex) when (request.Command != "checkpoint")
+                    catch (Exception ex) when (request.Command is not ("checkpoint" or "capture"))
                     {
                         Send(new("log", Text: "Сохранение недоступно: " + ex.Message));
                     }

@@ -7,6 +7,18 @@ namespace KNE;
 
 public partial class GameWindow
 {
+    private bool ConsoleAllowed => StandalonePlayer.Current is not { TestBuild: false } || project.Engine.Security.ReleaseDebugConsole;
+    private async Task PersistCrashReportAsync(GameErrorReport report)
+    {
+        try
+        {
+            string directory = PathSafety.ResolveRelative(saves.DirectoryPath, "diagnostics"); System.IO.Directory.CreateDirectory(directory);
+            string path = PathSafety.ResolveRelative(directory, "crash-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N") + ".json");
+            await System.IO.File.WriteAllTextAsync(path, JsonSerializer.Serialize(report, ProjectConfiguration.JsonOptions));
+        }
+        catch (Exception error) when (error is System.IO.IOException or UnauthorizedAccessException or ArgumentException)
+        { QueueOutput("Не удалось записать отчёт об ошибке: " + error.Message); }
+    }
     private static readonly JsonSerializerOptions VariableFormatting = new()
     {
         WriteIndented = true,
@@ -20,7 +32,8 @@ public partial class GameWindow
 
     private void RefreshErrorActions()
     {
-        ErrorRestartButton.IsEnabled = execution == null && !closed;
+        ErrorRestartButton.IsEnabled = ConsoleAllowed && execution == null && !closed;
+        ErrorConsoleButton.IsEnabled = ConsoleAllowed;
         ErrorReturnButton.IsEnabled = execution == null && !closed && runtime is ProcessGameSession { CanReturnAfterError: true };
     }
 
@@ -46,6 +59,7 @@ public partial class GameWindow
 
     private void ErrorConsole_Click(object sender, RoutedEventArgs e)
     {
+        if (!ConsoleAllowed) return;
         DebugOverlay.Visibility = DebugOverlay.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
         RenderConsole();
     }
@@ -54,7 +68,7 @@ public partial class GameWindow
 
     private async Task RestartFromErrorAsync()
     {
-        if (!startupFailed || execution != null || closed) return;
+        if (!ConsoleAllowed || !startupFailed || execution != null || closed) return;
         RestoreErrorPresentation();
         diagnosticConsole = true;
         DebugOverlay.Visibility = Visibility.Visible;

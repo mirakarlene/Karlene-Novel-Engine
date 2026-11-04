@@ -12,6 +12,7 @@ public sealed class EngineSettings
     public GameTheme Theme { get; set; } = new();
     public ScreenLayouts Screens { get; set; } = ScreenLayouts.CreateDefaults();
     public GameDefaults Game { get; init; } = new();
+    public ProjectSecuritySettings Security { get; init; } = new();
     public ProjectPerformanceSettings Performance { get; init; } = new();
     public ScenePerformanceDocument ScenePerformance { get; init; } = new();
     public JsonElement InitialState { get; init; } = JsonSerializer.SerializeToElement(new Dictionary<string, object>());
@@ -30,6 +31,7 @@ public sealed class EngineSettings
             Window = Read<WindowDefaults>(root, "window.json"),
             Theme = Read<GameTheme>(root, "theme.json"),
             Game = Read<GameDefaults>(root, "game.json"),
+            Security = Read<ProjectSecuritySettings>(root, "security.json"),
             Performance = PerformanceSettingsStore.LoadProject(root),
             ScenePerformance = PerformanceSettingsStore.LoadScenes(root),
             InitialState = Read<JsonElement>(root, "state.json", JsonSerializer.SerializeToElement(new Dictionary<string, object>()))
@@ -56,7 +58,7 @@ public sealed class EngineSettings
         foreach (var item in new (string Name, object Value)[]
         {
             ("window.json", settings.Window), ("theme.json", settings.Theme),
-            ("game.json", settings.Game), ("state.json", settings.InitialState), ("screens.json", settings.Screens),
+            ("game.json", settings.Game), ("security.json", settings.Security), ("state.json", settings.InitialState), ("screens.json", settings.Screens),
             ("performance.json", settings.Performance), ("scene-performance.json", settings.ScenePerformance)
         })
             File.WriteAllText(Path.Combine(directory, item.Name), JsonSerializer.Serialize(item.Value, JsonOptions));
@@ -129,6 +131,7 @@ public sealed class EngineSettings
             throw new InvalidDataException("engine/window.json: неизвестные position или mode.");
         Range(Window.Left, -32768, 32768, "window.left"); Range(Window.Top, -32768, 32768, "window.top");
         Range(Game.ExecutionTimeoutSeconds, 1, 3600, "game.execution_timeout_seconds");
+        Game.Validate(root); Security.Validate();
         Range(Theme.CharacterWidth, 100, 2000, "theme.character_width");
         if (Theme.PatternStyle is not ("waves" or "ornament" or "grid" or "dots" or "none")) throw new InvalidDataException("Неизвестный узор оформления.");
         if (!ThemePalettes.Names.Contains(Theme.Palette)) throw new InvalidDataException("Неизвестная палитра оформления.");
@@ -264,6 +267,18 @@ public sealed class GameDefaults
     public string ContinueLabel { get; set; } = "Продолжить";
     public string ExitLabel { get; set; } = "Выйти";
     public bool AutoSave { get; set; } = true;
+    public string AutoSaveInterval { get; set; } = "dialogue";
+    public int AutoSaveActions { get; set; } = 10;
+    public int RollbackDepth { get; set; } = 100;
+    public string? MenuMusic { get; set; }
+    internal void Validate(string root)
+    {
+        if (AutoSaveInterval is not ("dialogue" or "choice" or "actions") || AutoSaveActions is < 1 or > 1000 || RollbackDepth is < 0 or > 1000)
+            throw new InvalidDataException("Автосохранение: допустимы dialogue/choice/actions, N от 1 до 1000, глубина отката от 0 до 1000.");
+        if (!string.IsNullOrWhiteSpace(MenuMusic))
+            try { _ = ResourcePaths.Resolve(root, MenuMusic, audio: true); }
+            catch (ArgumentException error) { throw new InvalidDataException("Некорректная фоновая музыка: " + error.Message, error); }
+    }
     public bool DebugEnabled { get; set; } = true;
     public int ExecutionTimeoutSeconds { get; set; } = 30;
 }

@@ -35,6 +35,8 @@ public sealed class ProjectBuildTests
         var props = GameBuildExporter.CreatePlayerProperties("Игра & <title>", settings); var group = props.Root!.Element("PropertyGroup")!;
         Assert.Equal("false", group.Element("PublishTrimmed")!.Value); Assert.Equal("2.3.4.0", group.Element("FileVersion")!.Value); Assert.Equal(settings.Team, group.Element("Company")!.Value); Assert.Equal(settings.Author, group.Element("Copyright")!.Value); Assert.Equal("Игра & <title>", group.Element("Product")!.Value);
         Assert.Equal(mode == "single_file", group.Element("PublishSingleFile")?.Value == "true"); Assert.Equal(location, settings.EffectiveSaveLocation);
+        Assert.Contains("PlayerContent/**/*", group.Element("DefaultItemExcludes")!.Value);
+        Assert.Contains(props.Root.Elements("ItemGroup").SelectMany(items => items.Elements("Compile")), item => item.Attribute("Remove")?.Value == "PlayerContent/**/*.cs");
         if (mode == "single_file") { Assert.Equal("true", group.Element("EnableCompressionInSingleFile")!.Value); Assert.Equal("true", group.Element("IncludeAllContentForSelfExtract")!.Value); Assert.Contains("KNE.Game.zip", props.ToString()); }
         if (mode == "msix") { var manifest = MsixPackage.Manifest(new(Guid.NewGuid().ToString("N"), "Игра", location, mode, "Nick", "Команда", "2.3.4"), settings.FourPartVersion); Assert.Contains("Windows.FullTrustApplication", manifest.ToString()); Assert.Contains("2.3.4.0", manifest.ToString()); Assert.Contains("Команда", manifest.ToString()); }
     }
@@ -92,7 +94,16 @@ public sealed class ProjectBuildTests
     [InlineData("msix")]
     public async Task Publish_RealPlayerRunsWithoutEditorAndKeepsExeMetadataAndSavesPolicy(string mode)
     {
-        using var fixture = new TempProject(); fixture.Write("game/scenes/main.krl", "function main()\n include_cs('game/plugins/smoke.cs')\n d(nil, state.exported)\nend");
+        using var fixture = new TempProject(); fixture.Write("game/scenes/main.krl", "function main()\n local helper=require('game.plugins.helper')\n include_lua('game/plugins/included.lua')\n include_cs('game/plugins/smoke.cs')\n d(nil, state.exported .. helper.suffix)\nend");
+        fixture.Write("game/plugins/helper.lua", "return {suffix=''}"); fixture.Write("game/plugins/included.lua", "state.included=true");
+        var extra = VisualScript.Create(); extra.FunctionName = "extra"; fixture.Write("extra.knegraph", extra.Serialize());
+        fixture.Write("engine/security.json", JsonSerializer.Serialize(new ProjectSecuritySettings { EncryptScripts = true }, EngineSettings.JsonOptions));
+        await StaTask.Run(() =>
+        {
+            var image = System.Windows.Media.Imaging.BitmapSource.Create(1, 1, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null, new byte[] { 0, 120, 240, 255 }, 4);
+            var png = new System.Windows.Media.Imaging.PngBitmapEncoder(); png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
+            using var file = File.Create(Path.Combine(fixture.ProjectPath, "icon.png")); png.Save(file);
+        });
         fixture.Write("game/plugins/smoke.cs", "using KNE; public sealed class ExportPlugin : IKnePlugin { public void Execute(IPluginContext context) { context.Set(\"exported\", \"exported game\"); } }");
         fixture.Write("saves/private.json", "developer-progress"); fixture.Write(".kne/private.txt", "private"); fixture.Write(".git/config", "private"); fixture.Write(".kne/plugin-assets/resource.txt", "asset");
         var settings = new ProjectBuildSettings { GameId = Guid.NewGuid().ToString("N"), ReleaseMode = mode, Author = "Автор $(UNDEFINED); 100%", Team = "Команда", Version = "2.3.4", ReleasePath = Path.Combine(fixture.Root, "output") };
@@ -101,6 +112,8 @@ public sealed class ProjectBuildTests
         const string jsonAuthor = "Из project.json $(UNDEFINED); 100%", jsonTeam = "JSON team", jsonVersion = "3.4.5";
         string projectFile = Path.Combine(fixture.ProjectPath, "project.json"); var projectJson = JsonNode.Parse(File.ReadAllText(projectFile))!;
         projectJson["metadata"]!["author"] = jsonAuthor; projectJson["metadata"]!["team"] = jsonTeam; projectJson["metadata"]!["version"] = jsonVersion;
+        projectJson["metadata"]!["icon"] = "icon.png"; projectJson["metadata"]!["default_language"] = "en";
+        projectJson["game_info"]!["description"] = "A protected game $(UNDEFINED); 100%";
         File.WriteAllText(projectFile, projectJson.ToJsonString(ProjectConfiguration.JsonOptions));
         var logs = new List<string>();
         GameBuildResult built;
@@ -109,6 +122,9 @@ public sealed class ProjectBuildTests
         catch (Exception error) { throw new Exception(error + "\n" + string.Join("\n", logs)); }
         var metadata = FileVersionInfo.GetVersionInfo(built.Executable);
         Assert.Equal("3.4.5.0", metadata.FileVersion); Assert.Equal(jsonAuthor, metadata.LegalCopyright); Assert.Equal(jsonTeam, metadata.CompanyName); Assert.Equal("Новелла с пробелами", metadata.ProductName);
+        Assert.Equal("A protected game $(UNDEFINED); 100%", metadata.FileDescription);
+        if (mode != "single_file") Assert.True(File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(built.Executable)!, "project", "game", "scenes", "main.krl")).AsSpan().StartsWith("KNESRC01"u8));
+        Assert.Contains("include_cs", File.ReadAllText(Path.Combine(fixture.ProjectPath, "game/scenes/main.krl")));
         Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(built.Executable)!, "project", "saves", "private.json")));
         Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(built.Executable)!, "project", "engine", "build.json")));
         if (mode == "single_file") Assert.Single(Directory.GetFiles(Path.GetDirectoryName(built.Executable)!));

@@ -11,16 +11,17 @@ public sealed class PluginAssets : IDisposable
 {
     private readonly HttpClient http;
     private readonly string projectDirectory;
+    private readonly ProjectSecuritySettings policy;
     private bool disposed;
     public PluginAssets(string projectDirectory) : this(projectDirectory, new HttpClientHandler()) { }
     public PluginAssets(string projectDirectory, HttpMessageHandler handler)
-    { this.projectDirectory = PathSafety.NormalizeDirectory(projectDirectory); http = new HttpClient(handler, disposeHandler: true) { Timeout = TimeSpan.FromSeconds(30) }; }
+    { this.projectDirectory = PathSafety.NormalizeDirectory(projectDirectory); policy = ProjectSecuritySettings.Load(projectDirectory); http = new HttpClient(handler, disposeHandler: true) { Timeout = TimeSpan.FromSeconds(30) }; }
     private const int Limit = 32 * 1024 * 1024;
     public string Local(string path, params string[] extensions)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        string full = Path.GetFullPath(path, projectDirectory);
+        string full = policy.ResolveFile(projectDirectory, path);
         if (!File.Exists(full)) throw new FileNotFoundException("Ресурс плагина не найден.", full);
         if (extensions.Length > 0 && !extensions.Contains(Path.GetExtension(full), StringComparer.OrdinalIgnoreCase)) throw new ArgumentException("Неподдерживаемый тип ресурса.");
         if (new FileInfo(full).Length > Limit) throw new InvalidDataException("Ресурс плагина больше 32 МБ.");
@@ -51,6 +52,7 @@ public sealed class PluginAssets : IDisposable
     public async Task<byte[]> SendAsync(HttpRequestMessage request, CancellationToken token = default)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+        if (!policy.AllowNetwork) throw new InvalidOperationException("Внешние запросы запрещены политикой проекта.");
         if (request.RequestUri is not { IsAbsoluteUri: true } uri || uri.Scheme is not ("https" or "http")) throw new ArgumentException("Требуется абсолютный HTTP(S) URL.");
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();

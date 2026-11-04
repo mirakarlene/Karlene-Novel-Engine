@@ -174,7 +174,8 @@ public sealed class EditorAutomationUiTests
         using var fixture = new TempProject();
         var window = Create(fixture, new() { BreakReminders = true, StrictBreak = true });
         _ = new System.Windows.Interop.WindowInteropHelper(window).EnsureHandle();
-        var enabled = new Window { Owner = window, Title = "Enabled" };
+        var originalSurface = new StackPanel(); originalSurface.Children.Add(new Button { Content = "Original action" });
+        var enabled = new Window { Owner = window, Title = "Enabled", Content = originalSurface };
         var disabled = new Window { Owner = window, Title = "Disabled", IsEnabled = false };
         try
         {
@@ -190,17 +191,21 @@ public sealed class EditorAutomationUiTests
                 Assert.InRange(bounds.Left, 0, overlay.ActualWidth - bounds.Width);
                 Assert.InRange(bounds.Top, 0, overlay.ActualHeight - bounds.Height);
             }
-            Assert.False(enabled.IsEnabled); Assert.False(disabled.IsEnabled);
+            Assert.False(originalSurface.IsEnabled); Assert.True(enabled.IsEnabled); Assert.False(disabled.IsEnabled);
+            var ownedButtons = ((Grid)enabled.Content).Children.OfType<Border>().Single().Child as StackPanel;
+            var ownedFinish = ownedButtons!.Children.OfType<WrapPanel>().Single().Children.OfType<Button>().Single(button => Equals(button.Content, "Снять досрочно"));
+            Assert.True(ownedFinish.IsEnabled);
             Assert.StartsWith("Перерыв", enabled.Title); Assert.StartsWith("Перерыв", disabled.Title);
             Capture(root, "strict-break-" + width);
             Click(minimize);
             Assert.Equal(WindowState.Minimized, window.WindowState);
             Assert.True(window.SessionClock.IsOnBreak); Assert.False(Find<DockPanel>(window, "EditorMainSurface").IsEnabled);
             Assert.False(await window.ExecuteWorkspaceActionAsync("general.settings"));
-            window.WindowState = WindowState.Normal; Click(finish);
+            window.WindowState = WindowState.Normal; Click(ownedFinish);
             Assert.False(window.SessionClock.IsOnBreak); Assert.Equal(Visibility.Collapsed, overlay.Visibility);
             Assert.True(Find<DockPanel>(window, "EditorMainSurface").IsEnabled);
             Assert.True(enabled.IsEnabled); Assert.False(disabled.IsEnabled);
+            Assert.Same(originalSurface, enabled.Content); Assert.True(originalSurface.IsEnabled);
             Assert.Equal("Enabled", enabled.Title); Assert.Equal("Disabled", disabled.Title);
             Assert.Equal(TimeSpan.FromHours(1), window.SessionClock.WorkTime);
         }

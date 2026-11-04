@@ -38,15 +38,16 @@ public partial class GameWindow : Window
         InitializeComponent();
         this.project = project;
         this.preview = preview;
+        rollback = new(project.Engine.Game.RollbackDepth);
         this.saves = saves ?? new GameSaveStore(project.Path);
         LoadPreferences();
-        Title = project.Title; InitializePerformance();
+        Title = project.Title; Icon = ProjectIcon.Load(project.Path, project.Configuration.Metadata?.Icon); InitializePerformance();
         ApplyEngineTheme();
         runtime = new ProcessGameSession(project, QueueOutput, preview: preview);
         InitializeBlockEffects();
         InitializeShaders();
         InitializeTriggerInput();
-        music.MediaEnded += (_, _) => { if (runtime.Visuals.AudioChannels.All(c => c.Channel != "music") && runtime.Visuals.LoopMusic) { music.Position = TimeSpan.Zero; music.Play(); } };
+        music.MediaEnded += (_, _) => { if (runtime.Visuals.AudioChannels.All(c => c.Channel != "music") && (runtime.Visuals.LoopMusic || menuMusicPlaying)) { music.Position = TimeSpan.Zero; music.Play(); } };
         music.MediaFailed += (_, e) => QueueOutput("Ошибка музыки: " + e.ErrorException.Message);
         sound.MediaFailed += (_, e) => QueueOutput("Ошибка звука: " + e.ErrorException.Message);
         renderTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background,
@@ -158,6 +159,7 @@ public partial class GameWindow : Window
         CloseAudio();
         sceneEffects?.Stop();
         currentErrorReport = GameErrorReport.Create(project, error, operation);
+        if (project.Engine.Security.CrashReports) _ = PersistCrashReportAsync(currentErrorReport);
         StartupErrorMessage.Text = currentErrorReport.ToDisplayText();
         ErrorActionStatus.Text = "";
         RefreshErrorActions();
@@ -195,6 +197,7 @@ public partial class GameWindow : Window
         await runtime.DisposeAsync();
         if (closed) { await candidate.DisposeAsync(); return; }
         runtime = candidate;
+        rollback.Clear(); autosave.Reset();
         triggerInput.Reset(); pendingTriggerSignals.Clear();
         gameplayUi?.Reset();
         DialogueEffects.Reset();
@@ -243,6 +246,7 @@ public partial class GameWindow : Window
         GameControls.Visibility = Visibility.Collapsed;
         if (!diagnosticConsole) DebugOverlay.Visibility = Visibility.Collapsed;
         PauseAudio();
+        StartMenuMusic();
         DialogueEffects.Stop();
         choicePresentation?.Stop();
         ContinueButton.IsEnabled = saves.Exists("auto") || saves.Exists("quick");
@@ -258,6 +262,7 @@ public partial class GameWindow : Window
         MenuOverlay.Visibility = Visibility.Collapsed;
         DialoguePanel.Visibility = Visibility.Visible;
         GameControls.Visibility = Visibility.Visible;
+        StopMenuMusic();
         ResumeAudio();
         NextButton.Focus();
     }
@@ -291,7 +296,7 @@ public partial class GameWindow : Window
         noticeUntil = DateTime.UtcNow.AddSeconds(5);
     }
 
-    private async Task ExecuteAsync(Func<Task> action, bool starting = false, string operation = "Выполнение сценария")
+    private async Task ExecuteAsync(Func<Task> action, bool starting = false, string operation = "Выполнение сценария", bool playerAction = false)
     {
         if (closed || startupFailed || execution != null) return;
         clockSuspended = false;
@@ -307,12 +312,21 @@ public partial class GameWindow : Window
         StatusText.Text = starting ? "Загрузка сценария…" : "Выполнение команды…";
         try
         {
+            string previousKind = runtime.Story.Kind;
+            GameCheckpoint? before = null;
+            if (playerAction && ready && project.Engine.Game.RollbackDepth > 0)
+            {
+                try { before = await runtime.CaptureCheckpointAsync(execution.Token); }
+                catch (Exception error) when (GameErrorReport.TryGet(error) == null && error is InvalidOperationException or NotSupportedException or System.IO.InvalidDataException or System.Text.Json.JsonException)
+                { operationNotice = "Откат для этого действия недоступен: " + error.Message; QueueOutput(operationNotice); }
+            }
             await action();
+            if (before != null) rollback.Push(before);
             if (closed) return;
             if (starting) ready = true;
-            if (ready && project.Engine.Game.AutoSave && (!starting || !saves.Exists("auto")))
+            if (ready && (starting && project.Engine.Game.AutoSave && !saves.Exists("auto") || playerAction && autosave.Completed(project.Engine.Game, previousKind)))
             {
-                try { await saves.SaveAsync("auto", await runtime.GetCheckpointAsync(execution.Token), execution.Token); }
+                try { await saves.SaveAsync("auto", await CheckpointAsync(execution.Token), execution.Token); }
                 catch (Exception ex) when (GameErrorReport.TryGet(ex) == null)
                 { operationNotice = "Автосохранение не выполнено: " + ex.Message; QueueOutput(operationNotice); }
             }
@@ -379,7 +393,7 @@ public partial class GameWindow : Window
         bool saved = false;
         await ExecuteAsync(async () =>
         {
-            await saves.SaveAsync("quick", await runtime.GetCheckpointAsync(execution!.Token), execution.Token);
+            await saves.SaveAsync("quick", await CheckpointAsync(execution!.Token), execution.Token);
             QueueOutput("Игра сохранена.");
             saved = true;
         }, operation: "Сохранение игры");
@@ -404,6 +418,7 @@ public partial class GameWindow : Window
             catch { await candidate.DisposeAsync(); throw; }
             await ReplaceSessionAsync(candidate);
             QueueOutput("Сохранение загружено.");
+            rollback.Restore(checkpoint);
         }, operation: "Загрузка сохранения");
     }
 
@@ -411,7 +426,7 @@ public partial class GameWindow : Window
     {
         if (await TryButtonTriggerAsync(sender)) { e.Handled = true; return; }
         if (NextButton.IsEnabled && MenuOverlay.Visibility != Visibility.Visible)
-            await ExecuteAsync(() => runtime.AdvanceAsync(execution!.Token), operation: "Продолжение сценария");
+            await ExecuteAsync(() => runtime.AdvanceAsync(execution!.Token), operation: "Продолжение сценария", playerAction: true);
         e.Handled = true;
     }
 
@@ -419,7 +434,7 @@ public partial class GameWindow : Window
     {
         if (await TryButtonTriggerAsync(sender)) { e.Handled = true; return; }
         if (sender is Button { Tag: int index } && execution == null && MenuOverlay.Visibility != Visibility.Visible)
-            await ExecuteAsync(() => runtime.ChooseAsync(index, execution!.Token), operation: "Выбор ответа");
+            await ExecuteAsync(() => runtime.ChooseAsync(index, execution!.Token), operation: "Выбор ответа", playerAction: true);
         e.Handled = true;
     }
 
@@ -439,8 +454,9 @@ public partial class GameWindow : Window
         var signal = triggerInput.KeyDown(e);
         if (signal != null && runtime.Story.Triggers.Any(trigger => trigger.Matches(signal)) && ready && execution == null)
         { e.Handled = true; await DispatchTriggerAsync(signal); return; }
+        if (e.Key == Key.Back && e.OriginalSource is not TextBox && ready && MenuOverlay.Visibility != Visibility.Visible) { await RollbackAsync(); e.Handled = true; return; }
         if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
-        if (e.Key == Key.F3 && (project.Engine.Game.DebugEnabled || diagnosticConsole))
+        if (e.Key == Key.F3 && (StandalonePlayer.Current is not { TestBuild: false } ? project.Engine.Game.DebugEnabled || diagnosticConsole : project.Engine.Security.ReleaseDebugConsole))
         {
             DebugOverlay.Visibility = DebugOverlay.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
             RenderConsole();

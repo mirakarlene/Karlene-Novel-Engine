@@ -30,7 +30,7 @@
                             <DockPanel Margin="5,3">
                             <Button DockPanel.Dock="Right" Content="×" Tag="{Binding Path}" ToolTip="Убрать из списка. Файлы проекта останутся." Width="30" Margin="6,0,0,0" Click="ForgetRecentProject_Click"/>
                             <Button Tag="{Binding Path}" ToolTip="{Binding Path}" HorizontalContentAlignment="Stretch" Padding="10,8" Click="OpenRecentProject_Click">
-                                <StackPanel><TextBlock Text="{Binding Label}" FontWeight="SemiBold"/><TextBlock Text="{Binding Path}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/><TextBlock Text="{Binding LastOpenedLabel}" FontSize="11" Margin="0,3,0,0"/></StackPanel>
+                                <DockPanel><Image Source="{Binding Icon}" Width="40" Height="40" Margin="0,0,10,0" DockPanel.Dock="Left"><Image.Style><Style TargetType="Image"><Style.Triggers><Trigger Property="Source" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></Image.Style></Image><StackPanel><TextBlock Text="{Binding Label}" FontWeight="SemiBold"/><TextBlock Text="{Binding Path}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/><TextBlock Text="{Binding LastOpenedLabel}" FontSize="11" Margin="0,3,0,0"/></StackPanel></DockPanel>
                                 <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Opacity" Value="1"/><Style.Triggers><DataTrigger Binding="{Binding IsAvailable}" Value="False"><Setter Property="Opacity" Value="0.4"/></DataTrigger></Style.Triggers></Style></Button.Style>
                             </Button>
                             </DockPanel>

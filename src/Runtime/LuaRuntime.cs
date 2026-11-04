@@ -56,7 +56,7 @@ public sealed partial class LuaRuntime : IGameSession
         this.project = project;
         this.output = output;
         this.interactive = interactive;
-        this.pluginsEnabled = pluginsEnabled ?? EngineLaunch.PluginsEnabled;
+        this.pluginsEnabled = (pluginsEnabled ?? EngineLaunch.PluginsEnabled) && project.Engine.Security.AllowPlugins;
         this.preview = preview;
         this.editorSource = editorSource;
         if (editorSource?.Seed is { } previewSeed) seed = previewSeed;
@@ -117,6 +117,7 @@ public sealed partial class LuaRuntime : IGameSession
         Register(nameof(DebugWait), "kne_debug_wait");
         lua["kne_debug_enabled"] = debugger != null;
         lua["project_dir"] = project.Path;
+        lua["project_language"] = project.Configuration.Metadata?.DefaultLanguage ?? "ru";
         lua["kne_interactive"] = interactive;
         lua["kne_editor"] = editorSource?.StepCommands == true;
         lua["kne_scene_test"] = editorSource?.SceneTest == true;
@@ -209,12 +210,12 @@ public sealed partial class LuaRuntime : IGameSession
         InitializeNarrative();
         InitializeTextInput();
         InitializeChoices();
-        InitializePluginApi();
         string initPath = project.InitScriptPath;
         string scenePath = project.MainScenePath;
         string scriptModules = Path.GetDirectoryName(initPath)!.Replace('\\', '/') + "/?.lua";
         string root = project.Path.Replace('\\', '/') + "/?.lua";
         lua["package.path"] = scriptModules + ";" + root + ";" + lua["package.path"];
+        InitializePluginApi();
         InstallHook();
         using (var declare = (LuaFunction)lua["kne_declare_function"])
             foreach (var function in scripts.Functions) declare.Call(function.Name, function.Path);
@@ -262,8 +263,7 @@ public sealed partial class LuaRuntime : IGameSession
             return script.Graph?.Compile(editorPreview: editorSource?.StepCommands == true) ?? FrameCatalog.Instrument(script.Path, script.Source);
         }
         string path = PathSafety.ResolveRelative(project.Path, ResolveScenePath(relative));
-        if (new FileInfo(path).Length > 8 * 1024 * 1024) throw new InvalidDataException("Сцена больше 8 МБ.");
-        string code = File.ReadAllText(path);
+        string code = ScriptProtection.ReadText(path);
         return ScriptDocument.IsVisualPath(path) ? VisualScript.Parse(code).Compile() : LuaSource.Prepare(code);
     }
 
@@ -365,6 +365,7 @@ public sealed partial class LuaRuntime : IGameSession
     }
 
     public Task<GameCheckpoint> GetCheckpointAsync(CancellationToken cancellationToken = default) => CapturePluginCheckpointAsync(true, cancellationToken);
+    public Task<GameCheckpoint> CaptureCheckpointAsync(CancellationToken cancellationToken = default) => CapturePluginCheckpointAsync(false, cancellationToken);
 
     internal async Task<GameCheckpoint> CapturePluginCheckpointAsync(bool saving, CancellationToken cancellationToken = default)
     {
@@ -456,8 +457,7 @@ public sealed partial class LuaRuntime : IGameSession
         {
             string path = PathSafety.ResolveRelative(project.Path, relative);
             hash.AppendData(Encoding.UTF8.GetBytes(Path.GetRelativePath(project.Path, path)));
-            using var source = File.OpenRead(path); int read;
-            while ((read = source.Read(hashBuffer)) != 0) hash.AppendData(hashBuffer.AsSpan(0, read));
+            hash.AppendData(ScriptProtection.IsScript(path) ? ScriptProtection.ReadBytes(path) : File.ReadAllBytes(path));
         }
         // Presentation changes should not invalidate a player's progress; initial game state should.
         foreach (string path in pluginsEnabled ? project.ApplicationPlugins : [])
@@ -584,7 +584,8 @@ public sealed partial class LuaRuntime : IGameSession
 
     private void Register(string method, string name)
     {
-        using var function = lua!.RegisterFunction(name, this, GetType().GetMethod(method)!);
+        if (project.Engine.Security.Restricted) LuaExecutionPolicy.Register(lua!, this, GetType().GetMethod(method)!, name);
+        else { using var function = lua!.RegisterFunction(name, this, GetType().GetMethod(method)!); }
     }
 
     private void AttachScriptReport(Exception error, string operation)

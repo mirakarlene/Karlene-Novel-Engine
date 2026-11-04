@@ -210,10 +210,9 @@ public sealed class FrameCatalog
             .Select(path =>
             {
                 path = PathSafety.EnsureInside(project.Path, path);
-                if (new FileInfo(path).Length > 8 * 1024 * 1024) throw new InvalidDataException("Сценарий больше 8 МБ.");
                 string relative = Path.GetRelativePath(project.Path, path).Replace('\\', '/');
                 bool overridden = editorSource != null && editorSource.RelativePath(project.Path).Equals(relative, StringComparison.OrdinalIgnoreCase);
-                string source = overridden ? editorSource!.Source : System.IO.File.ReadAllText(path);
+                string source = overridden ? editorSource!.Source : ScriptProtection.ReadText(path);
                 return new GameScript(relative, source, null,
                     ScriptDocument.IsVisualPath(path) && !overridden ? VisualScript.Parse(source) : null);
             }).ToArray();

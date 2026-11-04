@@ -25,7 +25,7 @@ public partial class GameWindow
         var saved = PerformanceSettingsStore.LoadProject(project.Path);
         var scenes = PerformanceSettingsStore.LoadScenes(project.Path);
         var active = project.Engine.Performance;
-        active.Graphics = saved.Graphics; active.Preloading = saved.Preloading;
+        active.Graphics = saved.Graphics; active.Preloading = saved.Preloading; active.PreloadScenes = saved.PreloadScenes;
         active.UnloadPreviousScene = saved.UnloadPreviousScene; active.AudioBuffer = saved.AudioBuffer; active.MaxAsyncTasks = saved.MaxAsyncTasks;
         active.FpsCounter = saved.FpsCounter; active.StatisticsOverlay = saved.StatisticsOverlay;
         active.FpsCorner = saved.FpsCorner; active.LoadingIndicator = saved.LoadingIndicator;
@@ -54,7 +54,7 @@ public partial class GameWindow
         GraphicsEnvironment.SetSettings(this, settings.Graphics);
         assets.Configure(settings.Graphics);
         Loaded += (_, _) => { CompositionTarget.Rendering -= PerformanceRendering; CompositionTarget.Rendering += PerformanceRendering; };
-        diagnosticConsole = settings.DebugMode;
+        diagnosticConsole = settings.DebugMode && (StandalonePlayer.Current is not { TestBuild: false } || project.Engine.Security.ReleaseDebugConsole);
         DebugOverlay.Visibility = diagnosticConsole ? Visibility.Visible : Visibility.Collapsed;
         performanceOverlay = new Border { Child = performanceText, Background = new SolidColorBrush(Color.FromArgb(210, 20, 16, 30)), Padding = new(8), Margin = new(12), IsHitTestVisible = false, Visibility = Visibility.Collapsed };
         Panel.SetZIndex(performanceOverlay, 9);

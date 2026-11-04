@@ -79,7 +79,7 @@ public static class ProjectLoader
         {
             Window = new WindowDefaults { Width = 800, Height = 600 },
             Theme = new GameTheme { BackgroundColor = "#FF2D2D30", Pattern = false },
-            Game = new GameDefaults { MainMenu = false },
+            Game = new GameDefaults { MainMenu = false }, Security = ProjectSecuritySettings.Load(root),
             Performance = PerformanceSettingsStore.LoadProject(root), ScenePerformance = PerformanceSettingsStore.LoadScenes(root)
         };
         var result = new ProjectInfo { Path = root, Configuration = configuration, Engine = engine };

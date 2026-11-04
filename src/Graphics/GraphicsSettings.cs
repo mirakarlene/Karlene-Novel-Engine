@@ -54,6 +54,7 @@ public sealed class ProjectPerformanceSettings
     public bool LoadingIndicator { get; set; } = true;
     public bool DebugMode { get; set; }
     public bool Preloading { get; set; } = true;
+    public int PreloadScenes { get; set; } = 3;
     /// <summary>Release optional resources when execution enters a different scene file.</summary>
     public bool UnloadPreviousScene { get; set; }
     /// <summary>Maximum active coroutine tasks, including the main branch.</summary>
@@ -68,6 +69,7 @@ public sealed class ProjectPerformanceSettings
     {
         if (Graphics == null) throw new InvalidDataException("Секция graphics не должна быть null.");
         Graphics.Validate();
+        if (PreloadScenes is < 1 or > 3) throw new InvalidDataException("Количество сцен для предзагрузки: 1, 2 или 3.");
         if (!Corners.Any(item => item.Value == FpsCorner)) throw new InvalidDataException("Неизвестный угол счётчика FPS.");
         if (!AsyncTaskLimits.Any(item => item.Value == MaxAsyncTasks)) throw new InvalidDataException("Лимит асинхронных задач: 32, 64 или 128.");
         if (!AudioBuffers.Any(item => item.Value == AudioBuffer)) throw new InvalidDataException("Неизвестный профиль аудио буфера.");

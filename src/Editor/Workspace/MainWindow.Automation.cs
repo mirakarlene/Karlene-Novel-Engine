@@ -14,7 +14,7 @@ public partial class MainWindow
     private readonly EditorNotificationQueue notifications = new();
     private readonly WindowsEditorNotifications notificationDelivery = new();
     private readonly HashSet<string> pendingBackups = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<Window, (bool Enabled, string Title)> breakWindows = [];
+    private readonly Dictionary<Window, BreakWindowSurface> breakWindows = [];
     private readonly EditorSaveSchedule saveSchedule = new();
     private TimeSpan lastClockTick;
     private bool automationBusy, deliveringNotification;
@@ -184,12 +184,16 @@ public partial class MainWindow
         if (SessionClock.IsOnBreak)
         {
             if (enteringBreak) MinimizeBreakButton.Focus();
-            foreach (Window window in OwnedWindows)
+            foreach (Window window in BreakOwnedWindows(this))
             {
-                if (!breakWindows.ContainsKey(window)) breakWindows.Add(window, (window.IsEnabled, window.Title));
-                window.IsEnabled = false; window.Title = BreakCountdown.Text + " · " + breakWindows[window].Title;
+                if (!breakWindows.ContainsKey(window)) breakWindows.Add(window, new(window, () => MinimizeBreak_Click(this, new RoutedEventArgs()), () => EndBreak_Click(this, new RoutedEventArgs())));
+                breakWindows[window].Update(BreakCountdown.Text);
             }
         }
-        else { foreach (var pair in breakWindows) { pair.Key.IsEnabled = pair.Value.Enabled; pair.Key.Title = pair.Value.Title; } breakWindows.Clear(); }
+        else { foreach (var pair in breakWindows) pair.Value.Restore(); breakWindows.Clear(); }
+    }
+    private static IEnumerable<Window> BreakOwnedWindows(Window parent)
+    {
+        foreach (Window child in parent.OwnedWindows) { yield return child; foreach (var nested in BreakOwnedWindows(child)) yield return nested; }
     }
 }

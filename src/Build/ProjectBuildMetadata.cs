@@ -10,7 +10,7 @@ internal sealed record ProjectExeMetadata(string Author, string Team, string Ver
     internal static ProjectExeMetadata From(ProjectBuildSettings value) => new(value.Author, value.Team, value.Version);
 }
 
-internal sealed record ProjectBuildWrite(ProjectBuildSettings Settings, byte[] BuildJson, byte[] ProjectJson);
+internal sealed record ProjectBuildWrite(ProjectBuildSettings Settings, byte[] BuildJson, byte[] ProjectJson, byte[] OriginalProject, byte[]? OriginalBuild);
 
 /// <summary>Canonical project.json EXE fields; missing values retain compatibility with older build.json files.</summary>
 internal sealed record ProjectBuildMetadata(string Path, byte[] Original, JsonObject Configuration)

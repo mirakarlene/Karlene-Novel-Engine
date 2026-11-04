@@ -13,7 +13,7 @@ public partial class GameWindow
     private readonly Dictionary<string, FrameworkElement> pluginViews = new(StringComparer.Ordinal);
     private void InitializePlayerPlugins()
     {
-        if (!EngineLaunch.PluginsEnabled) return;
+        if (!EngineLaunch.PluginsEnabled || !project.Engine.Security.AllowPlugins) return;
         var host = new PluginHost(project.Path, false, this);
         try
         {

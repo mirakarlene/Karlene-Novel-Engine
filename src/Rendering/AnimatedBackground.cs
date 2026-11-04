@@ -141,7 +141,7 @@ public sealed class AnimatedBackground : FrameworkElement
 
 public static class ThemePalettes
 {
-    public static readonly string[] Names = ["violet", "ocean", "rose", "forest", "amber", "custom"];
+    public static readonly string[] Names = new[] { "violet", "custom" }.Concat(EditorTheme.BuiltInThemes.Select(t => t.Id)).Distinct().ToArray();
     public static void Apply(GameTheme theme, string palette)
     {
         var colors = palette switch
@@ -152,8 +152,13 @@ public static class ThemePalettes
             "forest" => new[] { "#FF122A24", "#FF4B9178", "#FFBBE5C2", "#EB284D40" },
             "amber" => new[] { "#FF30251A", "#FFA98748", "#FFFFDCA1", "#EB52402A" },
             "custom" => null,
-            _ => throw new ArgumentException("Неизвестная палитра.")
+            _ => null
         };
+        if (colors == null && palette != "custom")
+        {
+            if (!Names.Contains(palette)) throw new ArgumentException("Неизвестная палитра.");
+            GamePalette.Apply(theme, new ScreenLayouts(), palette); return;
+        }
         theme.Palette = palette;
         if (colors == null) return;
         theme.BackgroundColor = colors[0]; theme.PatternColor = colors[1]; theme.AccentColor = colors[2]; theme.ButtonColor = colors[3];

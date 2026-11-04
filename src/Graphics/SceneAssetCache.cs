@@ -50,6 +50,7 @@ internal sealed class SceneAssetCache
     }
     internal BitmapImage Load(string path, CancellationToken token = default)
     {
+        path = Path.GetFullPath(path);
         token.ThrowIfCancellationRequested();
         var file = new FileInfo(path);
         long epoch; int divisor;
@@ -85,6 +86,7 @@ internal sealed class SceneAssetCache
     }
     internal async Task PreloadAsync(ProjectInfo project, string? scenePath, CancellationToken token)
     {
+        if (!project.Engine.Performance.Preloading) return;
         await Task.Run(() =>
         {
             var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -94,7 +96,7 @@ internal sealed class SceneAssetCache
             foreach (var file in project.Files.Where(file => ScriptDocument.IsVisualPath(file.FilePath)).Take(500))
             {
                 token.ThrowIfCancellationRequested();
-                try { if (new FileInfo(file.FilePath).Length <= 2 * 1024 * 1024) { var graph = VisualScript.Parse(File.ReadAllText(file.FilePath)); graphs.TryAdd(graph.FunctionName, graph); } }
+                try { if (new FileInfo(file.FilePath).Length <= 2 * 1024 * 1024) { var graph = VisualScript.Parse(ScriptProtection.ReadText(file.FilePath)); graphs.TryAdd(graph.FunctionName, graph); } }
                 catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException) { }
             }
             VisualScript? source = null;
@@ -104,7 +106,7 @@ internal sealed class SceneAssetCache
                 try
                 {
                     if (new FileInfo(file.FilePath).Length > 2 * 1024 * 1024) continue;
-                    string text = File.ReadAllText(file.FilePath); scripts[file.FilePath] = text;
+                    string text = ScriptProtection.ReadText(file.FilePath); scripts[file.FilePath] = text;
                     foreach (var declaration in LuaSource.Functions(text)) functions.TryAdd(declaration.Name, file.FilePath);
                 }
                 catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException) { }
@@ -113,7 +115,7 @@ internal sealed class SceneAssetCache
             if (scenePath != null)
             {
                 string full = PathSafety.ResolveRelative(project.Path, scenePath);
-                try { if (File.Exists(full) && ScriptDocument.IsVisualPath(full) && new FileInfo(full).Length <= 2 * 1024 * 1024) source = VisualScript.Parse(File.ReadAllText(full)); }
+                try { if (File.Exists(full) && ScriptDocument.IsVisualPath(full) && new FileInfo(full).Length <= 2 * 1024 * 1024) source = VisualScript.Parse(ScriptProtection.ReadText(full)); }
                 catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException) { }
                 if (scripts.TryGetValue(full, out string? text))
                 {
@@ -124,6 +126,7 @@ internal sealed class SceneAssetCache
                 }
             }
             if (source != null) foreach (var node in source.Nodes.Where(node => node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ConditionalGoto)) targetNames.Add(node.Path);
+            targetNames = targetNames.Where(name => graphs.ContainsKey(name) || functions.ContainsKey(name)).Take(project.Engine.Performance.PreloadScenes).ToHashSet(StringComparer.Ordinal);
             IEnumerable<VisualScript> candidates = (source == null ? Enumerable.Empty<VisualScript>() : new[] { source }).Concat(targetNames.Select(name => graphs.GetValueOrDefault(name)).OfType<VisualScript>()).Take(4);
             foreach (var graph in candidates)
                 foreach (var node in graph.Nodes.Where(node => node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character).Take(24))

@@ -69,9 +69,9 @@ public static class ProjectBuildSettingsStore
 
     public static Task SaveAsync(string root, ProjectBuildSettings value, CancellationToken token = default) => SaveCoreAsync(root, value, null, null, token);
 
-    internal static Task<ProjectBuildWrite> SaveCheckedAsync(string root, ProjectBuildSettings value, ProjectExeMetadata expected, string? title = null, CancellationToken token = default) => SaveCoreAsync(root, value, expected, title, token);
+    internal static Task<ProjectBuildWrite> SaveCheckedAsync(string root, ProjectBuildSettings value, ProjectExeMetadata expected, string? title = null, CancellationToken token = default, Func<System.Text.Json.Nodes.JsonObject, System.Text.Json.Nodes.JsonObject>? update = null) => SaveCoreAsync(root, value, expected, title, token, update);
 
-    private static async Task<ProjectBuildWrite> SaveCoreAsync(string root, ProjectBuildSettings value, ProjectExeMetadata? expected, string? title, CancellationToken token)
+    private static async Task<ProjectBuildWrite> SaveCoreAsync(string root, ProjectBuildSettings value, ProjectExeMetadata? expected, string? title, CancellationToken token, Func<System.Text.Json.Nodes.JsonObject, System.Text.Json.Nodes.JsonObject>? update = null)
     {
         value.Validate();
         if (value.GameId == "") value = value with { GameId = Guid.NewGuid().ToString("N") };
@@ -81,7 +81,9 @@ public static class ProjectBuildSettingsStore
         byte[]? previousBuild = File.Exists(file) ? await File.ReadAllBytesAsync(file, token) : null;
         if (expected != null && expected != ProjectExeMetadata.From(project.Apply(ReadBuild(previousBuild))))
             throw new IOException("Метаданные проекта изменены вне окна параметров. Откройте параметры заново, чтобы загрузить изменения.");
+        if (update != null) project = project with { Configuration = update(project.Configuration) };
         byte[] nextBuild = JsonSerializer.SerializeToUtf8Bytes(value, EngineSettings.JsonOptions), nextProject = project.Updated(value, title);
+        if (nextProject.Length > 1024 * 1024) throw new InvalidDataException("project.json больше 1 МБ.");
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         string temp = file + "." + Guid.NewGuid().ToString("N") + ".tmp";
         string projectTemp = project.Path + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -92,7 +94,7 @@ public static class ProjectBuildSettingsStore
             ProjectBuildMetadata.CheckCurrent(file, previousBuild); ProjectBuildMetadata.CheckCurrent(project.Path, project.Original);
             File.Move(temp, file, true); buildCommitted = true;
             ProjectBuildMetadata.CheckCurrent(project.Path, project.Original); File.Move(projectTemp, project.Path, true);
-            return new(value, nextBuild, nextProject);
+            return new(value, nextBuild, nextProject, project.Original, previousBuild);
         }
         catch (Exception error)
         {

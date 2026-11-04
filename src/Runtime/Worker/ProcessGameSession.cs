@@ -45,7 +45,7 @@ public sealed class ProcessGameSession : IGameSession
         this.project = project ?? throw new ArgumentNullException(nameof(project));
         applicationPlugins = project.ApplicationPlugins.ToArray();
         this.preview = preview;
-        this.pluginsEnabled = pluginsEnabled ?? EngineLaunch.PluginsEnabled;
+        this.pluginsEnabled = (pluginsEnabled ?? EngineLaunch.PluginsEnabled) && project.Engine.Security.AllowPlugins;
         this.editorSource = editorSource;
         this.debuggerPipe = debuggerPipe ?? Environment.GetEnvironmentVariable(RemoteDebugConnection.EnvironmentName);
         this.output = output ?? throw new ArgumentNullException(nameof(output));
@@ -100,6 +100,9 @@ public sealed class ProcessGameSession : IGameSession
         ArgumentNullException.ThrowIfNull(checkpoint);
         return ExecuteAsync("restore", cancellationToken, checkpoint: checkpoint);
     }
+    public async Task<GameCheckpoint> CaptureCheckpointAsync(CancellationToken cancellationToken = default) =>
+        (await ExecuteAsync("capture", cancellationToken).ConfigureAwait(false)).Checkpoint
+        ?? throw new InvalidOperationException("Текущую позицию нельзя сохранить для отката.");
 
     public Task ReturnAsync(CancellationToken cancellationToken = default)
     {
