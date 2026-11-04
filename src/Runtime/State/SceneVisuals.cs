@@ -22,6 +22,14 @@ public sealed partial record SceneVisuals(string? Background, string? Character,
     public string[] Shaders { get; init; } = [];
     /// <summary>Execution flows that hide effects until their next shader container.</summary>
     public string[] ShaderSuppressions { get; init; } = [];
+    /// <summary>The foreground scene policy; the visit identifies a new call/goto, not a return to its caller.</summary>
+    public SceneRuntimeState? Scene { get; init; }
+}
+
+public sealed record SceneRuntimeState(string File, string Function, long Visit, ScenePerformanceSettings Settings)
+{
+    public bool Exited { get; init; }
+    public long LastVisit { get; init; }
 }
 
 public sealed record VisualMotion(double X = 0, double Y = 0, double Duration = 0, long Version = 0);

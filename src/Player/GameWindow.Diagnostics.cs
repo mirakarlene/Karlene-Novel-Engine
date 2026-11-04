@@ -77,6 +77,7 @@ public partial class GameWindow
             var candidate = new ProcessGameSession(project, QueueOutput);
             var previous = runtime;
             runtime = candidate;
+            sceneSaves.Reset();
             ready = false;
             renderedStory = null; renderedSettings = null; renderedVisuals = null;
             renderedVariables = null;

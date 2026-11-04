@@ -94,6 +94,7 @@ public sealed partial class LuaRuntime : IGameSession
         lua = new Lua();
         shaderTargets.Clear();
         lua.State.Encoding = Encoding.UTF8;
+        InitializeSceneSettings();
         lock (stateLock) windowSettings = project.Engine.RuntimeDefaults(project.Title);
         Register(nameof(PrintToUI), "print_to_ui");
         Register(nameof(ShouldStop), "kne_should_stop");
@@ -373,6 +374,7 @@ public sealed partial class LuaRuntime : IGameSession
         await RunAsync(() =>
         {
             if (!initialized || !interactive) throw new InvalidOperationException("Нет запущенной интерактивной сцены.");
+            if (saving && Visuals.Scene?.Settings.AllowSaves == false) throw new InvalidOperationException("Сохранения в этой сцене запрещены.");
             if (history.Count > 10_000) throw new InvalidDataException("История игры слишком длинная для сохранения.");
             using var table = lua!["state"] as LuaTable ?? throw new InvalidDataException("state должен оставаться таблицей.");
             if (saving) PublishPluginEvent("on_save");
@@ -460,6 +462,12 @@ public sealed partial class LuaRuntime : IGameSession
             hash.AppendData(ScriptProtection.IsScript(path) ? ScriptProtection.ReadBytes(path) : File.ReadAllBytes(path));
         }
         // Presentation changes should not invalidate a player's progress; initial game state should.
+        foreach (var function in program.Functions.OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase).ThenBy(f => f.Name, StringComparer.Ordinal))
+        {
+            var settings = project.Engine.ScenePerformance.For(function.Path, function.Name);
+            if (!settings.InitialState.EnumerateObject().Any() && settings.MaxCallDepth == null && settings.AllowTriggers) continue;
+            hash.AppendData(Encoding.UTF8.GetBytes("scene-execution:" + function.Path + "::" + function.Name + ":" + settings.InitialState.GetRawText() + ":" + settings.MaxCallDepth + ":" + settings.AllowTriggers));
+        }
         foreach (string path in pluginsEnabled ? project.ApplicationPlugins : [])
         {
             hash.AppendData(Encoding.UTF8.GetBytes("application-plugin:" + path));

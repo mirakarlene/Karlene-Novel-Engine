@@ -91,24 +91,24 @@ public sealed class PerformanceWindowsTests
             {
                 Assert.Equal(-1, window.SceneInput.SelectedIndex); Assert.False(window.QualityInput.IsEnabled); Assert.False(window.PostProcessingInput.IsEnabled);
                 string[] choices = window.SceneInput.Items.Cast<GraphicsOption<string>>().Select(item => item.Value).Order().ToArray();
-                Assert.Contains("nested/chapter.krl", choices); Assert.Contains("nested/two.knegraph", choices); Assert.Contains("one.knegraph", choices);
+                Assert.Contains("nested/chapter.krl::chapter", choices); Assert.Contains("nested/two.knegraph::main", choices); Assert.Contains("one.knegraph::main", choices);
                 Assert.DoesNotContain("helper.lua", choices); Assert.DoesNotContain("notes.txt", choices);
-                window.SceneInput.SelectedValue = "nested/chapter.krl";
-                Assert.True(window.QualityInput.IsEnabled); window.QualityInput.SelectedValue = "low"; window.PostProcessingInput.IsChecked = false;
-                window.SceneInput.SelectedValue = "one.knegraph";
-                Assert.True(window.QualityInput.IsEnabled); Assert.True(window.PostProcessingInput.IsEnabled); Assert.Equal("high", window.QualityInput.SelectedValue); Assert.True(window.PostProcessingInput.IsChecked);
-                window.QualityInput.SelectedValue = "low"; window.PostProcessingInput.IsChecked = false;
-                window.SceneInput.SelectedValue = "nested/two.knegraph";
-                Assert.Equal("high", window.QualityInput.SelectedValue); Assert.True(window.PostProcessingInput.IsChecked);
+                window.SceneInput.SelectedValue = "nested/chapter.krl::chapter";
+                Assert.True(window.QualityInput.IsEnabled); window.QualityInput.SelectedValue = "low"; window.PostProcessingInput.IsChecked = true;
+                window.SceneInput.SelectedValue = "one.knegraph::main";
+                Assert.True(window.QualityInput.IsEnabled); Assert.True(window.PostProcessingInput.IsEnabled); Assert.Equal("high", window.QualityInput.SelectedValue); Assert.False(window.PostProcessingInput.IsChecked);
+                window.QualityInput.SelectedValue = "low"; window.PostProcessingInput.IsChecked = true;
+                window.SceneInput.SelectedValue = "nested/two.knegraph::main";
+                Assert.Equal("high", window.QualityInput.SelectedValue); Assert.False(window.PostProcessingInput.IsChecked);
                 window.QualityInput.SelectedValue = "medium";
-                window.SceneInput.SelectedValue = "one.knegraph";
-                Assert.Equal("low", window.QualityInput.SelectedValue); Assert.False(window.PostProcessingInput.IsChecked);
+                window.SceneInput.SelectedValue = "one.knegraph::main";
+                Assert.Equal("low", window.QualityInput.SelectedValue); Assert.True(window.PostProcessingInput.IsChecked);
                 Capture(window, "scene-parameters.png");
                 await window.SaveAsync();
                 var saved = PerformanceSettingsStore.LoadScenes(project.Path);
-                Assert.Equal(4, saved.Scenes.Count); Assert.Equal("low", saved.For("one.knegraph").EffectsQuality); Assert.False(saved.For("one.knegraph").PostProcessing);
-                Assert.Equal("low", saved.For("NESTED/CHAPTER.KRL").EffectsQuality); Assert.False(saved.For("nested/chapter.krl").PostProcessing);
-                Assert.Equal("medium", saved.For("nested/two.knegraph").EffectsQuality); Assert.True(saved.For("nested/two.knegraph").PostProcessing);
+                Assert.Single(saved.Scenes); Assert.Equal(3, saved.Functions.Count); Assert.Equal("low", saved.For("one.knegraph", "main").EffectsQuality); Assert.False(saved.For("one.knegraph", "main").PostProcessing);
+                Assert.Equal("low", saved.For("NESTED/CHAPTER.KRL", "chapter").EffectsQuality); Assert.False(saved.For("nested/chapter.krl", "chapter").PostProcessing);
+                Assert.Equal("medium", saved.For("nested/two.knegraph", "main").EffectsQuality); Assert.True(saved.For("nested/two.knegraph", "main").PostProcessing);
                 Assert.Equal("medium", saved.For("unopened.knegraph").EffectsQuality); Assert.False(saved.For("unopened.knegraph").PostProcessing);
                 Assert.Equal(global, File.ReadAllText(Path.Combine(project.Path, "engine", "performance.json")));
             }
@@ -124,8 +124,8 @@ public sealed class PerformanceWindowsTests
         await WorkspaceTabsTests.Sta(() =>
         {
             var canceled = new SceneParametersWindow(project);
-            canceled.SceneInput.SelectedValue = "one.knegraph"; canceled.QualityInput.SelectedValue = "low";
-            canceled.SceneInput.SelectedValue = "two.knegraph"; canceled.PostProcessingInput.IsChecked = false; canceled.Close();
+            canceled.SceneInput.SelectedValue = "one.knegraph::main"; canceled.QualityInput.SelectedValue = "low";
+            canceled.SceneInput.SelectedValue = "two.knegraph::main"; canceled.PostProcessingInput.IsChecked = true; canceled.Close();
             Assert.Equal(original, File.ReadAllText(path));
             return Task.CompletedTask;
         });
@@ -135,7 +135,7 @@ public sealed class PerformanceWindowsTests
         await WorkspaceTabsTests.Sta(async () =>
         {
             var empty = new SceneParametersWindow(project);
-            try { Assert.Empty(empty.SceneInput.Items); Assert.False(empty.QualityInput.IsEnabled); Assert.False(empty.PostProcessingInput.IsEnabled); await empty.SaveAsync(); Assert.Empty(PerformanceSettingsStore.LoadScenes(project.Path).Scenes); }
+            try { Assert.Empty(empty.SceneInput.Items); Assert.False(empty.QualityInput.IsEnabled); Assert.False(empty.PostProcessingInput.IsEnabled); await Assert.ThrowsAsync<InvalidOperationException>(empty.SaveAsync); Assert.Empty(PerformanceSettingsStore.LoadScenes(project.Path).Scenes); Assert.Empty(PerformanceSettingsStore.LoadScenes(project.Path).Functions); }
             finally { empty.Close(); }
         });
     }

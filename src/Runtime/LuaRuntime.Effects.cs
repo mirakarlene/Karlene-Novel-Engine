@@ -113,6 +113,7 @@ public sealed partial class LuaRuntime
         {
             var previous = visuals.AudioChannels.FirstOrDefault(item => item.Channel == channel) ?? new(channel);
             var next = update(previous);
+            if (channel == "music" && next.Path != null && (next.Path != previous.Path || next.Version != previous.Version)) musicScene = executingScene;
             visuals = visuals with { AudioChannels = visuals.AudioChannels.Where(item => item.Channel != channel).Append(next).ToArray() };
             if (channel == "music") visuals = visuals with { Music = next.Path, LoopMusic = next.Loop, MusicVersion = next.Version };
             if (channel == "sfx") visuals = visuals with { Sound = next.Path, SoundVersion = next.Version };

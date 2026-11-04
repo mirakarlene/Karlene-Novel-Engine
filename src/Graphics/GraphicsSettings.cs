@@ -89,33 +89,71 @@ public sealed class ProjectPerformanceSettings
 /// <summary>Overrides for one graph; gameplay commands and dialogue remain unchanged.</summary>
 public sealed record ScenePerformanceSettings
 {
+    public string Name { get; set; } = "";
+    public int? WindowWidth { get; set; }
+    public int? WindowHeight { get; set; }
+    public string? Music { get; set; }
+    public bool LoopMusic { get; set; } = true;
+    public int? MusicVolume { get; set; }
+    public bool StopMusicOnExit { get; set; }
+    public SceneTransitionSettings EntryTransition { get; set; } = new();
+    public SceneTransitionSettings ExitTransition { get; set; } = new();
+    public bool AllowSaves { get; set; } = true;
+    public bool AllowAutosave { get; set; } = true;
+    public bool CheckpointOnEntry { get; set; }
+    public System.Text.Json.JsonElement InitialState { get; set; } = System.Text.Json.JsonSerializer.SerializeToElement(new Dictionary<string, object>());
+    public int? MaxCallDepth { get; set; }
+    public bool AllowTriggers { get; set; } = true;
     public string EffectsQuality { get; set; } = "high";
     public bool PostProcessing { get; set; } = true;
     /// <summary>Bypasses all project shaders for this scene without changing its authored files.</summary>
     public bool HideShaders { get; set; }
     public static IReadOnlyList<GraphicsOption<string>> Qualities { get; } = [new("high", "Высокое"), new("medium", "Среднее"), new("low", "Низкое")];
-    public void Validate()
+    public void Validate(string? root = null)
     {
         if (!Qualities.Any(item => item.Value == EffectsQuality)) throw new InvalidDataException("Неизвестное качество эффектов сцены.");
+        if (Name == null || Name.Length > 128 || Name.Any(char.IsControl)) throw new InvalidDataException("Название сцены: до 128 символов без управляющих знаков.");
+        if (WindowWidth.HasValue != WindowHeight.HasValue || WindowWidth is < 640 or > 7680 || WindowHeight is < 480 or > 4320) throw new InvalidDataException("Разрешение сцены: ширина 640…7680, высота 480…4320, либо наследование проекта.");
+        if (MusicVolume is < 0 or > 100) throw new InvalidDataException("Громкость сцены: 0…100% либо наследование.");
+        if (MaxCallDepth is < 1 or > 63) throw new InvalidDataException("Дополнительная глубина call: 1…63 либо без дополнительного ограничения.");
+        if (InitialState.ValueKind != JsonValueKind.Object || System.Text.Encoding.UTF8.GetByteCount(InitialState.GetRawText()) > 65536) throw new InvalidDataException("Начальное состояние сцены — JSON-объект не больше 64 КБ.");
+        try { EngineSettings.ValidateState(InitialState, 0, allowNull: true); }
+        catch (InvalidDataException error) { throw new InvalidDataException("Начальное состояние сцены: " + error.Message, error); }
+        if (EntryTransition == null || ExitTransition == null) throw new InvalidDataException("Переходы сцены не должны быть null.");
+        EntryTransition.Validate(root); ExitTransition.Validate(root);
+        if (!string.IsNullOrWhiteSpace(Music) && root != null) _ = ResourcePaths.Resolve(root, Music, audio: true);
     }
 }
 
-/// <summary>A versioned collection keyed by project-relative graph paths.</summary>
+/// <summary>Legacy file defaults and individual function overrides keyed by project-relative scene paths.</summary>
 public sealed class ScenePerformanceDocument
 {
     internal static bool IsScenePath(string path) => ScriptDocument.IsVisualPath(path) || Path.GetExtension(path).Equals(".krl", StringComparison.OrdinalIgnoreCase);
     public int Version { get; set; } = 1;
     public Dictionary<string, ScenePerformanceSettings> Scenes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, Dictionary<string, ScenePerformanceSettings>> Functions { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public ScenePerformanceSettings For(string? relativePath) => relativePath != null && Scenes.TryGetValue(relativePath.Replace('\\', '/'), out var value) ? value : new();
+    public ScenePerformanceSettings For(string? relativePath, string? function) => relativePath != null && function != null && Functions.TryGetValue(relativePath.Replace('\\', '/'), out var named) && named.TryGetValue(function, out var value) ? value : For(relativePath);
     public void Validate(string root)
     {
-        if (Version != 1 || Scenes == null || Scenes.Count > 5000) throw new InvalidDataException("Некорректный формат параметров сцен.");
+        if (Version != 1 || Scenes == null || Functions == null || Scenes.Count + Functions.Sum(f => f.Value?.Count ?? 0) > 5000) throw new InvalidDataException("Некорректный формат параметров сцен.");
         var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var pair in Scenes)
         {
             string full = PathSafety.ResolveRelative(root, pair.Key);
             if (!IsScenePath(full) || !paths.Add(full) || pair.Value == null) throw new InvalidDataException("Параметры сцены требуют уникальный путь к .krl или .knegraph.");
-            pair.Value.Validate();
+            pair.Value.Validate(root);
+        }
+        var functionPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in Functions)
+        {
+            string full = PathSafety.ResolveRelative(root, file.Key);
+            if (!IsScenePath(full) || file.Value == null || !functionPaths.Add(full)) throw new InvalidDataException("Параметры функций требуют уникальный путь к .krl или .knegraph.");
+            foreach (var function in file.Value)
+            {
+                if (!LuaSource.IsIdentifier(function.Key) || function.Value == null) throw new InvalidDataException("Некорректное имя функции в параметрах сцены.");
+                function.Value.Validate(root);
+            }
         }
     }
 }
@@ -130,7 +168,8 @@ public static class PerformanceSettingsStore
     public static ScenePerformanceDocument LoadScenes(string root)
     {
         var value = Read<ScenePerformanceDocument>(root, "scene-performance.json"); value.Validate(root);
-        value.Scenes = value.Scenes.ToDictionary(pair => Path.GetRelativePath(root, PathSafety.ResolveRelative(root, pair.Key)).Replace('\\', '/'), pair => pair.Value, StringComparer.OrdinalIgnoreCase); return value;
+        value.Scenes = value.Scenes.ToDictionary(pair => Path.GetRelativePath(root, PathSafety.ResolveRelative(root, pair.Key)).Replace('\\', '/'), pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+        value.Functions = value.Functions.ToDictionary(pair => Path.GetRelativePath(root, PathSafety.ResolveRelative(root, pair.Key)).Replace('\\', '/'), pair => new Dictionary<string, ScenePerformanceSettings>(pair.Value, StringComparer.Ordinal), StringComparer.OrdinalIgnoreCase); return value;
     }
     public static Task SaveProjectAsync(string root, ProjectPerformanceSettings settings, CancellationToken token = default)
     { settings.Validate(root); return WriteAsync(root, "performance.json", settings, token); }

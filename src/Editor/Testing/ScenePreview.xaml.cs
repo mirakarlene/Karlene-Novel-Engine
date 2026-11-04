@@ -233,8 +233,8 @@ public partial class ScenePreview : UserControl
     {
         if (project == null) return;
         var theme = project.Engine.Theme;
-        string? scenePath = story.Identity?.Scene.Split("::", StringSplitOptions.None)[0];
-        shaders?.SetScene(scenePath);
+        string? scenePath = visuals.Scene?.File ?? story.Identity?.Scene.Split("::", StringSplitOptions.None)[0];
+        shaders?.SetScene(scenePath, visuals.Scene?.Function);
         if (shaders != null) _ = shaders.SetActiveAsync(visuals.ShaderSuppressions.Length == 0 ? visuals.Shaders : []);
         shaders?.SetFrame(window, visuals, story);
         if (scenePath != resourceScene)
@@ -242,7 +242,7 @@ public partial class ScenePreview : UserControl
             if (resourceScene != null && project.Engine.Performance.UnloadPreviousScene) assets.RetainForScene(project, visuals);
             resourceScene = scenePath;
         }
-        var performance = project.Engine.ScenePerformance.For(scenePath);
+        var performance = project.Engine.ScenePerformance.For(scenePath, visuals.Scene?.Function);
         animate &= performance.EffectsQuality != "low";
         AnimatedBackdrop.SetQuality(performance.EffectsQuality);
         SceneArea.Width = window.Width; SceneArea.Height = window.Height;

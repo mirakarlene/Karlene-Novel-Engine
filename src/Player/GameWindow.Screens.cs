@@ -171,11 +171,12 @@ public partial class GameWindow
             bool trigger = GameTriggerInput.ButtonId(button, project.Engine.Screens) is { } id && HasButtonTrigger(id);
             button.IsEnabled = execution == null && (trigger || action switch
             {
-                "resume" or "save" => ready,
+                "resume" => ready,
+                "save" => ready && CanSaveInScene,
                 "continue" => saves.Exists("auto") || saves.Exists("quick"),
                 "settings" => project.Engine.Screens.Find("settings") != null,
                 "saves" => project.Engine.Screens.Find("saves") != null,
-                "save_slot" => ready,
+                "save_slot" => ready && CanSaveInScene,
                 "load_slot" => SaveSlotsList.SelectedItem is GameSaveEntry { Damaged: false },
                 "delete_slot" => SaveSlotsList.SelectedItem != null,
                 _ => true
@@ -194,7 +195,7 @@ public partial class GameWindow
             var layout = project.Engine.Screens.Find("saves");
             if (layout == null) { Notify("Экран сохранений отключён."); return; }
             screenHistory.Push(activeScreen ?? "gameplay");
-            SaveSlotsList.ItemsSource = slots; SaveSelectedButton.IsEnabled = ready; LoadSelectedButton.IsEnabled = DeleteSelectedButton.IsEnabled = false;
+            SaveSlotsList.ItemsSource = slots; SaveSelectedButton.IsEnabled = ready && CanSaveInScene; LoadSelectedButton.IsEnabled = DeleteSelectedButton.IsEnabled = false;
             ShowLayout(layout.Id);
         }
         catch (Exception ex) { Notify("Не удалось открыть сохранения: " + ex.Message); }
@@ -208,7 +209,7 @@ public partial class GameWindow
     }
     private async void SaveSelected_Click(object sender, RoutedEventArgs e)
     {
-        if (!ready || execution != null) return;
+        if (!ready || execution != null || !CanSaveInScene) return;
         string slot = SaveSlotName.Text.Trim();
         bool saved = false;
         await ExecuteAsync(async () => { await saves.SaveAsync(slot, await CheckpointAsync(execution!.Token), execution.Token); saved = true; });

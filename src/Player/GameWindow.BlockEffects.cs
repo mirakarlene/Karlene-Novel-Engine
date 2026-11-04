@@ -83,7 +83,8 @@ public partial class GameWindow
         {
             double preference = pair.Key is "music" or "ambient" ? preferences.MusicVolume : preferences.SoundVolume;
             double channel = state.AudioChannels.FirstOrDefault(item => item.Channel == pair.Key)?.Volume ?? 1;
-            pair.Value.Volume = Math.Clamp(preference * state.MasterVolume * channel, 0, 1);
+            double sceneVolume = pair.Key == "music" ? (state.Scene?.Settings.MusicVolume ?? 100) / 100d : 1;
+            pair.Value.Volume = Math.Clamp(preference * state.MasterVolume * channel * sceneVolume, 0, 1);
         }
     }
     private void CloseAudio() { foreach (var player in audioPlayers.Values) player.Close(); activeAudioChannels.Clear(); }

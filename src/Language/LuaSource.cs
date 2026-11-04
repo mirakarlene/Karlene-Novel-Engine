@@ -12,10 +12,11 @@ public static class LuaSource
         (char.IsAsciiLetter(name[0]) || name[0] == '_') && name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_') && !Keywords.Contains(name);
 
     /// <summary>Finds named global functions, including name = function(...) assignments.</summary>
-    public static IReadOnlyList<LuaFunctionDeclaration> Functions(string source)
+    public static IReadOnlyList<LuaFunctionDeclaration> Functions(string source) => FunctionPositions(source).Select(item => item.Function).ToArray();
+    internal static IReadOnlyList<(LuaFunctionDeclaration Function, int Offset)> FunctionPositions(string source)
     {
         var tokens = Tokens(source);
-        var functions = new List<LuaFunctionDeclaration>();
+        var functions = new List<(LuaFunctionDeclaration Function, int Offset)>();
         var scopes = new List<Scope> { new("root", 0) };
         int tableDepth = 0;
         bool Local(string name) => scopes.Any(s => s.Locals.Contains(name));
@@ -43,7 +44,7 @@ public static class LuaSource
                 if (explicitGlobal) name += 2;
                 if (name + 1 < tokens.Count && IsIdentifier(tokens[name].Text) && tokens[name + 1].Text == "(" &&
                     (explicitGlobal || !Local(tokens[name].Text)) && (i == 0 || tokens[i - 1].Text != "local"))
-                    functions.Add(new(tokens[name].Text, tokens[name].Line));
+                    functions.Add((new(tokens[name].Text, tokens[name].Line), tokens[name].Offset));
                 var scope = new Scope("function", tableDepth);
                 int parameters = name;
                 while (parameters < tokens.Count && tokens[parameters].Text is not ("(" or "end")) parameters++;
@@ -80,7 +81,7 @@ public static class LuaSource
             bool globalField = i >= 2 && tokens[i - 2].Text == "_G" && tokens[i - 1].Text == ".";
             bool assignment = i + 3 < tokens.Count && tokens[i + 1].Text == "=" && tokens[i + 2].Text == "function" && tokens[i + 3].Text == "(" &&
                 (globalField || tableDepth == 0 && !Local(token.Text) && (i == 0 || tokens[i - 1].Text is not ("local" or ":" or ".")));
-            if (assignment) functions.Add(new(token.Text, token.Line));
+            if (assignment) functions.Add((new(token.Text, token.Line), token.Offset));
         }
         return functions;
     }

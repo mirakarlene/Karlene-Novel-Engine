@@ -164,7 +164,7 @@ public sealed class EngineSettings
         if (InitialState.ValueKind != JsonValueKind.Object) throw new InvalidDataException("engine/state.json должен содержать объект.");
     }
 
-    private static void ValidateState(JsonElement value, int depth)
+    internal static void ValidateState(JsonElement value, int depth, bool allowNull = false)
     {
         if (depth > 16) throw new InvalidDataException("engine/state.json: глубина больше 16.");
         switch (value.ValueKind)
@@ -174,15 +174,20 @@ public sealed class EngineSettings
                 foreach (var property in value.EnumerateObject())
                 {
                     if (!keys.Add(property.Name)) throw new InvalidDataException("engine/state.json: повтор ключа «" + property.Name + "».");
-                    ValidateState(property.Value, depth + 1);
+                    ValidateState(property.Value, depth + 1, allowNull);
                 }
                 break;
             case JsonValueKind.Array:
                 if (value.GetArrayLength() > 10_000) throw new InvalidDataException("engine/state.json: массив больше 10000 элементов.");
-                foreach (var item in value.EnumerateArray()) ValidateState(item, depth + 1);
+                foreach (var item in value.EnumerateArray())
+                {
+                    if (allowNull && item.ValueKind == JsonValueKind.Null) throw new InvalidDataException("Массив state не поддерживает null вместо элемента.");
+                    ValidateState(item, depth + 1, allowNull);
+                }
                 break;
             case JsonValueKind.String: case JsonValueKind.True: case JsonValueKind.False: break;
             case JsonValueKind.Number when value.TryGetDouble(out double number) && double.IsFinite(number): break;
+            case JsonValueKind.Null when allowNull: break;
             default: throw new InvalidDataException("engine/state.json: разрешены объекты, массивы, строки, конечные числа и логические значения.");
         }
     }
