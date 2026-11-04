@@ -10,7 +10,11 @@ internal sealed class LuaPluginModule(PluginApi api, Lua lua)
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
     internal void Install()
     {
-        void Bind(string method, string name) => lua.RegisterFunction(name, this, GetType().GetMethod(method)!);
+        void Bind(string method, string name)
+        {
+            if (ProjectSecuritySettings.Load(api.ProjectDirectory).Restricted) LuaExecutionPolicy.Register(lua, this, GetType().GetMethod(method)!, name);
+            else { using var callback = lua.RegisterFunction(name, this, GetType().GetMethod(method)!); }
+        }
         Bind(nameof(Register), "kne_sdk_register"); Bind(nameof(Event), "kne_sdk_event"); Bind(nameof(TextHook), "kne_sdk_text_hook");
         Bind(nameof(Http), "kne_sdk_http"); Bind(nameof(Download), "kne_sdk_download"); Bind(nameof(Speak), "kne_sdk_speak");
         lua["kne_sdk_is_editor"] = api.IsEditor; lua["kne_sdk_is_player"] = api.IsPlayer;

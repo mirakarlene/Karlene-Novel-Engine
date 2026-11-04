@@ -92,10 +92,7 @@ public sealed partial class LuaRuntime
             string extension = Path.GetExtension(full).ToLowerInvariant();
             bool allowed = kind switch { "lua" => extension == ".lua", "cs" => extension == ".cs", "script" => extension is ".lua" or ".krl" or ".cs", _ => false };
             if (!allowed) throw new ArgumentException("Поддерживаются .lua, .krl и C#-плагины .cs; расширение должно соответствовать блоку.");
-            using var stream = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read);
-            if (stream.Length > 8 * 1024 * 1024) throw new InvalidDataException("Плагин больше 8 МБ.");
-            using var reader = new StreamReader(stream, new UTF8Encoding(false, true), detectEncodingFromByteOrderMarks: true);
-            string source = reader.ReadToEnd();
+            string source = ScriptProtection.ReadText(full);
             return [extension == ".krl" ? LuaSource.Prepare(source) : source, Path.GetRelativePath(project.Path, full).Replace('\\', '/'), ""];
         }
         catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException or DecoderFallbackException)
@@ -109,6 +106,7 @@ public sealed partial class LuaRuntime
     public string ExecuteCSharpPlugin(string relative, string source)
     {
         if (!pluginsEnabled) return "Сторонние плагины отключены в этом запуске движка.";
+        if (project.Engine.Security.Restricted) return "C#-плагины запрещены ограниченной политикой проекта.";
         EngineDiagnostics.Trace("Выполнение C#-плагина", relative);
         using var context = new PluginContext(this);
         try

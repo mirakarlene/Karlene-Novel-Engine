@@ -8,7 +8,11 @@ namespace KNE;
 public sealed record StoryAction(string Kind, string ExpectedFrame, int Option = 0, string? Command = null, bool Cancel = false);
 
 public sealed record GameCheckpoint(int Version, string ProjectPath, string Fingerprint, int Seed,
-    IReadOnlyList<StoryAction> History, StoryFrame Frame, JsonElement State);
+    IReadOnlyList<StoryAction> History, StoryFrame Frame, JsonElement State)
+{
+    /// <summary>Optional bounded previous positions; each retains its full replay log.</summary>
+    public IReadOnlyList<GameCheckpoint>? Rollback { get; init; }
+}
 
 public interface IGameSession : IAsyncDisposable
 {
@@ -29,6 +33,8 @@ public interface IGameSession : IAsyncDisposable
     Task TriggerAsync(TriggerSignal signal, CancellationToken cancellationToken = default) => Task.CompletedTask;
     Task ProcessCommandAsync(string command, CancellationToken cancellationToken = default);
     Task<GameCheckpoint> GetCheckpointAsync(CancellationToken cancellationToken = default);
+    /// <summary>Captures a rollback position without publishing save lifecycle events.</summary>
+    Task<GameCheckpoint> CaptureCheckpointAsync(CancellationToken cancellationToken = default) => GetCheckpointAsync(cancellationToken);
     Task RestoreAsync(GameCheckpoint checkpoint, CancellationToken cancellationToken = default);
 }
 
@@ -125,6 +131,7 @@ public sealed class GameSaveStore
 
     public async Task SaveAsync(string slot, GameCheckpoint checkpoint, CancellationToken cancellationToken = default)
     {
+        GameRollbackHistory.Validate(checkpoint);
         string target = SlotPath(slot);
         string json = JsonSerializer.Serialize(checkpoint, ProjectConfiguration.JsonOptions);
         if (Encoding.UTF8.GetByteCount(json) > 8_000_000)
@@ -154,7 +161,7 @@ public sealed class GameSaveStore
                 checkpoint.Frame.Speaker == null || checkpoint.Frame.Text == null || checkpoint.Frame.Options == null ||
                 checkpoint.Frame.Options.Count > 20 || checkpoint.Frame.Options.Any(string.IsNullOrWhiteSpace))
                 throw new InvalidDataException("Некорректный формат сохранения.");
-            return checkpoint;
+            GameRollbackHistory.Validate(checkpoint); return checkpoint;
         }
         catch (JsonException ex) { throw new InvalidDataException("Сохранение повреждено.", ex); }
     }

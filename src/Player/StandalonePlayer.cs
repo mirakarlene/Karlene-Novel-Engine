@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace KNE;
 
 /// <summary>Embedded game identity; build-machine paths and credentials are never shipped.</summary>
-public sealed record PlayerManifest(string GameId, string Title, string SaveLocation, string ReleaseMode, string Author, string Team, string Version, string ContentRevision = "")
+public sealed record PlayerManifest(string GameId, string Title, string SaveLocation, string ReleaseMode, string Author, string Team, string Version, string ContentRevision = "", bool TestBuild = false)
 {
     public string SavesDirectory(string executableDirectory, string? appData = null) => Path.Combine(SaveLocation == "local" ? executableDirectory : Path.Combine(appData ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KNE", "games", GameId), "saves");
 }

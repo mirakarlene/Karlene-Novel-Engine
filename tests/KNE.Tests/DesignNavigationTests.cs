@@ -137,7 +137,7 @@ public sealed class DesignNavigationTests
             recent.ItemsSource = new[] { new { Path = "C:\\projects\\Novel", Label = "Novel", LastOpenedLabel = "Сегодня", IsAvailable = true } };
             var root = (FrameworkElement)window.Content; FileBrowserDesignTests.Layout(root);
             var heading = Assert.Single(FileBrowserDesignTests.Descendants(root).OfType<TextBlock>(), text => text.Text == "Последние проекты");
-            var button = Assert.Single(FileBrowserDesignTests.Descendants(recent).OfType<Button>(), item => item.Content is StackPanel);
+            var button = Assert.Single(FileBrowserDesignTests.Descendants(recent).OfType<Button>(), item => item.Content is DockPanel);
             double headingLeft = heading.TranslatePoint(new Point(), root).X; double rowLeft = button.TranslatePoint(new Point(), root).X;
             Assert.InRange(headingLeft, rowLeft, rowLeft + button.Padding.Left + 2);
             FileBrowserDesignTests.Capture(root, "welcome-heading.png", new Size(1460, 900));

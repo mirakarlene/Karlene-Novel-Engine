@@ -30,7 +30,7 @@
                             <DockPanel Margin="5,3">
                             <Button DockPanel.Dock="Right" Content="×" Tag="{Binding Path}" ToolTip="Убрать из списка. Файлы проекта останутся." Width="30" Margin="6,0,0,0" Click="ForgetRecentProject_Click"/>
                             <Button Tag="{Binding Path}" ToolTip="{Binding Path}" HorizontalContentAlignment="Stretch" Padding="10,8" Click="OpenRecentProject_Click">
-                                <StackPanel><TextBlock Text="{Binding Label}" FontWeight="SemiBold"/><TextBlock Text="{Binding Path}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/><TextBlock Text="{Binding LastOpenedLabel}" FontSize="11" Margin="0,3,0,0"/></StackPanel>
+                                <DockPanel><Image Source="{Binding Icon}" Width="40" Height="40" Margin="0,0,10,0" DockPanel.Dock="Left"><Image.Style><Style TargetType="Image"><Style.Triggers><Trigger Property="Source" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></Image.Style></Image><StackPanel><TextBlock Text="{Binding Label}" FontWeight="SemiBold"/><TextBlock Text="{Binding Path}" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/><TextBlock Text="{Binding LastOpenedLabel}" FontSize="11" Margin="0,3,0,0"/></StackPanel></DockPanel>
                                 <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Opacity" Value="1"/><Style.Triggers><DataTrigger Binding="{Binding IsAvailable}" Value="False"><Setter Property="Opacity" Value="0.4"/></DataTrigger></Style.Triggers></Style></Button.Style>
                             </Button>
                             </DockPanel>
@@ -267,8 +267,15 @@
             </Grid>
         </Grid>
     </DockPanel>
-        <Border x:Name="BreakOverlay" Panel.ZIndex="100" Visibility="Collapsed" Background="{DynamicResource Editor.Background}">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock Text="Пора сделать перерыв" FontSize="28" TextAlignment="Center"/><TextBlock x:Name="BreakCountdown" FontSize="22" Margin="0,16,0,0" TextAlignment="Center"/></StackPanel>
+        <Border x:Name="BreakOverlay" Panel.ZIndex="100" Visibility="Collapsed" Background="{DynamicResource Editor.Background}" KeyboardNavigation.TabNavigation="Cycle">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="Пора сделать перерыв" FontSize="28" TextAlignment="Center"/>
+                <TextBlock x:Name="BreakCountdown" FontSize="22" Margin="0,16,0,0" TextAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,24,0,0">
+                    <Button x:Name="MinimizeBreakButton" Content="Свернуть окно" Padding="16,10" Click="MinimizeBreak_Click"/>
+                    <Button x:Name="EndBreakButton" Content="Снять досрочно" Padding="16,10" Margin="12,0,0,0" Click="EndBreak_Click"/>
+                </StackPanel>
+            </StackPanel>
         </Border>
         <Border x:Name="BlockLibraryOverlay" Visibility="Collapsed" Background="#B9181420" Padding="36" MouseDown="BlockLibraryBackdrop_Click"
                 KeyboardNavigation.TabNavigation="Cycle">

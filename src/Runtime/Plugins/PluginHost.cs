@@ -7,8 +7,9 @@ internal sealed class PluginHost : IDisposable
 {
     private readonly CSharpPluginCompiler compiler = new();
     private NLua.Lua? editorLua;
+    private readonly ProjectSecuritySettings policy;
     internal PluginApi Api { get; }
-    internal PluginHost(string directory, bool editor, object engine) { Api = new(directory, editor) { Engine = engine }; }
+    internal PluginHost(string directory, bool editor, object engine) { policy = ProjectSecuritySettings.Load(directory); Api = new(directory, editor) { Engine = engine }; }
     internal static HashSet<string> ManifestSourcePaths(string directory)
         => PluginFailure.Invoke(directory, "Поиск манифестов плагинов", () => ManifestSourcePathsCore(directory));
     private static HashSet<string> ManifestSourcePathsCore(string directory)
@@ -35,7 +36,7 @@ internal sealed class PluginHost : IDisposable
     private void LoadCore(Func<IPluginContext> context, CancellationToken token,
         IEnumerable<string>? applicationPlugins, bool includeProjectPlugins)
     {
-        if (!EngineLaunch.PluginsEnabled) return;
+        if (!EngineLaunch.PluginsEnabled || !policy.AllowPlugins) return;
         var loadedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string source in ApplicationPluginFiles.Normalize(applicationPlugins))
         {
@@ -65,7 +66,7 @@ internal sealed class PluginHost : IDisposable
                 PluginApi.Id(manifest.Id);
                 if (!ids.Add(manifest.Id)) throw new InvalidDataException("Повторный ID плагина: " + manifest.Id);
                 string source = PathSafety.ResolveRelative(Api.ProjectDirectory, manifest.Source);
-                if (Path.GetExtension(source).ToLowerInvariant() is not (".cs" or ".lua") || new FileInfo(source).Length > 8 * 1024 * 1024) throw new InvalidDataException("Расширение требует исходный .cs или .lua до 8 МБ.");
+                if (Path.GetExtension(source).ToLowerInvariant() is not (".cs" or ".lua")) throw new InvalidDataException("Расширение требует исходный .cs или .lua до 8 МБ.");
                 if (loadedSources.Add(source)) LoadSource(source, manifest.Source, context);
                 return true;
             });
@@ -82,20 +83,22 @@ internal sealed class PluginHost : IDisposable
     {
         if (source.EndsWith(".lua", StringComparison.OrdinalIgnoreCase))
         {
-            if (Api.Engine is LuaRuntime runtime) runtime.LoadLuaPluginManifest(diagnosticPath, File.ReadAllText(source));
+            if (Api.Engine is LuaRuntime runtime) runtime.LoadLuaPluginManifest(diagnosticPath, ScriptProtection.ReadText(source));
             else
             {
                 editorLua ??= new NLua.Lua(); editorLua.State.Encoding = System.Text.Encoding.UTF8;
-                new LuaPluginModule(Api, editorLua).Install(); editorLua.DoString(File.ReadAllText(source), "@" + diagnosticPath);
+                new LuaPluginModule(Api, editorLua).Install(); LuaExecutionPolicy.Apply(editorLua, policy); editorLua.DoString(ScriptProtection.ReadText(source), "@" + diagnosticPath);
             }
             return;
         }
+        policy.DemandCSharp();
         var invocation = context();
-        try { compiler.Execute(diagnosticPath, File.ReadAllText(source), invocation); }
+        try { compiler.Execute(diagnosticPath, ScriptProtection.ReadText(source), invocation); }
         finally { (invocation as IDisposable)?.Dispose(); }
     }
     internal void Execute(string path, string source, IPluginContext context) => PluginFailure.Invoke(path, "Выполнение C#", () =>
     {
+        policy.DemandCSharp();
         string previous = Api.SourcePath; Api.SourcePath = path;
         try { compiler.Execute(path, source, context); return true; }
         finally { Api.SourcePath = previous; }

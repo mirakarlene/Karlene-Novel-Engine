@@ -9,11 +9,11 @@ using System.Text.Json;
 namespace KNE;
 
 /// <summary>Compact project-wide graphics, runtime, diagnostics and storage preferences.</summary>
-public sealed class ProjectParametersWindow : Window
+public sealed partial class ProjectParametersWindow : Window
 {
     private readonly ProjectInfo project;
     internal GraphicsSettingsEditor GraphicsInput { get; } = new();
-    internal TextBox TitleInput { get; } = new() { IsReadOnly = true, MaxLength = 128, FontSize = 18, FontWeight = FontWeights.SemiBold, Width = 420 };
+    internal TextBox TitleInput { get; } = new() { MaxLength = 128 };
     internal TextBox SavesInput { get; } = new();
     internal ComboBox CornerInput { get; } = GraphicsSettingsEditor.Choice(ProjectPerformanceSettings.Corners);
     internal ComboBox TextureInput => GraphicsInput.TextureInput;
@@ -43,35 +43,28 @@ public sealed class ProjectParametersWindow : Window
         GraphicsInput.Children.Clear(); // Reuse the value/selection contract while placing its inputs in two columns.
         GraphicsInput.Value = value.Graphics;
         GraphicsInput.ApiInput.ItemsSource = GraphicsSettings.Apis.Select(option => option.Value == "auto" ? option with { Label = "Автоматически" } : option).ToArray();
-        GraphicsInput.CacheLimitInput.ItemsSource = GraphicsSettings.CacheLimits.Where(option => option.Value >= 64 || option.Value == value.Graphics.ResourceCacheLimitMb).Select(option => option with { Label = option.Value + " МБ" }).ToArray();
+        GraphicsInput.CacheLimitInput.ItemsSource = GraphicsSettings.CacheLimits.Select(option => option with { Label = option.Value + " МБ" }).ToArray();
         GraphicsInput.ApiInput.SelectedValue = value.Graphics.Api; GraphicsInput.CacheLimitInput.SelectedValue = value.Graphics.ResourceCacheLimitMb;
         CornerInput.ItemsSource = ProjectPerformanceSettings.Corners.Where(option => option.Value != "bottom_left" || value.FpsCorner == "bottom_left").OrderBy(option => option.Value == "top_right" ? 0 : option.Value == "top_left" ? 1 : 2).ToArray();
         CornerInput.SelectedValue = value.FpsCorner; AsyncTasksInput.SelectedValue = value.MaxAsyncTasks; AudioBufferInput.SelectedValue = value.AudioBuffer;
         AudioBufferInput.ToolTip = "Два аудиобуфера по 25 / 75 / 150 мс. Меньший буфер снижает задержку, больший лучше переносит задержки обработки. Применяется при следующем открытии аудиофайла.";
         AsyncTasksInput.ToolTip = "Максимум одновременно активных веток, включая основную. Применяется при следующем запуске сценария.";
-        var body = new StackPanel { Width = 732 };
-        var heading = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new(0, 0, 0, 12) };
-        heading.Children.Add(new TextBlock { Text = "Название проекта", HorizontalAlignment = HorizontalAlignment.Center, Opacity = .7, Margin = new(0, 0, 0, 6) });
-        var titleRow = new StackPanel { Orientation = Orientation.Horizontal };
-        TitleInput.Text = project.Title; TitleInput.ToolTip = "Название в project.json; папка проекта остаётся на прежнем месте.";
-        var rename = new Button { Content = "Переименовать", Margin = new(8, 0, 0, 0), Padding = new(10, 5, 10, 5) };
-        void Rename()
-        {
-            if (TitleInput.IsReadOnly) { TitleInput.IsReadOnly = false; rename.Content = "Готово"; TitleInput.Focus(); TitleInput.SelectAll(); }
-            else { try { TitleInput.Text = ProjectMaintenance.ValidateName(TitleInput.Text); TitleInput.IsReadOnly = true; rename.Content = "Переименовать"; status.Text = "Новое название применится при сохранении."; } catch (ArgumentException error) { status.Text = error.Message; } }
-        }
-        rename.Click += (_, _) => Rename(); TitleInput.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Rename(); e.Handled = true; } };
-        titleRow.Children.Add(TitleInput); titleRow.Children.Add(rename); heading.Children.Add(titleRow); body.Children.Add(heading);
+        var body = new StackPanel();
+        TitleInput.Text = project.Title;
+        MetadataInput = new(project, BuildInput, TitleInput);
+        InitializeOptions(project);
         var columns = new Grid(); columns.ColumnDefinitions.Add(new()); columns.ColumnDefinitions.Add(new() { Width = new GridLength(16) }); columns.ColumnDefinitions.Add(new());
         var graphics = new StackPanel(); graphics.Children.Add(Heading("Графика"));
         AddField(graphics, "Графический API", GraphicsInput.ApiInput); graphics.Children.Add(GraphicsInput.VSyncInput);
         AddField(graphics, "Ограничение FPS", GraphicsInput.FpsInput); AddField(graphics, "Сглаживание", GraphicsInput.MsaaInput); AddField(graphics, "Качество текстур", TextureInput);
+        AddField(graphics, "Разрешение окна", ResolutionFields()); AddField(graphics, "Палитра игры", PaletteInput);
         var performance = new StackPanel(); performance.Children.Add(Heading("Производительность"));
         var cache = new DockPanel { LastChildFill = true }; GraphicsInput.CacheLimitInput.MinWidth = 80; GraphicsInput.CacheLimitInput.Width = 90; DockPanel.SetDock(GraphicsInput.CacheLimitInput, Dock.Right);
         cache.Children.Add(GraphicsInput.CacheLimitInput); cache.Children.Add(GraphicsInput.LimitCacheInput); performance.Children.Add(cache);
         performance.Children.Add(Hint("Кэш хранит подготовленные ресурсы. Лимит не включает активные изображения и память драйвера. API готовит графику один раз; движение выполняет композитор WPF."));
         AddSwitch(performance, "unload", "Выгружать ресурсы прошлой сцены", value.UnloadPreviousScene);
         AddField(performance, "Лимит асинхронных задач", AsyncTasksInput); AddField(performance, "Аудио буфер", AudioBufferInput);
+        AddSwitch(performance, "preload", "Предзагрузка сцен", value.Preloading); AddField(performance, "Количество сцен", PreloadInput);
         var left = Card(graphics); var right = Card(performance); columns.Children.Add(left); columns.Children.Add(right); Grid.SetColumn(right, 2); body.Children.Add(columns);
         var diagnostics = new StackPanel(); diagnostics.Children.Add(Heading("Отладка и Диагностика"));
         var diagnosticGrid = new Grid(); diagnosticGrid.ColumnDefinitions.Add(new()); diagnosticGrid.ColumnDefinitions.Add(new());
@@ -80,18 +73,22 @@ public sealed class ProjectParametersWindow : Window
         Place(diagnosticGrid, Switch("stats", "Оверлей статистики (RAM, GPU, Draw Calls)", value.StatisticsOverlay), 0, 1);
         Place(diagnosticGrid, Switch("loading", "Уведомление загрузки в углу", value.LoadingIndicator), 1, 0);
         Place(diagnosticGrid, Switch("debug", "Режим отладки (консоль при запуске)", value.DebugMode), 1, 1);
-        Place(diagnosticGrid, Switch("preload", "Предзагрузка ресурсов следующей сцены", value.Preloading), 2, 0);
+
         diagnostics.Children.Add(diagnosticGrid); var diagnosticCard = Card(diagnostics); diagnosticCard.Margin = new(0, 10, 0, 0); body.Children.Add(diagnosticCard);
-        var storage = new StackPanel(); storage.Children.Add(Heading("Путь к сохранениям"));
+        var storage = new StackPanel(); storage.Children.Add(Heading("Сохранения"));
         var pathRow = new DockPanel(); var browse = new Button { Content = "Выбрать...", Margin = new(8, 0, 0, 0), Padding = new(10, 5, 10, 5) }; DockPanel.SetDock(browse, Dock.Right); pathRow.Children.Add(browse);
         SavesInput.Text = value.SavesPath; SavesInput.Padding = new(5); pathRow.Children.Add(SavesInput); storage.Children.Add(pathRow);
         browse.Click += (_, _) => { var dialog = new OpenFolderDialog(); if (dialog.ShowDialog(this) == true) SavesInput.Text = dialog.FolderName; };
         storage.Children.Add(Hint("Относительный путь считается от проекта. При смене папки существующие сохранения не переносятся."));
+        AddField(storage, "Максимальная история действий (глубина отката)", RollbackInput);
+        AddSwitch(storage, "autosave", "Автосохранение", project.Engine.Game.AutoSave);
+        AddField(storage, "Интервал", AutosaveInput); AddField(storage, "Каждые N действий", AutosaveActionsInput);
+        AddField(storage, "Фоновая музыка по умолчанию (главное меню, необязательно)", MusicRow());
         var footer = new StackPanel { Orientation = Orientation.Horizontal, Margin = new(0, 8, 0, 0) };
         var save = new Button { Content = "Сохранить", Foreground = Brushes.White, Padding = new(16, 7, 16, 7) }; save.SetResourceReference(BackgroundProperty, "KNE.AccentBrush");
         var cancel = new Button { Content = "Отмена", Background = new SolidColorBrush(Color.FromRgb(65, 62, 74)), Foreground = Brushes.WhiteSmoke, Margin = new(8, 0, 0, 0), Padding = new(16, 7, 16, 7), IsCancel = true };
         save.Click += async (_, _) => { try { await SaveAsync(); DialogResult = true; } catch (Exception error) { status.Text = error.Message; } }; cancel.Click += (_, _) => Close();
-        footer.Children.Add(save); footer.Children.Add(cancel); storage.Children.Add(footer);
+        footer.Children.Add(save); footer.Children.Add(cancel);
         var storageCard = Card(storage); storageCard.Margin = new(0, 10, 0, 0); body.Children.Add(storageCard);
         var danger = new StackPanel { Margin = new(0, 7, 0, 0) };
         danger.Children.Add(Hint("Удаление проекта удаляет все файлы его папки и несохранённые изменения. Отмена или сворачивание этого раздела сбрасывает счётчик."));
@@ -104,24 +101,27 @@ public sealed class ProjectParametersWindow : Window
             DeleteCounter.Text = "Осталось нажатий: " + DeletionConfirmation.Remaining; DeleteCounter.Visibility = Visibility.Visible;
         };
         DangerZone.Content = danger; DangerZone.Collapsed += (_, _) => ResetDeletion(); body.Children.Add(DangerZone); body.Children.Add(status);
-        var firstPage = body.Children.OfType<UIElement>().Where(item => item != status).ToArray();
-        body.Children.Insert(body.Children.Count - 1, BuildInput);
-        var pageLabel = new TextBlock { Text = "1 / 2 · Проект", VerticalAlignment = VerticalAlignment.Center, Margin = new(14, 0, 14, 0) };
+        BuildInput.Children.Add(SecurityCard(project.Engine.Security));
+        var scroll = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        var pageLabel = new TextBlock { Text = "1 / 3 · Проект", VerticalAlignment = VerticalAlignment.Center, Margin = new(14, 0, 14, 0) };
         var pager = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new(0, 10, 0, 0) };
-        pager.Children.Add(PreviousPage); pager.Children.Add(pageLabel); pager.Children.Add(NextPage); body.Children.Add(pager);
+        pager.Children.Add(PreviousPage); pager.Children.Add(pageLabel); pager.Children.Add(NextPage);
         void ShowPage(int page)
         {
-            Page = page; ResetDeletion(); DangerZone.IsExpanded = false;
-            foreach (var child in firstPage) child.Visibility = page == 0 ? Visibility.Visible : Visibility.Collapsed;
-            BuildInput.Visibility = page == 1 ? Visibility.Visible : Visibility.Collapsed;
-            if (footer.Parent is Panel parent) parent.Children.Remove(footer);
-            (page == 0 ? storage.Children : BuildInput.Children).Add(footer);
-            PreviousPage.IsEnabled = page == 1; NextPage.IsEnabled = page == 0; pageLabel.Text = page == 0 ? "1 / 2 · Проект" : "2 / 2 · Сборки";
+            Page = Math.Clamp(page, 0, 2); ResetDeletion(); DangerZone.IsExpanded = false;
+            scroll.Content = Page switch { 0 => body, 1 => BuildInput, _ => MetadataInput };
+            BuildInput.Visibility = Visibility.Visible;
+            PreviousPage.IsEnabled = Page > 0; NextPage.IsEnabled = Page < 2;
+            pageLabel.Text = (Page + 1) + " / 3 · " + (Page switch { 0 => "Проект", 1 => "Сборки и безопасность", _ => "Метаданные проекта" });
+            scroll.ScrollToTop();
         }
-        PreviousPage.Click += (_, _) => ShowPage(0); NextPage.Click += (_, _) => ShowPage(1);
+        PreviousPage.Click += (_, _) => ShowPage(Page - 1); NextPage.Click += (_, _) => ShowPage(Page + 1);
         Closed += (_, _) => { if (!DeletionRequested) ResetDeletion(); };
-        // Keep the requested window dimensions, including a smaller manually resized window and expanded danger zone.
-        Content = new Viewbox { Child = body, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Top, Margin = new(20) };
+        body.Children.Remove(status);
+        var bottom = new StackPanel(); bottom.Children.Add(status); bottom.Children.Add(footer); bottom.Children.Add(pager);
+        var root = new DockPanel { Margin = new(20) }; DockPanel.SetDock(bottom, Dock.Bottom); root.Children.Add(bottom); root.Children.Add(scroll); Content = root;
+        foreach (var text in Descendants(columns).OfType<TextBlock>()) text.TextWrapping = TextWrapping.Wrap;
+        foreach (var check in switches.Values) if (check.Content is string label) check.Content = new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap };
         foreach (var input in new[] { GraphicsInput.ApiInput, GraphicsInput.FpsInput, GraphicsInput.MsaaInput, TextureInput, GraphicsInput.CacheLimitInput, AsyncTasksInput, AudioBufferInput, CornerInput }) input.Margin = new(0, 3, 0, 5);
     }
     private void ResetDeletion() { DeletionConfirmation.Cancel(); DeleteCounter.Visibility = Visibility.Collapsed; DeleteCounter.Text = ""; }
@@ -137,38 +137,5 @@ public sealed class ProjectParametersWindow : Window
     private static Border Card(UIElement child) { var result = new Border { Child = child, Padding = new(12), CornerRadius = new(8), BorderThickness = new(1) }; result.SetResourceReference(Border.BackgroundProperty, "Editor.Surface"); result.SetResourceReference(Border.BorderBrushProperty, "Editor.Border"); return result; }
     private static Button DangerButton(string content) => new() { Content = content, Background = Brushes.DarkRed, Foreground = Brushes.White, BorderBrush = Brushes.IndianRed, Padding = new(12, 6, 12, 6) };
     private static void AddField(Panel body, string label, UIElement input) { body.Children.Add(new TextBlock { Text = label, FontSize = 12 }); body.Children.Add(input); }
-    internal async Task SaveAsync()
-    {
-        string title = ProjectMaintenance.ValidateName(TitleInput.Text);
-        var value = new ProjectPerformanceSettings { Graphics = GraphicsInput.Value, FpsCounter = switches["fps"].IsChecked == true, FpsCorner = (string?)CornerInput.SelectedValue ?? "top_right", StatisticsOverlay = switches["stats"].IsChecked == true, LoadingIndicator = switches["loading"].IsChecked == true, DebugMode = switches["debug"].IsChecked == true, Preloading = switches["preload"].IsChecked == true, UnloadPreviousScene = switches["unload"].IsChecked == true, MaxAsyncTasks = (int?)AsyncTasksInput.SelectedValue ?? 128, AudioBuffer = (string?)AudioBufferInput.SelectedValue ?? "balanced", SavesPath = SavesInput.Text.Trim() };
-        value.Validate(project.Path);
-        var build = BuildInput.Value; build.Validate();
-        string buildFile = System.IO.Path.Combine(project.Path, "engine", "build.json");
-        byte[]? previousBuild = System.IO.File.Exists(buildFile) ? await System.IO.File.ReadAllBytesAsync(buildFile) : null;
-        string projectFile = PathSafety.ResolveRelative(project.Path, "project.json"), performanceFile = PathSafety.ResolveRelative(project.Path, "engine/performance.json");
-        byte[] previousProject = await File.ReadAllBytesAsync(projectFile);
-        byte[]? previousPerformance = File.Exists(performanceFile) ? await File.ReadAllBytesAsync(performanceFile) : null;
-        ProjectBuildWrite? written = null; bool performanceSaved = false;
-        try
-        {
-            written = await ProjectBuildSettingsStore.SaveCheckedAsync(project.Path, build, BuildInput.InitialMetadata, title == project.Title ? null : title);
-            await PerformanceSettingsStore.SaveProjectAsync(project.Path, value);
-            performanceSaved = true;
-            var configuration = JsonSerializer.Deserialize<ProjectConfiguration>(written.ProjectJson, ProjectConfiguration.JsonOptions)!;
-            project.Configuration.Metadata = configuration.Metadata; project.Configuration.GameInfo = configuration.GameInfo; project.Configuration.LegacyName = configuration.LegacyName;
-            BuildInput.Saved(written.Settings);
-        }
-        catch (Exception error)
-        {
-            var failures = new List<Exception>();
-            if (performanceSaved) try { await ProjectBuildMetadata.ReplaceAsync(performanceFile, previousPerformance); } catch (Exception rollback) { failures.Add(rollback); }
-            if (written != null)
-            {
-                try { ProjectBuildMetadata.CheckCurrent(buildFile, written.BuildJson); await ProjectBuildMetadata.ReplaceAsync(buildFile, previousBuild); } catch (Exception rollback) { failures.Add(rollback); }
-                try { ProjectBuildMetadata.CheckCurrent(projectFile, written.ProjectJson); await ProjectBuildMetadata.ReplaceAsync(projectFile, previousProject); } catch (Exception rollback) { failures.Add(rollback); }
-            }
-            if (failures.Count > 0) throw new AggregateException("Не удалось полностью отменить сохранение параметров проекта.", new[] { error }.Concat(failures));
-            throw;
-        }
-    }
+    internal Task SaveAsync() => SaveAllOptionsAsync();
 }

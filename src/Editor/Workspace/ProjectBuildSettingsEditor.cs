@@ -29,11 +29,6 @@ internal sealed class ProjectBuildSettingsEditor : StackPanel
         Author.Text = value.Author; Team.Text = value.Team; Version.Text = value.Version; Saves.SelectedValue = value.SaveLocation;
         var test = Section("Тестовый билд"); Field(test, "Режим запуска", TestMode); test.Children.Add(testHint); Field(test, "Папка тестового билда", PathRow(TestPath)); Children.Add(Card(test));
         var release = Section("Релизный билд · Windows x64"); Field(release, "Формат", ReleaseMode); release.Children.Add(releaseHint); Field(release, "Папка выходных файлов", PathRow(ReleasePath)); Field(release, "Сохранения и настройки игрока", Saves); Children.Add(Card(release));
-        var metadata = Section("Метаданные EXE");
-        var row = new Grid(); row.ColumnDefinitions.Add(new()); row.ColumnDefinitions.Add(new() { Width = new GridLength(12) }); row.ColumnDefinitions.Add(new());
-        var left = new StackPanel(); Field(left, "Автор / никнейм", Author); Field(left, "Версия игры", Version);
-        var right = new StackPanel(); Field(right, "Команда разработчиков (необязательно)", Team); right.Children.Add(Hint("Эти поля записываются в свойства EXE. Цифровая подпись сертификатом не создаётся."));
-        row.Children.Add(left); Grid.SetColumn(right, 2); row.Children.Add(right); metadata.Children.Add(row); Children.Add(Card(metadata));
         Children.Add(Hint("Для сборки нужен .NET 10 SDK и доступ к пакетам NuGet. Тестовый EXE использует выбранный релизный профиль; MSIX тестируется как EXE до упаковки. Сценарии и ресурсы входят в билд, сохранения разработчика — нет."));
         TestMode.SelectionChanged += (_, _) => Refresh(); ReleaseMode.SelectionChanged += (_, _) => Refresh(); Refresh();
     }

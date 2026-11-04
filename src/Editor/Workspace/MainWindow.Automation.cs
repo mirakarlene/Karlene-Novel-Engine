@@ -14,7 +14,7 @@ public partial class MainWindow
     private readonly EditorNotificationQueue notifications = new();
     private readonly WindowsEditorNotifications notificationDelivery = new();
     private readonly HashSet<string> pendingBackups = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<Window, (bool Enabled, string Title)> breakWindows = [];
+    private readonly Dictionary<Window, BreakWindowSurface> breakWindows = [];
     private readonly EditorSaveSchedule saveSchedule = new();
     private TimeSpan lastClockTick;
     private bool automationBusy, deliveringNotification;
@@ -58,7 +58,7 @@ public partial class MainWindow
         if (closed) return;
         TimeSpan now = sessionTime.Elapsed;
         bool reminder = SessionClock.Advance(now - lastClockTick, settings.Editor); lastClockTick = now;
-        if (reminder && !settings.Editor.StrictBreak) notifications.Add(new("break", $"Вы работаете уже {settings.Editor.BreakMinutes} минут. Пора сделать перерыв?"));
+        if (reminder && !settings.Editor.StrictBreak) notifications.Add(new("break", $"Вы работаете уже {settings.Editor.BreakMinutes} минут. Для вашего здоровья лучше взять перерыв."));
         UpdateBreakUi();
         if (!deliveringNotification) _ = DeliverNotificationsAsync();
         if (automationBusy || busy || checkingClose || SessionClock.IsOnBreak || OwnedWindows.Cast<Window>().Any(window => window.IsVisible) || OpenEditors.Any(editor => editor.IsSaving)) return;
@@ -168,8 +168,14 @@ public partial class MainWindow
         catch (Exception error) { if (!closed) OperationStatus.Text = "Уведомления Windows: " + error.Message; }
         finally { deliveringNotification = false; }
     }
+    private void MinimizeBreak_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    private void EndBreak_Click(object sender, RoutedEventArgs e)
+    {
+        SessionClock.EndBreak(); lastClockTick = sessionTime.Elapsed; UpdateBreakUi();
+    }
     private void UpdateBreakUi()
     {
+        bool enteringBreak = SessionClock.IsOnBreak && BreakOverlay.Visibility != Visibility.Visible;
         WorkTimeStatus.Visibility = settings.Editor.ShowWorkTime ? Visibility.Visible : Visibility.Collapsed;
         WorkTimeStatus.Text = $"Время работы: {(int)SessionClock.WorkTime.TotalHours:00}:{SessionClock.WorkTime.Minutes:00}:{SessionClock.WorkTime.Seconds:00}";
         BreakOverlay.Visibility = SessionClock.IsOnBreak ? Visibility.Visible : Visibility.Collapsed;
@@ -177,12 +183,17 @@ public partial class MainWindow
         BreakCountdown.Text = $"Перерыв · {(int)SessionClock.BreakRemaining.TotalMinutes:00}:{SessionClock.BreakRemaining.Seconds:00}";
         if (SessionClock.IsOnBreak)
         {
-            foreach (Window window in OwnedWindows)
+            if (enteringBreak) MinimizeBreakButton.Focus();
+            foreach (Window window in BreakOwnedWindows(this))
             {
-                if (!breakWindows.ContainsKey(window)) breakWindows.Add(window, (window.IsEnabled, window.Title));
-                window.IsEnabled = false; window.Title = BreakCountdown.Text + " · " + breakWindows[window].Title;
+                if (!breakWindows.ContainsKey(window)) breakWindows.Add(window, new(window, () => MinimizeBreak_Click(this, new RoutedEventArgs()), () => EndBreak_Click(this, new RoutedEventArgs())));
+                breakWindows[window].Update(BreakCountdown.Text);
             }
         }
-        else { foreach (var pair in breakWindows) { pair.Key.IsEnabled = pair.Value.Enabled; pair.Key.Title = pair.Value.Title; } breakWindows.Clear(); }
+        else { foreach (var pair in breakWindows) pair.Value.Restore(); breakWindows.Clear(); }
+    }
+    private static IEnumerable<Window> BreakOwnedWindows(Window parent)
+    {
+        foreach (Window child in parent.OwnedWindows) { yield return child; foreach (var nested in BreakOwnedWindows(child)) yield return nested; }
     }
 }

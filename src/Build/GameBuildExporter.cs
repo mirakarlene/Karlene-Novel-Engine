@@ -19,6 +19,7 @@ public sealed class GameBuildExporter
     private async Task<GameBuildResult> BuildCoreAsync(ProjectInfo project, ProjectBuildSettings settings, string outputRoot,
         bool test, Action<string>? log, CancellationToken token)
     {
+        project = await ProjectLoader.LoadProjectAsync(project.Path, token).ConfigureAwait(false);
         settings = ProjectBuildMetadata.Read(project.Path).Apply(settings);
         settings.Validate();
         if (settings.GameId == "") throw new InvalidDataException("Сначала сохраните параметры сборки проекта.");
@@ -38,14 +39,31 @@ public sealed class GameBuildExporter
             using (var zip = new ZipArchive(archive)) ExtractZip(zip, source, token);
             string game = Path.Combine(source, "PlayerContent"); Directory.CreateDirectory(game);
             await CopyProjectAsync(project, game, token).ConfigureAwait(false);
-            var manifest = new PlayerManifest(settings.GameId, project.Title, settings.EffectiveSaveLocation, settings.ReleaseMode, settings.Author, settings.Team, settings.Version, Guid.NewGuid().ToString("N"));
+            bool encrypt = !test && project.Engine.Security.EncryptScripts;
+            if (encrypt)
+            {
+                byte[] key = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+                await ScriptProtection.EncryptProjectAsync(game, key, token).ConfigureAwait(false);
+                await File.WriteAllBytesAsync(Path.Combine(source, "kne-script-key.bin"), key, token).ConfigureAwait(false);
+            }
+            bool icon = !string.IsNullOrWhiteSpace(project.Configuration.Metadata?.Icon);
+            if (icon) await StaTask.Run(() => ProjectIcon.WriteExeIcon(project.Path, project.Configuration.Metadata!.Icon!, Path.Combine(source, "game.ico"))).ConfigureAwait(false);
+            var manifest = new PlayerManifest(settings.GameId, project.Title, settings.EffectiveSaveLocation, settings.ReleaseMode, settings.Author, settings.Team, settings.Version, Guid.NewGuid().ToString("N"), test);
             await File.WriteAllTextAsync(Path.Combine(source, "kne-player.json"), JsonSerializer.Serialize(manifest), token).ConfigureAwait(false);
             if (settings.ReleaseMode == "single_file")
             {
                 ZipFile.CreateFromDirectory(game, Path.Combine(source, "kne-game.zip"), CompressionLevel.Optimal, false);
                 Directory.Delete(game, true);
             }
-            CreatePlayerProperties(project.Title, settings).Save(Path.Combine(source, "KnePlayer.props"));
+            var properties = CreatePlayerProperties(project.Title, settings);
+            if (encrypt) properties.Root!.Add(new XElement("ItemGroup", new XElement("EmbeddedResource", new XAttribute("Include", "kne-script-key.bin"), new XAttribute("LogicalName", "KNE.ScriptKey"))));
+            if (icon) properties.Root!.Add(new XElement("PropertyGroup", new XElement("ApplicationIcon", "game.ico")));
+            if (!string.IsNullOrWhiteSpace(project.Configuration.GameInfo?.Description))
+            {
+                properties.Root!.Element("PropertyGroup")!.Element("Description")!.Value = EscapeProperty(project.Configuration.GameInfo.Description);
+                properties.Root!.Element("PropertyGroup")!.Element("AssemblyTitle")!.Value = EscapeProperty(project.Configuration.GameInfo.Description);
+            }
+            properties.Save(Path.Combine(source, "KnePlayer.props"));
             log?.Invoke("Публикация Windows x64 · " + settings.ReleaseMode);
             await RunToolAsync("dotnet", PublishArguments(source, publish, settings), source, log, token).ConfigureAwait(false);
             if (!File.Exists(Path.Combine(publish, "Game.exe"))) throw new IOException("Публикация не создала Game.exe.");
@@ -92,6 +110,8 @@ public sealed class GameBuildExporter
         static string Escape(string text) => text.Replace("%", "%25").Replace("$", "%24").Replace("@", "%40").Replace(";", "%3B").Replace("'", "%27").Replace("(", "%28").Replace(")", "%29").Replace("?", "%3F").Replace("*", "%2A");
         var group = new XElement("PropertyGroup",
             new XElement("AssemblyName", "Game"), new XElement("RootNamespace", "KNE"), new XElement("DefineConstants", "$(DefineConstants);KNE_PLAYER"),
+            new XElement("DefaultItemExcludes", "$(DefaultItemExcludes);PlayerContent/**/*"),
+            new XElement("AssemblyTitle", Escape(title)),
             new XElement("Product", Escape(title)), new XElement("Title", Escape(title)), new XElement("Description", Escape(title + " · " + settings.Author)),
             new XElement("Company", Escape(string.IsNullOrWhiteSpace(settings.Team) ? settings.Author : settings.Team)), new XElement("Authors", Escape(settings.Author)),
             new XElement("Copyright", Escape(settings.Author)), new XElement("Version", settings.FourPartVersion), new XElement("FileVersion", settings.FourPartVersion), new XElement("AssemblyVersion", settings.FourPartVersion),
@@ -100,10 +120,12 @@ public sealed class GameBuildExporter
         if (settings.ReleaseMode == "single_file")
         { group.Add(new XElement("PublishSingleFile", "true"), new XElement("IncludeNativeLibrariesForSelfExtract", "true"), new XElement("IncludeAllContentForSelfExtract", "true"), new XElement("EnableCompressionInSingleFile", "true")); }
         var items = new XElement("ItemGroup", new XElement("EmbeddedResource", new XAttribute("Include", "kne-player.json"), new XAttribute("LogicalName", "KNE.Player.json")));
+        items.Add(new XElement("Compile", new XAttribute("Remove", "PlayerContent/**/*.cs")), new XElement("Page", new XAttribute("Remove", "PlayerContent/**/*.xaml")));
         if (settings.ReleaseMode == "single_file") items.Add(new XElement("EmbeddedResource", new XAttribute("Include", "kne-game.zip"), new XAttribute("LogicalName", "KNE.Game.zip")));
         else items.Add(new XElement("Content", new XAttribute("Include", "PlayerContent/**/*"), new XElement("Link", "project/%(RecursiveDir)%(Filename)%(Extension)"), new XElement("CopyToPublishDirectory", "PreserveNewest")));
         return new(new XElement("Project", group, items));
     }
+    private static string EscapeProperty(string text) => text.Replace("%", "%25").Replace("$", "%24").Replace("@", "%40").Replace(";", "%3B").Replace("'", "%27").Replace("(", "%28").Replace(")", "%29").Replace("?", "%3F").Replace("*", "%2A");
 
     internal static async Task CopyProjectAsync(ProjectInfo project, string target, CancellationToken token)
     {

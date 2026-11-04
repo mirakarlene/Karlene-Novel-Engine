@@ -19,6 +19,7 @@ public sealed class GameScripts
     /// <summary>Validates all declarations before any project code runs; main must be globally unique.</summary>
     public static GameScripts Load(ProjectInfo project, EditorPreviewSource? editorSource = null, bool pluginsEnabled = true)
     {
+        pluginsEnabled = pluginsEnabled && project.Engine.Security.AllowPlugins;
         string init = project.InitScriptPath;
         var extensionSources = pluginsEnabled ? PluginHost.ManifestSourcePaths(project.Path) : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var applicationSources = ApplicationPluginFiles.Normalize(project.ApplicationPlugins).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -36,9 +37,8 @@ public sealed class GameScripts
             string source = "";
             try
             {
-                if (new FileInfo(full).Length > 8 * 1024 * 1024) throw new InvalidDataException("Сценарий больше 8 МБ: " + path);
                 bool overridden = editorSource != null && path.Equals(editorSource.RelativePath(project.Path), StringComparison.OrdinalIgnoreCase);
-                source = overridden ? editorSource!.Source : File.ReadAllText(full);
+                source = overridden ? editorSource!.Source : ScriptProtection.ReadText(full);
                 if (ScriptDocument.IsVisualPath(full) && !overridden)
                 {
                     var graph = VisualScript.Parse(source);

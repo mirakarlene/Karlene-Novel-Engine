@@ -5,7 +5,15 @@ namespace KNE;
 /// <summary>A remembered or discovered project, including missing entries.</summary>
 public sealed record StoredProject(string Path, bool IsAvailable, DateTimeOffset? LastOpened = null)
 {
-    public string Label => System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(Path));
+    public string Label => Configuration?.DisplayName(System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(Path))) ?? System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(Path));
+    private ProjectConfiguration? Configuration
+    {
+        get { try { string file = PathSafety.ResolveRelative(Path, "project.json"); return !IsAvailable || new FileInfo(file).Length > 1024 * 1024 ? null : System.Text.Json.JsonSerializer.Deserialize<ProjectConfiguration>(File.ReadAllText(file), ProjectConfiguration.JsonOptions); } catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or ArgumentException) { return null; } }
+    }
+    public System.Windows.Media.ImageSource? Icon
+    {
+        get { try { return ProjectIcon.Load(Path, Configuration?.Metadata?.Icon); } catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { return null; } }
+    }
     public string LastOpenedLabel => LastOpened is { } time ? "Последнее открытие: " + time.ToLocalTime().ToString("g") : "Ещё не открывался в KNE";
 }
 

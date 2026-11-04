@@ -17,8 +17,7 @@ public static class StartupScripts
         foreach (string candidate in paths)
         {
             string path = PathSafety.EnsureInside(project.Path, candidate);
-            if (new FileInfo(path).Length > 8 * 1024 * 1024) throw new InvalidDataException("Скрипт больше 8 МБ: " + path);
-            string source = File.ReadAllText(path);
+            string source = ScriptProtection.ReadText(path);
             (int? Priority, string Source) declaration;
             try { declaration = Declaration(source); }
             catch (InvalidDataException ex) { throw new InvalidDataException("Инициализация «" + Path.GetRelativePath(project.Path, path) + "»: " + ex.Message, ex); }

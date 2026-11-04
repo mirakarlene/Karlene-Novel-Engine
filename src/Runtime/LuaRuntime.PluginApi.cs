@@ -59,6 +59,7 @@ public sealed partial class LuaRuntime
             lua["kne_sdk_dialogue_hooks"] = pluginHost.Api.HasDialogueListeners;
         };
         pluginHost.Api.BindingsChanged();
+        ApplyExecutionPolicy(); InstallHook();
         if (pluginsEnabled) pluginHost!.Load(() => new PluginContext(this), executionToken, project.ApplicationPlugins);
         if (pluginHost!.Api.GameTexture is { } texture) lua.DoString("background(" + LuaQuote(texture) + ")", "KNE plugin texture");
         Register(nameof(PluginSceneForLua), "kne_plugin_scene");

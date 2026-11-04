@@ -121,7 +121,7 @@ public sealed class CompactProjectParametersTests
 
     [Theory]
     [InlineData(false)] [InlineData(true)]
-    public async Task Window_CompactColumnsDiagnosticsAndActionsFitTheSame780By840SizeInBothDangerStates(bool expanded)
+    public async Task Window_ColumnsDiagnosticsAndPinnedActionsFitTheSame780By840SizeWithScrollableDangerZone(bool expanded)
     {
         using var fixture = new TempProject(); var project = await fixture.LoadAsync();
         await WorkspaceTabsTests.Sta(() =>
@@ -132,27 +132,31 @@ public sealed class CompactProjectParametersTests
                 Assert.False(window.DangerZone.IsExpanded); window.DangerZone.IsExpanded = expanded;
                 if (Environment.GetEnvironmentVariable("KNE_EDITOR_RENDER") != null) EditorTheme.Apply(window, "kne");
                 Assert.Equal(780, window.Width); Assert.Equal(840, window.Height); Assert.Equal(SizeToContent.Manual, window.SizeToContent);
-                var content = Assert.IsType<Viewbox>(window.Content);
+                var content = Assert.IsType<DockPanel>(window.Content);
                 content.Measure(new Size(780, 800)); content.Arrange(new Rect(0, 0, 780, 800)); content.UpdateLayout();
-                Assert.Empty(Descendants(content).OfType<ScrollViewer>());
+                var scroll = Assert.Single(Descendants(content).OfType<ScrollViewer>());
+                Assert.Empty(Descendants(content).OfType<Viewbox>());
                 var graphics = Parent<Border>(window.GraphicsInput.ApiInput); var performance = Parent<Border>(window.AsyncTasksInput);
                 Assert.Same(graphics.Parent, performance.Parent); Assert.NotSame(graphics, performance);
                 Assert.True(Grid.GetColumn(graphics) < Grid.GetColumn(performance));
                 Assert.Equal(graphics.TransformToAncestor(content).Transform(new Point()).Y, performance.TransformToAncestor(content).Transform(new Point()).Y, 3);
-                Assert.Equal(HorizontalAlignment.Center, Parent<StackPanel>(Parent<StackPanel>(window.TitleInput)).HorizontalAlignment);
+                Assert.DoesNotContain(Descendants(scroll.Content), node => ReferenceEquals(node, window.TitleInput));
                 var diagnostic = Parent<Grid>(window.CornerInput);
                 Assert.Equal(2, diagnostic.ColumnDefinitions.Count); Assert.Equal(3, diagnostic.RowDefinitions.Count);
-                Assert.Contains(Descendants(diagnostic).OfType<CheckBox>(), input => Equals(input.Content, "Счётчик FPS"));
+                Assert.Contains(Descendants(diagnostic).OfType<CheckBox>(), input => input.Content is TextBlock text && text.Text == "Счётчик FPS");
                 Assert.IsType<DockPanel>(window.SavesInput.Parent);
                 var save = Assert.Single(Descendants(content).OfType<Button>(), button => Equals(button.Content, "Сохранить"));
                 var cancel = Assert.Single(Descendants(content).OfType<Button>(), button => Equals(button.Content, "Отмена"));
                 Assert.Same(save.Parent, cancel.Parent); Assert.True(cancel.IsCancel);
-                var body = Assert.IsType<StackPanel>(content.Child);
+                var body = Assert.IsType<StackPanel>(scroll.Content);
                 Assert.True(body.Children.IndexOf(window.DangerZone) > body.Children.IndexOf(Parent<Border>(window.SavesInput)));
                 Assert.Equal(System.Windows.Media.Colors.IndianRed, Assert.IsType<System.Windows.Media.SolidColorBrush>(window.DangerZone.Foreground).Color);
-                foreach (FrameworkElement element in new FrameworkElement[] { window.TitleInput, window.TextureInput, window.AsyncTasksInput, window.AudioBufferInput, window.CornerInput, window.SavesInput, save, cancel, window.DangerZone })
-                    AssertFits(element, content);
-                if (expanded) AssertFits(window.DeleteProjectButton, content);
+                Rect saveBounds = save.TransformToAncestor(content).TransformBounds(new Rect(save.RenderSize));
+                AssertFits(save, content); AssertFits(cancel, content);
+                foreach (FrameworkElement element in new FrameworkElement[] { window.TextureInput, window.AsyncTasksInput, window.AudioBufferInput, window.CornerInput, window.SavesInput, window.DangerZone })
+                    ScrollAndAssertFits(element, scroll, content);
+                if (expanded) ScrollAndAssertFits(window.DeleteProjectButton, scroll, content);
+                Assert.Equal(saveBounds, save.TransformToAncestor(content).TransformBounds(new Rect(save.RenderSize)));
                 Assert.Equal(780, window.Width); Assert.Equal(840, window.Height);
                 if (Environment.GetEnvironmentVariable("KNE_EDITOR_RENDER") is { } directory)
                 {
@@ -169,7 +173,7 @@ public sealed class CompactProjectParametersTests
 
     [Theory]
     [InlineData(16)] [InlineData(32)] [InlineData(64)]
-    public async Task Window_CacheOptionsOffer64Through512AndRetainOnlyTheLoadedLegacyChoice(int loaded)
+    public async Task Window_CacheOptionsOfferEveryRequestedLimitAndRetainTheLoadedChoice(int loaded)
     {
         using var fixture = new TempProject();
         await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, new() { Graphics = new() { ResourceCacheLimitMb = loaded } });
@@ -181,7 +185,7 @@ public sealed class CompactProjectParametersTests
             {
                 var input = window.GraphicsInput.CacheLimitInput;
                 Assert.Equal(loaded, input.SelectedValue);
-                Assert.Equal(loaded < 64 ? new[] { loaded, 64, 128, 256, 512 } : new[] { 64, 128, 256, 512 }, input.Items.Cast<GraphicsOption<int>>().Select(item => item.Value));
+                Assert.Equal(new[] { 16, 32, 64, 128, 256, 512 }, input.Items.Cast<GraphicsOption<int>>().Select(item => item.Value));
                 Assert.Same(input.Parent, window.GraphicsInput.LimitCacheInput.Parent); Assert.IsType<DockPanel>(input.Parent);
             }
             finally { window.Close(); }
@@ -203,9 +207,10 @@ public sealed class CompactProjectParametersTests
                 Click(window.DeleteProjectButton);
                 Assert.Equal(1, prompts); Assert.Equal(72, window.DeletionConfirmation.Remaining); Assert.False(window.DeletionRequested);
                 Assert.Equal("Осталось нажатий: 72", window.DeleteCounter.Text); Assert.Equal(Visibility.Visible, window.DeleteCounter.Visibility);
-                var content = Assert.IsType<Viewbox>(window.Content);
+                var content = Assert.IsType<DockPanel>(window.Content);
                 content.Measure(new Size(780, 800)); content.Arrange(new Rect(0, 0, 780, 800)); content.UpdateLayout();
-                AssertFits(window.DeleteCounter, content); AssertFits(window.DeleteProjectButton, content);
+                var scroll = Assert.Single(Descendants(content).OfType<ScrollViewer>());
+                ScrollAndAssertFits(window.DeleteCounter, scroll, content); ScrollAndAssertFits(window.DeleteProjectButton, scroll, content);
                 for (int click = 1; click <= 71; click++)
                 {
                     Click(window.DeleteProjectButton);
@@ -270,5 +275,16 @@ public sealed class CompactProjectParametersTests
         Rect bounds = element.TransformToAncestor(content).TransformBounds(new Rect(element.RenderSize));
         Assert.InRange(bounds.Left, -.01, content.ActualWidth); Assert.InRange(bounds.Top, -.01, content.ActualHeight);
         Assert.InRange(bounds.Right, 0, content.ActualWidth + .01); Assert.InRange(bounds.Bottom, 0, content.ActualHeight + .01);
+    }
+    private static void ScrollAndAssertFits(FrameworkElement element, ScrollViewer scroll, FrameworkElement content)
+    {
+        var body = (FrameworkElement)scroll.Content;
+        double top = element.TransformToAncestor(body).Transform(new Point()).Y;
+        scroll.ScrollToVerticalOffset(Math.Max(0, top - 4));
+        content.Measure(new Size(780, 800)); content.Arrange(new Rect(0, 0, 780, 800)); content.UpdateLayout();
+        AssertFits(element, content);
+        var viewport = scroll.TransformToAncestor(content).TransformBounds(new Rect(scroll.RenderSize));
+        var bounds = element.TransformToAncestor(content).TransformBounds(new Rect(element.RenderSize));
+        Assert.InRange(bounds.Top, viewport.Top - .01, viewport.Bottom); Assert.InRange(bounds.Bottom, viewport.Top, viewport.Bottom + .01);
     }
 }

@@ -21,16 +21,17 @@ public sealed class PerformanceWindowsTests
                 Assert.Equal(new GraphicsSettings { Api = "opengl", MaxFps = 30, MsaaSamples = 2 }, window.GraphicsInput.Value);
                 Assert.Equal("bottom_right", window.CornerInput.SelectedValue); Assert.Equal("saves", window.SavesInput.Text);
                 window.GraphicsInput.Value = new() { Api = "vulkan", MaxFps = 144, MsaaSamples = 4, TextureQuality = "quarter", VSync = false, LimitResourceCache = false, ResourceCacheLimitMb = 128 };
-                Assert.Equal(project.Title, window.TitleInput.Text); Assert.True(window.TitleInput.IsReadOnly);
-                Assert.Single(Descendants(window.Content).OfType<Button>(), input => Equals(input.Content, "Переименовать")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                window.NextPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); window.NextPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(2, window.Page); Assert.Equal(project.Title, window.TitleInput.Text);
                 Assert.False(window.TitleInput.IsReadOnly); window.TitleInput.Text = "  Новое название  ";
+                window.PreviousPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); window.PreviousPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 window.AsyncTasksInput.SelectedValue = 32; window.AudioBufferInput.SelectedValue = "low_latency";
                 window.CornerInput.SelectedValue = "top_left"; window.SavesInput.Text = "  progress/slots  ";
-                var toggles = Descendants(window.Content).OfType<CheckBox>().Where(input => !ReferenceEquals(input, window.GraphicsInput.VSyncInput) && !ReferenceEquals(input, window.GraphicsInput.LimitCacheInput)).ToDictionary(input => (string)input.Content);
-                Assert.Equal(6, toggles.Count);
+                var toggles = Descendants(window.Content).OfType<CheckBox>().Where(input => !ReferenceEquals(input, window.GraphicsInput.VSyncInput) && !ReferenceEquals(input, window.GraphicsInput.LimitCacheInput)).ToDictionary(input => input.Content is TextBlock text ? text.Text : (string)input.Content);
+                Assert.Equal(7, toggles.Count);
                 toggles["Счётчик FPS"].IsChecked = true; toggles["Оверлей статистики (RAM, GPU, Draw Calls)"].IsChecked = true;
                 toggles["Уведомление загрузки в углу"].IsChecked = false; toggles["Режим отладки (консоль при запуске)"].IsChecked = true;
-                toggles["Предзагрузка ресурсов следующей сцены"].IsChecked = false; toggles["Выгружать ресурсы прошлой сцены"].IsChecked = true;
+                toggles["Предзагрузка сцен"].IsChecked = false; toggles["Выгружать ресурсы прошлой сцены"].IsChecked = true;
                 Capture(window, "project-parameters.png");
                 await window.SaveAsync();
                 var saved = PerformanceSettingsStore.LoadProject(project.Path);
@@ -55,10 +56,9 @@ public sealed class PerformanceWindowsTests
         {
             var canceled = new ProjectParametersWindow(project);
             canceled.GraphicsInput.Value = new() { Api = "vulkan", MaxFps = 0, TextureQuality = "half" }; canceled.SavesInput.Text = "draft";
-            var rename = Assert.Single(Descendants(canceled.Content).OfType<Button>(), input => Equals(input.Content, "Переименовать"));
-            rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); canceled.TitleInput.Text = "  Cancelled title  ";
-            rename.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.True(canceled.TitleInput.IsReadOnly); Assert.Equal("Cancelled title", canceled.TitleInput.Text);
+            canceled.NextPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); canceled.NextPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            canceled.TitleInput.Text = "  Cancelled title  ";
+            Assert.False(canceled.TitleInput.IsReadOnly); Assert.Equal("  Cancelled title  ", canceled.TitleInput.Text);
             Assert.Equal(originalManifest, File.ReadAllText(manifest));
             canceled.AsyncTasksInput.SelectedValue = 64; canceled.AudioBufferInput.SelectedValue = "stable";
             var cancel = Assert.Single(Descendants(canceled.Content).OfType<Button>(), input => Equals(input.Content, "Отмена"));

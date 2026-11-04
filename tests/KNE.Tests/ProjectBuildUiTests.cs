@@ -45,7 +45,7 @@ public sealed class ProjectBuildUiTests
     [Theory]
     [InlineData(780, 840)]
     [InlineData(540, 500)]
-    public async Task Pages_KeepFirstPageDesignAndBothDrafts_SaveCancelAndBuildSettingsFit(double width, double height)
+    public async Task ThreePagesKeepGraphicsColumnsAndAllDraftsWithScrollableBuildAndMetadataForms(double width, double height)
     {
         using var fixture = new TempProject(); var project = await fixture.LoadAsync();
         await WorkspaceTabsTests.Sta(async () =>
@@ -56,21 +56,29 @@ public sealed class ProjectBuildUiTests
                 window.Width = width; window.Height = height; Layout(window, width, height);
                 Assert.Equal(0, window.Page); Assert.Equal(Visibility.Collapsed, window.BuildInput.Visibility); Assert.False(window.PreviousPage.IsEnabled); Assert.True(window.NextPage.IsEnabled);
                 Assert.Equal("vm", window.BuildInput.Value.TestMode); Assert.Equal("self_contained", window.BuildInput.Value.ReleaseMode);
-                Assert.Equal(420, window.TitleInput.Width); Assert.Equal(3, Parent<Grid>(Parent<Border>(window.GraphicsInput.ApiInput)).ColumnDefinitions.Count);
-                double x = window.TitleInput.TransformToAncestor((Visual)window.Content).Transform(new Point()).X;
+                Assert.Equal(3, Parent<Grid>(Parent<Border>(window.GraphicsInput.ApiInput)).ColumnDefinitions.Count);
+                var scroll = Descendants(window.Content).OfType<ScrollViewer>().Single();
+                Assert.DoesNotContain(Descendants(scroll.Content), node => ReferenceEquals(node, window.TitleInput));
+                double x = window.GraphicsInput.ApiInput.TransformToAncestor((Visual)window.Content).Transform(new Point()).X;
                 window.SavesInput.Text = "draft/saves"; window.BuildInput.Author.Text = "Draft author";
                 Capture(window, width, height, "project");
                 Click(window.NextPage); Layout(window, width, height);
-                Assert.Equal(1, window.Page); Assert.Equal(Visibility.Collapsed, window.TitleInput.Visibility == Visibility.Collapsed ? window.TitleInput.Visibility : Parent<StackPanel>(Parent<StackPanel>(window.TitleInput)).Visibility);
-                Assert.True(window.PreviousPage.IsEnabled); Assert.False(window.NextPage.IsEnabled); Assert.Equal(Visibility.Visible, window.BuildInput.Visibility);
+                Assert.Equal(1, window.Page); Assert.DoesNotContain(Descendants(scroll.Content), node => ReferenceEquals(node, window.TitleInput));
+                Assert.True(window.PreviousPage.IsEnabled); Assert.True(window.NextPage.IsEnabled); Assert.Equal(Visibility.Visible, window.BuildInput.Visibility);
                 window.BuildInput.TestMode.SelectedValue = "remote_debug"; Assert.True(window.BuildInput.TestPath.IsEnabled);
                 window.BuildInput.ReleaseMode.SelectedValue = "portable"; Assert.Equal("local", window.BuildInput.Value.EffectiveSaveLocation); Assert.False(window.BuildInput.Saves.IsEnabled);
                 Layout(window, width, height);
-                foreach (FrameworkElement control in new FrameworkElement[] { window.BuildInput.TestMode, window.BuildInput.TestPath, window.BuildInput.ReleaseMode, window.BuildInput.ReleasePath, window.BuildInput.Author, window.BuildInput.Team, window.BuildInput.Version, window.BuildInput.Saves, window.PreviousPage, window.NextPage }) Fits(control, (FrameworkElement)window.Content);
+                foreach (FrameworkElement control in new FrameworkElement[] { window.BuildInput.TestMode, window.BuildInput.TestPath, window.BuildInput.ReleaseMode, window.BuildInput.ReleasePath, window.BuildInput.Saves })
+                    ScrollAndFit(control, scroll, window, width, height);
+                Fits(window.PreviousPage, (FrameworkElement)window.Content); Fits(window.NextPage, (FrameworkElement)window.Content);
                 Assert.DoesNotContain(window.BuildInput.Children.OfType<Button>(), button => Equals(button.Content, "Собрать релиз"));
                 Capture(window, width, height, "builds");
-                Click(window.PreviousPage); Layout(window, width, height); Assert.Equal("draft/saves", window.SavesInput.Text); Assert.Equal("Draft author", window.BuildInput.Author.Text);
-                Assert.Equal(x, window.TitleInput.TransformToAncestor((Visual)window.Content).Transform(new Point()).X, 3);
+                Click(window.NextPage); Layout(window, width, height); Assert.Equal(2, window.Page); Assert.False(window.NextPage.IsEnabled);
+                Assert.False(window.TitleInput.IsReadOnly); Assert.Same(window.MetadataInput, scroll.Content);
+                foreach (FrameworkElement control in new FrameworkElement[] { window.TitleInput, window.BuildInput.Author, window.BuildInput.Team, window.BuildInput.Version }) ScrollAndFit(control, scroll, window, width, height);
+                Capture(window, width, height, "metadata");
+                Click(window.PreviousPage); Click(window.PreviousPage); Layout(window, width, height); Assert.Equal("draft/saves", window.SavesInput.Text); Assert.Equal("Draft author", window.BuildInput.Author.Text);
+                Assert.Equal(x, window.GraphicsInput.ApiInput.TransformToAncestor((Visual)window.Content).Transform(new Point()).X, 3);
                 Assert.False(File.Exists(Path.Combine(project.Path, "engine", "build.json")));
                 await window.SaveAsync(); var saved = ProjectBuildSettingsStore.Load(project.Path); Assert.Equal("remote_debug", saved.TestMode); Assert.Equal("portable", saved.ReleaseMode); Assert.Equal("Draft author", saved.Author); Assert.Equal("draft/saves", PerformanceSettingsStore.LoadProject(project.Path).SavesPath);
             }
@@ -122,6 +130,19 @@ public sealed class ProjectBuildUiTests
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     private static void Layout(Window window, double width, double height) { var content = (FrameworkElement)window.Content; content.Measure(new Size(width - 20, height - 40)); content.Arrange(new Rect(0, 0, width - 20, height - 40)); content.UpdateLayout(); }
     private static T Parent<T>(DependencyObject child) where T : DependencyObject { for (var item = LogicalTreeHelper.GetParent(child); item != null; item = LogicalTreeHelper.GetParent(item)) if (item is T match) return match; throw new Exception("Missing parent"); }
+    private static IEnumerable<DependencyObject> Descendants(object root)
+    {
+        if (root is not DependencyObject owner) yield break;
+        foreach (object child in LogicalTreeHelper.GetChildren(owner)) if (child is DependencyObject node) { yield return node; foreach (var nested in Descendants(node)) yield return nested; }
+    }
+    private static void ScrollAndFit(FrameworkElement control, ScrollViewer scroll, Window window, double width, double height)
+    {
+        var body = (FrameworkElement)scroll.Content;
+        scroll.ScrollToVerticalOffset(Math.Max(0, control.TransformToAncestor(body).Transform(new Point()).Y - 4)); Layout(window, width, height);
+        Fits(control, (FrameworkElement)window.Content);
+        var bounds = control.TransformToAncestor(scroll).TransformBounds(new Rect(control.RenderSize));
+        Assert.InRange(bounds.Top, -.1, scroll.ActualHeight); Assert.InRange(bounds.Bottom, 0, scroll.ActualHeight + .1);
+    }
     private static void Fits(FrameworkElement child, FrameworkElement root) { Assert.True(child.ActualWidth > 0); Assert.True(child.ActualHeight > 0); var bounds = child.TransformToAncestor(root).TransformBounds(new Rect(child.RenderSize)); Assert.InRange(bounds.Left, -.1, root.ActualWidth); Assert.InRange(bounds.Top, -.1, root.ActualHeight); Assert.InRange(bounds.Right, 0, root.ActualWidth + .1); Assert.InRange(bounds.Bottom, 0, root.ActualHeight + .1); }
     private static void Capture(Window window, double width, double height, string page)
     {

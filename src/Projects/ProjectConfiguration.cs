@@ -34,6 +34,8 @@ public sealed class ProjectMetadata
     [JsonPropertyName("version")] public string Version { get; set; } = "1.0.0";
     [JsonPropertyName("author")] public string? Author { get; set; }
     [JsonPropertyName("team")] public string? Team { get; set; }
+    [JsonPropertyName("icon")] public string? Icon { get; set; }
+    [JsonPropertyName("default_language")] public string? DefaultLanguage { get; set; }
     [JsonPropertyName("created_date")] public string? CreatedDate { get; set; }
     [JsonPropertyName("kne_version")] public string KneVersion { get; set; } = "1.0.0";
     [JsonExtensionData] public Dictionary<string, JsonElement>? AdditionalData { get; set; }

@@ -32,6 +32,9 @@ public sealed class WorkspaceLayoutRefinementsTests
             general.BackupPath.Text = Path.Combine(fixture.Root, "backups"); general.AutosaveInterval.SelectedValue = 10; general.BackupCopies.SelectedValue = 10; Layout();
             Assert.Equal("1 / 4 · Сохранение и горячие клавиши", Find<TextBlock>(window, "SettingsPageLabel").Text); Assert.Equal(0, general.ScrollableHeight); Assert.Equal(1, general.LayoutTransform.Value.M11);
             var first = LogicalChildren(general).ToArray(); var second = LogicalChildren(general.BehaviorPage).ToArray();
+            Assert.InRange(((Grid)general.Content).ActualHeight, general.ViewportHeight, general.ViewportHeight + 1);
+            var manualBackup = first.OfType<Button>().Single(button => Equals(button.Content, "Создать резервную копию"));
+            Assert.InRange(Bounds(general).Bottom - Bounds(manualBackup).Bottom, 0, 48);
             foreach (var control in new FrameworkElement[] { general.BackupPath, general.BackupFrequency, general.BackupCopies, general.AutosaveInterval, general.HistoryLimit, general.KeepHistory }) { Assert.Contains(control, first); Assert.DoesNotContain(control, second); Fits(control); }
             Assert.Contains(first.OfType<Button>(), button => Equals(button.Content, "Настроить горячие клавиши"));
             foreach (var control in new FrameworkElement[] { general.Startup, general.StartupProject, general.Toasts, general.Breaks, general.WorkTime }) { Assert.DoesNotContain(control, first); Assert.Contains(control, second); }
@@ -40,6 +43,7 @@ public sealed class WorkspaceLayoutRefinementsTests
             general.Startup.SelectedValue = "project"; general.StartupProject.Text = fixture.ProjectPath; general.Tips.IsChecked = true; general.Breaks.IsChecked = true; general.BreakType.SelectedValue = "strict"; general.BreakInterval.SelectedValue = 90; general.WorkTime.IsChecked = true;
             general.Status.Text = "Проверка обратной связи"; Layout(); Assert.Equal(general.Status.Text, general.BehaviorStatus.Text);
             if (height == 950) Assert.Equal(0, general.BehaviorPage.ScrollableHeight);
+            Assert.True(((Grid)general.BehaviorPage.Content).ActualHeight >= general.BehaviorPage.ViewportHeight);
             Fits(general.Startup); Fits(general.Toasts); Capture(root, "behavior-top-" + width);
             general.BehaviorPage.ScrollToEnd(); Layout(); Fits(general.WorkTime); Capture(root, "behavior-bottom-" + width);
             var expected = general.Value;

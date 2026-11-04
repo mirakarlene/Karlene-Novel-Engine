@@ -42,7 +42,9 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     {
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto; HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         var (grid, left, right) = Columns(); Content = grid;
+        grid.SetBinding(MinHeightProperty, new Binding(nameof(ViewportHeight)) { Source = this });
         var (behaviorGrid, behaviorLeft, behaviorRight) = Columns(); BehaviorPage.Content = behaviorGrid;
+        behaviorGrid.SetBinding(MinHeightProperty, new Binding(nameof(ViewportHeight)) { Source = BehaviorPage });
         var backup = Section(left, "Резервное копирование"); Field(backup, "Путь хранения", PathRow(BackupPath, "Выбрать…", () => BrowseFolder(BackupPath)));
         backup.Children.Add(Hint("Резервные копии хранятся отдельно от проектов. При перемещении хранилища проекты не перемещаются автоматически"));
         Field(backup, "Частота создания", BackupFrequency); Field(backup, "Хранить последних копий", BackupCopies);
@@ -65,7 +67,7 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         Button(notifications, "Проверить уведомления", () => TestNotificationRequested?.Invoke() ?? Task.CompletedTask);
         notifications.Children.Add(Hint("Уведомления используют Windows Action Center. Убедитесь, что KNE разрешён в параметрах уведомлений Windows"));
         var breaks = Section(behaviorLeft, "Ограничение по времени"); breaks.Children.Add(Breaks); Field(breaks, "Интервал напоминания", BreakInterval); Field(breaks, "Тип напоминания", BreakType);
-        breaks.Children.Add(Hint("Мягкие напоминания используют настройки некритичных уведомлений."));
+        breaks.Children.Add(Hint("Мягкое напоминание предлагает взять перерыв для вашего здоровья и использует настройки некритичных уведомлений."));
         Field(breaks, "Длительность строгого перерыва", BreakDuration); breaks.Children.Add(WorkTime);
         Button(breaks, "Сбросить статистику", () => { ResetWorkRequested?.Invoke(); return Task.CompletedTask; }); right.Children.Add(Status);
         BehaviorStatus.SetBinding(TextBlock.TextProperty, new Binding(nameof(TextBlock.Text)) { Source = Status }); behaviorRight.Children.Add(BehaviorStatus);
@@ -100,17 +102,17 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     private void BrowseFolder(TextBox input) { var dialog = new OpenFolderDialog(); if (dialog.ShowDialog(Window.GetWindow(this)) == true) input.Text = dialog.FolderName; }
     private static ComboBox Choice(IEnumerable<(int Value, string Label)> values) => GraphicsSettingsEditor.Choice(values.Select(value => new GraphicsOption<int>(value.Value, value.Label)).ToArray());
     private static CheckBox Check(string label) => new() { Content = new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap }, Margin = new(0, 5, 0, 5), VerticalContentAlignment = VerticalAlignment.Center };
-    private static StackPanel Section(Panel parent, string title)
+    private static Panel Section(Panel parent, string title)
     {
-        var panel = new StackPanel(); panel.Children.Add(new TextBlock { Text = title, FontSize = 21, FontWeight = FontWeights.SemiBold, Margin = new(0, 0, 0, 12) });
+        var panel = new DistributedSettingsPanel(); panel.Children.Add(new TextBlock { Text = title, FontSize = 21, FontWeight = FontWeights.SemiBold, Margin = new(0, 0, 0, 12) });
         var border = new Border { Child = panel, Padding = new(18), BorderThickness = new(1), CornerRadius = new(10), Margin = new(0, 0, 0, 12) }; border.SetResourceReference(BackgroundProperty, "Editor.Surface"); border.SetResourceReference(Border.BorderBrushProperty, "Editor.Border"); parent.Children.Add(border); return panel;
     }
-    private static (Grid Grid, StackPanel Left, StackPanel Right) Columns()
+    private static (Grid Grid, UniformSettingsColumn Left, UniformSettingsColumn Right) Columns()
     {
         var grid = new Grid { Margin = new(0, 0, 12, 0) }; grid.ColumnDefinitions.Add(new()); grid.ColumnDefinitions.Add(new() { Width = new GridLength(18) }); grid.ColumnDefinitions.Add(new());
-        var left = new StackPanel(); var right = new StackPanel(); Grid.SetColumn(right, 2); grid.Children.Add(left); grid.Children.Add(right); return (grid, left, right);
+        var left = new UniformSettingsColumn(); var right = new UniformSettingsColumn(); Grid.SetColumn(right, 2); grid.Children.Add(left); grid.Children.Add(right); return (grid, left, right);
     }
-    private static void Field(Panel panel, string label, FrameworkElement input) { panel.Children.Add(new TextBlock { Text = label, Margin = new(0, 4, 0, 5) }); input.Margin = new(0, 0, 0, 5); panel.Children.Add(input); }
+    private static void Field(Panel panel, string label, FrameworkElement input) { var field = new StackPanel(); field.Children.Add(new TextBlock { Text = label, Margin = new(0, 4, 0, 5) }); input.Margin = new(0, 0, 0, 5); field.Children.Add(input); panel.Children.Add(field); }
     private static TextBlock Hint(string text) { var hint = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontSize = 11, Margin = new(0, 3, 0, 7) }; hint.SetResourceReference(TextBlock.ForegroundProperty, "Editor.Muted"); return hint; }
     private static DockPanel PathRow(TextBox input, string title, Action browse)
     {
