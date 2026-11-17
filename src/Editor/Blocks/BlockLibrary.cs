@@ -86,6 +86,8 @@ public static class BlockLibrary
         Add("narrative", ScriptNodeKind.RandomBranch, "Случайная ветка", "Выбрать один выход с заданными относительными вероятностями.");
         Add("narrative", ScriptNodeKind.EffectDialogue, "Реплика с эффектом", "Анимация каждой буквы: волна, дрожание, радуга и другие эффекты.");
         Add("logic", ScriptNodeKind.CompareVariables, "Условие", "Сравнить две переменные state без реплики или остановки игры.");
+        foreach (var kind in Enum.GetValues<ScriptNodeKind>().Where(LogicCompiler.IsLogic))
+            Add("logic", kind, LogicCompiler.Label(kind), "Работа со списками, текстом и переменными. Индексы списков начинаются с 0; результат записывается в state.");
         Add("logic", ScriptNodeKind.SetVariable, "Переменная", "Записать значение в state.");
         Add("logic", ScriptNodeKind.Switch, "Switch / Case", "Сравнить переменную с вариантами; предусмотрен выход по умолчанию.");
         Add("logic", ScriptNodeKind.While, "Цикл While", "Повторять тело, пока условие истинно. Конец тела возвращает к проверке.");
@@ -135,6 +137,7 @@ public static class BlockLibrary
         if (category != null && !Definitions.Any(entry => entry.Kind == kind && entry.Group == category))
             throw new ArgumentException("Блок недоступен в выбранной группе.", nameof(category));
         var node = new ScriptNode { Kind = kind };
+        if (LogicCompiler.IsLogic(kind)) node.Logic = new() { A = kind == ScriptNodeKind.CopyVariable ? new("variable", "score") : new() };
         if (kind == ScriptNodeKind.Anchor) node.Text = "Якорь";
         if (kind == ScriptNodeKind.SendFlow) node.Target = "";
         if (kind == ScriptNodeKind.RemoveLayerShaders) node.Target = "background";

@@ -32,6 +32,9 @@ public sealed partial class ProjectParametersWindow : Window
     internal int Page { get; private set; }
     internal Button PreviousPage { get; } = new() { Content = "‹", Padding = new(12, 3, 12, 3), IsEnabled = false };
     internal Button NextPage { get; } = new() { Content = "›", Padding = new(12, 3, 12, 3) };
+    private readonly ContentControl pageContent = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
+    private readonly List<UIElement> pages = [];
+    private readonly TextBlock pageLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new(8, 0, 8, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 };
     public ProjectParametersWindow(ProjectInfo project, string? projectsStoragePath = null)
     {
         this.project = project; Title = "Параметры проекта · " + project.Title;
@@ -101,28 +104,39 @@ public sealed partial class ProjectParametersWindow : Window
             DeleteCounter.Text = "Осталось нажатий: " + DeletionConfirmation.Remaining; DeleteCounter.Visibility = Visibility.Visible;
         };
         DangerZone.Content = danger; DangerZone.Collapsed += (_, _) => ResetDeletion(); body.Children.Add(DangerZone); body.Children.Add(status);
-        BuildInput.Children.Add(SecurityCard(project.Engine.Security));
-        var scroll = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-        var pageLabel = new TextBlock { Text = "1 / 3 · Проект", VerticalAlignment = VerticalAlignment.Center, Margin = new(14, 0, 14, 0) };
+        var securityCard = SecurityCard(project.Engine.Security);
+        body.Children.Clear();
+        ParameterLayout.Compact(graphics); ParameterLayout.Compact(performance); ParameterLayout.Compact(storage);
+        diagnosticGrid.Children.Clear();
+        foreach (string key in new[] { "fps", "stats", "loading", "debug" })
+        {
+            var check = switches[key]; if (check.Parent is Panel parent) parent.Children.Remove(check); diagnostics.Children.Add(check);
+        }
+        diagnostics.Children.Remove(diagnosticGrid); fpsRow.Children.Remove(CornerInput); AddField(diagnostics, "Угол счётчика FPS", CornerInput); CornerInput.Width = double.NaN; CornerInput.MinWidth = 0;
+        diagnostics.Children.Add(DangerZone); ParameterLayout.Compact(diagnostics);
+        columns.Children.Clear();
+        pages.Add(ParameterLayout.Columns(left, right)); pages.Add(ParameterLayout.Columns(storageCard, diagnosticCard));
+        pages.Add(BuildInput); pages.Add(securityCard); pages.Add(MetadataInput); pages.Add(MetadataInput.AdditionalPage);
+        ParameterLayout.Compact((Panel)securityCard.Child);
+        foreach (Border card in BuildInput.Children.OfType<Border>()) { card.Padding = new(8); card.Margin = new(0, 0, 0, 4); ParameterLayout.Compact((Panel)card.Child); }
+        foreach (FrameworkElement card in new FrameworkElement[] { storageCard, diagnosticCard, securityCard }) card.Margin = new(0);
         var pager = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new(0, 10, 0, 0) };
         pager.Children.Add(PreviousPage); pager.Children.Add(pageLabel); pager.Children.Add(NextPage);
-        void ShowPage(int page)
-        {
-            Page = Math.Clamp(page, 0, 2); ResetDeletion(); DangerZone.IsExpanded = false;
-            scroll.Content = Page switch { 0 => body, 1 => BuildInput, _ => MetadataInput };
-            BuildInput.Visibility = Visibility.Visible;
-            PreviousPage.IsEnabled = Page > 0; NextPage.IsEnabled = Page < 2;
-            pageLabel.Text = (Page + 1) + " / 3 · " + (Page switch { 0 => "Проект", 1 => "Сборки и безопасность", _ => "Метаданные проекта" });
-            scroll.ScrollToTop();
-        }
         PreviousPage.Click += (_, _) => ShowPage(Page - 1); NextPage.Click += (_, _) => ShowPage(Page + 1);
         Closed += (_, _) => { if (!DeletionRequested) ResetDeletion(); };
         body.Children.Remove(status);
         var bottom = new StackPanel(); bottom.Children.Add(status); bottom.Children.Add(footer); bottom.Children.Add(pager);
-        var root = new DockPanel { Margin = new(20) }; DockPanel.SetDock(bottom, Dock.Bottom); root.Children.Add(bottom); root.Children.Add(scroll); Content = root;
+        var root = new DockPanel { Margin = new(12) }; DockPanel.SetDock(bottom, Dock.Bottom); root.Children.Add(bottom); root.Children.Add(pageContent); Content = root; ShowPage(0);
         foreach (var text in Descendants(columns).OfType<TextBlock>()) text.TextWrapping = TextWrapping.Wrap;
         foreach (var check in switches.Values) if (check.Content is string label) check.Content = new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap };
         foreach (var input in new[] { GraphicsInput.ApiInput, GraphicsInput.FpsInput, GraphicsInput.MsaaInput, TextureInput, GraphicsInput.CacheLimitInput, AsyncTasksInput, AudioBufferInput, CornerInput }) input.Margin = new(0, 3, 0, 5);
+    }
+    internal void ShowPage(int page)
+    {
+        Page = Math.Clamp(page, 0, 5); ResetDeletion(); DangerZone.IsExpanded = false;
+        pageContent.Content = pages[Page]; BuildInput.Visibility = Visibility.Visible;
+        PreviousPage.IsEnabled = Page > 0; NextPage.IsEnabled = Page < 5;
+        pageLabel.Text = (Page + 1) + " / 6 · " + new[] { "Графика и производительность", "Сохранения и диагностика", "Сборка", "Безопасность", "Метаданные", "Остальные параметры project.json" }[Page];
     }
     private void ResetDeletion() { DeletionConfirmation.Cancel(); DeleteCounter.Visibility = Visibility.Collapsed; DeleteCounter.Text = ""; }
     private CheckBox Switch(string key, string label, bool value) { var input = new CheckBox { Content = label, IsChecked = value, FontWeight = FontWeights.Normal, Margin = new(0, 6, 8, 6), VerticalAlignment = VerticalAlignment.Center }; switches[key] = input; return input; }

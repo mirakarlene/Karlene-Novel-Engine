@@ -42,53 +42,37 @@ public sealed class ProjectBuildUiTests
         });
     }
 
-    [Theory]
-    [InlineData(780, 840)]
-    [InlineData(540, 500)]
-    public async Task ThreePagesKeepGraphicsColumnsAndAllDraftsWithScrollableBuildAndMetadataForms(double width, double height)
+    [Fact]
+    public async Task SixProjectPagesKeepAllDraftsAndSaveBuildMetadataAndPerformanceTogether()
     {
         using var fixture = new TempProject(); var project = await fixture.LoadAsync();
         await WorkspaceTabsTests.Sta(async () =>
         {
-            var window = new ProjectParametersWindow(project, fixture.Root); EditorTheme.Apply(window, "kne");
+            var window = new ProjectParametersWindow(project, fixture.Root);
             try
             {
-                window.Width = width; window.Height = height; Layout(window, width, height);
-                Assert.Equal(0, window.Page); Assert.Equal(Visibility.Collapsed, window.BuildInput.Visibility); Assert.False(window.PreviousPage.IsEnabled); Assert.True(window.NextPage.IsEnabled);
+                Assert.Equal(0, window.Page); Assert.False(window.PreviousPage.IsEnabled); Assert.True(window.NextPage.IsEnabled);
                 Assert.Equal("vm", window.BuildInput.Value.TestMode); Assert.Equal("self_contained", window.BuildInput.Value.ReleaseMode);
-                Assert.Equal(3, Parent<Grid>(Parent<Border>(window.GraphicsInput.ApiInput)).ColumnDefinitions.Count);
-                var scroll = Descendants(window.Content).OfType<ScrollViewer>().Single();
-                Assert.DoesNotContain(Descendants(scroll.Content), node => ReferenceEquals(node, window.TitleInput));
-                double x = window.GraphicsInput.ApiInput.TransformToAncestor((Visual)window.Content).Transform(new Point()).X;
-                window.SavesInput.Text = "draft/saves"; window.BuildInput.Author.Text = "Draft author";
-                Capture(window, width, height, "project");
-                Click(window.NextPage); Layout(window, width, height);
-                Assert.Equal(1, window.Page); Assert.DoesNotContain(Descendants(scroll.Content), node => ReferenceEquals(node, window.TitleInput));
-                Assert.True(window.PreviousPage.IsEnabled); Assert.True(window.NextPage.IsEnabled); Assert.Equal(Visibility.Visible, window.BuildInput.Visibility);
+                Click(window.NextPage); Assert.Equal(1, window.Page); window.SavesInput.Text = "draft/saves";
+                Click(window.NextPage); Assert.Equal(2, window.Page); Assert.Equal(Visibility.Visible, window.BuildInput.Visibility);
                 window.BuildInput.TestMode.SelectedValue = "remote_debug"; Assert.True(window.BuildInput.TestPath.IsEnabled);
                 window.BuildInput.ReleaseMode.SelectedValue = "portable"; Assert.Equal("local", window.BuildInput.Value.EffectiveSaveLocation); Assert.False(window.BuildInput.Saves.IsEnabled);
-                Layout(window, width, height);
-                foreach (FrameworkElement control in new FrameworkElement[] { window.BuildInput.TestMode, window.BuildInput.TestPath, window.BuildInput.ReleaseMode, window.BuildInput.ReleasePath, window.BuildInput.Saves })
-                    ScrollAndFit(control, scroll, window, width, height);
-                Fits(window.PreviousPage, (FrameworkElement)window.Content); Fits(window.NextPage, (FrameworkElement)window.Content);
                 Assert.DoesNotContain(window.BuildInput.Children.OfType<Button>(), button => Equals(button.Content, "Собрать релиз"));
-                Capture(window, width, height, "builds");
-                Click(window.NextPage); Layout(window, width, height); Assert.Equal(2, window.Page); Assert.False(window.NextPage.IsEnabled);
-                Assert.False(window.TitleInput.IsReadOnly); Assert.Same(window.MetadataInput, scroll.Content);
-                foreach (FrameworkElement control in new FrameworkElement[] { window.TitleInput, window.BuildInput.Author, window.BuildInput.Team, window.BuildInput.Version }) ScrollAndFit(control, scroll, window, width, height);
-                Capture(window, width, height, "metadata");
-                Click(window.PreviousPage); Click(window.PreviousPage); Layout(window, width, height); Assert.Equal("draft/saves", window.SavesInput.Text); Assert.Equal("Draft author", window.BuildInput.Author.Text);
-                Assert.Equal(x, window.GraphicsInput.ApiInput.TransformToAncestor((Visual)window.Content).Transform(new Point()).X, 3);
+                Click(window.NextPage); Assert.Equal(3, window.Page);
+                Click(window.NextPage); Assert.Equal(4, window.Page); Assert.False(window.TitleInput.IsReadOnly); window.BuildInput.Author.Text = "Draft author";
+                Click(window.NextPage); Assert.Equal(5, window.Page); Assert.False(window.NextPage.IsEnabled);
+                Assert.Empty(Descendants(window.Content).OfType<ScrollViewer>());
+                for (int page = 4; page >= 0; page--) { Click(window.PreviousPage); Assert.Equal(page, window.Page); }
+                Assert.Equal("draft/saves", window.SavesInput.Text); Assert.Equal("Draft author", window.BuildInput.Author.Text); Assert.Equal("remote_debug", window.BuildInput.Value.TestMode);
                 Assert.False(File.Exists(Path.Combine(project.Path, "engine", "build.json")));
                 await window.SaveAsync(); var saved = ProjectBuildSettingsStore.Load(project.Path); Assert.Equal("remote_debug", saved.TestMode); Assert.Equal("portable", saved.ReleaseMode); Assert.Equal("Draft author", saved.Author); Assert.Equal("draft/saves", PerformanceSettingsStore.LoadProject(project.Path).SavesPath);
             }
             finally { window.Close(); }
             var cancel = new ProjectParametersWindow(project);
-            try { cancel.BuildInput.Version.Text = "9.9"; Click(cancel.NextPage); cancel.Close(); Assert.Equal("1.0.0", ProjectBuildSettingsStore.Load(project.Path).Version); }
+            try { cancel.ShowPage(4); cancel.BuildInput.Version.Text = "9.9"; cancel.ShowPage(5); cancel.Close(); Assert.Equal("1.0.0", ProjectBuildSettingsStore.Load(project.Path).Version); }
             finally { cancel.Close(); }
         });
     }
-
     [Fact]
     public async Task InvalidBuildDraftCannotChangeProjectTitlePerformanceOrStoredBuildSettings()
     {

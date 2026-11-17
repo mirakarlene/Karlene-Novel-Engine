@@ -26,7 +26,9 @@ public static class LuaSyntax
         "show_title", "hide_background", "move_visual", "animate_visual", "screen_shake", "screen_flash", "camera", "show_screen",
         "set_audio_channel", "play_audio", "stop_audio", "set_master_volume", "kne_parallel", "kne_async", "kne_join", "kne_pause", "kne_timer", "kne_wait_condition", "kne_end",
         "include_lua", "include_cs", "run_script", "configure_ui", "clear_backgrounds", "clear_sprites",
-        "register_character", "update_character", "set_speaker", "reset_speakers", "kne_say", "text_pause", "clear_text", "console_write", "kne_random_branch", "text_input"
+        "register_character", "update_character", "set_speaker", "reset_speakers", "kne_say", "text_pause", "clear_text", "console_write", "kne_random_branch", "text_input",
+        "create_list", "delete_list", "clear_list", "list_add", "list_remove", "list_remove_at", "list_insert", "list_set", "list_length", "list_get", "list_contains", "list_index_of", "list_is_empty", "list_shuffle", "list_sort", "list_merge", "list_copy", "list_exists", "list_random",
+        "string_concat", "string_length", "string_contains", "string_replace", "string_upper", "string_lower", "to_number", "to_string", "to_bool", "copy_variable", "reset_variable"
     };
 
     public static IReadOnlyList<LuaToken> Parse(string text)

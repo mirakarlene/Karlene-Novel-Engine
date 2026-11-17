@@ -123,6 +123,7 @@ public sealed partial class VisualScript
                 }
                 node.Character?.Validate(); node.TextEffect?.Validate(); node.Input?.Validate(); node.Trigger?.Validate();
                 if (CalculationCompiler.IsCalculation(node.Kind)) _ = CalculationCompiler.Compile(node.Kind, node.Calculation ?? new CalculationSettings(), node.Variable);
+                if (LogicCompiler.IsLogic(node.Kind)) _ = LogicCompiler.Compile(node.Kind, node.Logic ?? new(), node.Variable);
                 node.ChoiceSettings?.Validate();
                 foreach (var option in node.Options) option.Lock?.Validate();
             }
@@ -228,7 +229,9 @@ public enum ScriptNodeKind
     Arithmetic, Modulo, Increment, Decrement, Pow, Sqrt, Trigonometry, Absolute, Clamp, Round, Floor, Ceil, Lerp, Remap, WeightedRandom, Constant, Formula,
     ShaderContainer, ShaderTexture, ShaderUv, ShaderTime, ShaderScreenPosition, ShaderFloat, ShaderVector, ShaderColor, ShaderTilingOffset, ShaderRotate, ShaderPolar, ShaderFlipbook, ShaderTwirl, ShaderSimplex, ShaderVoronoi, ShaderCheckerboard, ShaderLinearGradient, ShaderRadialGradient, ShaderSplit, ShaderCombine, ShaderHueShift, ShaderSaturation, ShaderContrast, ShaderBrightness, ShaderInvert, ShaderGrayscale, ShaderPosterize, ShaderGaussianBlur, ShaderBoxBlur, ShaderMotionBlur, ShaderBloom, ShaderChromatic, ShaderVignette, ShaderScanlines, ShaderLensDistortion, ShaderPixelate, ShaderSharpen, ShaderSobel, ShaderDithering, ShaderMix, ShaderAdd, ShaderSubtract, ShaderMultiply, ShaderScreen, ShaderStep, ShaderSmoothstep, ShaderOutput,
     RemoveLayerShaders, RemoveAllShaders, Plugin,
-    Anchor, SendFlow, ConditionalGoto
+    Anchor, SendFlow, ConditionalGoto,
+    CreateList, DeleteList, ClearList, ListAdd, ListRemove, ListRemoveAt, ListInsert, ListSet, ListLength, ListGet, ListContains, ListIndexOf, ListIsEmpty, ListShuffle, ListSort, ListMerge, ListCopy, ListExists, ListRandom,
+    CompoundCondition, StringConcat, StringLength, StringContains, StringReplace, StringUpper, StringLower, ConvertType, CopyVariable, ResetVariable
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -269,6 +272,7 @@ public sealed class ScriptNode
     public ShaderNodeSettings? Shader { get; set; }
     /// <summary>Operands, weighted rows, or reusable named formula steps.</summary>
     public CalculationSettings? Calculation { get; set; }
+    public LogicSettings? Logic { get; set; }
     /// <summary>Event block: connected blocks await the event; disconnected roots register an independent handler.</summary>
     [JsonIgnore] public bool IsTrigger => Kind is ScriptNodeKind.TriggerKey or ScriptNodeKind.TriggerButton or ScriptNodeKind.TriggerHotspot or ScriptNodeKind.TriggerTextClosed or ScriptNodeKind.TriggerCombination;
     /// <summary>Wait for a subsystem; false spawns it as a background task.</summary>
@@ -395,6 +399,7 @@ public sealed class ScriptNode
         ScriptNodeKind.RemoveLayerShaders => "Удалить шейдер с слоя", ScriptNodeKind.RemoveAllShaders => "Удалить все шейдеры",
         _ when ShaderLibrary.IsShader(Kind) => Kind == ScriptNodeKind.ShaderContainer && Path.Length > 0 ? System.IO.Path.GetFileName(Path) : ShaderLibrary.Get(Kind).Title,
         ScriptNodeKind.Start => "Начало", ScriptNodeKind.Dialogue => "Реплика", ScriptNodeKind.Choice => "Выбор", ScriptNodeKind.TimedChoice => "Выбор с таймером",
+        _ when LogicCompiler.IsLogic(Kind) => LogicCompiler.Label(Kind),
         ScriptNodeKind.Condition => "Условие (значение, прежний формат)", ScriptNodeKind.Branching => "Ветвление", ScriptNodeKind.CompareVariables => "Условие", ScriptNodeKind.SetVariable => "Переменная",
         ScriptNodeKind.Subsystem => Path.Length == 0 ? "Подсистема" : System.IO.Path.GetFileName(Path),
         ScriptNodeKind.TriggerKey => "При клике на клавишу", ScriptNodeKind.TriggerButton => "При клике на кнопку",
@@ -447,7 +452,7 @@ public sealed class ScriptNode
             if (Kind == ScriptNodeKind.Switch) yield return ("По умолчанию", False);
             if (Kind is not (ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.RandomBranch)) yield return ("Далее", Next);
         }
-        else if (Kind is ScriptNodeKind.Condition or ScriptNodeKind.Branching or ScriptNodeKind.CompareVariables or ScriptNodeKind.CheckFlag)
+        else if (Kind is ScriptNodeKind.Condition or ScriptNodeKind.Branching or ScriptNodeKind.CompareVariables or ScriptNodeKind.CompoundCondition or ScriptNodeKind.CheckFlag)
         {
             yield return ("Да", True);
             yield return ("Нет", False);
@@ -483,7 +488,7 @@ public sealed class ScriptNode
             else if (Kind == ScriptNodeKind.Switch && index == Options.Count) False = target;
             else Next = target;
         }
-        else if (Kind is ScriptNodeKind.Condition or ScriptNodeKind.Branching or ScriptNodeKind.CompareVariables or ScriptNodeKind.CheckFlag)
+        else if (Kind is ScriptNodeKind.Condition or ScriptNodeKind.Branching or ScriptNodeKind.CompareVariables or ScriptNodeKind.CompoundCondition or ScriptNodeKind.CheckFlag)
         {
             if (index == 0) True = target;
             else False = target;

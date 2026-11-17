@@ -21,7 +21,7 @@ internal sealed class DistributedSettingsPanel : Panel
     }
 }
 
-/// <summary>Fills the viewport with cards in proportion to their natural content; feedback stays compact.</summary>
+/// <summary>Keeps settings cards together at their natural height instead of stretching their fields.</summary>
 internal sealed class UniformSettingsColumn : Panel
 {
     protected override Size MeasureOverride(Size available)
@@ -31,10 +31,10 @@ internal sealed class UniformSettingsColumn : Panel
     }
     protected override Size ArrangeOverride(Size final)
     {
-        double natural = InternalChildren.Cast<UIElement>().Sum(c => c.DesiredSize.Height), cards = InternalChildren.Cast<UIElement>().Where(c => c is Border).Sum(c => c.DesiredSize.Height), top = 0;
+        double top = 0;
         foreach (UIElement child in InternalChildren)
         {
-            double height = child.DesiredSize.Height + (child is Border && cards > 0 ? Math.Max(0, final.Height - natural) * child.DesiredSize.Height / cards : 0);
+            double height = child.DesiredSize.Height;
             child.Arrange(new Rect(0, top, final.Width, height)); top += height;
         }
         return final;

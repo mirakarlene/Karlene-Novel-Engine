@@ -12,6 +12,8 @@ public sealed record GameCheckpoint(int Version, string ProjectPath, string Fing
 {
     /// <summary>Optional bounded previous positions; each retains its full replay log.</summary>
     public IReadOnlyList<GameCheckpoint>? Rollback { get; init; }
+    /// <summary>Independent named lists, including empty lists; absent in legacy checkpoints.</summary>
+    public JsonElement? Lists { get; init; }
 }
 
 public interface IGameSession : IAsyncDisposable

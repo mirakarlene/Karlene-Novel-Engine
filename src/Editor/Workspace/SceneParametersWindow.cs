@@ -15,12 +15,18 @@ public sealed class SceneParametersWindow : Window
     private readonly Dictionary<SceneDefinition, ScenePerformanceSettings> drafts = [];
     private readonly Dictionary<SceneDefinition, string> names = [];
     private readonly Dictionary<string, byte[]?> originals = new(StringComparer.OrdinalIgnoreCase);
-    private readonly StackPanel options = new() { IsEnabled = false };
+    private readonly Grid options = new() { IsEnabled = false };
     private readonly TextBlock metrics = new() { TextWrapping = TextWrapping.Wrap, Opacity = .65, Margin = new(0, 12, 0, 12) };
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, Margin = new(0, 8, 0, 8) };
     private readonly Button save = new() { Content = "Сохранить", Padding = new(16, 8, 16, 8), IsEnabled = false };
     private SceneDefinition? selected;
     private bool loading;
+    private readonly ContentControl pageContent = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
+    private readonly List<UIElement> pages = [];
+    private readonly TextBlock pageLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new(10, 0, 10, 0) };
+    internal int Page { get; private set; }
+    internal Button PreviousPage { get; } = new() { Content = "‹", Padding = new(12, 3, 12, 3) };
+    internal Button NextPage { get; } = new() { Content = "›", Padding = new(12, 3, 12, 3) };
     internal Action<IReadOnlyList<string>>? ValidateWrites { get; set; }
     internal ComboBox SceneInput { get; } = new() { DisplayMemberPath = "Label", SelectedValuePath = "Value", Margin = new(0, 8, 0, 12) };
     internal TextBox NameInput { get; } = new() { MaxLength = 128 };
@@ -48,10 +54,10 @@ public sealed class SceneParametersWindow : Window
     public SceneParametersWindow(ProjectInfo project)
     {
         this.project = project; document = PerformanceSettingsStore.LoadScenes(project.Path); definitions = SceneDefinition.Read(project); CaptureOriginals();
-        Title = "Параметры сцены · " + project.Title; Width = 700; Height = 530; MinWidth = 500; MinHeight = 420; WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Title = "Параметры сцены · " + project.Title; Width = 780; Height = 640; MinWidth = 740; MinHeight = 600; WindowStartupLocation = WindowStartupLocation.CenterOwner;
         EntryTransitionInput = new(project); ExitTransitionInput = new(project);
         SceneInput.ItemsSource = Choices();
-        var root = new DockPanel { Margin = new(24) };
+        var root = new DockPanel { Margin = new(16) };
         var header = new StackPanel(); header.Children.Add(new TextBlock { Text = "Выберите сцену: файл · функция (.krl / .knegraph)" }); header.Children.Add(SceneInput); DockPanel.SetDock(header, Dock.Top); root.Children.Add(header);
         var footer = new StackPanel(); footer.Children.Add(status); var actions = new StackPanel { Orientation = Orientation.Horizontal };
         var cancel = new Button { Content = "Отмена", IsCancel = true, Padding = new(16, 8, 16, 8), Margin = new(8, 0, 0, 0) }; cancel.Click += (_, _) => Close();
@@ -67,11 +73,25 @@ public sealed class SceneParametersWindow : Window
         var transitions = Card("Переходы"); Field(transitions, "При входе", EntryTransitionInput); Field(transitions, "При выходе", ExitTransitionInput); transitions.Children.Add(Hint("Fade: затемнение при выходе, проявление из чёрного при входе. Dissolve смешивает кадры. Свой эффект получает снимок и время от 0 до 1. Переходы не зависят от выключения вспышек и тряски."));
         var storage = Card("Сохранения"); storage.Children.Add(AllowSavesInput); storage.Children.Add(AutosaveInput); storage.Children.Add(CheckpointInput); storage.Children.Add(Hint("Запрет сохранений запрещает любую запись, но не загрузку. Отдельная точка входа создаётся на первой реплике, выборе или ожидании даже при отключённом автосохранении."));
         var execution = Card("Состояние и выполнение"); Field(execution, "Начальное состояние (JSON)", StateInput); execution.Children.Add(Hint("Указанные ключи state заменяются при новом call/goto; остальные сохраняются. Возврат из call не применяет JSON повторно.")); execution.Children.Add(LimitDepthInput); Field(execution, "Максимум дополнительных вложенных call (1–63)", DepthInput); execution.Children.Add(TriggersInput);
-        root.Children.Add(new ScrollViewer { Content = options, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled }); Content = root;
+        var json = new Grid(); json.RowDefinitions.Add(new() { Height = GridLength.Auto }); json.RowDefinitions.Add(new());
+        int stateIndex = execution.Children.IndexOf(StateInput); var stateLabel = (TextBlock)execution.Children[stateIndex - 1]; var stateHint = execution.Children[stateIndex + 1]; execution.Children.Remove(stateLabel); execution.Children.Remove(StateInput); execution.Children.Remove(stateHint);
+        var jsonHeader = new StackPanel(); jsonHeader.Children.Add(stateLabel); jsonHeader.Children.Add(stateHint); json.Children.Add(jsonHeader); Grid.SetRow(StateInput, 1); json.Children.Add(StateInput); StateInput.MinHeight = 0;
+        var cards = options.Children.Cast<Border>().ToArray(); options.Children.Clear();
+        foreach (var card in cards) { card.Padding = new(10); card.Margin = new(0); ParameterLayout.Compact((Panel)card.Child); }
+        pages.Add(ParameterLayout.Columns(cards[0], cards[1])); pages.Add(ParameterLayout.Columns(cards[2], cards[3])); pages.Add(ParameterLayout.Columns(cards[4], cards[5])); pages.Add(json);
+        var pager = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new(0, 8, 0, 0) }; pager.Children.Add(PreviousPage); pager.Children.Add(pageLabel); pager.Children.Add(NextPage); footer.Children.Add(pager);
+        options.Children.Add(pageContent); root.Children.Add(options); Content = root;
+        PreviousPage.Click += (_, _) => ShowPage(Page - 1); NextPage.Click += (_, _) => ShowPage(Page + 1); ShowPage(0);
         SceneInput.SelectionChanged += (_, _) => SelectScene();
         foreach (var checkbox in new[] { InheritResolutionInput, InheritVolumeInput, LimitDepthInput, AllowSavesInput }) { checkbox.Checked += (_, _) => Refresh(); checkbox.Unchecked += (_, _) => Refresh(); }
         save.Click += async (_, _) => { try { await SaveAsync(); DialogResult = true; } catch (Exception error) { status.Text = error.Message; } };
         var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) }; timer.Tick += (_, _) => { if (selected != null) metrics.Text = SceneMetrics.Describe(project.Path, selected.Path); }; Loaded += (_, _) => timer.Start(); Closed += (_, _) => timer.Stop();
+    }
+    internal void ShowPage(int page)
+    {
+        Page = Math.Clamp(page, 0, 3); pageContent.Content = pages[Page]; PreviousPage.IsEnabled = Page > 0; NextPage.IsEnabled = Page < 3;
+        foreach (var item in pages) item.IsEnabled = selected != null;
+        pageLabel.Text = (Page + 1) + " / 4 · " + new[] { "Основное и графика", "Музыка и переходы", "Сохранения и выполнение", "Начальное состояние" }[Page];
     }
     private GraphicsOption<string>[] Choices() => definitions.Select(scene => new GraphicsOption<string>(scene.Key, scene.Label)).ToArray();
     private void SelectScene()
@@ -80,6 +100,7 @@ public sealed class SceneParametersWindow : Window
         try { StoreSelection(); }
         catch (Exception error) { status.Text = error.Message; loading = true; SceneInput.SelectedValue = selected?.Key; loading = false; return; }
         selected = definitions.FirstOrDefault(scene => scene.Key == (string?)SceneInput.SelectedValue); save.IsEnabled = options.IsEnabled = selected != null;
+        foreach (var item in pages) item.IsEnabled = selected != null;
         if (selected == null) return;
         LoadSelection(drafts.GetValueOrDefault(selected) ?? document.For(selected.Path, selected.Function)); status.Text = "";
     }
