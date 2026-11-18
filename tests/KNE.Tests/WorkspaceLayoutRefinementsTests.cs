@@ -34,7 +34,11 @@ public sealed class WorkspaceLayoutRefinementsTests
             var first = LogicalChildren(general).ToArray(); var second = LogicalChildren(general.BehaviorPage).ToArray();
             Assert.InRange(((Grid)general.Content).ActualHeight, general.ViewportHeight, general.ViewportHeight + 1);
             var manualBackup = first.OfType<Button>().Single(button => Equals(button.Content, "Создать резервную копию"));
-            Assert.InRange(Bounds(general).Bottom - Bounds(manualBackup).Bottom, 0, 48);
+            var generalGrid = (Grid)general.Content;
+            Assert.InRange(generalGrid.ActualWidth, 1, 1300);
+            Assert.InRange(Math.Abs(Bounds(generalGrid).Left - Bounds(general).Left - (general.ActualWidth - generalGrid.ActualWidth) / 2), 0, 2);
+            Assert.True(Bounds(general).Bottom - Bounds(manualBackup).Bottom > 48);
+            Assert.InRange(Bounds(manualBackup).Top - Bounds(general.BackupCopies).Bottom, 0, 90);
             foreach (var control in new FrameworkElement[] { general.BackupPath, general.BackupFrequency, general.BackupCopies, general.AutosaveInterval, general.HistoryLimit, general.KeepHistory }) { Assert.Contains(control, first); Assert.DoesNotContain(control, second); Fits(control); }
             Assert.Contains(first.OfType<Button>(), button => Equals(button.Content, "Настроить горячие клавиши"));
             foreach (var control in new FrameworkElement[] { general.Startup, general.StartupProject, general.Toasts, general.Breaks, general.WorkTime }) { Assert.DoesNotContain(control, first); Assert.Contains(control, second); }

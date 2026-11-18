@@ -94,7 +94,7 @@ public sealed class ProjectBuildTests
     [InlineData("msix")]
     public async Task Publish_RealPlayerRunsWithoutEditorAndKeepsExeMetadataAndSavesPolicy(string mode)
     {
-        using var fixture = new TempProject(); fixture.Write("game/scenes/main.krl", "function main()\n local helper=require('game.plugins.helper')\n include_lua('game/plugins/included.lua')\n include_cs('game/plugins/smoke.cs')\n d(nil, state.exported .. helper.suffix .. ':' .. state.scene_exported)\nend");
+        using var fixture = new TempProject(); fixture.Write("game/scenes/main.krl", "function main()\n local helper=require('game.plugins.helper')\n include_lua('game/plugins/included.lua')\n include_cs('game/plugins/smoke.cs')\n create_list('inventory',{'shield'})\n list_add('inventory','potion')\n d(nil, state.exported .. helper.suffix .. ':' .. state.scene_exported .. ':' .. list_get('inventory',0) .. ':' .. list_length('inventory'))\nend");
         fixture.Write("game/plugins/helper.lua", "return {suffix=''}"); fixture.Write("game/plugins/included.lua", "state.included=true");
         var extra = VisualScript.Create(); extra.FunctionName = "extra"; fixture.Write("extra.knegraph", extra.Serialize());
         fixture.Write("engine/security.json", JsonSerializer.Serialize(new ProjectSecuritySettings { EncryptScripts = true }, EngineSettings.JsonOptions));
@@ -135,7 +135,7 @@ public sealed class ProjectBuildTests
         using var process = Process.Start(info)!; var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
         try { await process.WaitForExitAsync(timeout.Token); } catch { process.Kill(true); throw; }
         Assert.True(process.ExitCode == 0, await stderr); using var result = JsonDocument.Parse(await stdout);
-        Assert.Equal("exported game:7", result.RootElement.GetProperty("Story").GetProperty("Text").GetString());
+        Assert.Equal("exported game:7:shield:2", result.RootElement.GetProperty("Story").GetProperty("Text").GetString());
         Assert.Equal("Новелла с пробелами", result.RootElement.GetProperty("Title").GetString());
         Assert.Equal("kne-game:" + settings.GameId, result.RootElement.GetProperty("SaveIdentity").GetString());
         string saves = result.RootElement.GetProperty("Saves").GetString()!;

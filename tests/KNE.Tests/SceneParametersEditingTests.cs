@@ -140,39 +140,25 @@ public sealed class SceneParametersEditingTests
         finally { window.Close(); }
     });
 
-    [Theory]
-    [InlineData(700, 530)] [InlineData(500, 420)]
-    public Task SixScrollableCardsKeepTheSceneSelectorAndSaveCancelAtTheirOriginalWindowSizes(double width, double height) => WorkspaceTabsTests.Sta(async () =>
+    [Fact]
+    public Task FourScenePagesClampNavigationKeepTheSelectedFunctionAndDiscardEveryDraftOnCancel() => WorkspaceTabsTests.Sta(async () =>
     {
         using var fixture = new TempProject(); fixture.Write("chapter.krl", "function chapter() end"); var window = new SceneParametersWindow(await fixture.LoadAsync());
         try
         {
-            Assert.Equal((700d, 530d, 500d, 420d), (window.Width, window.Height, window.MinWidth, window.MinHeight));
-            EditorTheme.Apply(window, "kne"); window.SceneInput.SelectedValue = "chapter.krl::chapter";
-            window.Width = width; window.Height = height; window.WindowStartupLocation = WindowStartupLocation.Manual; window.Left = -10000; window.Top = -10000; window.ShowInTaskbar = false; window.ShowActivated = false; window.Show();
-            var root = (FrameworkElement)window.Content; var scroll = Descendants(root).OfType<ScrollViewer>().Single(); var options = Assert.IsType<StackPanel>(scroll.Content);
-            var cards = options.Children.OfType<Border>().ToArray(); Assert.Equal(6, cards.Length);
-            Assert.Equal(new[] { "Основное", "Графика", "Музыка", "Переходы", "Сохранения", "Состояние и выполнение" }, cards.Select(card => ((StackPanel)card.Child).Children.OfType<TextBlock>().First().Text));
-            void Layout() { window.UpdateLayout(); root.UpdateLayout(); }
-            Rect Bounds(FrameworkElement item) => item.TransformToAncestor(root).TransformBounds(new Rect(item.RenderSize));
-            Layout(); var save = Descendants(root).OfType<Button>().Single(button => Equals(button.Content, "Сохранить")); var cancel = Descendants(root).OfType<Button>().Single(button => Equals(button.Content, "Отмена"));
-            var selector = Bounds(window.SceneInput); var saveBounds = Bounds(save); var cancelBounds = Bounds(cancel);
-            Assert.True(scroll.ScrollableHeight > 0); Assert.Equal(0, scroll.ScrollableWidth); Assert.Equal(1, root.LayoutTransform.Value.M11); Assert.Equal(1, root.LayoutTransform.Value.M22);
-            Assert.True(selector.Bottom <= Bounds(scroll).Top + .01); Assert.True(Bounds(scroll).Bottom <= saveBounds.Top + .01); Assert.True(saveBounds.Bottom <= root.ActualHeight + .01);
-            Assert.True(saveBounds.Width >= 64 && saveBounds.Height >= 25); Assert.Equal(saveBounds.Y, cancelBounds.Y); Assert.True(cancelBounds.Right <= root.ActualWidth + .01);
-            window.NameInput.Text = "Draft while scrolling";
-            for (int index = 0; index < cards.Length; index++)
-            {
-                scroll.ScrollToVerticalOffset(cards[index].TransformToAncestor(options).Transform(new Point()).Y); Layout();
-                Assert.Equal(selector, Bounds(window.SceneInput)); Assert.Equal(saveBounds, Bounds(save)); Assert.Equal(cancelBounds, Bounds(cancel));
-                Assert.True(cards[index].ActualWidth <= scroll.ViewportWidth + .01); Capture(root, $"scene-options-{width}-{index + 1}.png");
-            }
-            scroll.ScrollToEnd(); Layout(); Assert.True(scroll.VerticalOffset > 0); Assert.Equal(saveBounds, Bounds(save)); Assert.Equal("Draft while scrolling", window.NameInput.Text);
-            cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Empty(PerformanceSettingsStore.LoadScenes(fixture.ProjectPath).Functions);
+            Assert.Equal((780d, 640d, 740d, 600d), (window.Width, window.Height, window.MinWidth, window.MinHeight));
+            window.ShowPage(-1); Assert.Equal(0, window.Page); Assert.False(window.PreviousPage.IsEnabled); Assert.True(window.NextPage.IsEnabled);
+            window.SceneInput.SelectedValue = "chapter.krl::chapter"; window.NameInput.Text = "Draft while paging";
+            for (int page = 1; page <= 3; page++) { window.NextPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Equal(page, window.Page); Assert.Equal("chapter.krl::chapter", window.SceneInput.SelectedValue); }
+            Assert.False(window.NextPage.IsEnabled); window.ShowPage(99); Assert.Equal(3, window.Page);
+            window.StateInput.Text = "{";
+            for (int page = 2; page >= 0; page--) { window.PreviousPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Equal(page, window.Page); }
+            Assert.False(window.PreviousPage.IsEnabled); Assert.Equal("Draft while paging", window.NameInput.Text); Assert.Equal("{", window.StateInput.Text);
+            var cancel = Descendants((DependencyObject)window.Content).OfType<Button>().Single(button => Equals(button.Content, "Отмена")); cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Empty(PerformanceSettingsStore.LoadScenes(fixture.ProjectPath).Functions);
         }
         finally { window.Close(); }
     });
-
     static IEnumerable<DependencyObject> Descendants(DependencyObject owner)
     {
         foreach (object child in LogicalTreeHelper.GetChildren(owner)) if (child is DependencyObject nested) { yield return nested; foreach (var descendant in Descendants(nested)) yield return descendant; }

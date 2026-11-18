@@ -48,6 +48,7 @@ public static class BlockHelpDocument
     /// <summary>Parameters for one currently supported block.</summary>
     public static IReadOnlyList<string> Parameters(ScriptNodeKind kind)
     {
+        if (LogicCompiler.IsLogic(kind)) return ["Типизированные операнды: string/number/boolean — литерал, variable — имя в state, list — независимый именованный массив. Результат записывается в указанную переменную state.", "Списки создаются create_list(name, {values}); индексы list_* начинаются с 0. Копирование глубокое, merge дописывает второй массив. Списки сохраняются и откатываются вместе с игрой.", "Строковые операции учитывают Unicode, поиск/замена буквальные. Bool: true/false либо 1/0. Сброс переменной берёт начальное значение сцены, затем проекта, иначе удаляет ключ.", "Составные условия: compare и вложенные AND/OR/NOT; количество строк не фиксировано. Проверяются слева направо с коротким замыканием."];
         if (kind is ScriptNodeKind.RemoveLayerShaders or ScriptNodeKind.RemoveAllShaders)
             return ["Команда игровой схемы .knegraph с входом и выходом выполнения. Удаляет активные эффекты; исходные файлы не удаляются.",
                 kind == ScriptNodeKind.RemoveLayerShaders ? "Слой: вся сцена, фон, спрайт, игровой UI или экран по названию. Удаляются все шейдеры выбранной цели; название экрана сравнивается без учёта регистра." : "Удаляет все активные шейдеры.",

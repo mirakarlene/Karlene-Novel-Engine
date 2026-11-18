@@ -174,6 +174,7 @@ public sealed partial class LuaRuntime : IGameSession
         lua.DoString(RuntimeDiagnosticsLua.Source, "KNE diagnostics");
         lua.DoString(SceneRuntimeLua.Source, "KNE scene scheduler");
         lua.DoString(CalculationRuntimeLua.Source, "KNE calculations");
+        InitializeLogic();
         lua.DoString("kne_diagnostics_baseline()", "KNE baseline");
         // Resolve all paths before executing any project code.
         lua.DoString("state = " + StateLiteral(project.Engine.InitialState), "KNE initial state");
@@ -379,7 +380,7 @@ public sealed partial class LuaRuntime : IGameSession
             using var table = lua!["state"] as LuaTable ?? throw new InvalidDataException("state должен оставаться таблицей.");
             if (saving) PublishPluginEvent("on_save");
             JsonElement state = JsonSerializer.SerializeToElement(ReadState(table, 0));
-            checkpoint = new GameCheckpoint(1, StandalonePlayer.SaveIdentity(project.Path), fingerprint, seed, history.ToArray(), Story, state);
+            checkpoint = new GameCheckpoint(1, StandalonePlayer.SaveIdentity(project.Path), fingerprint, seed, history.ToArray(), Story, state) { Lists = CaptureLists() };
         }, cancellationToken).ConfigureAwait(false);
         return checkpoint!;
     }
@@ -388,8 +389,14 @@ public sealed partial class LuaRuntime : IGameSession
     {
         if (checkpoint.Version != 1 || !StandalonePlayer.SaveIdentity(project.Path).Equals(checkpoint.ProjectPath, StringComparison.OrdinalIgnoreCase) ||
             checkpoint.Fingerprint != ComputeFingerprint() || checkpoint.History == null || checkpoint.History.Count > 10_000 ||
-            checkpoint.State.ValueKind != JsonValueKind.Object)
+            checkpoint.State.ValueKind != JsonValueKind.Object || checkpoint.Lists is { ValueKind: not JsonValueKind.Object })
             throw new InvalidDataException("Сохранение относится к другому проекту или сценарии изменились.");
+        if (checkpoint.Lists is { } savedLists)
+            foreach (var pair in savedLists.EnumerateObject())
+            {
+                if (pair.Value.ValueKind != JsonValueKind.Array) throw new InvalidDataException("Сохранение списка требует JSON-массив.");
+                EngineSettings.ValidateState(pair.Value, 0);
+            }
         replaying = true;
         initialized = false;
         seed = checkpoint.Seed;
@@ -431,6 +438,7 @@ public sealed partial class LuaRuntime : IGameSession
             }
             if (FrameSignature(Story) != FrameSignature(checkpoint.Frame)) throw new InvalidDataException("Реплика сохранения не совпадает со сценарием.");
             lua!.DoString("for k in pairs(state) do state[k] = nil end; local restored = " + StateLiteral(checkpoint.State) + "; for k,v in pairs(restored) do state[k] = v end", "KNE restore state");
+            if (checkpoint.Lists is { } lists) lua.DoString("kne_list_restore(" + StateLiteral(lists) + ")", "KNE restore lists");
             history.AddRange(checkpoint.History);
             lock (stateLock) visuals = visuals with
             {

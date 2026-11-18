@@ -109,7 +109,7 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     }
     private static (Grid Grid, UniformSettingsColumn Left, UniformSettingsColumn Right) Columns()
     {
-        var grid = new Grid { Margin = new(0, 0, 12, 0) }; grid.ColumnDefinitions.Add(new()); grid.ColumnDefinitions.Add(new() { Width = new GridLength(18) }); grid.ColumnDefinitions.Add(new());
+        var grid = new Grid { MaxWidth = 1300, HorizontalAlignment = HorizontalAlignment.Center }; grid.ColumnDefinitions.Add(new()); grid.ColumnDefinitions.Add(new() { Width = new GridLength(18) }); grid.ColumnDefinitions.Add(new());
         var left = new UniformSettingsColumn(); var right = new UniformSettingsColumn(); Grid.SetColumn(right, 2); grid.Children.Add(left); grid.Children.Add(right); return (grid, left, right);
     }
     private static void Field(Panel panel, string label, FrameworkElement input) { var field = new StackPanel(); field.Children.Add(new TextBlock { Text = label, Margin = new(0, 4, 0, 5) }); input.Margin = new(0, 0, 0, 5); field.Children.Add(input); panel.Children.Add(field); }

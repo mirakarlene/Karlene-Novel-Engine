@@ -11,8 +11,8 @@ public sealed partial class ProjectParametersWindow
 {
     internal ProjectMetadataEditor MetadataInput { get; }
     internal ComboBox ResolutionInput { get; } = GraphicsSettingsEditor.Choice(ProjectCreationOptions.Resolutions.Select(r => new GraphicsOption<string>(r.Id, r.Title)).Append(new("custom", "Своё разрешение…")).ToArray());
-    internal TextBox CustomWidthInput { get; } = new() { Width = 72, MaxLength = 5 };
-    internal TextBox CustomHeightInput { get; } = new() { Width = 72, MaxLength = 5 };
+    internal TextBox CustomWidthInput { get; } = new() { Width = 50, MaxLength = 5 };
+    internal TextBox CustomHeightInput { get; } = new() { Width = 50, MaxLength = 5 };
     internal ComboBox PaletteInput { get; } = GraphicsSettingsEditor.Choice(EditorTheme.BuiltInThemes.Select(r => new GraphicsOption<string>(r.Id, r.Label)).Concat([new("violet", "Фиолетовая (прежняя)"), new("custom", "Своя (сохранить цвета)")]).ToArray());
     internal ComboBox PreloadInput { get; } = GraphicsSettingsEditor.Choice([new GraphicsOption<int>(1, "1"), new(2, "2"), new(3, "3")]);
     internal TextBox RollbackInput { get; } = new();

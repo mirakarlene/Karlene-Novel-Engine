@@ -184,47 +184,31 @@ public sealed class ProjectOptionsEditingTests
 
     [Theory]
     [InlineData(780, 840)] [InlineData(540, 500)]
-    public Task ThreeProjectPagesKeepFooterFullSizeAndDraftsWhileScrollingThePageBody(double width, double height) => WorkspaceTabsTests.Sta(async () =>
+    public Task SixProjectPagesKeepFooterFullSizeAndDraftsWithoutScrollingThePageBody(double width, double height) => WorkspaceTabsTests.Sta(async () =>
     {
         using var fixture = new TempProject(); var window = new ProjectParametersWindow(await fixture.LoadAsync());
         try
         {
-            if (Environment.GetEnvironmentVariable("KNE_EDITOR_RENDER") != null) EditorTheme.Apply(window, "kne");
-            var root = (FrameworkElement)window.Content;
-            void Layout() { root.Measure(new Size(width - 20, height - 40)); root.Arrange(new Rect(0, 0, width - 20, height - 40)); root.UpdateLayout(); }
-            Layout();
-            var save = Descendants(root).OfType<Button>().Single(button => Equals(button.Content, "Сохранить"));
+            EditorTheme.Apply(window, "kne"); window.Width = width; window.Height = height; window.WindowStartupLocation = WindowStartupLocation.Manual; window.Left = -10000; window.Top = -10000; window.ShowInTaskbar = false; window.ShowActivated = false; window.Show(); window.UpdateLayout();
+            var root = (FrameworkElement)window.Content; var save = Descendants(root).OfType<Button>().Single(button => Equals(button.Content, "Сохранить"));
             Rect Bounds(FrameworkElement item) => item.TransformToAncestor(root).TransformBounds(new Rect(item.RenderSize));
             var saveBounds = Bounds(save); var nextBounds = Bounds(window.NextPage);
-            var scroll = Descendants(root).OfType<ScrollViewer>().First();
-            if (height == 500) Assert.True(scroll.ScrollableHeight > 0);
-            Assert.Equal(1, root.LayoutTransform.Value.M11);
-            Assert.True(saveBounds.Width >= 64, $"Save bounds: {saveBounds}; root: {root.ActualWidth}x{root.ActualHeight}");
-            Assert.True(saveBounds.Height >= 25, $"Save bounds: {saveBounds}; root: {root.ActualWidth}x{root.ActualHeight}");
-            Assert.True(nextBounds.Bottom <= root.ActualHeight + 0.01, $"Next bounds: {nextBounds}; root: {root.ActualWidth}x{root.ActualHeight}");
-            Assert.Equal(12, save.FontSize);
-            Assert.True(Bounds(scroll).Bottom <= saveBounds.Top + 0.01, $"Scroll bounds: {Bounds(scroll)}; save bounds: {saveBounds}");
+            Assert.Empty(Descendants(root).OfType<ScrollViewer>()); Assert.Equal(1, root.LayoutTransform.Value.M11);
+            Assert.True(saveBounds.Width >= 64 && saveBounds.Height >= 25); Assert.True(nextBounds.Bottom <= root.ActualHeight + .01); Assert.Equal(12, save.FontSize);
             Assert.Equal(0, window.Page); Assert.False(window.PreviousPage.IsEnabled);
-            Capture(window, "project-options-1-" + width);
-            window.RollbackInput.Text = "42";
-            window.NextPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout();
-            Assert.Equal(1, window.Page); Assert.DoesNotContain(Descendants((DependencyObject)scroll.Content), node => ReferenceEquals(node, window.BuildInput.Author));
-            Assert.Contains(Descendants((DependencyObject)scroll.Content).OfType<TextBlock>(), text => text.Text == "Безопасность");
-            Assert.Equal(saveBounds, Bounds(save)); Assert.Equal(nextBounds.Y, Bounds(window.NextPage).Y);
-            Capture(window, "project-options-2-" + width);
-            window.NextPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout();
-            Assert.Equal(2, window.Page); Assert.False(window.NextPage.IsEnabled); Assert.True(window.PreviousPage.IsEnabled);
-            Assert.Same(window.MetadataInput, scroll.Content); Assert.Equal(saveBounds, Bounds(save)); Assert.Equal(nextBounds.Y, Bounds(window.NextPage).Y);
-            Capture(window, "project-options-3-" + width);
-            window.BuildInput.Author.Text = "Draft author";
-            scroll.ScrollToEnd(); Layout(); Assert.Equal(saveBounds, Bounds(save)); Assert.True(scroll.VerticalOffset > 0);
-            Capture(window, "project-options-3-bottom-" + width);
-            window.PreviousPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); window.PreviousPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout();
-            Assert.Equal("42", window.RollbackInput.Text); Assert.Equal("Draft author", window.BuildInput.Author.Text);
+            window.ShowPage(1); window.RollbackInput.Text = "42";
+            for (int page = 1; page <= 5; page++)
+            {
+                window.ShowPage(page); window.UpdateLayout(); Assert.Equal(page, window.Page); Assert.Equal(saveBounds, Bounds(save)); Assert.Equal(nextBounds.Y, Bounds(window.NextPage).Y); Assert.Empty(Descendants(root).OfType<ScrollViewer>());
+                Assert.True(window.PreviousPage.IsEnabled); Assert.Equal(page < 5, window.NextPage.IsEnabled);
+                if (page == 3) Assert.Contains(Descendants(root).OfType<TextBlock>(), text => text.Text == "Безопасность");
+                if (page == 4) { Assert.True(window.BuildInput.Author.IsVisible); window.BuildInput.Author.Text = "Draft author"; }
+            }
+            for (int page = 4; page >= 0; page--) { window.PreviousPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Equal(page, window.Page); }
+            Assert.False(window.PreviousPage.IsEnabled); Assert.Equal("42", window.RollbackInput.Text); Assert.Equal("Draft author", window.BuildInput.Author.Text);
         }
         finally { window.Close(); }
     });
-
     private static Dictionary<string, CheckBox> Flags(ProjectParametersWindow window) => (Dictionary<string, CheckBox>)typeof(ProjectParametersWindow).GetField("switches", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
     private static JsonObject Read(string path) => JsonNode.Parse(File.ReadAllText(path))!.AsObject();
     private static void Write(string path, JsonObject value) => File.WriteAllText(path, value.ToJsonString(ProjectConfiguration.JsonOptions));

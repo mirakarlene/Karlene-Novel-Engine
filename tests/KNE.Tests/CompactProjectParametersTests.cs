@@ -121,7 +121,7 @@ public sealed class CompactProjectParametersTests
 
     [Theory]
     [InlineData(false)] [InlineData(true)]
-    public async Task Window_ColumnsDiagnosticsAndPinnedActionsFitTheSame780By840SizeWithScrollableDangerZone(bool expanded)
+    public async Task GraphicsAndDiagnosticsRemainOnTheirAssignedPagesWithPinnedActionsAndNoScrollableDangerZone(bool expanded)
     {
         using var fixture = new TempProject(); var project = await fixture.LoadAsync();
         await WorkspaceTabsTests.Sta(() =>
@@ -129,48 +129,32 @@ public sealed class CompactProjectParametersTests
             var window = new ProjectParametersWindow(project);
             try
             {
-                Assert.False(window.DangerZone.IsExpanded); window.DangerZone.IsExpanded = expanded;
-                if (Environment.GetEnvironmentVariable("KNE_EDITOR_RENDER") != null) EditorTheme.Apply(window, "kne");
+                Assert.False(window.DangerZone.IsExpanded); EditorTheme.Apply(window, "kne");
                 Assert.Equal(780, window.Width); Assert.Equal(840, window.Height); Assert.Equal(SizeToContent.Manual, window.SizeToContent);
-                var content = Assert.IsType<DockPanel>(window.Content);
-                content.Measure(new Size(780, 800)); content.Arrange(new Rect(0, 0, 780, 800)); content.UpdateLayout();
-                var scroll = Assert.Single(Descendants(content).OfType<ScrollViewer>());
-                Assert.Empty(Descendants(content).OfType<Viewbox>());
+                window.WindowStartupLocation = WindowStartupLocation.Manual; window.Left = -10000; window.Top = -10000; window.ShowInTaskbar = false; window.ShowActivated = false; window.Show(); window.UpdateLayout();
+                var content = Assert.IsType<DockPanel>(window.Content); Assert.Empty(Descendants(content).OfType<ScrollViewer>()); Assert.Empty(Descendants(content).OfType<Viewbox>());
                 var graphics = Parent<Border>(window.GraphicsInput.ApiInput); var performance = Parent<Border>(window.AsyncTasksInput);
-                Assert.Same(graphics.Parent, performance.Parent); Assert.NotSame(graphics, performance);
-                Assert.True(Grid.GetColumn(graphics) < Grid.GetColumn(performance));
+                Assert.Same(graphics.Parent, performance.Parent); Assert.NotSame(graphics, performance); Assert.True(Grid.GetColumn(graphics) < Grid.GetColumn(performance));
                 Assert.Equal(graphics.TransformToAncestor(content).Transform(new Point()).Y, performance.TransformToAncestor(content).Transform(new Point()).Y, 3);
-                Assert.DoesNotContain(Descendants(scroll.Content), node => ReferenceEquals(node, window.TitleInput));
-                var diagnostic = Parent<Grid>(window.CornerInput);
-                Assert.Equal(2, diagnostic.ColumnDefinitions.Count); Assert.Equal(3, diagnostic.RowDefinitions.Count);
+                Assert.False(window.TitleInput.IsVisible); Assert.False(window.CornerInput.IsVisible);
+                var save = Assert.Single(Descendants(content).OfType<Button>(), button => Equals(button.Content, "Сохранить")); var cancel = Assert.Single(Descendants(content).OfType<Button>(), button => Equals(button.Content, "Отмена"));
+                Assert.Same(save.Parent, cancel.Parent); Assert.True(cancel.IsCancel); Rect saveBounds = save.TransformToAncestor(content).TransformBounds(new Rect(save.RenderSize));
+                var viewport = Descendants(content).OfType<ContentControl>().Single(control => control.GetType() == typeof(ContentControl));
+                foreach (FrameworkElement element in new FrameworkElement[] { window.TextureInput, window.AsyncTasksInput, window.AudioBufferInput }) AssertFits(element, viewport);
+                window.ShowPage(1); window.DangerZone.IsExpanded = expanded; window.UpdateLayout();
+                var diagnostic = Parent<Border>(window.CornerInput);
                 Assert.Contains(Descendants(diagnostic).OfType<CheckBox>(), input => input.Content is TextBlock text && text.Text == "Счётчик FPS");
-                Assert.IsType<DockPanel>(window.SavesInput.Parent);
-                var save = Assert.Single(Descendants(content).OfType<Button>(), button => Equals(button.Content, "Сохранить"));
-                var cancel = Assert.Single(Descendants(content).OfType<Button>(), button => Equals(button.Content, "Отмена"));
-                Assert.Same(save.Parent, cancel.Parent); Assert.True(cancel.IsCancel);
-                var body = Assert.IsType<StackPanel>(scroll.Content);
-                Assert.True(body.Children.IndexOf(window.DangerZone) > body.Children.IndexOf(Parent<Border>(window.SavesInput)));
+                Assert.Contains(window.DangerZone, Descendants(diagnostic)); Assert.IsType<DockPanel>(window.SavesInput.Parent);
                 Assert.Equal(System.Windows.Media.Colors.IndianRed, Assert.IsType<System.Windows.Media.SolidColorBrush>(window.DangerZone.Foreground).Color);
-                Rect saveBounds = save.TransformToAncestor(content).TransformBounds(new Rect(save.RenderSize));
                 AssertFits(save, content); AssertFits(cancel, content);
-                foreach (FrameworkElement element in new FrameworkElement[] { window.TextureInput, window.AsyncTasksInput, window.AudioBufferInput, window.CornerInput, window.SavesInput, window.DangerZone })
-                    ScrollAndAssertFits(element, scroll, content);
-                if (expanded) ScrollAndAssertFits(window.DeleteProjectButton, scroll, content);
-                Assert.Equal(saveBounds, save.TransformToAncestor(content).TransformBounds(new Rect(save.RenderSize)));
-                Assert.Equal(780, window.Width); Assert.Equal(840, window.Height);
-                if (Environment.GetEnvironmentVariable("KNE_EDITOR_RENDER") is { } directory)
-                {
-                    Directory.CreateDirectory(directory);
-                    var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(780, 800, 96, 96, System.Windows.Media.PixelFormats.Pbgra32); bitmap.Render(content);
-                    var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder(); encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
-                    using var output = File.Create(Path.Combine(directory, expanded ? "project-parameters-expanded.png" : "project-parameters-collapsed.png")); encoder.Save(output);
-                }
+                foreach (FrameworkElement element in new FrameworkElement[] { window.CornerInput, window.SavesInput, window.DangerZone }) AssertFits(element, viewport);
+                if (expanded) AssertFits(window.DeleteProjectButton, viewport);
+                Assert.Equal(saveBounds, save.TransformToAncestor(content).TransformBounds(new Rect(save.RenderSize))); Assert.Equal(780, window.Width); Assert.Equal(840, window.Height);
             }
             finally { window.Close(); }
             return Task.CompletedTask;
         });
     }
-
     [Theory]
     [InlineData(16)] [InlineData(32)] [InlineData(64)]
     public async Task Window_CacheOptionsOfferEveryRequestedLimitAndRetainTheLoadedChoice(int loaded)
@@ -200,7 +184,7 @@ public sealed class CompactProjectParametersTests
         string sentinel = fixture.Write("keep.txt", "still present");
         await WorkspaceTabsTests.Sta(() =>
         {
-            var window = new ProjectParametersWindow(project); int prompts = 0;
+            var window = new ProjectParametersWindow(project); window.ShowPage(1); int prompts = 0;
             window.ConfirmProjectDeletion = () => { prompts++; return true; }; window.DangerZone.IsExpanded = true;
             try
             {
@@ -209,8 +193,9 @@ public sealed class CompactProjectParametersTests
                 Assert.Equal("Осталось нажатий: 72", window.DeleteCounter.Text); Assert.Equal(Visibility.Visible, window.DeleteCounter.Visibility);
                 var content = Assert.IsType<DockPanel>(window.Content);
                 content.Measure(new Size(780, 800)); content.Arrange(new Rect(0, 0, 780, 800)); content.UpdateLayout();
-                var scroll = Assert.Single(Descendants(content).OfType<ScrollViewer>());
-                ScrollAndAssertFits(window.DeleteCounter, scroll, content); ScrollAndAssertFits(window.DeleteProjectButton, scroll, content);
+                Assert.Empty(Descendants(content).OfType<ScrollViewer>());
+                var viewport = Descendants(content).OfType<ContentControl>().Single(control => control.GetType() == typeof(ContentControl));
+                AssertFits(window.DeleteCounter, viewport); AssertFits(window.DeleteProjectButton, viewport);
                 for (int click = 1; click <= 71; click++)
                 {
                     Click(window.DeleteProjectButton);
@@ -233,7 +218,7 @@ public sealed class CompactProjectParametersTests
         using var fixture = new TempProject(); var project = await fixture.LoadAsync();
         await WorkspaceTabsTests.Sta(() =>
         {
-            var window = new ProjectParametersWindow(project); int prompts = 0; bool confirm = false;
+            var window = new ProjectParametersWindow(project); window.ShowPage(1); int prompts = 0; bool confirm = false;
             window.ConfirmProjectDeletion = () => { prompts++; return confirm; }; window.DangerZone.IsExpanded = true;
             try
             {

@@ -114,6 +114,7 @@ public sealed partial class VisualScript
                 case ScriptNodeKind.Condition:
                 case ScriptNodeKind.Branching:
                 case ScriptNodeKind.CompareVariables:
+                case ScriptNodeKind.CompoundCondition:
                 case ScriptNodeKind.CheckFlag:
                     Line($"if {Comparison(node)} then __kne_node = {Quote(node.True!)} else __kne_node = {Quote(node.False!)} end");
                     break;
@@ -191,6 +192,7 @@ public sealed partial class VisualScript
 
     private static string Command(ScriptNode node) => node.Kind switch
     {
+        _ when LogicCompiler.IsLogic(node.Kind) && node.Kind != ScriptNodeKind.CompoundCondition => LogicCompiler.Compile(node.Kind, node.Logic ?? new(), node.Variable),
         _ when CalculationCompiler.IsCalculation(node.Kind) => CalculationCompiler.Compile(node.Kind, node.Calculation ?? new CalculationSettings(), node.Variable),
         ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue => DialogueCommand(node),
         ScriptNodeKind.RegisterCharacter => $"register_character({Quote(System.Text.Json.JsonSerializer.Serialize(node.Character ?? new CharacterProfile(), EngineSettings.JsonOptions))})",
@@ -255,6 +257,7 @@ public sealed partial class VisualScript
 
     private static string Comparison(ScriptNode node)
     {
+        if (node.Kind == ScriptNodeKind.CompoundCondition) return LogicCompiler.CompileCondition((node.Logic ?? new()).Condition);
         string op = node.Comparison switch
         {
             ScriptComparison.Equal => "==", ScriptComparison.NotEqual => "~=", ScriptComparison.Greater => ">",
@@ -265,6 +268,7 @@ public sealed partial class VisualScript
 
     private static string RandomCommand(ScriptNode node)
     {
+        if (!string.IsNullOrWhiteSpace(node.Logic?.List)) return LogicCompiler.Compile(ScriptNodeKind.ListRandom, node.Logic, node.Variable);
         string low = Number(node.Minimum), high = Number(node.Maximum);
         if (node.Minimum == node.Maximum) return $"state[{Quote(node.Variable)}] = {low}";
         if (Math.Truncate(node.Minimum) == node.Minimum && Math.Truncate(node.Maximum) == node.Maximum &&
@@ -292,6 +296,11 @@ public sealed partial class VisualScript
 
     private static void ValidateCommand(ScriptNode node)
     {
+        if (LogicCompiler.IsLogic(node.Kind))
+        {
+            try { _ = LogicCompiler.Compile(node.Kind, node.Logic ?? new(), node.Variable); }
+            catch (ArgumentException error) { Fail(node, error.Message); }
+        }
         if (CalculationCompiler.IsCalculation(node.Kind))
         {
             try { _ = CalculationCompiler.Compile(node.Kind, node.Calculation ?? new CalculationSettings(), node.Variable); }
@@ -355,7 +364,7 @@ public sealed partial class VisualScript
             if (node.Variable == node.IterationKey || node.Variable == node.Path || node.IterationKey == node.Path)
                 Fail(node, "массив, элемент и индекс For Each требуют разных имён");
         }
-        if (node.Kind == ScriptNodeKind.Random && node.Minimum > node.Maximum) Fail(node, "минимум случайного диапазона не должен превышать максимум");
+        if (node.Kind == ScriptNodeKind.Random && string.IsNullOrWhiteSpace(node.Logic?.List) && node.Minimum > node.Maximum) Fail(node, "минимум случайного диапазона не должен превышать максимум");
         if (node.Duration is < 0 or > 3600) Fail(node, "длительность должна быть от 0 до 3600 секунд");
         if (node.Kind is ScriptNodeKind.AudioChannel or ScriptNodeKind.StopSound or ScriptNodeKind.Sound or ScriptNodeKind.Music && node.Channel is not ("music" or "sfx" or "voice" or "ambient"))
             Fail(node, "канал аудио: music, sfx, voice или ambient");
