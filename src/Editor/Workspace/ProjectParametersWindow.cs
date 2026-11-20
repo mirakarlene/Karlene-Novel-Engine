@@ -99,6 +99,8 @@ public sealed partial class ProjectParametersWindow : Window
         browse.Click += (_, _) => { var dialog = new OpenFolderDialog(); if (dialog.ShowDialog(this) == true) SavesInput.Text = dialog.FolderName; };
         storage.Children.Add(Hint("Относительный путь считается от проекта. При смене папки существующие сохранения не переносятся."));
         AddField(storage, "Расположение persistent", PersistentLocationInput);
+        AddField(storage, "Если запись недоступна", UnavailableSavesInput);
+        UnavailableSavesInput.ToolTip = "Профиль Portable продолжает работу без записи при недоступной папке.";
         AddField(storage, "Максимальная история действий (глубина отката)", RollbackInput);
         AddSwitch(storage, "autosave", "Автосохранение", project.Engine.Game.AutoSave);
         AddField(storage, "Интервал", AutosaveInput); AddField(storage, "Каждые N действий", AutosaveActionsInput);

@@ -9,7 +9,7 @@ internal static class ScriptProtection
 {
     internal static bool HasEmbeddedKey { get { using var key = typeof(ScriptProtection).Assembly.GetManifestResourceStream("KNE.ScriptKey"); return key != null; } }
     private static readonly byte[] Magic = "KNESRC01"u8.ToArray();
-    internal static bool IsScript(string path) => Path.GetExtension(path).ToLowerInvariant() is ".krl" or ".lua" or ".cs" or ".knegraph";
+    internal static bool IsScript(string path) => ScriptDocument.IsExecutablePath(path) || Path.GetExtension(path).Equals(".cs", StringComparison.OrdinalIgnoreCase);
     internal static byte[] Encrypt(byte[] source, byte[] key)
     {
         byte[] data = new byte[36 + source.Length]; Magic.CopyTo(data, 0); RandomNumberGenerator.Fill(data.AsSpan(8, 12));

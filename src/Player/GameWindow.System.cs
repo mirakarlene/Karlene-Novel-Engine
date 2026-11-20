@@ -15,6 +15,7 @@ public partial class GameWindow
     private GameSystemConsent? systemConsent;
     private Task systemInitialization = Task.CompletedTask;
     private GameStorageStatus? saveStorage;
+    private string? startupStorageNotice;
     private bool SaveStorageWritable => saveStorage?.Writable != false;
     internal bool CountSystemLaunch { get; init; } = true;
     private bool systemFrozen;
@@ -62,11 +63,20 @@ public partial class GameWindow
 
     private async Task InitializeSystemServicesAsync(bool usesFiles)
     {
-        saveStorage = await Task.Run(() => GameStartupDiagnostics.CheckStorage(saves.DirectoryPath), blockFlowLifetime.Token);
-        if (!saveStorage.Writable)
+        var storage = await Task.Run(() => GameStartupDiagnostics.SelectStorage(project, saves.DirectoryPath), blockFlowLifetime.Token);
+        saveStorage = storage.Effective;
+        if (storage.Effective.Directory != storage.Requested.Directory)
         {
-            QueueOutput("Сохранения: " + saveStorage.Message);
-            if (!closed) Notify(saveStorage.Message);
+            saves = new GameSaveStore(project.Path, storage.Effective.Directory);
+            LoadPreferences();
+            ContinueButton.IsEnabled = saves.Exists("auto") || saves.Exists("quick");
+            UpdateScreenButtons();
+        }
+        if (!storage.Requested.Writable)
+        {
+            startupStorageNotice = storage.Requested.Message + (saveStorage.Writable ? " Игра использует папку сохранений в LocalAppData." : "");
+            QueueOutput("Сохранения: " + startupStorageNotice);
+            if (!closed) Notify(startupStorageNotice);
         }
         if (saves.LegacyImportError is { } importError) QueueOutput("Старые сохранения не перенесены. " + importError);
         systemServices = new(project, saves);

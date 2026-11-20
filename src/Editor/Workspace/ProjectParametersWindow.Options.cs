@@ -21,6 +21,8 @@ public sealed partial class ProjectParametersWindow
     internal TextBox MenuMusicInput { get; } = new();
     internal ComboBox PersistentLocationInput { get; } = GraphicsSettingsEditor.Choice(
         [new GraphicsOption<string>("local", "Папка игры (saves)"), new("appdata", "AppData")]);
+    internal ComboBox UnavailableSavesInput { get; } = GraphicsSettingsEditor.Choice(
+        [new GraphicsOption<string>("read_only", "Продолжить без записи"), new("appdata", "Использовать LocalAppData")]);
     internal ComboBox ConsoleModeInput { get; } = GraphicsSettingsEditor.Choice(
         [new GraphicsOption<string>("embedded", "Встроенная панель"), new("window", "Отдельное окно KNE"), new("terminal", "Системная консоль Windows")]);
     internal TextBox ConsoleHotkeyInput { get; } = new() { MaxLength = 60, ToolTip = "F3 или сочетание, например Ctrl+Shift+D" };
@@ -35,6 +37,7 @@ public sealed partial class ProjectParametersWindow
         PreloadInput.SelectedValue = project.Engine.Performance.PreloadScenes; RollbackInput.Text = project.Engine.Game.RollbackDepth.ToString();
         AutosaveInput.SelectedValue = project.Engine.Game.AutoSaveInterval; AutosaveActionsInput.Text = project.Engine.Game.AutoSaveActions.ToString(); MenuMusicInput.Text = project.Engine.Game.MenuMusic ?? "";
         PersistentLocationInput.SelectedValue = project.Engine.Performance.PersistentLocation == "appdata" ? "appdata" : "local";
+        UnavailableSavesInput.SelectedValue = project.Engine.Performance.UnavailableSaves;
         ConsoleModeInput.SelectedValue = project.Engine.Performance.ConsoleMode;
         ConsoleHotkeyInput.Text = project.Engine.Performance.ConsoleHotkey;
         AutosaveInput.SelectionChanged += (_, _) => AutosaveActionsInput.IsEnabled = (string?)AutosaveInput.SelectedValue == "actions";
@@ -74,6 +77,7 @@ public sealed partial class ProjectParametersWindow
         JsonObject draft = MetadataInput.Draft();
         var value = new ProjectPerformanceSettings { Graphics = GraphicsInput.Value, FpsCounter = Flag("fps"), FpsCorner = (string?)CornerInput.SelectedValue ?? "top_right", StatisticsOverlay = Flag("stats"), LoadingIndicator = Flag("loading"), DebugMode = Flag("debug"), Preloading = Flag("preload"), PreloadScenes = (int?)PreloadInput.SelectedValue ?? 3, UnloadPreviousScene = Flag("unload"), MaxAsyncTasks = (int?)AsyncTasksInput.SelectedValue ?? 128, AudioBuffer = (string?)AudioBufferInput.SelectedValue ?? "balanced", SavesPath = SavesInput.Text.Trim() };
         value.PersistentLocation = (string?)PersistentLocationInput.SelectedValue ?? "local";
+        value.UnavailableSaves = (string?)UnavailableSavesInput.SelectedValue ?? "read_only";
         value.ConsoleMode = (string?)ConsoleModeInput.SelectedValue ?? "embedded";
         value.ConsoleHotkey = ConsoleHotkeyInput.Text.Trim();
         value.Validate(project.Path);

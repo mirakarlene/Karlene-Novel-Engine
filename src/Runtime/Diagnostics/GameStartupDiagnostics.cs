@@ -7,6 +7,26 @@ internal sealed record GameStorageStatus(string Directory, bool Writable, string
 
 internal static class GameStartupDiagnostics
 {
+    internal static (GameStorageStatus Requested, GameStorageStatus Effective) SelectStorage(ProjectInfo project, string directory)
+    {
+        var manifest = StandalonePlayer.RuntimeManifest;
+        string? fallback = null;
+        if (project.Engine.Performance.UnavailableSaves == "appdata" && manifest?.ReleaseMode != "portable")
+            fallback = manifest == null ? GameSaveStore.LegacyDirectory(project.Path) :
+                (manifest with { SaveLocation = "appdata" }).SavesDirectory(AppContext.BaseDirectory);
+        return SelectStorage(directory, fallback);
+    }
+
+    internal static (GameStorageStatus Requested, GameStorageStatus Effective) SelectStorage(string directory, string? fallback)
+    {
+        var requested = CheckStorage(directory);
+        if (requested.Writable || fallback == null) return (requested, requested);
+        if (PathSafety.NormalizeDirectory(directory).Equals(PathSafety.NormalizeDirectory(fallback), StringComparison.OrdinalIgnoreCase))
+            return (requested, requested);
+        var candidate = CheckStorage(fallback);
+        return (requested, candidate.Writable ? candidate : requested);
+    }
+
     internal static GameStorageStatus CheckStorage(string directory)
     {
         try

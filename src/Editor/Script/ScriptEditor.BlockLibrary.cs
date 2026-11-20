@@ -11,13 +11,15 @@ public partial class ScriptEditor
     internal void FocusAddBlock() => AddBlockButton.Focus();
 
     /// <summary>Checks the block limit and the unique entry-point rule without modifying the graph.</summary>
-    public bool CanAddBlock(ScriptNodeKind kind) => Document?.Graph is { } graph && BlockLibrary.Definitions.Any(entry => entry.Kind == kind) && graph.Nodes.Count < 500 &&
-        ShaderLibrary.CanPlace(kind, graph.IsShader) &&
+    public bool CanAddBlock(ScriptNodeKind kind) => Document?.Graph is { } graph && graph.Nodes.Count < 500 &&
+        (graph.IsVisualLua ? kind is ScriptNodeKind.LuaBlock or ScriptNodeKind.Start :
+            BlockLibrary.Definitions.Any(entry => entry.Kind == kind) && ShaderLibrary.CanPlace(kind, graph.IsShader)) &&
         (kind is not (ScriptNodeKind.Start or ScriptNodeKind.Initialization) || graph.Nodes.All(node => node.Kind != kind));
 
     /// <summary>Creates a command at the center of the visible canvas, retaining the viewport and undo history.</summary>
     public void AddBlock(ScriptNodeKind kind, string? category = null)
-        => AddBlock(BlockLibrary.Definitions.First(entry => entry.Kind == kind && (category == null || entry.Group == category)));
+        => AddBlock((Document?.Graph?.IsVisualLua == true ? VisualLuaCatalog.Definitions : BlockLibrary.Definitions)
+            .First(entry => entry.Kind == kind && (category == null || entry.Group == category)));
 
     /// <summary>Adds a registered block, including a stable plugin definition.</summary>
     public void AddBlock(BlockDefinition entry)
@@ -50,6 +52,7 @@ public partial class ScriptEditor
         ExtendedProperties.Children.Clear(); extendedEdits.Clear();
         selectedSpeakerId = node?.SpeakerId ?? ""; UpdateSpeakerReference();
         if (node == null) return;
+        if (node.Lua != null) { AddLuaBlockFields(node); return; }
         if (node.Kind == ScriptNodeKind.Plugin) { AddPluginFields(node); return; }
         if (node.Kind is ScriptNodeKind.RemoveLayerShaders or ScriptNodeKind.RemoveAllShaders) { AddShaderRemovalFields(node); return; }
         if (ShaderLibrary.IsShader(node.Kind)) { AddShaderFields(node); return; }

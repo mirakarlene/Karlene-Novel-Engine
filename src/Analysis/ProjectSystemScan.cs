@@ -66,10 +66,10 @@ internal static class ProjectSystemScan
                             CheckAsset(block.Path);
                     }
                 }
-                else if (Path.GetExtension(path).ToLowerInvariant() is ".krl" or ".lua")
+                else if (ScriptDocument.IsCodePath(path) || ScriptDocument.IsVisualLuaPath(path))
                 {
-                    string text = ScriptProtection.ReadText(path);
-                    if (Path.GetExtension(path).Equals(".lua", StringComparison.OrdinalIgnoreCase))
+                    string text = VisualLua.ReadProjectSource(path);
+                    if (ScriptDocument.IsLuaPath(path))
                     {
                         var result = await syntax.CheckAsync(LuaSource.Prepare(StartupScripts.Declaration(text).Source), token).ConfigureAwait(false);
                         if (result.Error != null && errors.Count < 150) errors.Add(Path.GetRelativePath(project.Path, path) + ": " + result.Error);

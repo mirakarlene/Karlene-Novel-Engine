@@ -26,7 +26,7 @@ public sealed class ProjectInfo
     {
         if (!string.IsNullOrWhiteSpace(configured))
         {
-            string declaredPath = PathSafety.ResolveRelative(Path, configured);
+            string declaredPath = PathSafety.EnsureInside(Path, VisualLua.ResolveTwin(PathSafety.ResolveRelative(Path, configured)));
             if (File.Exists(declaredPath)) return declaredPath;
             // Older KNE templates declared game_init.lua but created gamelogic.lua.
             if (configured.Replace('\\', '/') == "game/scripts/game_init.lua")
@@ -38,7 +38,7 @@ public sealed class ProjectInfo
         }
         foreach (string candidate in defaults)
         {
-            string fullPath = PathSafety.ResolveRelative(Path, candidate);
+            string fullPath = PathSafety.EnsureInside(Path, VisualLua.ResolveTwin(PathSafety.ResolveRelative(Path, candidate)));
             if (File.Exists(fullPath)) return fullPath;
         }
         if (extension != null)

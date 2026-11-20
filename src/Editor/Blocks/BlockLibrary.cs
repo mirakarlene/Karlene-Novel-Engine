@@ -4,7 +4,7 @@ namespace KNE;
 public sealed record BlockGroup(string Id, string Title, string Color, string Icon = "");
 
 /// <summary>A selectable command with a description and category color.</summary>
-public sealed record BlockDefinition(ScriptNodeKind Kind, string Group, string Title, string Description, string Color, PluginBlock? Plugin = null);
+public sealed record BlockDefinition(ScriptNodeKind Kind, string Group, string Title, string Description, string Color, PluginBlock? Plugin = null, string? LuaOperation = null);
 
 /// <summary>The grouped library and defaults used when creating a new visual block.</summary>
 public static class BlockLibrary
@@ -24,6 +24,8 @@ public static class BlockLibrary
     /// <summary>Creates a custom block with persistent ports and parameter defaults.</summary>
     public static ScriptNode Create(BlockDefinition entry)
     {
+        if (entry.Kind == ScriptNodeKind.Start && entry.Group == "lua_flow") return new() { Kind = ScriptNodeKind.Start };
+        if (entry.LuaOperation != null) return VisualLuaCatalog.Create(entry.LuaOperation);
         if (entry.Plugin is not { } block) return Create(entry.Kind, entry.Group);
         return new ScriptNode { Kind = ScriptNodeKind.Plugin, Category = entry.Group,
             Plugin = new() { BlockId = block.Id, Title = block.Title, Icon = block.Icon, Color = block.Color, Inputs = block.Inputs?.ToArray() ?? ["Вход"],
@@ -194,6 +196,7 @@ public static class BlockLibrary
     /// <summary>The header color for an existing block.</summary>
     public static string ColorFor(ScriptNode node)
     {
+        if (node.Lua?.Operation is { } operation) return VisualLuaCatalog.Blocks[operation].Group.Color;
         var entry = node.Plugin == null ? Definitions.First(d => d.Kind == (node.Kind == ScriptNodeKind.Condition ? ScriptNodeKind.Branching : node.Kind)) : null;
         if (node.Kind is ScriptNodeKind.Start or ScriptNodeKind.End) return entry!.Color;
         string group = node.Category.Length > 0 ? node.Category : entry?.Group ?? "plugins";

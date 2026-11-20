@@ -24,7 +24,8 @@ public sealed partial class LuaRuntime
     {
         string savesDirectory = StandalonePlayer.RuntimeManifest?.SavesDirectory(AppContext.BaseDirectory) ??
             project.Engine.Performance.ResolveSavesPath(project.Path);
-        var saves = GameStartupDiagnostics.CheckStorage(savesDirectory);
+        var selection = GameStartupDiagnostics.SelectStorage(project, savesDirectory);
+        var saves = selection.Effective;
         string persistentDirectory = GameSystemServices.PersistentDirectories(project.Path, savesDirectory)
             .For(project.Engine.Performance.PersistentLocation);
         var persistent = PathSafety.NormalizeDirectory(persistentDirectory).Equals(PathSafety.NormalizeDirectory(savesDirectory), StringComparison.OrdinalIgnoreCase)
@@ -43,6 +44,7 @@ public sealed partial class LuaRuntime
             architecture_translation_possible = RuntimeInformation.ProcessArchitecture != RuntimeInformation.OSArchitecture,
             installation_directory = Path.TrimEndingDirectorySeparator(installationDirectory),
             saves = Storage(saves),
+            requested_saves = Storage(selection.Requested),
             persistent = Storage(persistent)
         }));
 

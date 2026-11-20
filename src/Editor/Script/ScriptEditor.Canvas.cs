@@ -87,7 +87,7 @@ public partial class ScriptEditor
                 Background = brush, CornerRadius = new CornerRadius(9, 9, 0, 0), Height = 32,
                 Cursor = Cursors.SizeAll, Child = new TextBlock
                 {
-                    Text = (node.Plugin == null ? "" : node.Plugin.Icon + " ") + node.Title, Foreground = node.Kind == ScriptNodeKind.Start || CalculationCompiler.IsCalculation(node.Kind) || graph.IsShader || node.Category == "shaders" ? Brushes.Black : Brushes.White,
+                    Text = (node.Plugin == null ? "" : node.Plugin.Icon + " ") + node.Title, Foreground = node.Kind == ScriptNodeKind.Start || CalculationCompiler.IsCalculation(node.Kind) || graph.IsShader || node.Category is "shaders" or "lua_flow" or "lua_functions" ? Brushes.Black : Brushes.White,
                     FontWeight = FontWeights.Bold, TextTrimming = TextTrimming.CharacterEllipsis,
                     Margin = new Thickness(12, 6, 12, 0), ToolTip = DescribeNodeIdentity(node)
                 }

@@ -19,13 +19,21 @@ internal sealed class GameSystemServices
     private readonly ProjectInfo project;
     private readonly GameSaveStore saves;
     private readonly PersistentGameStore persistent;
+    private readonly bool savesWritable = true;
     internal string ConsentDirectory { get; }
     internal double PlayedSeconds { get; set; }
 
     internal GameSystemServices(ProjectInfo project, GameSaveStore? saves = null)
     {
         this.project = project;
-        this.saves = saves ?? StandalonePlayer.RuntimeSaves(project);
+        if (saves != null) this.saves = saves;
+        else
+        {
+            var configured = StandalonePlayer.RuntimeSaves(project);
+            var storage = GameStartupDiagnostics.SelectStorage(project, configured.DirectoryPath);
+            savesWritable = storage.Effective.Writable;
+            this.saves = storage.Effective.Directory == configured.DirectoryPath ? configured : new(project.Path, storage.Effective.Directory);
+        }
         var locations = PersistentDirectories(project.Path, this.saves.DirectoryPath);
         persistent = new(locations.For(project.Engine.Performance.PersistentLocation));
         ConsentDirectory = locations.Portable ? locations.Local : locations.Profile;
@@ -79,6 +87,7 @@ internal sealed class GameSystemServices
             case "save_list": return SystemReply.From(await ReadSlotsAsync(token).ConfigureAwait(false));
             case "save_checkpoint":
             {
+                if (!savesWritable) return SystemReply.From(false);
                 var checkpoint = Arg(call, 1).Deserialize<GameCheckpoint>() ?? throw new InvalidDataException("Пустая точка сохранения.");
                 DemandOwnership(checkpoint);
                 await saves.SaveAsync(String(call, 0), checkpoint, token).ConfigureAwait(false);

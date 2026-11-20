@@ -12,7 +12,7 @@ public partial class GameWindow : Window
 {
     private IGameSession runtime;
     private readonly ProjectInfo project;
-    private readonly GameSaveStore saves;
+    private GameSaveStore saves;
     private readonly DispatcherTimer renderTimer;
     private readonly LogBuffer pendingOutput = new();
     private readonly Queue<string> lines = new();
@@ -83,7 +83,7 @@ public partial class GameWindow : Window
         if (!useMenu)
         {
             await StartGameAsync();
-            if (!closed && saveStorage is { Writable: false } storage) Notify(storage.Message);
+            if (!closed && startupStorageNotice is { } storageNotice) Notify(storageNotice);
         }
     }
 

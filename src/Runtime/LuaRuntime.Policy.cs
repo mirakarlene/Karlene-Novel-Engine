@@ -24,42 +24,46 @@ public sealed partial class LuaRuntime
         LuaExecutionPolicy.Register(lua!, this, GetType().GetMethod(nameof(WritePolicyFile))!, "kne_write_file");
         lua!.DoString("kne = kne or {}; kne.read_file = kne_read_file; kne.write_file = kne_write_file", "KNE file API");
         LuaExecutionPolicy.Apply(lua, project.Engine.Security);
-        if (ScriptProtection.HasEmbeddedKey && !project.Engine.Security.Restricted) InstallEncryptedModules();
+        if (!project.Engine.Security.Restricted) InstallProjectModules();
     }
-    /// <summary>Supplies encrypted project Lua modules while leaving standard module lookup intact in full-access mode.</summary>
+    /// <summary>Supplies project Lua modules with compiled or protected source in full-access mode.</summary>
     public string[] PlayerModuleSource(string path, bool module)
     {
         if (module) path = path.Replace('.', '/') + ".lua";
-        foreach (string relative in module ? new[] { path, Path.GetRelativePath(project.Path, Path.Combine(Path.GetDirectoryName(project.InitScriptPath)!, path)) } : new[] { path })
+        string besideInitializer = Path.GetRelativePath(project.Path, Path.Combine(Path.GetDirectoryName(project.InitScriptPath)!, path));
+        bool encrypted = ScriptProtection.HasEmbeddedKey;
+        string[] candidates = !module ? [path] : encrypted ? [path, besideInitializer] : [besideInitializer, path];
+        foreach (string relative in candidates)
         {
             string full;
-            try { full = PathSafety.ResolveRelative(project.Path, relative); } catch (ArgumentException) { continue; }
-            if (File.Exists(full)) return [ScriptProtection.ReadText(full), full.Replace('\\', '/')];
+            try { full = PathSafety.EnsureInside(project.Path, VisualLua.ResolveTwin(Path.GetFullPath(relative, project.Path))); }
+            catch (ArgumentException) { continue; }
+            if (!File.Exists(full)) continue;
+            if (encrypted || ScriptDocument.IsVisualLuaPath(full) ||
+                ScriptDocument.IsLuaPath(relative) && !Path.GetExtension(relative).Equals(Path.GetExtension(full), StringComparison.OrdinalIgnoreCase))
+                return [VisualLua.ReadProjectSource(full), full.Replace('\\', '/')];
+            break;
         }
         return ["", ""];
     }
-    private void InstallEncryptedModules()
+    private void InstallProjectModules()
     {
         Register(nameof(PlayerModuleSource), "kne_player_module");
         lua!.DoString("""
             do
-                local originalRequire, originalLoadfile = require, loadfile
+                local originalLoadfile = loadfile
                 function loadfile(path, mode, environment)
+                    if type(path) ~= 'string' or mode == 'b' then return originalLoadfile(path, mode, environment) end
                     local value = kne_player_module(path, false)
                     if value[1] == '' then return originalLoadfile(path, mode, environment) end
                     return load(value[0], '@' .. value[1], 't', environment or _G)
                 end
                 function dofile(path) return assert(loadfile(path))() end
-                function require(name)
-                    if package.loaded[name] ~= nil then return package.loaded[name] end
+                table.insert(package.searchers, 2, function(name)
                     local value = kne_player_module(name, true)
-                    if value[1] == '' then return originalRequire(name) end
-                    package.loaded[name] = true
-                    local ok, result = pcall(assert(load(value[0], '@' .. value[1], 't', _G)), name)
-                    if not ok then package.loaded[name] = nil; error(result, 2) end
-                    if result ~= nil then package.loaded[name] = result end
-                    return package.loaded[name]
-                end
+                    if value[1] == '' then return nil end
+                    return assert(load(value[0], '@' .. value[1], 't', _G)), value[1]
+                end)
             end
             """, "KNE protected project modules");
     }

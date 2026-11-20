@@ -88,11 +88,11 @@ public sealed partial class LuaRuntime
             if (!pluginsEnabled) return ["", "", "Сторонние плагины отключены в этом запуске движка."];
             PluginPrivileges.EnsureUserProcess();
             EngineDiagnostics.Trace("Чтение плагина", relative);
-            string full = PathSafety.ResolveRelative(project.Path, relative);
+            string full = PathSafety.EnsureInside(project.Path, VisualLua.ResolveTwin(PathSafety.ResolveRelative(project.Path, relative)));
             string extension = Path.GetExtension(full).ToLowerInvariant();
-            bool allowed = kind switch { "lua" => extension == ".lua", "cs" => extension == ".cs", "script" => extension is ".lua" or ".krl" or ".cs", _ => false };
-            if (!allowed) throw new ArgumentException("Поддерживаются .lua, .krl и C#-плагины .cs; расширение должно соответствовать блоку.");
-            string source = ScriptProtection.ReadText(full);
+            bool allowed = kind switch { "lua" => ScriptDocument.IsLuaPath(full), "cs" => extension == ".cs", "script" => ScriptDocument.IsLuaPath(full) || extension is ".krl" or ".cs", _ => false };
+            if (!allowed) throw new ArgumentException("Поддерживаются .lua, .vlua, .krl и .cs. Расширение должно соответствовать блоку.");
+            string source = VisualLua.ReadProjectSource(full);
             return [extension == ".krl" ? LuaSource.Prepare(source) : source, Path.GetRelativePath(project.Path, full).Replace('\\', '/'), ""];
         }
         catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException or DecoderFallbackException)

@@ -25,7 +25,7 @@ public sealed class GameScripts
         var applicationSources = ApplicationPluginFiles.Normalize(project.ApplicationPlugins).ToHashSet(StringComparer.OrdinalIgnoreCase);
         extensionSources.UnionWith(applicationSources);
         var paths = ProjectLoader.EnumerateFiles(project.Path, CancellationToken.None).Files
-            .Where(p => ScriptDocument.IsCodePath(p) || ScriptDocument.IsVisualPath(p))
+            .Where(ScriptDocument.IsExecutablePath)
             .Where(p => pluginsEnabled || !EngineLaunch.IsPluginPath(Path.GetRelativePath(project.Path, p)) && !applicationSources.Contains(p))
             .Append(init).Append(project.MainScenePath).Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(p => Path.GetRelativePath(project.Path, p), StringComparer.Ordinal);
@@ -38,7 +38,7 @@ public sealed class GameScripts
             try
             {
                 bool overridden = editorSource != null && path.Equals(editorSource.RelativePath(project.Path), StringComparison.OrdinalIgnoreCase);
-                source = overridden ? editorSource!.Source : ScriptProtection.ReadText(full);
+                source = overridden ? editorSource!.Source : VisualLua.ReadProjectSource(full);
                 if (ScriptDocument.IsVisualPath(full) && !overridden)
                 {
                     var graph = VisualScript.Parse(source);
@@ -70,6 +70,8 @@ public sealed class GameScripts
     }
 
     public GameScript FindFile(string path) => Files.FirstOrDefault(f => f.Path.Equals(path.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase))
+        ?? (ScriptDocument.IsLuaPath(path) ? Files.FirstOrDefault(f => f.Path.Equals(Path.ChangeExtension(path.Replace('\\', '/'),
+            ScriptDocument.IsVisualLuaPath(path) ? ".lua" : ".vlua"), StringComparison.OrdinalIgnoreCase)) : null)
         ?? throw new FileNotFoundException("Сценарий не найден в проекте: " + path);
 
     public string PreviewFunction(string path)

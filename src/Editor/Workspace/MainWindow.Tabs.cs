@@ -24,12 +24,18 @@ public partial class MainWindow
         if (existing != null) { DocumentTabs.SelectedItem = existing; ShowActiveEditor(); return; }
 
         var editor = OpenEditors.Any() ? CreateTabEditor() : SceneEditor;
-        try { await editor.OpenAsync(currentProject.Path, path); }
+        string projectPath = currentProject.Path;
+        try { await editor.OpenAsync(projectPath, path); }
         catch { if (editor != SceneEditor) EditorWorkspace.Children.Remove(editor); throw; }
         var tab = new TabItem { Tag = editor, ToolTip = Path.GetRelativePath(currentProject.Path, path) };
         var header = new StackPanel { Orientation = Orientation.Horizontal };
         var title = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 8, 0) };
-        void UpdateHeader() => title.Text = Path.GetFileName(path) + (editor.HasUnsavedChanges ? " *" : "");
+        void UpdateHeader()
+        {
+            string currentPath = editor.Document?.FilePath ?? path;
+            title.Text = Path.GetFileName(currentPath) + (editor.HasUnsavedChanges ? " *" : "");
+            tab.ToolTip = Path.GetRelativePath(projectPath, currentPath);
+        }
         EventHandler changed = (_, _) => UpdateHeader();
         editor.DocumentStateChanged += changed;
         tabStateHandlers.Add(editor, changed);
@@ -51,6 +57,7 @@ public partial class MainWindow
         editor.BlockLibraryRequested += SceneEditor_BlockLibraryRequested;
         editor.TestSceneRequested += SceneEditor_TestSceneRequested;
         editor.ExternalEditorRequested += SceneEditor_ExternalEditorRequested;
+        editor.LuaFileConverted += SceneEditor_LuaFileConverted;
         editor.RunRequested += SceneEditor_RunRequested;
         editor.MainSceneRequested += SceneEditor_MainSceneRequested;
         editor.CloseRequested += SceneEditor_CloseRequested;
