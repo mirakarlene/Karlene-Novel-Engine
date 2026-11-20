@@ -77,7 +77,7 @@ public sealed class LuaRuntimeTests
         await runtime.StartAsync();
         Assert.Equal("Диагностика KNE — Новелла с пробелами", output.First());
         Assert.Contains(output, line => line.StartsWith("Точка входа: game/scenes/main.krl", StringComparison.Ordinal));
-        Assert.Contains("Сохранения: Папка доступна для записи.", output);
+        Assert.Contains(output, line => line.StartsWith("Сохранения (", StringComparison.Ordinal) && line.EndsWith("Папка доступна для записи.", StringComparison.Ordinal));
         Assert.Equal(new[]
         {
             "Добро пожаловать! Это базовая сцена.",
@@ -97,7 +97,7 @@ public sealed class LuaRuntimeTests
         await using var runtime = new LuaRuntime(await fixture.LoadAsync(), output.Enqueue);
         await runtime.StartAsync();
 
-        Assert.Contains(output, line => line.StartsWith("Сохранения: Не удалось записать проверочный файл", StringComparison.Ordinal));
+        Assert.Contains(output, line => line.StartsWith("Предупреждение: Не удалось записать проверочный файл", StringComparison.Ordinal));
         Assert.Contains("Добро пожаловать! Это базовая сцена.", output);
         Assert.Equal("keep", File.ReadAllText(blocked));
         Assert.Empty(Directory.GetFiles(fixture.ProjectPath, ".kne-write-check-*", SearchOption.AllDirectories));

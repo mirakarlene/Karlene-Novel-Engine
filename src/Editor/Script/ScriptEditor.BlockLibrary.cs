@@ -12,7 +12,7 @@ public partial class ScriptEditor
 
     /// <summary>Checks the block limit and the unique entry-point rule without modifying the graph.</summary>
     public bool CanAddBlock(ScriptNodeKind kind) => Document?.Graph is { } graph && graph.Nodes.Count < 500 &&
-        (graph.IsVisualLua ? kind is ScriptNodeKind.LuaBlock or ScriptNodeKind.Start :
+        (graph.IsVisualLua ? kind is ScriptNodeKind.LuaBlock or ScriptNodeKind.Start or ScriptNodeKind.Comment :
             BlockLibrary.Definitions.Any(entry => entry.Kind == kind) && ShaderLibrary.CanPlace(kind, graph.IsShader)) &&
         (kind is not (ScriptNodeKind.Start or ScriptNodeKind.Initialization) || graph.Nodes.All(node => node.Kind != kind));
 
@@ -28,7 +28,9 @@ public partial class ScriptEditor
         ApplyProperties();
         if (!CanAddBlock(kind)) throw new InvalidOperationException(kind is ScriptNodeKind.Start or ScriptNodeKind.Initialization
             ? "Этот блок можно добавить только один раз." : "Добавление блока недоступно: предел 500 блоков.");
-        var node = BlockLibrary.Create(entry);
+        var node = entry.Kind == ScriptNodeKind.Comment && entry.Group == "lua_raw"
+            ? new ScriptNode { Kind = ScriptNodeKind.Comment, Category = entry.Group, Text = "Комментарий" }
+            : BlockLibrary.Create(entry);
         node.IsShaderInvocation = kind == ScriptNodeKind.ShaderContainer && Document?.Graph?.IsShader == false;
         double centerX = (GraphScroll.ActualWidth / 2 - CanvasPan.X) / ZoomSlider.Value;
         double centerY = (GraphScroll.ActualHeight / 2 - CanvasPan.Y) / ZoomSlider.Value;

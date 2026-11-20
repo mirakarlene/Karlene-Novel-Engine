@@ -1,6 +1,8 @@
 using System.IO;
 using System.Text;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Xunit;
 
 namespace KNE.Tests;
@@ -35,6 +37,92 @@ public sealed class VisualLuaTests
         var graph = VisualLua.ParseSource(source);
         Assert.Contains(graph.Nodes, node => node.Lua?.Operation == operation);
         Assert.Equal(source, VisualScript.Parse(graph.Serialize()).Compile());
+    }
+
+    [Fact]
+    public void SourceCommentsAreEditableDetachedNodesAndStringsKeepTheirDashes()
+    {
+        const string source = "-- first\r\nlocal label = '-- a string'\r\nlocal total = 1 --[=[ inline ]=] + 2\r\n-- tail";
+        var graph = VisualScript.Parse(VisualLua.ParseSource(source).Serialize());
+        var comments = graph.Nodes.Where(node => node.Kind == ScriptNodeKind.Comment).ToArray();
+        Assert.Equal(3, comments.Length);
+        Assert.All(comments, node => { Assert.Equal("lua_raw", node.Category); Assert.Empty(node.Outputs()); });
+        Assert.Equal(source, graph.Compile());
+        comments[0].Text = " revised";
+        graph.Nodes.Remove(comments[1]);
+        Assert.Equal("-- revised\r\nlocal label = '-- a string'\r\nlocal total = 1   + 2\r\n-- tail", graph.Compile());
+    }
+
+    [Fact]
+    public async Task ConversionPreservesLayoutAndStableNodesAfterCodeEdits()
+    {
+        using var fixture = new TempProject();
+        const string original = "-- note\nif false then print('left') else print('right') end\nreturn 1";
+        string lua = fixture.Write("layout.lua", original);
+        var document = await ScriptDocument.OpenAsync(fixture.ProjectPath, lua);
+        string path = await document.ConvertLuaAsync();
+        var visual = await ScriptDocument.OpenAsync(fixture.ProjectPath, path);
+        var node = Assert.Single(visual.Graph!.Nodes, node => node.Lua?.Operation == "if");
+        node.X = -200; node.Y = 1320; node.Width = 310; node.Height = 190;
+        await visual.ConvertLuaAsync();
+        Assert.Equal(original, await File.ReadAllTextAsync(lua));
+        document = await ScriptDocument.OpenAsync(fixture.ProjectPath, lua);
+        visual = await ScriptDocument.OpenAsync(fixture.ProjectPath, await document.ConvertLuaAsync());
+        Assert.Equal(node.Id, Assert.Single(visual.Graph!.Nodes, candidate => candidate.Lua?.Operation == "if").Id);
+        await visual.ConvertLuaAsync();
+        document = await ScriptDocument.OpenAsync(fixture.ProjectPath, lua);
+        document.Code = original.Replace("return 1", "return 2", StringComparison.Ordinal);
+        visual = await ScriptDocument.OpenAsync(fixture.ProjectPath, await document.ConvertLuaAsync());
+        var retained = Assert.Single(visual.Graph!.Nodes, candidate => candidate.Lua?.Operation == "if");
+        Assert.Equal((node.X, node.Y, node.Width, node.Height), (retained.X, retained.Y, retained.Width, retained.Height));
+        Assert.EndsWith("return 2", visual.Graph.Compile());
+        Assert.DoesNotContain((await fixture.LoadAsync()).Files, file => file.FilePath.Contains("vlua-layout", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DebugRunsDraftAndDependenciesInCopyWithoutStartingMain()
+    {
+        using var fixture = new TempProject();
+        fixture.Write("game/scenes/main.krl", "function main() error('main must not run') end\nfunction chapter() state.chapter = 4 end");
+        fixture.Write("game/scripts/module.vlua", VisualLua.ParseSource("return { value = 42 }").Serialize());
+        fixture.Write("game/scripts/test.vlua", VisualLua.ParseSource("error('draft was not used')").Serialize());
+        var report = await VisualLuaDebug.RunAsync(fixture.ProjectPath, "game/scripts/test.vlua", """
+            local dependency = require('module')
+            call_scene('chapter')
+            kne.write_file('debug.txt', 'copy only')
+            print('dependency = ' .. dependency.value .. ':' .. state.chapter)
+            """);
+        Assert.True(report.Status == "Скрипт выполнен.", report.Status + Environment.NewLine + string.Join(Environment.NewLine, report.Output));
+        Assert.Contains("dependency = 42:4", report.Output);
+        Assert.False(File.Exists(Path.Combine(fixture.ProjectPath, "debug.txt")));
+    }
+
+    [Fact]
+    public Task LuaCategoryHoverUsesCatalogAndRespondsToAccessibilityModes() => WorkspaceTabsTests.Sta(() =>
+    {
+        var label = new ListBoxItem();
+        foreach (var category in VisualLuaCatalog.Groups)
+        {
+            CategoryHover.SetGroup(label, category.Id);
+            foreach (var mode in BlockAccessibility.Modes)
+            {
+                BlockAccessibility.SetMode(label, mode.Id);
+                var expected = BlockAccessibility.Presentation(category.Id, mode.Id);
+                Assert.Equal(expected.Color, Assert.IsType<SolidColorBrush>(CategoryHover.GetColor(label)).Color);
+                Assert.Equal(expected.Foreground, Assert.IsType<SolidColorBrush>(CategoryHover.GetInk(label)).Color);
+                Assert.Equal(mode.Id != "normal", expected.Badges);
+            }
+            Assert.Equal((Color)ColorConverter.ConvertFromString(category.Color), BlockAccessibility.Presentation(category.Id, "normal").Color);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public void VmDefaultPlacementFitsOversizedWindowsToTheEditorMonitor()
+    {
+        var workArea = new Rect(-1920, 30, 1920, 1010);
+        Assert.Equal(workArea, GameWindow.CenterVmBounds(workArea, 2560, 1440));
+        Assert.Equal(new Rect(-1280, 295, 640, 480), GameWindow.CenterVmBounds(workArea, 640, 480));
     }
 
     [Theory]
@@ -196,11 +284,15 @@ public sealed class VisualLuaTests
         Assert.True(editor.Document!.Graph!.IsVisualLua);
         Assert.True(editor.CanAddBlock(ScriptNodeKind.LuaBlock));
         Assert.False(editor.CanAddBlock(ScriptNodeKind.Dialogue));
+        Assert.Equal(Visibility.Visible, ((Button)editor.FindName("DebugLuaButton")).Visibility);
+        foreach (string name in new[] { "RunButton", "TestSceneButton", "MainSceneButton", "ExportButton" })
+            Assert.Equal(Visibility.Collapsed, ((Button)editor.FindName(name)).Visibility);
         Assert.Equal(Path.ChangeExtension(file, ".vlua"), editor.Document.FilePath);
         conversion = new(TaskCreationOptions.RunContinuationsAsynchronously);
         ((RadioButton)editor.FindName("CodeMode")).IsChecked = true;
         await conversion.Task.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(file, editor.Document!.FilePath);
+        Assert.Equal(Visibility.Collapsed, ((Button)editor.FindName("DebugLuaButton")).Visibility);
         Assert.Equal("local count = 3\nreturn count", await File.ReadAllTextAsync(file));
     });
 }

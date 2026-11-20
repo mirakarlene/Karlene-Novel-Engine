@@ -69,6 +69,8 @@ public sealed class CompactParameterWindowsTests
             var cancel = Logical(root).OfType<Button>().Single(button => Equals(button.Content, "Отмена"));
             var pageLabel = Logical(root).OfType<TextBlock>().Single(text => text.Text == "1 / 5");
             var fixedBounds = new FrameworkElement[] { save, cancel, window.PreviousPage, pageLabel, window.NextPage }.ToDictionary(input => input, input => Bounds(input, root));
+            Assert.Equal(root.ActualWidth / 2, (fixedBounds[save].Left + fixedBounds[cancel].Right) / 2, 0);
+            Assert.Equal(fixedBounds[save].Top, fixedBounds[cancel].Top);
             FrameworkElement[][] pages =
             [
                 [window.GraphicsInput.ApiInput, window.GraphicsInput.VSyncInput, window.GraphicsInput.FpsInput, window.GraphicsInput.MsaaInput, window.TextureInput, window.ResolutionInput, window.CustomWidthInput, window.CustomHeightInput, window.PaletteInput, window.GraphicsInput.LimitCacheInput, window.GraphicsInput.CacheLimitInput, window.AsyncTasksInput, window.AudioBufferInput, window.PreloadInput, window.ConsoleModeInput, window.ConsoleHotkeyInput],

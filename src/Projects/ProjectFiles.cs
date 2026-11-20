@@ -5,11 +5,15 @@ namespace KNE;
 /// <summary>File operations confined to a loaded project. Existing files are never overwritten.</summary>
 public sealed class ProjectFiles(ProjectInfo project)
 {
-    public string Create(string path)
+    public string Create(string path) => Create(path, "");
+
+    internal string Create(string path, string content)
     {
         string target = PathSafety.EnsureInside(project.Path, path);
         PathSafety.ValidateFileName(Path.GetFileName(target));
         using var stream = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        using var writer = new StreamWriter(stream);
+        writer.Write(content);
         return target;
     }
 

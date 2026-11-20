@@ -39,6 +39,7 @@
             <TextBlock x:Name="DocumentTitle" Text="Выберите сценарий в дереве и нажмите «Открыть сценарий»." TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,6"/>
             <WrapPanel>
                 <Button x:Name="SaveButton" Content="Сохранить" Padding="8,5" Margin="0,0,5,4" Click="Save_Click" IsEnabled="False"/>
+                <Button x:Name="DebugLuaButton" Content="Дебаг" Padding="8,5" Margin="0,0,5,4" Click="DebugLua_Click" Visibility="Collapsed"/>
                 <Button x:Name="RunButton" Content="Предпросмотр фрейма" Padding="8,5" Margin="0,0,5,4" Click="Run_Click" IsEnabled="False"/>
                 <Button x:Name="TestSceneButton" Content="Тестировать сцену" Padding="8,5" Margin="0,0,5,4" Click="TestScene_Click" IsEnabled="False"/>
                 <Button x:Name="ExternalEditorButton" Content="Внешний редактор" Padding="8,5" Margin="0,0,5,4" Click="ExternalEditor_Click" Visibility="Collapsed"/>

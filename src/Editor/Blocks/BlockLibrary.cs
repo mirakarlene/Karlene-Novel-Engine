@@ -196,6 +196,7 @@ public static class BlockLibrary
     /// <summary>The header color for an existing block.</summary>
     public static string ColorFor(ScriptNode node)
     {
+        if (node.Kind == ScriptNodeKind.Comment && node.Category == "lua_raw") return "#000000";
         if (node.Lua?.Operation is { } operation) return VisualLuaCatalog.Blocks[operation].Group.Color;
         var entry = node.Plugin == null ? Definitions.First(d => d.Kind == (node.Kind == ScriptNodeKind.Condition ? ScriptNodeKind.Branching : node.Kind)) : null;
         if (node.Kind is ScriptNodeKind.Start or ScriptNodeKind.End) return entry!.Color;

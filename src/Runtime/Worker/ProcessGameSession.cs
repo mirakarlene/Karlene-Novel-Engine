@@ -52,7 +52,7 @@ public sealed class ProcessGameSession : IGameSession
         this.preview = preview;
         this.pluginsEnabled = (pluginsEnabled ?? EngineLaunch.PluginsEnabled) && project.Engine.Security.AllowPlugins;
         this.editorSource = editorSource;
-        this.debuggerPipe = debuggerPipe ?? Environment.GetEnvironmentVariable(RemoteDebugConnection.EnvironmentName);
+        this.debuggerPipe = editorSource?.LuaDebug == true ? null : debuggerPipe ?? Environment.GetEnvironmentVariable(RemoteDebugConnection.EnvironmentName);
         this.output = output ?? throw new ArgumentNullException(nameof(output));
         ExecutionLimit = executionLimit ?? TimeSpan.FromSeconds(project.Engine.Game.ExecutionTimeoutSeconds);
         if (ExecutionLimit <= TimeSpan.Zero || ExecutionLimit > TimeSpan.FromHours(1))

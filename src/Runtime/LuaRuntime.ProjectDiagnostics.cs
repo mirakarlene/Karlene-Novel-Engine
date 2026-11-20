@@ -1,6 +1,8 @@
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
+using NLua;
 
 namespace KNE;
 
@@ -33,7 +35,7 @@ public sealed partial class LuaRuntime
         string installationDirectory = StandalonePlayer.RuntimeManifest == null ? project.Path : AppContext.BaseDirectory;
         return StateLiteral(JsonSerializer.SerializeToElement(new
         {
-            version = 1,
+            version = 2,
             project = project.Title,
             entry = scripts?.Main.Path,
             files = scripts?.Files.Count ?? 0,
@@ -43,6 +45,7 @@ public sealed partial class LuaRuntime
             os_architecture = RuntimeInformation.OSArchitecture.ToString(),
             architecture_translation_possible = RuntimeInformation.ProcessArchitecture != RuntimeInformation.OSArchitecture,
             installation_directory = Path.TrimEndingDirectorySeparator(installationDirectory),
+            integrity = CheckProjectIntegrity(),
             saves = Storage(saves),
             requested_saves = Storage(selection.Requested),
             persistent = Storage(persistent)
@@ -53,5 +56,56 @@ public sealed partial class LuaRuntime
             directory = value.Directory, writable = value.Writable, code = value.Code,
             message = value.Message, available_bytes = value.AvailableBytes
         };
+    }
+
+    private object CheckProjectIntegrity()
+    {
+        var issues = new HashSet<string>(StringComparer.Ordinal);
+        var assets = new HashSet<(string Path, bool Audio)>();
+        string context = "Настройки проекта";
+        ProjectSystemScan.CheckConfiguredAssets(project, CheckAsset);
+        int checkedScripts = 0;
+        using var compiler = new Lua();
+        compiler.State.Encoding = Encoding.UTF8;
+        foreach (var script in scripts?.Files ?? [])
+        {
+            executionToken.ThrowIfCancellationRequested();
+            context = script.Path;
+            try
+            {
+                string source = script.ExecutableSource;
+                checkedScripts++;
+                using var chunk = compiler.LoadString(source, "@" + script.Path);
+                if (script.Graph == null)
+                    ProjectSystemScan.CheckLiteralAssets(source, CheckAsset);
+                else
+                    foreach (var block in script.Graph.Nodes)
+                    {
+                        if (block.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.ShaderContainer)
+                            CheckAsset(block.Path, false);
+                        else if (block.Kind is ScriptNodeKind.Music or ScriptNodeKind.Sound or ScriptNodeKind.Voice)
+                            CheckAsset(block.Path, true);
+                    }
+            }
+            catch (Exception error) when (ProjectSystemScan.Reportable(error) || error is NLua.Exceptions.LuaException)
+            { issues.Add(context + ": " + error.Message); }
+        }
+        return new
+        {
+            scripts = checkedScripts, assets = assets.Count, issue_count = issues.Count,
+            issues = issues.Take(50).Select(issue => issue.Length <= 500 ? issue : issue[..500] + "…").ToArray()
+        };
+
+        void CheckAsset(string path, bool audio)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !assets.Add((path, audio))) return;
+            try
+            {
+                using var stream = File.OpenRead(ResourcePaths.Resolve(project.Path, path, audio: audio));
+                if (stream.Length == 0) issues.Add(context + " · " + path + ": ресурс пуст.");
+            }
+            catch (Exception error) when (ProjectSystemScan.Reportable(error))
+            { issues.Add(context + " · " + path + ": " + error.Message); }
+        }
     }
 }

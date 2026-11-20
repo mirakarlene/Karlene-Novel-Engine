@@ -15,6 +15,11 @@ public static class BlockHelpDocument
             <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Справка по блокам · KNE</title>
             <style>:root{color-scheme:light dark}body{font:16px/1.65 system-ui;margin:0;background:light-dark(#f7f6fa,#191c24);color:light-dark(#202733,#e5eaf3)}main{max-width:1000px;margin:auto;padding:32px}nav{display:flex;flex-wrap:wrap;gap:8px}a{color:light-dark(#3155a0,#99c5ff)}nav a{padding:6px 12px;border:1px solid #8886;border-radius:8px}article{padding:20px 24px;margin:20px 0;border:1px solid #8886;border-radius:12px;background:light-dark(white,#242935);scroll-margin-top:16px}h1,h2,h3{line-height:1.3}code{background:#8882;padding:2px 5px;border-radius:4px}li{margin:7px 0}.group{border-left:6px solid;padding-left:14px;margin-top:44px}small{opacity:.75}</style></head><body><main>
             <h1>Блоки Karlene Novel Engine</h1><p>Справочник поставляется вместе с движком и работает без интернета. Здесь перечислены все доступные блоки и их параметры.</p>
+            <nav><a href="#kne-reference">KNE / knegraph</a><a href="#lua-reference">Lua / Visual Lua</a></nav>
+            <section id="kne-reference"><h2>KNE / knegraph</h2>
+            """);
+        html.Append("<p>").Append(ProjectFileFormats.HtmlIcon(ProjectFileFormats.Krl)).Append(" KNE и сценарии .krl &nbsp; ").Append(ProjectFileFormats.HtmlIcon(ProjectFileFormats.Graph)).Append(" Блок-схемы .knegraph</p>");
+        html.Append("""
             <p><b>Связи:</b> игра начинается с единственной функции <code>main()</code>, каждая схема содержит одно «Начало». Соедините все выходы. Порты перетаскиваются мышью; ПКМ перемещает обзор, Tab ищет существующий блок. Порядок хранения и положение карточек не задают порядок исполнения.</p>
             <p><b>Переменные:</b> значения проекта хранятся в <code>state</code> и входят в сохранения. Пути к ресурсам задаются от корня проекта. «Перейти» (goto) не возвращается, «Вызвать» (call) сохраняет место возврата. У конца вложенной ветки выбирайте «Завершить ветку / вернуться».</p>
             <p><b>Инлайн-текст:</b> <code>{player_name}</code> подставляет значение <code>state.player_name</code> в репликах, выборе, вводе, титрах и текстах показанного экрана. Неизвестная переменная — серый <code>{missing}</code>, пустая — серый <code>{null}</code>, некорректное значение — красный <code>{error}</code>. <code>{color=red}текст{/color}</code> также принимает <code>#ff0000</code> и <code>rgb(255,0,0)</code>. Вложенные цвета восстанавливают внешний цвет. Для буквальных скобок используйте <code>{{</code> и <code>}}</code>. Только в репликах: <code>{w}</code> ждёт клика, <code>{w=0.5}</code> ждёт полсекунды игрового времени. Паузы входят в сохранения.</p>
@@ -32,7 +37,21 @@ public static class BlockHelpDocument
                 html.Append("</ul><p><small>").Append(entry.Kind == ScriptNodeKind.ShaderContainer ? "В игровой схеме подключите вход и выход выполнения; внутри .kneshader используйте порты значений." : ShaderLibrary.IsShader(entry.Kind) ? "Соединяйте выходы значений с нужными входами. Шейдер запускается контейнером из сценария." : entry.Kind == ScriptNodeKind.Initialization ? "Портов нет. Допускается один блок на файл." : entry.Kind is ScriptNodeKind.Comment ? "Портов нет. Заметка не выполняется." : entry.Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.SendFlow ? "Выхода «Далее» нет: этот блок завершает текущую ветку." : "Подключите выходы к следующему блоку. Изменения свойств применяются кнопкой «Применить свойства» и сохраняются вместе со схемой.").Append("</small></p><a href=\"#\">К началу ↑</a></article>");
             }
         }
-        return html.Append("</main></body></html>").ToString();
+        html.Append("""</section><section id="lua-reference"><h2>Lua / Visual Lua (VLua)</h2><p>""")
+            .Append(ProjectFileFormats.HtmlIcon(ProjectFileFormats.Lua)).Append(" Lua (.lua) &nbsp; ")
+            .Append(ProjectFileFormats.HtmlIcon(ProjectFileFormats.VisualLua)).Append(" Visual Lua (.vlua)</p>")
+            .Append("<p>KNE использует Lua 5.4. Тумблер «Код / Блок-схема» преобразует файл, а позиции блоков восстанавливаются при обратном преобразовании. Блок «Исходный код» хранит фрагменты, которые нельзя представить другими блоками. Комментарии не подключаются к портам и не выполняются.</p>")
+            .Append("<p>«Дебаг» запускает выбранный модуль с его зависимостями во временной копии проекта. Вывод и ошибки появляются в отчёте.</p><nav>");
+        foreach (var group in VisualLuaCatalog.Groups)
+            html.Append("<a href=\"#group-").Append(group.Id).Append("\">").Append(H(group.Title)).Append("</a>");
+        html.Append("</nav>");
+        foreach (var group in VisualLuaCatalog.Groups)
+        {
+            html.Append("<h3 class=\"group\" id=\"group-").Append(group.Id).Append("\" style=\"border-color:").Append(group.Color).Append("\">").Append(H(group.Title)).Append("</h3>");
+            foreach (var entry in VisualLuaCatalog.Definitions.Where(entry => entry.Group == group.Id))
+                html.Append("<article><h4>").Append(H(entry.Title)).Append("</h4><pre><code>").Append(H(entry.Description)).Append("</code></pre></article>");
+        }
+        return html.Append("</section></main></body></html>").ToString();
     }
 
     /// <summary>Exports the latest manual atomically to a local HTML file.</summary>

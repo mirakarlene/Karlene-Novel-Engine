@@ -48,6 +48,7 @@ public partial class BlockLibraryView : UserControl
     {
         ArgumentNullException.ThrowIfNull(availability);
         luaMode = visualLua;
+        LuaVersionNote.Visibility = visualLua ? Visibility.Visible : Visibility.Collapsed;
         canAdd = availability; BlockSearch.Clear(); page = 0;
         ScrollViewer.SetVerticalScrollBarVisibility(BlockGroups, PluginCatalog.Current?.Groups.Count > 0 ? ScrollBarVisibility.Hidden : ScrollBarVisibility.Disabled);
         BlockGroups.ItemsSource = new[] { new BlockGroup("favorites", "Избранное", "#B58B20"), new BlockGroup("recent", "Недавнее", "#697384") }
@@ -137,6 +138,7 @@ public partial class BlockLibraryView : UserControl
         var text = new StackPanel();
         text.Children.Add(new TextBlock { Text = (entry.Plugin == null ? "" : entry.Plugin.Icon + " ") + entry.Title, FontSize = 16, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 25, 8), MaxHeight = 43 });
         var description = new TextBlock { Text = entry.Description, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 50, Opacity = .85 };
+        if (luaMode) { description.FontFamily = new FontFamily("Consolas"); description.ToolTip = entry.Description; }
         text.Children.Add(description);
         var content = new Grid(); content.Children.Add(text);
         string key = BlockLibraryPreferences.Key(entry); bool favorite = preferences.Favorites.Contains(key, StringComparer.Ordinal);
@@ -159,10 +161,10 @@ public partial class BlockLibraryView : UserControl
         button.SetResourceReference(BackgroundProperty, "Editor.Surface");
         BlockAccessibility.Decorate(button, entry.Group, presentation =>
         {
-            Color tint = entry.LuaOperation != null ? color : entry.Kind == ScriptNodeKind.Start ? Colors.White : entry.Kind == ScriptNodeKind.End ? Colors.Black : presentation.Color;
+            Color tint = luaMode ? presentation.Color : entry.Kind == ScriptNodeKind.Start ? Colors.White : entry.Kind == ScriptNodeKind.End ? Colors.Black : presentation.Color;
             CategoryHover.SetColor(button, new SolidColorBrush(tint));
-            CategoryHover.SetInk(button, entry.Kind == ScriptNodeKind.Start || entry.Group is "lua_flow" or "lua_functions" ? Brushes.Black :
-                entry.Kind == ScriptNodeKind.End || entry.LuaOperation != null ? Brushes.White : new SolidColorBrush(presentation.Foreground));
+            CategoryHover.SetInk(button, luaMode ? new SolidColorBrush(presentation.Foreground) : entry.Kind == ScriptNodeKind.Start ? Brushes.Black :
+                entry.Kind == ScriptNodeKind.End ? Brushes.White : new SolidColorBrush(presentation.Foreground));
             button.BorderBrush = new SolidColorBrush(tint);
             button.BorderThickness = presentation.BorderWidth == 3 ? new Thickness(3, 5, 3, 3) : new Thickness(0, 5, 0, 1);
             if (entry.Group == "shaders" && BlockAccessibility.GetMode(button) == "normal") { var rainbow = ShaderRainbow.Create(button); button.BorderBrush = rainbow; CategoryHover.SetColor(button, rainbow); CategoryHover.SetInk(button, Brushes.Black); }

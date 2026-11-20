@@ -24,7 +24,8 @@ public sealed partial class LuaRuntime
         LuaExecutionPolicy.Register(lua!, this, GetType().GetMethod(nameof(WritePolicyFile))!, "kne_write_file");
         lua!.DoString("kne = kne or {}; kne.read_file = kne_read_file; kne.write_file = kne_write_file", "KNE file API");
         LuaExecutionPolicy.Apply(lua, project.Engine.Security);
-        if (!project.Engine.Security.Restricted) InstallProjectModules();
+        if (editorSource?.LuaDebug == true) InstallDebugModules();
+        else if (!project.Engine.Security.Restricted) InstallProjectModules();
     }
     /// <summary>Supplies project Lua modules with compiled or protected source in full-access mode.</summary>
     public string[] PlayerModuleSource(string path, bool module)
@@ -66,5 +67,51 @@ public sealed partial class LuaRuntime
                 end)
             end
             """, "KNE protected project modules");
+    }
+
+    /// <summary>Resolves a debug dependency inside the temporary project, including Visual Lua twins.</summary>
+    public string[] DebugModuleSource(string path, bool module)
+    {
+        string relative = module ? path.Replace('.', '/') + ".lua" : path;
+        if (!ScriptDocument.IsLuaPath(relative)) throw new InvalidDataException("Зависимость должна иметь формат .lua или .vlua.");
+        string? scriptsDirectory = module ? Path.GetDirectoryName(project.InitScriptPath) : null;
+        var candidates = scriptsDirectory == null ? new[] { relative } : [Path.Combine(scriptsDirectory, relative), relative];
+        foreach (string candidate in candidates)
+        {
+            string full = project.Engine.Security.ResolveFile(project.Path, candidate);
+            full = PathSafety.EnsureInside(project.Path, VisualLua.ResolveTwin(full));
+            if (!File.Exists(full)) continue;
+            string name = Path.GetRelativePath(project.Path, full).Replace('\\', '/');
+            string text = editorSource?.RelativePath(project.Path).Equals(name, StringComparison.OrdinalIgnoreCase) == true
+                ? editorSource.Source : VisualLua.ReadProjectSource(full);
+            return [LuaSource.Prepare(StartupScripts.Declaration(text).Source), name];
+        }
+        throw new FileNotFoundException("Модуль не найден во временной копии: " + path);
+    }
+
+    private void InstallDebugModules()
+    {
+        Register(nameof(DebugModuleSource), "kne_debug_module_source");
+        lua!.DoString("""
+            do
+                local read, compile = kne_debug_module_source, load
+                local loaded = {}
+                function loadfile(path, mode, environment)
+                    if mode == 'b' then return nil, 'Разрешены только текстовые скрипты Lua' end
+                    local ok, result = pcall(read, path, false)
+                    if not ok then return nil, result end
+                    return compile(result[0], '@' .. result[1], 't', environment or _G)
+                end
+                function dofile(path) return assert(loadfile(path))() end
+                function require(name)
+                    if loaded[name] then return loaded[name] end
+                    local result = read(name, true)
+                    local value = assert(compile(result[0], '@' .. result[1], 't', _G))(name, result[1])
+                    if value == nil then value = true end
+                    loaded[name] = value
+                    return value, result[1]
+                end
+            end
+            """, "KNE isolated Lua modules");
     }
 }

@@ -87,7 +87,7 @@ public partial class MainWindow
         applicationPluginLoadError = null;
         if (currentProject != null) currentProject.ApplicationPlugins = settings.ApplicationPlugins.ToArray();
         UnloadEditorPlugins();
-        try { LoadEditorPlugins(currentProject?.Path); }
+        try { LoadEditorPlugins(Project?.Path); }
         catch (Exception error) { applicationPluginLoadError = error.Message; OperationStatus.Text = "Не удалось загрузить плагины: " + error.Message; }
         ThemeInput.ItemsSource = EditorTheme.Themes; ThemeInput.SelectedValue = EditorTheme.Normalize(settings.Theme);
         EditorTheme.Apply(this, settings.Theme);

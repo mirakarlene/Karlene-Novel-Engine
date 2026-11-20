@@ -155,14 +155,11 @@
                     <WrapPanel>
                         <WrapPanel x:Name="ExitActionsGroup" Margin="0,0,12,0">
                             <Button Content="Главный экран" Padding="10,8" Margin="0,0,6,4" Click="BtnBack_Click"/>
-                            <Button Content="Сохранить всё и выйти" Padding="10,8" Margin="0,0,0,4" Click="BtnSaveAllExit_Click"/>
+                            <Button Content="Сохранить всё" Padding="10,8" Margin="0,0,0,4" Click="BtnSaveAll_Click"/>
                         </WrapPanel>
                         <WrapPanel x:Name="ImportActionsGroup" Margin="0,0,12,0">
                             <Button Content="Создать файл" Padding="8,8" Margin="0,0,6,4" Click="BtnCreateFile_Click"/>
                             <Button Content="Импорт файла" Padding="8,8" Margin="0,0,6,4" Click="BtnImportFile_Click"/>
-                            <Button Content="Новая блок-схема" Padding="8,8" Margin="0,0,6,4" Click="BtnNewVisualScene_Click"/>
-                            <Button Content="Импорт .rpy" Tag=".rpy" Padding="8,8" Margin="0,0,6,4" Click="BtnImportScript_Click"/>
-                            <Button Content="Импорт .docx" Tag=".docx" Padding="8,8" Margin="0,0,0,4" Click="BtnImportScript_Click"/>
                         </WrapPanel>
                         <WrapPanel x:Name="FileViewActionsGroup">
                             <Button Content="Список файлов" Padding="8,8" Margin="0,0,6,4" Click="BtnFileList_Click"/>

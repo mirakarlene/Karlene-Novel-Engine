@@ -6,6 +6,8 @@ namespace KNE;
 /// <summary>Converts Lua chunks to structured flow and emits the original source fragments in graph order.</summary>
 internal static class VisualLua
 {
+    internal const string LayoutDirectory = ".kne-vlua-layout";
+
     internal static string ReadProjectSource(string path)
     {
         string text = ScriptProtection.ReadText(path);
@@ -27,17 +29,19 @@ internal static class VisualLua
 
     internal static VisualScript ParseSource(string source)
     {
-        try { return new Reader(source).Read(); }
+        VisualScript graph;
+        try { graph = new Reader(source).Read(); }
         catch (InvalidDataException)
         {
             // An incomplete or unusually large chunk still round-trips as an editable source block.
-            var graph = EmptyGraph();
+            graph = EmptyGraph();
             var raw = VisualLuaCatalog.Create("raw");
             raw.X = 360; raw.Y = 60; raw.Lua = new() { Code = source };
             graph.Nodes[0].Next = raw.Id;
             graph.Nodes.Add(raw);
-            return graph;
         }
+        LuaCommentPlacement.Import(graph);
+        return graph;
     }
 
     private static VisualScript EmptyGraph() => new()
@@ -55,9 +59,17 @@ internal static class VisualLua
         var used = new HashSet<string>(StringComparer.Ordinal) { roots[0].Id };
         bool hasContinue = graph.Nodes.Any(node => node.Lua?.Operation == "continue");
         var code = new StringBuilder();
+        var comments = (graph.LuaComments ?? []).ToLookup(placement => (placement.Node, placement.Part));
+        var imported = (graph.LuaComments ?? []).Select(placement => placement.Id).ToHashSet();
+        foreach (var note in graph.Nodes.Where(node => node.Kind == ScriptNodeKind.Comment && !imported.Contains(node.Id)))
+            code.Append(LuaCommentPlacement.Encode(note.Text, inline: false)).Append('\n');
         Emit(roots[0].Next, null);
-        if (used.Count != nodes.Count) throw new InvalidDataException("Соедините все блоки Lua с началом или удалите лишние блоки.");
-        return code.Append(graph.LuaTrailingSource).ToString();
+        if (used.Count != graph.Nodes.Count(node => node.Kind != ScriptNodeKind.Comment))
+            throw new InvalidDataException("Соедините все блоки Lua с началом или удалите лишние блоки.");
+        return code.Append(WithComments("", "trailing", graph.LuaTrailingSource ?? "")).ToString();
+
+        string WithComments(string id, string part, string text) =>
+            LuaCommentPlacement.Apply(text, comments[(id, part)], nodes);
 
         void Emit(string? id, string? continueLabel, bool allowElseIf = false)
         {
@@ -68,9 +80,10 @@ internal static class VisualLua
                 if (!used.Add(id)) throw new InvalidDataException("Ветви Visual Lua должны иметь собственные блоки. Используйте порт «Далее» для общего продолжения.");
                 if (part.ElseIf && !allowElseIf) throw new InvalidDataException("Ветка elseif должна подключаться к порту «Иначе» предыдущего условия.");
                 allowElseIf = false;
+                string statement = WithComments(id, "code", part.Code);
                 if (lines != null)
                 {
-                    int line = LuaSource.FirstExecutableLine(part.Code) ?? 1;
+                    int line = LuaSource.FirstExecutableLine(statement) ?? 1;
                     for (int i = 0; i < code.Length; i++) if (code[i] == '\n') line++;
                     lines[id] = line;
                 }
@@ -81,7 +94,7 @@ internal static class VisualLua
                     code.Append("\ngoto ").Append(continueLabel).Append('\n');
                     continue;
                 }
-                code.Append(part.Code);
+                code.Append(statement);
                 if (!VisualLuaCatalog.Blocks[part.Operation].HasBody) continue;
                 if (shape == LuaBlockShape.Loop && hasContinue)
                 {
@@ -95,10 +108,10 @@ internal static class VisualLua
                 {
                     bool chained = part.Otherwise.Length == 0 && node.False != null &&
                         nodes.TryGetValue(node.False, out var alternative) && alternative.Lua?.ElseIf == true;
-                    if (!chained) code.Append(part.Otherwise.Length > 0 ? part.Otherwise : "\nelse\n");
+                    if (!chained) code.Append(part.Otherwise.Length > 0 ? WithComments(id, "else", part.Otherwise) : "\nelse\n");
                     Emit(node.False, continueLabel, chained);
                 }
-                code.Append(part.Close);
+                code.Append(WithComments(id, "close", part.Close));
             }
         }
     }

@@ -71,35 +71,12 @@ public static class ProjectCreator
                     d("Игрок", "Нажмите «Далее» или пробел, чтобы продолжить.")
                 end
                 """);
-            File.WriteAllText(Path.Combine(staging, "game", "scripts", "gamelogic.lua"), """
-                -- Отчёт о запуске: вход в сценарий, запись сохранений и среда выполнения.
-                local function print_diagnostics()
-                    local report = project_diagnostics()
-                    print("Диагностика KNE — " .. report.project)
-                    print("Точка входа: " .. (report.entry or "не определена") .. " · файлов сценария: " .. report.files)
-                    print("Среда: " .. report.environment .. " · " .. report.process_architecture .. " / " .. report.os_architecture)
-                    print("Сохранения: " .. report.saves.message)
-                    if report.saves.available_bytes then
-                        print("Доступно байт: " .. report.saves.available_bytes)
-                    end
-                    if report.persistent.directory ~= report.saves.directory then
-                        print("Глобальные данные: " .. report.persistent.message)
-                    end
-                    for _, warning in ipairs(report.warnings) do print("Предупреждение: " .. warning) end
-                end
-
-                print_diagnostics()
-
-                function process_command(command)
-                    if command == "diagnostics" then print_diagnostics()
-                    else print("Для повторной проверки введите diagnostics.") end
-                end
-                """);
+            string initScript = ProjectDiagnosticsTemplate.Create(authoringMode, staging);
             File.WriteAllText(Path.Combine(staging, "README.txt"), $$"""
                 Проект: {{projectName}}
                 Точки входа задаются в project.json.
                 engine/*.json — окно, оформление, меню и начальное состояние; см. engine/README.txt.
-                game/scripts/gamelogic.lua — стартовый отчёт о состоянии проекта. Команда diagnostics повторяет проверку.
+                {{initScript}} — стартовая диагностика целостности проекта. Команда diagnostics повторяет проверку.
                 Проверка записи использует отдельный временный файл в папке сохранений. Отчёт учитывает рекомендации Microsoft и Valve и модель качества ISO/IEC 25010.
                 {{mainScene}} — главная сцена с функцией main().
                 game/shaders — шейдерные файлы .kneshader; подключайте контейнером в нужном месте сценария.
@@ -124,7 +101,7 @@ public static class ProjectCreator
                 AuthoringMode = authoringMode,
                 Metadata = new ProjectMetadata { Name = projectName, CreatedDate = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
                 GameInfo = new GameInfo { Title = projectName, Description = "Новая визуальная новелла" },
-                EntryPoints = new EntryPoints { MainScene = mainScene, InitScript = "game/scripts/gamelogic.lua" }
+                EntryPoints = new EntryPoints { MainScene = mainScene, InitScript = initScript }
             };
             File.WriteAllText(Path.Combine(staging, "project.json"), JsonSerializer.Serialize(configuration, ProjectConfiguration.JsonOptions));
             cancellationToken.ThrowIfCancellationRequested();

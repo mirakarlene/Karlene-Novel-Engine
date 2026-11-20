@@ -128,6 +128,7 @@ public partial class ScriptEditor
             CodeMode.Margin = new Thickness(0);
             ModeTrack.CornerRadius = new CornerRadius(12);
             ModeTrack.Padding = new Thickness(2);
+            ModeTrack.Margin = new Thickness(8, 4, 8, 6);
             ModeTrack.BorderThickness = new Thickness(1);
             ModeTrack.SetResourceReference(Border.BorderBrushProperty, "Editor.Border");
             ModeTrack.SetResourceReference(Border.BackgroundProperty, "Editor.Background");
@@ -139,6 +140,7 @@ public partial class ScriptEditor
             CodeMode.Margin = new Thickness(8, 0, 8, 0);
             ModeTrack.ClearValue(Border.CornerRadiusProperty);
             ModeTrack.ClearValue(Border.PaddingProperty);
+            ModeTrack.ClearValue(MarginProperty);
             ModeTrack.ClearValue(Border.BorderThicknessProperty);
             ModeTrack.ClearValue(Border.BorderBrushProperty);
             ModeTrack.ClearValue(Border.BackgroundProperty);

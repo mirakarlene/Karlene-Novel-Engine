@@ -97,6 +97,7 @@ public static class ProjectLoader
         var warnings = new List<string>();
         var pending = new Stack<string>();
         string savesDirectory = PerformanceSettingsStore.LoadProject(root).ResolveSavesPath(root);
+        string luaLayouts = Path.Combine(root, VisualLua.LayoutDirectory);
         pending.Push(root);
         while (pending.TryPop(out string? directory))
         {
@@ -104,7 +105,8 @@ public static class ProjectLoader
             foreach (string entry in Directory.EnumerateFileSystemEntries(directory))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (entry.Equals(savesDirectory, StringComparison.OrdinalIgnoreCase)) continue;
+                if (entry.Equals(savesDirectory, StringComparison.OrdinalIgnoreCase) ||
+                    entry.Equals(luaLayouts, StringComparison.OrdinalIgnoreCase)) continue;
                 if (directory.Equals(root, StringComparison.OrdinalIgnoreCase) &&
                     (Path.GetFileName(entry).Equals("saves", StringComparison.OrdinalIgnoreCase) ||
                      Path.GetFileName(entry).Equals(".kne-backups", StringComparison.OrdinalIgnoreCase))) continue;

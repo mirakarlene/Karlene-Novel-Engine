@@ -5,7 +5,13 @@ internal sealed record LuaBlockSpec(string Id, BlockGroup Group, string Title, s
 {
     internal bool HasBody => Shape is LuaBlockShape.If or LuaBlockShape.Body or LuaBlockShape.Loop or LuaBlockShape.Function;
     internal BlockDefinition Entry => new(ScriptNodeKind.LuaBlock, Group.Id, Title,
-        Id == "raw" ? "Редактировать исходный текст Lua 5.4." : "Выполнить Lua 5.4 · " + Title, Group.Color, LuaOperation: Id);
+        Shape switch
+        {
+            LuaBlockShape.Continue => "goto continue_label",
+            LuaBlockShape.If => Code + "\n    -- условие истинно\nelse\n    -- условие ложно\nend",
+            _ when HasBody => Code + "\n    -- тело\nend",
+            _ => Code
+        }, Group.Color, LuaOperation: Id);
 }
 
 internal static class VisualLuaCatalog
@@ -27,7 +33,8 @@ internal static class VisualLuaCatalog
     internal static readonly IReadOnlyDictionary<string, string> Symbols = Blocks.Values.Where(block => block.Symbol != null)
         .ToDictionary(block => block.Symbol!, block => block.Id, StringComparer.Ordinal);
     internal static IEnumerable<BlockDefinition> Definitions => Blocks.Values.Select(block => block.Entry)
-        .Prepend(new(ScriptNodeKind.Start, "lua_flow", "Начало", "Вход в текущий файл Visual Lua.", "#FFFFFF"));
+        .Append(new(ScriptNodeKind.Comment, "lua_raw", "Комментарий", "-- Комментарий", "#000000"))
+        .Prepend(new(ScriptNodeKind.Start, "lua_flow", "Начало", "-- Начало Lua-файла", "#FFFFFF"));
 
     private static Dictionary<string, LuaBlockSpec> Build()
     {

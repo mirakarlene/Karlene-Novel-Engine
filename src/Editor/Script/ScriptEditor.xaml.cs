@@ -173,6 +173,7 @@ public partial class ScriptEditor : UserControl
             ? null
             : "Произвольный Lua/KRL не преобразуется в блоки. Создайте визуальную сцену.";
         ExportButton.IsEnabled = document.IsVisual && !luaFile;
+        SetVisualLuaActions(document.Graph?.IsVisualLua == true);
         SaveButton.IsEnabled = RunButton.IsEnabled = TestSceneButton.IsEnabled = MainSceneButton.IsEnabled = CloseDocumentButton.IsEnabled = true;
         bool shader = document.Graph?.IsShader == true;
         FunctionNameInput.IsEnabled = !shader; RunButton.Content = shader ? "Предпросмотр шейдера" : "Предпросмотр фрейма";
@@ -224,6 +225,7 @@ public partial class ScriptEditor : UserControl
         links.Clear();
         CodeMode.IsEnabled = GraphMode.IsEnabled = SaveButton.IsEnabled = RunButton.IsEnabled =
             TestSceneButton.IsEnabled = MainSceneButton.IsEnabled = ExportButton.IsEnabled = CloseDocumentButton.IsEnabled = false;
+        SetVisualLuaActions(false);
         CodeMode.IsChecked = GraphMode.IsChecked = false;
         ApplyLuaModeAppearance(false);
         CodeEditor.Visibility = GraphPanel.Visibility = Visibility.Collapsed;

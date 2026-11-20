@@ -160,8 +160,8 @@ public sealed class SceneTestingTests
                     Assert.Null(Field<SceneTestSession?>(testing, "scene")); Assert.Null(Field<EditorPreview?>(testing, "frame"));
                     Assert.Contains("unsaved", Field<EditorSelection>(testing, "selection").Source);
                 }
-                Assert.Equal(new[] { "Главный экран", "Сохранить всё и выйти" }, Labels(window, "ExitActionsGroup"));
-                Assert.Equal(new[] { "Создать файл", "Импорт файла", "Новая блок-схема", "Импорт .rpy", "Импорт .docx" }, Labels(window, "ImportActionsGroup"));
+                Assert.Equal(new[] { "Главный экран", "Сохранить всё" }, Labels(window, "ExitActionsGroup"));
+                Assert.Equal(new[] { "Создать файл", "Импорт файла" }, Labels(window, "ImportActionsGroup"));
                 Assert.Equal(new[] { "Список файлов", "Обновить" }, Labels(window, "FileViewActionsGroup"));
                 Assert.Equal(new[] { "Анализ проекта", "Запустить проект", "Собрать релиз" }, Labels(window, "RunActionsGroup"));
                 foreach (var size in new[] { new Size(1060, 620), new Size(1460, 870) })
@@ -212,7 +212,7 @@ public sealed class SceneTestingTests
     }
 
     [Fact]
-    public async Task Workspace_SaveAllExitSavesAndCloses_ButConflictKeepsEditorOpen()
+    public async Task Workspace_SaveAllKeepsTheEditorOpenAndPreservesDraftsOnConflict()
     {
         using var fixture = new TempProject();
         await Sta(async () =>
@@ -232,7 +232,11 @@ public sealed class SceneTestingTests
                 await InvokeAsync(window, "OpenScriptAsync", path);
                 Find<KrlCodeEditor>(editor, "CodeEditor").Text = "function main() d(nil,'saved all') end";
                 Find<WrapPanel>(window, "ExitActionsGroup").Children.OfType<Button>().Last().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await Until(() => closed); Assert.Contains("saved all", File.ReadAllText(path));
+                await Until(() => !editor.HasUnsavedChanges);
+                Assert.False(closed);
+                Assert.NotNull(window.Project);
+                Assert.Same(editor, Assert.IsType<TabItem>(Find<TabControl>(window, "DocumentTabs").SelectedItem).Tag);
+                Assert.Contains("saved all", File.ReadAllText(path));
             }
             finally { if (!closed) { Find<ScriptEditor>(window, "SceneEditor").Clear(); window.Close(); } }
         });

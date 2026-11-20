@@ -155,9 +155,6 @@ public partial class MainWindow : Window
         if (closed) return false;
         if (!await CheckCompatibilityAsync(loaded)) return false;
         string? identityWarning = null;
-        try { await FrameCatalog.SynchronizeAsync(loaded, lifetime.Token); }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception error) { identityWarning = " Не удалось обновить ID фреймов: " + error.Message; }
         if (currentProject != null && !currentProject.Path.Equals(loaded.Path, StringComparison.OrdinalIgnoreCase))
         {
             if (!await CanLeaveAllAsync()) return false;
@@ -167,6 +164,15 @@ public partial class MainWindow : Window
             EditorWorkspace.Visibility = ActiveEditor.Visibility = Visibility.Collapsed;
             FilesDataGrid.Visibility = Visibility.Visible;
         }
+        if (!IsDocumentOpen(Path.Combine(loaded.Path, ProjectDiagnosticsTemplate.CodePath)))
+        {
+            try { await ProjectDiagnosticsTemplate.UpdateStockAsync(loaded, lifetime.Token); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidDataException)
+            { identityWarning = " Не удалось обновить заводской gamelogic: " + error.Message; }
+        }
+        try { await FrameCatalog.SynchronizeAsync(loaded, lifetime.Token); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception error) { identityWarning += " Не удалось обновить ID фреймов: " + error.Message; }
         if (currentProject == null || !currentProject.Path.Equals(loaded.Path, StringComparison.OrdinalIgnoreCase))
         { browserDirectory = ""; FileSearch.Clear(); }
         currentProject = loaded;
@@ -214,24 +220,12 @@ public partial class MainWindow : Window
         }, "Создание проекта…");
     }
 
-    private async void BtnBack_Click(object sender, RoutedEventArgs e) => await RunOperationAsync(async () =>
+    private async void BtnBack_Click(object sender, RoutedEventArgs e)
     {
-        if (!await CanLeaveAllAsync()) return;
-        await LibraryView.FlushPendingPreferencesAsync();
-        ClearEditorTabs();
-        expandedTreePaths.Clear(); selectedTreePath = null;
-        EditorWorkspace.Visibility = ActiveEditor.Visibility = Visibility.Collapsed;
-        FilesDataGrid.Visibility = Visibility.Visible;
-        currentProject = null;
-        ReloadApplicationPlugins();
-        FilesDataGrid.ItemsSource = null;
-        ProjectFilesTree.ItemsSource = null;
-        monitor?.Dispose(); monitor = null; monitoredPath = null;
-        pendingRefresh = false;
-        OperationStatus.Text = "";
-        await RefreshStoredProjectsAsync();
         ShowPanel(WelcomePanel);
-    }, "Закрытие проекта…");
+        ReloadApplicationPlugins();
+        await RunOperationAsync(RefreshStoredProjectsAsync, "Обновление списка проектов…");
+    }
 
     private void BtnSettings_Click(object sender, RoutedEventArgs e)
     {
@@ -455,18 +449,6 @@ public partial class MainWindow : Window
         OverwritePrompt = false
     };
 
-    private async void BtnCreateFile_Click(object sender, RoutedEventArgs e)
-    {
-        if (currentProject is not { } project) return;
-        var dialog = CreateFileDialog(project.Path, "new_file.txt");
-        if (dialog.ShowDialog(this) != true) return;
-        await RunOperationAsync(async () =>
-        {
-            await Task.Run(() => new ProjectFiles(project).Create(dialog.FileName), lifetime.Token);
-            await OpenProjectAsync(project.Path);
-        }, "Создание файла…");
-    }
-
     private async void BtnRunProject_Click(object sender, RoutedEventArgs e)
     {
         if (currentProject is not { } project) return;
@@ -527,28 +509,6 @@ public partial class MainWindow : Window
     private void BtnFileList_Click(object sender, RoutedEventArgs e)
     {
         ShowFileBrowser();
-    }
-
-    private async void BtnNewVisualScene_Click(object sender, RoutedEventArgs e)
-    {
-        if (currentProject is not { } project) return;
-        var dialog = new SaveFileDialog
-        {
-            Title = "Создать визуальную сцену", InitialDirectory = project.Path,
-            FileName = "scene", Filter = "Игровая блок-схема (*.knegraph)|*.knegraph|Шейдерная блок-схема (*.kneshader)|*.kneshader|Visual Lua (*.vlua)|*.vlua",
-            DefaultExt = ".knegraph", AddExtension = true, OverwritePrompt = false
-        };
-        if (dialog.ShowDialog(this) != true) return;
-        await RunOperationAsync(async () =>
-        {
-            string path = dialog.FileName;
-            path = dialog.FilterIndex == 3 || ScriptDocument.IsVisualLuaPath(path)
-                ? PathSafety.EnsureInside(project.Path, Path.ChangeExtension(path, ".vlua"))
-                : ProjectShaderPaths.NewFile(project.Path, path, dialog.FilterIndex == 2 || ScriptDocument.IsShaderPath(path));
-            await ScriptDocument.CreateVisualAsync(project.Path, path, lifetime.Token);
-            await OpenProjectAsync(project.Path);
-            await OpenScriptAsync(path);
-        }, "Создание блок-схемы…");
     }
 
     private void SceneEditor_RunRequested(object? sender, EventArgs e) => OpenTestingWindow(sceneTest: false);

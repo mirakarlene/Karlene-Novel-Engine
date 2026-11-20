@@ -99,6 +99,38 @@ public sealed class ProjectCreatorTests
     }
 
     [Fact]
+    public async Task VisualProjectStartsWithVisualLuaDiagnosticsAndReportsMissingAssetsAndInvalidScripts()
+    {
+        using var fixture = new TempProject();
+        string root = ProjectCreator.CreateProject("Visual Check", fixture.Root, ProjectAuthoringMode.Visual);
+        var project = await ProjectLoader.LoadProjectAsync(root);
+        Assert.EndsWith("gamelogic.vlua", project.InitScriptPath);
+        Assert.False(File.Exists(Path.Combine(root, "game", "scripts", "gamelogic.lua")));
+        Assert.Contains(VisualScript.Parse(await File.ReadAllTextAsync(project.InitScriptPath)).Nodes, node => node.Kind == ScriptNodeKind.Comment);
+        await File.WriteAllTextAsync(Path.Combine(root, "broken.lua"), "local =");
+        await File.WriteAllTextAsync(Path.Combine(root, "missing.krl"), "function missing() background('absent.png') end");
+        var output = new List<string>();
+        await using var runtime = new LuaRuntime(project, output.Add, interactive: true);
+        await runtime.StartAsync();
+        Assert.Contains(output, line => line.StartsWith("Ошибка целостности: broken.lua:", StringComparison.Ordinal));
+        Assert.Contains(output, line => line.StartsWith("Ошибка целостности: missing.krl", StringComparison.Ordinal) && line.Contains("absent.png", StringComparison.Ordinal));
+        Assert.Equal("Добро пожаловать! Это базовая сцена.", runtime.Story.Text);
+    }
+
+    [Fact]
+    public async Task StockDiagnosticsUpdatePreservesUserEditedInitializers()
+    {
+        using var fixture = new TempProject();
+        const string edited = ProjectDiagnosticsTemplate.Legacy + "\nstate.score = 23";
+        string path = fixture.Write(ProjectDiagnosticsTemplate.CodePath, edited);
+        Assert.False(await ProjectDiagnosticsTemplate.UpdateStockAsync(await fixture.LoadAsync(), CancellationToken.None));
+        Assert.Equal(edited, await File.ReadAllTextAsync(path));
+        await File.WriteAllTextAsync(path, ProjectDiagnosticsTemplate.Legacy);
+        Assert.True(await ProjectDiagnosticsTemplate.UpdateStockAsync(await fixture.LoadAsync(), CancellationToken.None));
+        Assert.Contains(ProjectDiagnosticsTemplate.Source, await File.ReadAllTextAsync(path));
+    }
+
+    [Fact]
     public void CreateProject_ExistingTarget_DoesNotOverwrite()
     {
         using var fixture = new TempProject();

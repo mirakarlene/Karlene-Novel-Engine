@@ -92,10 +92,13 @@ public partial class GameWindow : Window
         var settings = project.Engine;
         var theme = settings.Theme;
         var dialogue = theme.Dialogue;
-        Width = settings.Window.Width; Height = settings.Window.Height;
+        if (vmInitialArea == null)
+        {
+            Width = settings.Window.Width; Height = settings.Window.Height;
+            WindowStartupLocation = settings.Window.Position == "center" ? WindowStartupLocation.CenterScreen : WindowStartupLocation.Manual;
+        }
         ResizeMode = settings.Window.Resizable ? ResizeMode.CanResize : ResizeMode.NoResize;
-        WindowStartupLocation = settings.Window.Position == "center" ? WindowStartupLocation.CenterScreen : WindowStartupLocation.Manual;
-        if (settings.Window.Position == "manual")
+        if (vmInitialArea == null && settings.Window.Position == "manual")
         {
             Left = Math.Clamp(settings.Window.Left, SystemParameters.VirtualScreenLeft,
                 Math.Max(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - Width));
@@ -582,8 +585,13 @@ public partial class GameWindow : Window
         {
             Title = settings.Title;
             // Apply only changed runtime values so a title update does not undo a player's window resize.
-            if (settings.Width != renderedSettings?.Width) Width = settings.Width;
-            if (settings.Height != renderedSettings?.Height) Height = settings.Height;
+            if (renderedSettings == null && vmInitialArea is { } area && WindowState == WindowState.Normal && !fullscreen)
+                ApplyVmBounds(area, settings.Width, settings.Height);
+            else
+            {
+                if (settings.Width != renderedSettings?.Width) Width = settings.Width;
+                if (settings.Height != renderedSettings?.Height) Height = settings.Height;
+            }
             Background = Brush(settings.Background);
             bool defaultBackground = settings.Background == project.Engine.Theme.BackgroundColor;
             DefaultBackground.Background = defaultBackground ? EnginePresentation.CreateBackground(project.Engine.Theme) : Background;

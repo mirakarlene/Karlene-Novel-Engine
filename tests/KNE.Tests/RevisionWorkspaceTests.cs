@@ -156,11 +156,8 @@ public sealed class RevisionWorkspaceTests
         });
     }
 
-    [Theory]
-    [InlineData(MessageBoxResult.Cancel)]
-    [InlineData(MessageBoxResult.No)]
-    [InlineData(MessageBoxResult.Yes)]
-    public async Task HomeButton_PromptsForDrafts_AndHonorsCancelDiscardSaveWithoutClosingWindow(MessageBoxResult answer)
+    [Fact]
+    public async Task HomeButton_KeepsDraftsAndReturnsWithoutSavingOrClosingWindow()
     {
         using var fixture = new Fixture();
         string path = Path.Combine(fixture.Project, "game", "scenes", "main.krl");
@@ -175,14 +172,19 @@ public sealed class RevisionWorkspaceTests
                 var tabs = WorkspaceTabsTests.Find<TabControl>(window, "DocumentTabs");
                 var editor = (ScriptEditor)((TabItem)tabs.Items[0]).Tag;
                 WorkspaceTabsTests.Find<KrlCodeEditor>(editor, "CodeEditor").Text = original + "\n-- draft";
-                string? prompted = null; editor.ConfirmSave = file => { prompted = file; return answer; };
+                int prompts = 0; editor.ConfirmSave = _ => { prompts++; return MessageBoxResult.Cancel; };
                 var home = Assert.Single(Descendants(WorkspaceTabsTests.Find<WrapPanel>(window, "ExitActionsGroup")).OfType<Button>(), button => Equals(button.Content, "Главный экран"));
                 home.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Idle(window);
-                Assert.Equal(path, prompted); Assert.Equal(0, closed);
-                Assert.Equal(answer == MessageBoxResult.Yes ? original + "\n-- draft" : original, File.ReadAllText(path));
-                Assert.Equal(answer == MessageBoxResult.Cancel ? Visibility.Collapsed : Visibility.Visible, WorkspaceTabsTests.Find<StackPanel>(window, "WelcomePanel").Visibility);
-                Assert.Equal(answer == MessageBoxResult.Cancel ? 1 : 0, tabs.Items.Count);
-                if (answer == MessageBoxResult.Cancel) { Assert.True(editor.HasUnsavedChanges); editor.ConfirmSave = _ => MessageBoxResult.No; await WorkspaceTabsTests.Invoke(window, "CloseEditorTabAsync", editor); }
+                Assert.Equal(0, prompts); Assert.Equal(0, closed);
+                Assert.Equal(original, File.ReadAllText(path));
+                Assert.Equal(Visibility.Visible, WorkspaceTabsTests.Find<StackPanel>(window, "WelcomePanel").Visibility);
+                Assert.Same(editor, Assert.IsType<TabItem>(Assert.Single(tabs.Items)).Tag);
+                Assert.True(editor.HasUnsavedChanges);
+                await WorkspaceTabsTests.Invoke(window, "OpenProjectAsync", fixture.Project, false);
+                Assert.Same(editor, Assert.IsType<TabItem>(tabs.SelectedItem).Tag);
+                Assert.Equal(original + "\n-- draft", WorkspaceTabsTests.Find<KrlCodeEditor>(editor, "CodeEditor").Text);
+                editor.ConfirmSave = _ => MessageBoxResult.No;
+                await WorkspaceTabsTests.Invoke(window, "CloseEditorTabAsync", editor);
             }
             finally { window.Close(); }
         });

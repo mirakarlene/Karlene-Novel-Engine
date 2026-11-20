@@ -254,10 +254,8 @@ public sealed class StudioConfigurationTests
         });
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task MainWindow_CloseWaitsForPendingCatalogPreferences_BeforePublishingClosed(bool saveAll)
+    [Fact]
+    public async Task MainWindow_CloseWaitsForPendingCatalogPreferences_BeforePublishingClosed()
     {
         using var fixture = new TempProject(); var store = new BlockLibraryPreferenceStore(Path.Combine(fixture.Root, "catalog-close.json"));
         await Sta(async () =>
@@ -272,7 +270,7 @@ public sealed class StudioConfigurationTests
             {
                 var pending = library.RecordUseAsync(BlockLibrary.Definitions.Single(entry => entry.Kind == ScriptNodeKind.Script));
                 Assert.False(pending.IsCompleted);
-                if (saveAll) Invoke(window, "BtnSaveAllExit_Click", window, new RoutedEventArgs()); else window.Close();
+                window.Close();
                 Assert.False(closed); Assert.True(library.HasPendingPreferenceSave);
                 writes.Release(); released = true; await pending; await Until(() => closed);
                 Assert.NotNull(atClose); Assert.Contains("plugins/Script", atClose);

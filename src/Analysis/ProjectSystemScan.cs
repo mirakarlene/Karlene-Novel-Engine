@@ -39,14 +39,7 @@ internal static class ProjectSystemScan
             }
         }
 
-        var engine = project.Engine;
-        CheckAsset(engine.Theme.BackgroundImage ?? "");
-        CheckAsset(engine.Game.MenuMusic ?? "", audio: true);
-        CheckAsset(project.Configuration.Metadata?.Icon ?? "");
-        foreach (var image in engine.Screens.Screens.SelectMany(screen => screen.Elements).Where(element => element.Type == "image"))
-            CheckAsset(image.Image ?? "");
-        foreach (var scene in engine.ScenePerformance.Scenes.Values.Concat(engine.ScenePerformance.Functions.Values.SelectMany(value => value.Values)))
-            CheckAsset(scene.Music ?? "", audio: true);
+        CheckConfiguredAssets(project, CheckAsset);
         await using var syntax = new SyntaxCheckSession();
         foreach (string path in snapshot.Files)
         {
@@ -87,23 +80,36 @@ internal static class ProjectSystemScan
         return summary + "\n\nЗамечания:\n" + string.Join("\n", errors.Distinct().Take(50).Select(error => error.Length <= 500 ? error : error[..500] + "…"));
     }
 
-    private static void CheckLiteralAssets(string source, Action<string, bool> check)
+    internal static void CheckConfiguredAssets(ProjectInfo project, Action<string, bool> check)
+    {
+        var engine = project.Engine;
+        check(engine.Theme.BackgroundImage ?? "", false);
+        check(engine.Game.MenuMusic ?? "", true);
+        check(project.Configuration.Metadata?.Icon ?? "", false);
+        foreach (var image in engine.Screens.Screens.SelectMany(screen => screen.Elements).Where(element => element.Type == "image"))
+            check(image.Image ?? "", false);
+        foreach (var scene in engine.ScenePerformance.Scenes.Values.Concat(engine.ScenePerformance.Functions.Values.SelectMany(value => value.Values)))
+            check(scene.Music ?? "", true);
+    }
+
+    internal static void CheckLiteralAssets(string source, Action<string, bool> check)
     {
         var tokens = LuaSyntax.Parse(source).Where(token => token.Kind != LuaTokenKind.Comment).ToArray();
         for (int i = 0; i + 3 < tokens.Length; i++)
         {
             string name = source[tokens[i].Start..tokens[i].End];
-            if (name is not ("background" or "show_character" or "play_music" or "play_sound") ||
+            if (name is not ("background" or "show_character" or "play_music" or "play_sound" or "play_voice") ||
                 source[tokens[i + 1].Start..tokens[i + 1].End] != "(") continue;
+            if (i > 0 && source[tokens[i - 1].Start..tokens[i - 1].End] is "." or ":" or "function") continue;
             var literal = tokens[i + 2];
             string next = source[tokens[i + 3].Start..tokens[i + 3].End];
             if (literal.Kind != LuaTokenKind.String || next is not ("," or ")")) continue;
             string raw = source[literal.Start..literal.End];
             if (raw.Length >= 2 && raw[0] is '\'' or '"' && !raw.Contains('\\'))
-                check(raw[1..^1], name is "play_music" or "play_sound");
+                check(raw[1..^1], name is "play_music" or "play_sound" or "play_voice");
         }
     }
 
-    private static bool Reportable(Exception error) =>
+    internal static bool Reportable(Exception error) =>
         error is IOException or UnauthorizedAccessException or ArgumentException or InvalidDataException or System.Text.Json.JsonException;
 }
