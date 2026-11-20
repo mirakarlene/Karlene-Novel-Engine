@@ -13,6 +13,7 @@ public partial class GameWindow
         await ExecuteAsync(async () =>
         {
             await runtime.RestoreAsync(previous, execution!.Token); rollback.Pop();
+            ResetPlayTime(previous.PlayedSeconds);
             sceneSaves.Reset(); sceneSaves.MarkRestored(runtime.Visuals.Scene);
             renderedStory = null; renderedSettings = null; renderedVisuals = null;
             triggerInput.Reset(); pendingTriggerSignals.Clear(); gameplayUi?.Reset(); DialogueEffects.Reset(); choicePresentation?.Reset();

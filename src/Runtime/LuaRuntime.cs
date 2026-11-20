@@ -175,6 +175,7 @@ public sealed partial class LuaRuntime : IGameSession
         lua.DoString(SceneRuntimeLua.Source, "KNE scene scheduler");
         lua.DoString(CalculationRuntimeLua.Source, "KNE calculations");
         InitializeLogic();
+        InitializeSystem();
         lua.DoString("kne_diagnostics_baseline()", "KNE baseline");
         // Resolve all paths before executing any project code.
         lua.DoString("state = " + StateLiteral(project.Engine.InitialState), "KNE initial state");
@@ -344,7 +345,7 @@ public sealed partial class LuaRuntime : IGameSession
             using var value = result.Length > 1 ? result[1] as LuaTable : null;
             if (value == null) throw new InvalidDataException("Сцена приостановлена без реплики или выбора.");
             string kind = value["kind"] as string ?? "";
-            if (kind is not ("dialogue" or "choice" or "input" or "preview" or "wait" or "text_pause" or "clear_text")) throw new InvalidDataException("Неизвестное событие сцены: " + kind);
+            if (kind is not ("dialogue" or "choice" or "input" or "preview" or "wait" or "text_pause" or "clear_text" or "system_save")) throw new InvalidDataException("Неизвестное событие сцены: " + kind);
             lock (stateLock) location = new PreviewLocation(value["file"] as string ?? "", Convert.ToInt32(value["line"] ?? 0),
                 value["node"] as string, value["functionline"] == null ? null : Convert.ToInt32(value["functionline"]));
             var options = new List<string>();
@@ -372,17 +373,23 @@ public sealed partial class LuaRuntime : IGameSession
     internal async Task<GameCheckpoint> CapturePluginCheckpointAsync(bool saving, CancellationToken cancellationToken = default)
     {
         GameCheckpoint? checkpoint = null;
-        await RunAsync(() =>
-        {
-            if (!initialized || !interactive) throw new InvalidOperationException("Нет запущенной интерактивной сцены.");
-            if (saving && Visuals.Scene?.Settings.AllowSaves == false) throw new InvalidOperationException("Сохранения в этой сцене запрещены.");
-            if (history.Count > 10_000) throw new InvalidDataException("История игры слишком длинная для сохранения.");
-            using var table = lua!["state"] as LuaTable ?? throw new InvalidDataException("state должен оставаться таблицей.");
-            if (saving) PublishPluginEvent("on_save");
-            JsonElement state = JsonSerializer.SerializeToElement(ReadState(table, 0));
-            checkpoint = new GameCheckpoint(1, StandalonePlayer.SaveIdentity(project.Path), fingerprint, seed, history.ToArray(), Story, state) { Lists = CaptureLists() };
-        }, cancellationToken).ConfigureAwait(false);
+        await RunAsync(() => checkpoint = CaptureCheckpoint(saving), cancellationToken).ConfigureAwait(false);
         return checkpoint!;
+    }
+    private GameCheckpoint CaptureCheckpoint(bool saving)
+    {
+        if (!initialized || !interactive) throw new InvalidOperationException("Нет запущенной интерактивной сцены.");
+        if (saving && Visuals.Scene?.Settings.AllowSaves == false) throw new InvalidOperationException("Сохранения в этой сцене запрещены.");
+        if (history.Count > 10_000) throw new InvalidDataException("История игры слишком длинная для сохранения.");
+        using var table = lua!["state"] as LuaTable ?? throw new InvalidDataException("state должен оставаться таблицей.");
+        if (saving) PublishPluginEvent("on_save");
+        JsonElement state = JsonSerializer.SerializeToElement(ReadState(table, 0));
+        return new(1, StandalonePlayer.SaveIdentity(project.Path), fingerprint, seed, history.ToArray(), Story, state)
+        {
+            Lists = CaptureLists(),
+            SystemResults = systemHistory.Count == 0 ? null : systemHistory.ToArray(),
+            PlayedSeconds = PlayedSeconds
+        };
     }
 
     public Task RestoreAsync(GameCheckpoint checkpoint, CancellationToken cancellationToken = default) => RunAsync(() =>
@@ -397,6 +404,7 @@ public sealed partial class LuaRuntime : IGameSession
                 if (pair.Value.ValueKind != JsonValueKind.Array) throw new InvalidDataException("Сохранение списка требует JSON-массив.");
                 EngineSettings.ValidateState(pair.Value, 0);
             }
+        PrepareSystemReplay(checkpoint);
         replaying = true;
         initialized = false;
         seed = checkpoint.Seed;
@@ -420,6 +428,7 @@ public sealed partial class LuaRuntime : IGameSession
                     case "plugin_event_input" when action.Command != null:
                         PublishPluginInputEvent(JsonSerializer.Deserialize<PluginInput>(action.Command) ?? throw new InvalidDataException("Пустое событие плагина.")); break;
                     case "advance" when Story.CanAdvance: ResumeStory(null); break;
+                    case "system_continue" when Story.Kind == "system_save": ResumeStory(null); break;
                     case "choose" when Story.Kind == "choice" && action.Option >= 1 && action.Option <= Story.Options.Count && IsChoiceEnabled(Story, action.Option): ResumeStory(action.Option); break;
                     case "input" when Story.Kind == "input" && action.Command != null: SubmitInputCore(action.Command, action.Cancel); break;
                     case "command" when !string.IsNullOrWhiteSpace(action.Command):
@@ -437,18 +446,24 @@ public sealed partial class LuaRuntime : IGameSession
                 }
             }
             if (FrameSignature(Story) != FrameSignature(checkpoint.Frame)) throw new InvalidDataException("Реплика сохранения не совпадает со сценарием.");
+            if (systemReplayMismatch || systemReplayIndex != systemReplay.Count)
+                throw new InvalidDataException("Журнал системных команд не совпадает с сохранением.");
             lua!.DoString("for k in pairs(state) do state[k] = nil end; local restored = " + StateLiteral(checkpoint.State) + "; for k,v in pairs(restored) do state[k] = v end", "KNE restore state");
             if (checkpoint.Lists is { } lists) lua.DoString("kne_list_restore(" + StateLiteral(lists) + ")", "KNE restore lists");
             history.AddRange(checkpoint.History);
+            systemHistory.AddRange(systemReplay);
+            systemHistoryCharacters = systemHistory.Sum(item => item.Arguments.GetRawText().Length + item.Value.GetRawText().Length);
+            PlayedSeconds = checkpoint.PlayedSeconds;
             lock (stateLock) visuals = visuals with
             {
                 Sound = null,
                 AudioChannels = visuals.AudioChannels.Select(channel => channel.Channel is "sfx" or "voice" && !channel.Loop ? channel with { Path = null } : channel).ToArray()
             };
         }
-        finally { replaying = false; }
+        finally { replaying = false; systemReplay = []; }
         if (pluginHost != null) { using var context = new PluginContext(this); pluginHost.Api.RestoreScreens(context); }
         PublishPluginEvent("on_load");
+        DrainNamedSaves(write: false);
     }, cancellationToken, "Загрузка сохранения");
 
     private string ComputeFingerprint(GameScripts? program = null)
@@ -578,6 +593,7 @@ public sealed partial class LuaRuntime : IGameSession
             await Task.Run(() =>
             {
                 action();
+                if (!replaying) DrainNamedSaves(write: true);
                 if (lua != null) lua.DoString("kne_publish_variables()", "KNE variable snapshot");
             }, linked.Token).ConfigureAwait(false);
             linked.Token.ThrowIfCancellationRequested();

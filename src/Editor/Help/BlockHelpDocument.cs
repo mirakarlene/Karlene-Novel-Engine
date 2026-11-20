@@ -48,6 +48,19 @@ public static class BlockHelpDocument
     /// <summary>Parameters for one currently supported block.</summary>
     public static IReadOnlyList<string> Parameters(ScriptNodeKind kind)
     {
+        if (SystemBlocks.All.TryGetValue(kind, out var system))
+        {
+            var details = new List<string> { "Lua / KRL: " + system.Function + "(" + string.Join(", ", system.Parameters) + ")." };
+            if (system.Result == "state") details.Add("Результат записывается в переменную state.");
+            if (system.Result == "list") details.Add("Имена записываются в отдельный именованный список.");
+            if (SystemBlocks.UsesFileSystem(system.Function)) details.Add("Требует разрешения игрока. Пути ограничиваются политикой проекта.");
+            if (kind == ScriptNodeKind.SaveNamed) details.Add("Загрузка слота продолжает сценарий после этого блока. Запрет сохранений в сцене действует и здесь.");
+            if (kind == ScriptNodeKind.PersistentClear) details.Add("Полный сброс persistent выполняется после подтверждения игроком.");
+            if (kind is ScriptNodeKind.OpenBrowser or ScriptNodeKind.ClipboardRead or ScriptNodeKind.ClipboardWrite or ScriptNodeKind.Screenshot)
+                details.Add("Игроку предлагается отдельно разрешить внешние функции. Ссылки ограничены HTTP и HTTPS, снимки сохраняются в PNG внутри проекта.");
+            if (kind == ScriptNodeKind.FreezeScan) details.Add("Разморозка: left (ЛКМ), right (ПКМ), key (клавиша) или timer (от 0,1 до 3600 секунд).");
+            return details;
+        }
         if (LogicCompiler.IsLogic(kind)) return ["Типизированные операнды: string/number/boolean — литерал, variable — имя в state, list — независимый именованный массив. Результат записывается в указанную переменную state.", "Списки создаются create_list(name, {values}); индексы list_* начинаются с 0. Копирование глубокое, merge дописывает второй массив. Списки сохраняются и откатываются вместе с игрой.", "Строковые операции учитывают Unicode, поиск/замена буквальные. Bool: true/false либо 1/0. Сброс переменной берёт начальное значение сцены, затем проекта, иначе удаляет ключ.", "Составные условия: compare и вложенные AND/OR/NOT; количество строк не фиксировано. Проверяются слева направо с коротким замыканием."];
         if (kind is ScriptNodeKind.RemoveLayerShaders or ScriptNodeKind.RemoveAllShaders)
             return ["Команда игровой схемы .knegraph с входом и выходом выполнения. Удаляет активные эффекты; исходные файлы не удаляются.",
@@ -61,7 +74,7 @@ public static class BlockHelpDocument
             if (kind == ScriptNodeKind.ShaderTexture) parameters.Add("Цель: вся сцена, фон, спрайт, игровой UI или экран с указанным названием. Один файл — одна цель. Файлы, подключённые контейнером, отдельно не применяются.");
             if (kind == ScriptNodeKind.ShaderContainer) parameters.Add("Путь .kneshader от проекта; по умолчанию game/shaders. Двойной клик открывает / создаёт файл. В игровом графе эффект включается при достижении блока; снятая галочка отключает его. Внутри .kneshader контейнер — чистая функция от UV и текстуры родителя; цель вложенного файла не меняет цель родителя. Циклы запрещены. Блоки «Плагины» доступны в обоих форматах; в шейдере выполняются при вызове как подготовка, include — один раз, Скрипт — каждый вызов.");
             if (kind is ScriptNodeKind.ShaderFloat or ScriptNodeKind.ShaderVector or ScriptNodeKind.ShaderColor) parameters.Add("Имя внешнего параметра; слайдеры и палитра доступны в отдельном предпросмотре шейдера. Значения предпросмотра не меняют файл.");
-            if (kind == ScriptNodeKind.ShaderOutput) parameters.Add("Ровно один итоговый выход. Компиляция GLSL / HLSL через SPIR-V и выполнение OpenGL / Vulkan. «Не отображать шейдеры» в параметрах сцены временно убирает эффекты.");
+            if (kind == ScriptNodeKind.ShaderOutput) parameters.Add("Ровно один итоговый выход. Компиляция GLSL / HLSL через SPIR-V и выполнение OpenGL / Vulkan / Direct3D 11. «Не отображать шейдеры» в параметрах сцены временно убирает эффекты.");
             return parameters;
         }
         if (CalculationCompiler.IsCalculation(kind))

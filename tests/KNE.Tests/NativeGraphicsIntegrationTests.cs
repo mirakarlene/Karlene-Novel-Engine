@@ -17,6 +17,7 @@ public sealed class NativeGraphicsIntegrationTests
     [InlineData("vulkan")]
     [InlineData("opengl")]
     [InlineData("auto")]
+    [InlineData("directx")]
     public Task NativeWelcome_LoadedLogoAndParticlesCompleteOnWorkersKeepDispatcherResponsiveAndReleaseOnUnload(string api) => WorkspaceTabsTests.Sta(async () =>
     {
         var logo = new WatercolorLogo { Height = 125 };
@@ -91,6 +92,7 @@ public sealed class NativeGraphicsIntegrationTests
     [GpuTheory]
     [InlineData("vulkan")]
     [InlineData("opengl")]
+    [InlineData("directx")]
     public Task NativeSceneBackground_LoadedGeometryUsesSelectedBackendAndSingleDrawAcrossQualityChanges(string api) => WorkspaceTabsTests.Sta(async () =>
     {
         var background = new AnimatedBackground();
@@ -124,6 +126,8 @@ public sealed class NativeGraphicsIntegrationTests
     [GpuTheory]
     [InlineData("vulkan", "opengl")]
     [InlineData("opengl", "vulkan")]
+    [InlineData("opengl", "directx")]
+    [InlineData("directx", "opengl")]
     public Task NativeLayers_ChangingForcedApiInvalidatesEveryAtlasAndUsesRequestedBackend(string first, string second) => WorkspaceTabsTests.Sta(async () =>
     {
         var bubbles = new WelcomeBubbles(); var window = Host(bubbles, first, 320, 220); var stats = GraphicsEnvironment.For(window); Thread? worker = null;
@@ -228,6 +232,8 @@ public sealed class NativeGraphicsIntegrationTests
     [GpuTheory]
     [InlineData("opengl", "vulkan")]
     [InlineData("vulkan", "opengl")]
+    [InlineData("opengl", "directx")]
+    [InlineData("directx", "opengl")]
     public async Task GameWindow_PersistedForcedApiAndLiveReloadDriveActualNativeBackendWithoutRestartingProject(string initialApi, string nextApi)
     {
         using var fixture = new TempProject();
@@ -284,7 +290,7 @@ public sealed class NativeGraphicsIntegrationTests
     }
     private static void AssertBackend(GraphicsTelemetry stats, string api)
     {
-        if (api == "auto") Assert.All(stats.Backend.Split(" / ", StringSplitOptions.RemoveEmptyEntries), backend => Assert.Contains(backend, new[] { "vulkan", "opengl" }));
+        if (api == "auto") { Assert.False(string.IsNullOrEmpty(stats.Backend)); Assert.All(stats.Backend.Split(" / ", StringSplitOptions.RemoveEmptyEntries), backend => Assert.Contains(backend, new[] { "vulkan", "opengl", "directx" })); }
         else Assert.Equal(api, stats.Backend);
     }
     private static GraphicsLayer Layer(object owner) => Assert.IsType<GraphicsLayer>(owner.GetType().GetField("graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(owner));

@@ -19,7 +19,11 @@ internal static class StandalonePlayer
         return stream == null ? null : JsonSerializer.Deserialize<PlayerManifest>(stream);
     });
     internal static PlayerManifest? Current { get; private set; }
-    internal static string SaveIdentity(string projectPath) => (Current ?? Embedded.Value) is { } game ? "kne-game:" + game.GameId : projectPath;
+    internal static PlayerManifest? RuntimeManifest => Current ?? Embedded.Value;
+    internal static string SaveIdentity(string projectPath) => RuntimeManifest is { } game ? "kne-game:" + game.GameId : projectPath;
+    internal static GameSaveStore RuntimeSaves(ProjectInfo project) => RuntimeManifest is { } game
+        ? new(project.Path, game.SavesDirectory(AppContext.BaseDirectory))
+        : new(project.Path);
     internal static string DiagnosticsDirectory => Current is { } game ? Path.Combine(Path.GetDirectoryName(game.SavesDirectory(AppContext.BaseDirectory))!, "diagnostics") : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KNE", "diagnostics");
 
     internal static async Task<ProjectInfo> LoadAsync(CancellationToken token = default)

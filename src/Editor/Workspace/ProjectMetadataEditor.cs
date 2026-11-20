@@ -42,14 +42,17 @@ internal sealed class ProjectMetadataEditor : StackPanel
         Children.Add(new TextBlock { Text = "Вложенные секции и дополнительные поля сохраняются. Пути задаются относительно проекта; иконку и музыку поместите в папку проекта.", TextWrapping = TextWrapping.Wrap, Opacity = .65, Margin = new(0, 0, 0, 8) });
         Additional.Text = remaining.ToJsonString(ProjectConfiguration.JsonOptions); Children.Add(Additional);
         var items = Children.Cast<UIElement>().ToArray(); Children.Clear();
-        var left = new StackPanel(); var right = new StackPanel(); var technicalLeft = new StackPanel(); var technicalRight = new StackPanel();
+        var metadata = new StackPanel(); var technicalLeft = new StackPanel(); var technicalRight = new StackPanel();
         for (int i = 0; i < Paths.Length; i++)
         {
-            var column = i < 4 ? left : i < 7 ? right : i < 9 ? technicalLeft : technicalRight;
+            var column = i < 7 ? metadata : i < 9 ? technicalLeft : technicalRight;
             column.Children.Add(items[i * 2]); column.Children.Add(items[i * 2 + 1]);
         }
-        foreach (var column in new[] { left, right, technicalLeft, technicalRight }) ParameterLayout.Compact(column);
-        Children.Add(ParameterLayout.Columns(left, right));
+        foreach (var column in new[] { metadata, technicalLeft, technicalRight }) ParameterLayout.Compact(column);
+        var description = fields["game_info.description"];
+        description.Height = 115;
+        description.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+        Children.Add(metadata);
         var header = new StackPanel(); header.Children.Add(ParameterLayout.Columns(technicalLeft, technicalRight));
         header.Children.Add(items[^3]); header.Children.Add(items[^2]); Additional.MinHeight = 0; Additional.Margin = new(0);
         AdditionalPage.RowDefinitions.Add(new() { Height = GridLength.Auto }); AdditionalPage.RowDefinitions.Add(new()); AdditionalPage.Children.Add(header); AdditionalPage.Children.Add(Additional); Grid.SetRow(Additional, 1);

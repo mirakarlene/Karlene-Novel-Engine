@@ -76,7 +76,7 @@ public static class ShaderLibrary
         new(ScriptNodeKind.ShaderScreen, "Screen", "Осветляющий режим наложения.", ["A", "B"]),
         new(ScriptNodeKind.ShaderStep, "Step", "Резкое разделение по порогу.", ["Value", "Edge"]),
         new(ScriptNodeKind.ShaderSmoothstep, "Smoothstep", "Плавное разделение по двум порогам.", ["Value", "Min", "Max"]),
-        new(ScriptNodeKind.ShaderOutput, "Fragment Output", "Финальный цвет; компиляция GLSL/HLSL для OpenGL/Vulkan.", ["Color"])
+        new(ScriptNodeKind.ShaderOutput, "Fragment Output", "Финальный цвет. Компиляция GLSL/HLSL для OpenGL, Vulkan и Direct3D 11.", ["Color"])
     ];
     public static bool IsShader(ScriptNodeKind kind) => kind >= ScriptNodeKind.ShaderContainer && kind <= ScriptNodeKind.ShaderOutput;
     public static ShaderDefinition Get(ScriptNodeKind kind) => Definitions.Single(entry => entry.Kind == kind);

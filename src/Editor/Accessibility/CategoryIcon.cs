@@ -26,7 +26,7 @@ public sealed class CategoryIcon : FrameworkElement
     }
     /// <summary>Returns a stable silhouette discriminator for a category.</summary>
     /// <param name="group">Catalog group ID.</param><returns>A vector symbol name.</returns>
-    public static string SymbolFor(string group) => group switch { "narrative" => "speech", "logic" => "gear", "visual" => "eye", "audio" => "note", "flows" => "arrows", "calculations" => "calculator", "async" => "branches", "triggers" => "lightning", "configurations" => "sliders", "shaders" => "prism", "plugins" => "puzzle", _ => "play" };
+    public static string SymbolFor(string group) => group switch { "narrative" => "speech", "logic" => "gear", "visual" => "eye", "audio" => "note", "flows" => "arrows", "calculations" => "calculator", "async" => "branches", "triggers" => "lightning", "configurations" => "sliders", "meta_system" => "terminal", "shaders" => "prism", "plugins" => "puzzle", _ => "play" };
     private static readonly Dictionary<string, Geometry> symbols = Build();
     private static Dictionary<string, Geometry> Build()
     {
@@ -40,6 +40,7 @@ public sealed class CategoryIcon : FrameworkElement
             ["branches"] = "M10,1 L14,1 14,8 22,8 22,23 18,23 18,12 6,12 6,23 2,23 2,8 10,8 Z",
             ["lightning"] = "M13,0 L3,14 10,14 8,24 22,9 14,9 17,0 Z",
             ["sliders"] = "M1,5 L7,5 7,2 11,2 11,5 23,5 23,8 11,8 11,11 7,11 7,8 1,8 Z M1,16 L15,16 15,13 19,13 19,16 23,16 23,19 19,19 19,22 15,22 15,19 1,19 Z",
+            ["terminal"] = "F0 M1,3 L23,3 23,21 1,21 Z M3,5 L21,5 21,19 3,19 Z M6,7 L12,12 6,17 4,15 8,12 4,9 Z M13,15 L19,15 19,17 13,17 Z",
             ["puzzle"] = "M2,4 L9,4 Q7,-1 12,0 Q17,-1 15,4 L22,4 22,11 Q17,9 18,14 Q17,19 22,17 L22,24 2,24 2,17 Q7,19 6,14 Q7,9 2,11 Z",
             ["prism"] = "M12,1 L23,21 1,21 Z M12,5 L5,18 12,14 19,18 Z",
             ["play"] = "M4,2 L22,12 4,22 Z" };

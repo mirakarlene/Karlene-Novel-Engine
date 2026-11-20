@@ -74,7 +74,8 @@ public partial class GameWindow
         DebugOverlay.Visibility = Visibility.Visible;
         await ExecuteAsync(async () =>
         {
-            var candidate = new ProcessGameSession(project, QueueOutput);
+            var candidate = CreateGameSession();
+            ResetPlayTime();
             var previous = runtime;
             runtime = candidate;
             sceneSaves.Reset();

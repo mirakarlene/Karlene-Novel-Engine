@@ -47,7 +47,7 @@ public partial class GameWindow
     }
     private void PerformanceRendering(object? sender, EventArgs args)
     {
-        if (!IsVisible || WindowState == WindowState.Minimized || !(project.Engine.Performance.FpsCounter || project.Engine.Performance.StatisticsOverlay)) return;
+        if (!IsVisible || WindowState == WindowState.Minimized || systemFrozen) return;
         if (args is RenderingEventArgs frame && performancePacer.ShouldRender(frame.RenderingTime.TotalSeconds, project.Engine.Performance.Graphics.MaxFps)) GraphicsEnvironment.For(this).Presented();
     }
     private void InitializePerformance()

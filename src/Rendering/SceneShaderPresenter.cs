@@ -46,6 +46,8 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
     private RuntimeWindowSettings? previousWindow;
     private string[] previousOptions = [];
     private ChoiceOptionState[]? previousChoices;
+    private static readonly IReadOnlyDictionary<string, string> EmptyScreenTexts = new Dictionary<string, string>();
+    private IReadOnlyDictionary<string, string> previousScreenTexts = EmptyScreenTexts;
     private IInputElement? hovered;
     private Task activation = Task.CompletedTask;
     private Task shutdown = Task.CompletedTask;
@@ -116,12 +118,15 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
         if (programs.Length == 0) return;
         // Worker IPC creates new arrays even for unchanged frames. Compare their content,
         // while versioned UI styles and active shaders are handled by their own revisions.
-        var normalizedVisuals = visuals with { AudioChannels = Array.Empty<AudioChannelState>(), UiConfigurations = Array.Empty<GameplayUiConfiguration>(), Shaders = Array.Empty<string>(), ShaderSuppressions = Array.Empty<string>() };
+        var normalizedVisuals = visuals with { AudioChannels = Array.Empty<AudioChannelState>(), UiConfigurations = Array.Empty<GameplayUiConfiguration>(), Shaders = Array.Empty<string>(), ShaderSuppressions = Array.Empty<string>(), ScreenTexts = EmptyScreenTexts };
         var normalizedStory = story with { Options = Array.Empty<string>(), ChoiceOptions = null, Triggers = Array.Empty<TriggerSettings>() };
         if (window != previousWindow || normalizedVisuals != previousVisuals || normalizedStory != previousStory ||
-            !previousOptions.SequenceEqual(story.Options) || !(previousChoices ?? []).SequenceEqual(story.ChoiceOptions ?? [])) NotifyContentChanged();
+            !previousOptions.SequenceEqual(story.Options) || !(previousChoices ?? []).SequenceEqual(story.ChoiceOptions ?? []) ||
+            previousScreenTexts.Count != visuals.ScreenTexts.Count ||
+            previousScreenTexts.Any(pair => !visuals.ScreenTexts.TryGetValue(pair.Key, out string? value) || value != pair.Value)) NotifyContentChanged();
         previousWindow = window; previousVisuals = normalizedVisuals; previousStory = normalizedStory;
         previousOptions = story.Options.ToArray(); previousChoices = story.ChoiceOptions?.ToArray();
+        previousScreenTexts = new Dictionary<string, string>(visuals.ScreenTexts);
     }
     private void InputChanged(object sender, System.Windows.Input.MouseEventArgs args) => NotifyContentChanged();
     private void HoverChanged(object sender, System.Windows.Input.MouseEventArgs args)

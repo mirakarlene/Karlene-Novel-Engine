@@ -391,6 +391,7 @@ public sealed class ShaderPerformanceTests
     [GpuTheory]
     [InlineData("opengl")]
     [InlineData("vulkan")]
+    [InlineData("directx")]
     public async Task Presenter_StaticEffectRendersOnceUntilContentChangesAndDeactivationRestoresOriginal(string api)
     {
         using var fixture = new TempProject(); var graph = ShaderGraphCompiler.Create();

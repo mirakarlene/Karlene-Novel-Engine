@@ -22,7 +22,7 @@ public sealed record GraphicsSettings
     public int ResourceCacheLimitMb { get; set; } = 64;
     public static IReadOnlyList<GraphicsOption<int>> CacheLimits { get; } = [new(16, "16 МиБ"), new(32, "32 МиБ"), new(64, "64 МиБ"), new(128, "128 МиБ"), new(256, "256 МиБ"), new(512, "512 МиБ")];
     internal long CacheBudgetBytes => LimitResourceCache ? ResourceCacheLimitMb * 1024L * 1024 : long.MaxValue;
-    public static IReadOnlyList<GraphicsOption<string>> Apis { get; } = [new("auto", "Автоматически (OpenGL / Vulkan)"), new("vulkan", "Только Vulkan"), new("opengl", "Только OpenGL")];
+    public static IReadOnlyList<GraphicsOption<string>> Apis { get; } = [new("auto", "Автоматически (OpenGL / Vulkan / DirectX)"), new("vulkan", "Только Vulkan"), new("opengl", "Только OpenGL"), new("directx", "DirectX (Direct3D 11)")];
     public static IReadOnlyList<GraphicsOption<int>> FrameRates { get; } = [new(30, "30"), new(60, "60"), new(144, "144"), new(0, "Без ограничений")];
     public static IReadOnlyList<GraphicsOption<int>> Antialiasing { get; } = [new(0, "Нет"), new(2, "MSAA ×2"), new(4, "MSAA ×4")];
     /// <summary>Rejects unsupported persisted values before a native context is created.</summary>
@@ -62,6 +62,8 @@ public sealed class ProjectPerformanceSettings
     /// <summary>Profile selecting two bounded audio output buffers per channel.</summary>
     public string AudioBuffer { get; set; } = "balanced";
     public string SavesPath { get; set; } = "saves";
+    /// <summary>Stores persistent beside save slots, in AppData, or in the local saves folder.</summary>
+    public string PersistentLocation { get; set; } = "saves";
     public static IReadOnlyList<GraphicsOption<int>> AsyncTaskLimits { get; } = [new(32, "32"), new(64, "64"), new(128, "128")];
     public static IReadOnlyList<GraphicsOption<string>> AudioBuffers { get; } = [new("low_latency", "Низкая задержка"), new("balanced", "Сбалансированный"), new("stable", "Стабильный")];
     public static IReadOnlyList<GraphicsOption<string>> Corners { get; } = [new("top_left", "Слева сверху"), new("top_right", "Справа сверху"), new("bottom_left", "Слева снизу"), new("bottom_right", "Справа снизу")];
@@ -69,6 +71,8 @@ public sealed class ProjectPerformanceSettings
     {
         if (Graphics == null) throw new InvalidDataException("Секция graphics не должна быть null.");
         Graphics.Validate();
+        if (PersistentLocation is not ("saves" or "appdata" or "local"))
+            throw new InvalidDataException("Хранилище persistent: saves, appdata или local.");
         if (PreloadScenes is < 1 or > 3) throw new InvalidDataException("Количество сцен для предзагрузки: 1, 2 или 3.");
         if (!Corners.Any(item => item.Value == FpsCorner)) throw new InvalidDataException("Неизвестный угол счётчика FPS.");
         if (!AsyncTaskLimits.Any(item => item.Value == MaxAsyncTasks)) throw new InvalidDataException("Лимит асинхронных задач: 32, 64 или 128.");

@@ -86,7 +86,7 @@ public sealed class ShaderAuthoringTests
             var view = new BlockLibraryView(new(Path.Combine(fixture.Root, "library.json"))); var owner = new Window { Content = view }; EditorTheme.Apply(owner, "kne"); view.Open(_ => true); await view.LoadPreferencesAsync();
             var groups = Find<ListBox>(view, "BlockGroups");
             var names = groups.Items.Cast<BlockGroup>().Select(group => group.Id).ToArray();
-            int index = Array.IndexOf(names, "shaders"); Assert.Equal("configurations", names[index - 1]); Assert.Equal("plugins", names[index + 1]);
+            int index = Array.IndexOf(names, "shaders"); Assert.Equal("meta_system", names[index - 1]); Assert.Equal("plugins", names[index + 1]);
             groups.SelectedItem = groups.Items.Cast<BlockGroup>().Single(group => group.Id == "shaders");
             var cards = Find<WrapPanel>(view, "BlockCards").Children.OfType<Button>().ToArray(); Assert.Equal(12, cards.Length);
             Assert.All(cards, card => { Assert.IsType<LinearGradientBrush>(card.BorderBrush); Assert.Equal(236, card.Width); Assert.Equal(130, card.Height); });

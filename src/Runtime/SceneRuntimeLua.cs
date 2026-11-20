@@ -191,7 +191,7 @@ internal static class SceneRuntimeLua
                 if ok == false then error(problem, 0) end
             end
             function kne_end(action, screen)
-                if action ~= "menu" and action ~= "screen" and action ~= "exit" then error("Неизвестное действие конца", 2) end
+                if action ~= "menu" and action ~= "screen" and action ~= "exit" and action ~= "restart" and action ~= "menu_reset" then error("Неизвестное действие конца", 2) end
                 if action == "screen" and (type(screen) ~= "string" or screen == "") then error("Укажите экран конца", 2) end
                 local problem = kne_validate_end(action, screen)
                 if problem ~= "" then error(problem, 2) end
@@ -376,9 +376,10 @@ internal static class SceneRuntimeLua
                         root.ending = {kind = "completed", action = event.action, screen = event.screen,
                             file = event.file, line = event.line, node = event.node, key = event.key, functionline = event.functionline}
                         for _, current in ipairs(tasks) do close_task(current) end
-                    elseif event.kind == "dialogue" or event.kind == "choice" or event.kind == "input" or event.kind == "text_pause" or event.kind == "clear_text" or (kne_editor and event.kind == "preview") then
+                    elseif event.kind == "dialogue" or event.kind == "choice" or event.kind == "input" or event.kind == "text_pause" or event.kind == "clear_text" or event.kind == "system_save" or (kne_editor and event.kind == "preview") then
                         task.transitions = 0
                         if task.detached then
+                            if event.kind == "system_save" then return fail(task, "Сохранение недоступно в фоновой асинхронной ветке") end
                             if event.kind == "choice" then return fail(task, "Выбор недоступен в фоновой асинхронной ветке; используйте Параллель") end
                             if event.kind == "input" then return fail(task, "Ввод текста недоступен в фоновой асинхронной ветке; используйте Параллель") end
                             if event.kind == "dialogue" then print_to_ui(kne_inline_plain(event.speaker == "" and event.text or event.speaker .. ": " .. event.text)) end

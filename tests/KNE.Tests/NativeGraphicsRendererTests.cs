@@ -10,12 +10,23 @@ public sealed class NativeGraphicsRendererTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("directx")]
+    [InlineData("direct3d12")]
     [InlineData("Vulkan")]
     public void NativeRenderer_UnknownApiIsRejectedBeforeNativeDeviceCreation(string? api)
     {
         var error = Assert.Throws<ArgumentException>(() => NativeGraphicsRenderer.Create(api!, false));
         Assert.Equal("api", error.ParamName);
+    }
+
+    [GpuTheory]
+    [InlineData("auto")]
+    public void NativeGpu_AutomaticSelectionPrefersOpenGlWhenThatBackendIsAvailable(string api)
+    {
+        // Opt-in GPU runs require all three advertised drivers, so OpenGL is available.
+        using var renderer = NativeGraphicsRenderer.Create(api, false);
+        Assert.Equal("opengl", renderer.Backend);
+        using var image = renderer.Render(new GraphicsFrame(3, 2, [new(Solid(9001, 0, 0, 128, 128), new Rect(0, 0, 3, 2))]), 0);
+        Assert.Equal("opengl", image.Backend); Pixel(image, 2, 1, 0, 0, 128, 128);
     }
 
     [GpuTheory]
@@ -25,6 +36,9 @@ public sealed class NativeGraphicsRendererTests
     [InlineData("opengl", 0)]
     [InlineData("opengl", 2)]
     [InlineData("opengl", 4)]
+    [InlineData("directx", 0)]
+    [InlineData("directx", 2)]
+    [InlineData("directx", 4)]
     public void NativeGpu_RenderReadback_KeepsBgraOriginPremultiplicationClippingAndRequestedSamples(string api, int samples)
     {
         using var renderer = NativeGraphicsRenderer.Create(api, false);
@@ -69,6 +83,7 @@ public sealed class NativeGraphicsRendererTests
     [GpuTheory]
     [InlineData("vulkan")]
     [InlineData("opengl")]
+    [InlineData("directx")]
     public void NativeGpu_MsaaActuallyResolvesPartialTriangleCoverage_AndChangingSamplesRecreatesTarget(string api)
     {
         using var renderer = NativeGraphicsRenderer.Create(api, false);
@@ -100,6 +115,7 @@ public sealed class NativeGraphicsRendererTests
     [GpuTheory]
     [InlineData("vulkan")]
     [InlineData("opengl")]
+    [InlineData("directx")]
     public void NativeGpu_ResizeAndEmptyFrame_ClearTargetsAndReportSubmittedDrawCalls(string api)
     {
         using var renderer = NativeGraphicsRenderer.Create(api, true);
@@ -124,6 +140,7 @@ public sealed class NativeGraphicsRendererTests
     [GpuTheory]
     [InlineData("vulkan")]
     [InlineData("opengl")]
+    [InlineData("directx")]
     public void NativeGpu_TextureIdentityOpacityAndRepeatedDeviceLifetime_DoNotReuseStaleResources(string api)
     {
         for (int lifetime = 0; lifetime < 3; lifetime++)
@@ -147,6 +164,7 @@ public sealed class NativeGraphicsRendererTests
     [GpuTheory]
     [InlineData("vulkan")]
     [InlineData("opengl")]
+    [InlineData("directx")]
     public void NativeGpu_InvalidFramesAndUnsupportedSamples_FailExplicitly(string api)
     {
         using var renderer = NativeGraphicsRenderer.Create(api, false);
@@ -170,6 +188,7 @@ public sealed class NativeGraphicsRendererTests
     [GpuTheory]
     [InlineData("vulkan")]
     [InlineData("opengl")]
+    [InlineData("directx")]
     public void NativeGpu_CacheBudgetEvictsPreviousResourcesRejectsOversizeAndReleasesPreparationTargets(string api)
     {
         using var renderer = NativeGraphicsRenderer.Create(api, false);
@@ -211,6 +230,6 @@ public sealed class GpuTheoryAttribute : TheoryAttribute
     public GpuTheoryAttribute()
     {
         if (Environment.GetEnvironmentVariable("KNE_GPU_TEST") != "1")
-            Skip = "Real GPU verification is opt-in: set KNE_GPU_TEST=1 (both Vulkan and OpenGL drivers required).";
+            Skip = "Real GPU verification is opt-in: set KNE_GPU_TEST=1 (Direct3D 11, Vulkan and OpenGL drivers required).";
     }
 }

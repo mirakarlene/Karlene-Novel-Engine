@@ -64,12 +64,17 @@ public static class BlockAccessibility
     /// <returns>Presentation for the editor; the normal mode retains the catalog tint.</returns>
     public static CategoryPresentation Presentation(string group, string mode)
     {
-        mode = Normalize(mode); int index = BlockLibrary.Groups.ToList().FindIndex(item => item.Id == group);
+        mode = Normalize(mode); var groups = BlockLibrary.Groups;
+        int index = groups.ToList().FindIndex(item => item.Id == group);
         if (index < 0) index = 0;
-        string original = PluginCatalog.Current?.ActivePalette?.Groups?.GetValueOrDefault(group) ?? BlockLibrary.Groups[index].Color;
+        string original = PluginCatalog.Current?.ActivePalette?.Groups?.GetValueOrDefault(group) ?? groups[index].Color;
+        int metaIndex = groups.ToList().FindIndex(item => item.Id == "meta_system");
+        bool meta = group == "meta_system";
+        int paletteIndex = metaIndex >= 0 && index > metaIndex ? index - 1 : index;
         string[] safe = mode == "tritanopia" ? ["#666666", "#B83B63", "#007F83", "#903F80", "#4B667D", "#C44A65", "#9CCED6", "#8D4051", "#506A79", "#506060", "#777777"] : ["#64748B", "#E69F00", "#0072B2", "#CC79A7", "#009E73", "#56B4E9", "#F0E442", "#D55E00", "#775E91", "#007B83", "#777777"];
-        Color color = (Color)ColorConverter.ConvertFromString(mode == "normal" || mode == "high_contrast" ? original : safe[index % safe.Length]);
-        if (mode == "achromatopsia") { byte value = (byte)(45 + index * 16); color = Color.FromRgb(value, value, value); }
+        string adapted = meta ? mode == "tritanopia" ? "#9F5D86" : "#D4AA35" : safe[paletteIndex % safe.Length];
+        Color color = (Color)ColorConverter.ConvertFromString(mode == "normal" || mode == "high_contrast" ? original : adapted);
+        if (mode == "achromatopsia") { byte value = meta ? (byte)233 : (byte)(45 + paletteIndex * 16); color = Color.FromRgb(value, value, value); }
         double luminance = .2126 * Linear(color.R) + .7152 * Linear(color.G) + .0722 * Linear(color.B);
         return new(color, luminance > .179 ? Colors.Black : Colors.White, mode != "normal", mode == "high_contrast" ? 3 : 1.5);
     }

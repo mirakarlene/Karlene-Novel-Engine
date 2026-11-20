@@ -80,7 +80,7 @@ public sealed class EngineSettings
             Escape — меню паузы; F11 — полноэкранный режим; F3 — журнал и команды отладки.
             В fullscreen системная рамка скрыта; F11 возвращает оконный режим.
             Предпросмотр выбранной сцены пропускает начальное меню.
-            performance.json: graphics (api auto/vulkan/opengl, v_sync, max_fps 30/60/144/0,
+            performance.json: graphics (api auto/vulkan/opengl/directx, v_sync, max_fps 30/60/144/0,
             msaa_samples 0/2/4, texture_quality original/half/quarter, limit_resource_cache true/false,
             resource_cache_limit_mb 16/32/64/128/256/512), fps_counter, fps_corner, statistics_overlay,
             loading_indicator, debug_mode, preloading, unload_previous_scene, max_async_tasks 32/64/128,

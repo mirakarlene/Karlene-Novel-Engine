@@ -10,6 +10,7 @@ public partial class GameWindow
 
     private async void PlayerClock_Tick(object? sender, EventArgs e)
     {
+        UpdatePlayClock();
         RenderOutput();
         if (pumpingSceneTime) return;
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -21,7 +22,7 @@ public partial class GameWindow
     // A clock tick only writes an explicitly requested scene-entry checkpoint; it never steals focus.
     private async Task PumpSceneTimeAsync(double seconds = .1)
     {
-        if (pumpingSceneTime || clockSuspended || closed || startupFailed || !ready || execution != null ||
+        if (pumpingSceneTime || clockSuspended || closed || startupFailed || systemFrozen || !ready || execution != null ||
             MenuOverlay.Visibility == System.Windows.Visibility.Visible || !runtime.Story.NeedsTick) return;
         pumpingSceneTime = true;
         using var operation = CancellationTokenSource.CreateLinkedTokenSource(blockFlowLifetime.Token);

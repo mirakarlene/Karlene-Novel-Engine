@@ -12,7 +12,7 @@ public sealed record ProjectCreationOptions
     public int Width { get; init; } = 1920;
     /// <summary>Initial window height, from 480 to 2160 pixels.</summary>
     public int Height { get; init; } = 1080;
-    /// <summary>Automatic selection or an explicitly selected OpenGL/Vulkan backend.</summary>
+    /// <summary>Automatic selection or an explicitly selected OpenGL, Vulkan or Direct3D 11 backend.</summary>
     public string GraphicsApi { get; init; } = "auto";
     /// <summary>Frame limit: 30, 60, 144, or zero for unlimited.</summary>
     public int MaxFps { get; init; } = 60;

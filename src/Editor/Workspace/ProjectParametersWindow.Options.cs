@@ -19,6 +19,8 @@ public sealed partial class ProjectParametersWindow
     internal ComboBox AutosaveInput { get; } = GraphicsSettingsEditor.Choice([new GraphicsOption<string>("dialogue", "После каждой реплики"), new("choice", "После каждого выбора"), new("actions", "Каждые N действий")]);
     internal TextBox AutosaveActionsInput { get; } = new();
     internal TextBox MenuMusicInput { get; } = new();
+    internal ComboBox PersistentLocationInput { get; } = GraphicsSettingsEditor.Choice(
+        [new GraphicsOption<string>("saves", "Рядом со слотами"), new("appdata", "AppData"), new("local", "Папка игры (saves)")]);
     internal ComboBox FileSystemInput { get; } = GraphicsSettingsEditor.Choice([new GraphicsOption<string>("project", "Только папка проекта"), new("full", "Полный доступ")]);
     private readonly Dictionary<string, byte[]?> originalEngine = [];
     private static readonly string[] EditableFiles = ["performance.json", "window.json", "game.json", "theme.json", "screens.json", "security.json"];
@@ -29,6 +31,7 @@ public sealed partial class ProjectParametersWindow
         ResolutionInput.SelectedValue = resolution?.Id ?? "custom"; CustomWidthInput.Text = project.Engine.Window.Width.ToString(); CustomHeightInput.Text = project.Engine.Window.Height.ToString(); PaletteInput.SelectedValue = project.Engine.Theme.Palette;
         PreloadInput.SelectedValue = project.Engine.Performance.PreloadScenes; RollbackInput.Text = project.Engine.Game.RollbackDepth.ToString();
         AutosaveInput.SelectedValue = project.Engine.Game.AutoSaveInterval; AutosaveActionsInput.Text = project.Engine.Game.AutoSaveActions.ToString(); MenuMusicInput.Text = project.Engine.Game.MenuMusic ?? "";
+        PersistentLocationInput.SelectedValue = project.Engine.Performance.PersistentLocation;
         AutosaveInput.SelectionChanged += (_, _) => AutosaveActionsInput.IsEnabled = (string?)AutosaveInput.SelectedValue == "actions";
         AutosaveActionsInput.IsEnabled = project.Engine.Game.AutoSaveInterval == "actions";
     }
@@ -65,6 +68,7 @@ public sealed partial class ProjectParametersWindow
     {
         JsonObject draft = MetadataInput.Draft();
         var value = new ProjectPerformanceSettings { Graphics = GraphicsInput.Value, FpsCounter = Flag("fps"), FpsCorner = (string?)CornerInput.SelectedValue ?? "top_right", StatisticsOverlay = Flag("stats"), LoadingIndicator = Flag("loading"), DebugMode = Flag("debug"), Preloading = Flag("preload"), PreloadScenes = (int?)PreloadInput.SelectedValue ?? 3, UnloadPreviousScene = Flag("unload"), MaxAsyncTasks = (int?)AsyncTasksInput.SelectedValue ?? 128, AudioBuffer = (string?)AudioBufferInput.SelectedValue ?? "balanced", SavesPath = SavesInput.Text.Trim() };
+        value.PersistentLocation = (string?)PersistentLocationInput.SelectedValue ?? "saves";
         value.Validate(project.Path);
         var game = Copy(project.Engine.Game); game.AutoSave = Flag("autosave"); game.AutoSaveInterval = (string?)AutosaveInput.SelectedValue ?? "dialogue";
         if (!int.TryParse(RollbackInput.Text, out int rollback) || !int.TryParse(AutosaveActionsInput.Text, out int actions)) throw new InvalidDataException("Глубина отката и число действий должны быть целыми числами.");

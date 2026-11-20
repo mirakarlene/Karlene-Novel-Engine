@@ -34,12 +34,12 @@ public sealed partial class ProjectParametersWindow : Window
     internal Button NextPage { get; } = new() { Content = "›", Padding = new(12, 3, 12, 3) };
     private readonly ContentControl pageContent = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
     private readonly List<UIElement> pages = [];
-    private readonly TextBlock pageLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new(8, 0, 8, 0), TextWrapping = TextWrapping.Wrap, MaxWidth = 320 };
+    private readonly TextBlock pageLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new(8, 0, 8, 0), Width = 48, TextAlignment = TextAlignment.Center };
     public ProjectParametersWindow(ProjectInfo project, string? projectsStoragePath = null)
     {
         this.project = project; Title = "Параметры проекта · " + project.Title;
         BuildInput = new(project, projectsStoragePath) { Visibility = Visibility.Collapsed };
-        Width = 780; Height = 840; MinWidth = 540; MinHeight = 500; WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Width = 780; Height = 840; MinWidth = 740; MinHeight = 680; WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ConfirmProjectDeletion = () => MessageBox.Show(this, $"Удалить проект «{project.Title}» и все файлы в папке?\n{project.Path}\n\nНесохранённые изменения будут потеряны. После подтверждения нажмите кнопку ещё 72 раза. Внешняя папка сохранений не удаляется.", "Удаление проекта", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
         ConfirmResetProgress = () => MessageBox.Show(this, "Удалить сохранения этого проекта из сохранённой папки? Настройки и посторонние файлы останутся. Действие нельзя отменить.", "Сброс прогресса", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
         var value = PerformanceSettingsStore.LoadProject(project.Path);
@@ -83,6 +83,7 @@ public sealed partial class ProjectParametersWindow : Window
         SavesInput.Text = value.SavesPath; SavesInput.Padding = new(5); pathRow.Children.Add(SavesInput); storage.Children.Add(pathRow);
         browse.Click += (_, _) => { var dialog = new OpenFolderDialog(); if (dialog.ShowDialog(this) == true) SavesInput.Text = dialog.FolderName; };
         storage.Children.Add(Hint("Относительный путь считается от проекта. При смене папки существующие сохранения не переносятся."));
+        AddField(storage, "Хранилище persistent", PersistentLocationInput);
         AddField(storage, "Максимальная история действий (глубина отката)", RollbackInput);
         AddSwitch(storage, "autosave", "Автосохранение", project.Engine.Game.AutoSave);
         AddField(storage, "Интервал", AutosaveInput); AddField(storage, "Каждые N действий", AutosaveActionsInput);
@@ -115,11 +116,14 @@ public sealed partial class ProjectParametersWindow : Window
         diagnostics.Children.Remove(diagnosticGrid); fpsRow.Children.Remove(CornerInput); AddField(diagnostics, "Угол счётчика FPS", CornerInput); CornerInput.Width = double.NaN; CornerInput.MinWidth = 0;
         diagnostics.Children.Add(DangerZone); ParameterLayout.Compact(diagnostics);
         columns.Children.Clear();
-        pages.Add(ParameterLayout.Columns(left, right)); pages.Add(ParameterLayout.Columns(storageCard, diagnosticCard));
-        pages.Add(BuildInput); pages.Add(securityCard); pages.Add(MetadataInput); pages.Add(MetadataInput.AdditionalPage);
         ParameterLayout.Compact((Panel)securityCard.Child);
         foreach (Border card in BuildInput.Children.OfType<Border>()) { card.Padding = new(8); card.Margin = new(0, 0, 0, 4); ParameterLayout.Compact((Panel)card.Child); }
         foreach (FrameworkElement card in new FrameworkElement[] { storageCard, diagnosticCard, securityCard }) card.Margin = new(0);
+        foreach (var panel in new[] { graphics, performance, storage, diagnostics, (Panel)securityCard.Child }) ParameterLayout.SpreadFields(panel);
+        var buildCards = BuildInput.Children.OfType<Border>().ToArray();
+        foreach (var card in buildCards) { ParameterLayout.SpreadFields((Panel)card.Child); }
+        pages.Add(ParameterLayout.Cards(left, right)); pages.Add(ParameterLayout.Cards(storageCard, diagnosticCard));
+        pages.Add(ParameterLayout.Cards(BuildInput, securityCard)); pages.Add(ParameterLayout.Cards(Card(MetadataInput))); pages.Add(MetadataInput.AdditionalPage);
         var pager = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new(0, 10, 0, 0) };
         pager.Children.Add(PreviousPage); pager.Children.Add(pageLabel); pager.Children.Add(NextPage);
         PreviousPage.Click += (_, _) => ShowPage(Page - 1); NextPage.Click += (_, _) => ShowPage(Page + 1);
@@ -133,10 +137,10 @@ public sealed partial class ProjectParametersWindow : Window
     }
     internal void ShowPage(int page)
     {
-        Page = Math.Clamp(page, 0, 5); ResetDeletion(); DangerZone.IsExpanded = false;
+        Page = Math.Clamp(page, 0, 4); ResetDeletion(); DangerZone.IsExpanded = false;
         pageContent.Content = pages[Page]; BuildInput.Visibility = Visibility.Visible;
-        PreviousPage.IsEnabled = Page > 0; NextPage.IsEnabled = Page < 5;
-        pageLabel.Text = (Page + 1) + " / 6 · " + new[] { "Графика и производительность", "Сохранения и диагностика", "Сборка", "Безопасность", "Метаданные", "Остальные параметры project.json" }[Page];
+        PreviousPage.IsEnabled = Page > 0; NextPage.IsEnabled = Page < 4;
+        pageLabel.Text = (Page + 1) + " / 5";
     }
     private void ResetDeletion() { DeletionConfirmation.Cancel(); DeleteCounter.Visibility = Visibility.Collapsed; DeleteCounter.Text = ""; }
     private CheckBox Switch(string key, string label, bool value) { var input = new CheckBox { Content = label, IsChecked = value, FontWeight = FontWeights.Normal, Margin = new(0, 6, 8, 6), VerticalAlignment = VerticalAlignment.Center }; switches[key] = input; return input; }

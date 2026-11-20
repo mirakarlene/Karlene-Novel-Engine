@@ -134,8 +134,10 @@ public sealed class CompactProjectParametersTests
                 window.WindowStartupLocation = WindowStartupLocation.Manual; window.Left = -10000; window.Top = -10000; window.ShowInTaskbar = false; window.ShowActivated = false; window.Show(); window.UpdateLayout();
                 var content = Assert.IsType<DockPanel>(window.Content); Assert.Empty(Descendants(content).OfType<ScrollViewer>()); Assert.Empty(Descendants(content).OfType<Viewbox>());
                 var graphics = Parent<Border>(window.GraphicsInput.ApiInput); var performance = Parent<Border>(window.AsyncTasksInput);
-                Assert.Same(graphics.Parent, performance.Parent); Assert.NotSame(graphics, performance); Assert.True(Grid.GetColumn(graphics) < Grid.GetColumn(performance));
-                Assert.Equal(graphics.TransformToAncestor(content).Transform(new Point()).Y, performance.TransformToAncestor(content).Transform(new Point()).Y, 3);
+                Assert.Same(graphics.Parent, performance.Parent); Assert.NotSame(graphics, performance); Assert.IsType<StackPanel>(graphics.Parent);
+                var graphicsBounds = graphics.TransformToAncestor(content).TransformBounds(new Rect(graphics.RenderSize));
+                var performanceBounds = performance.TransformToAncestor(content).TransformBounds(new Rect(performance.RenderSize));
+                Assert.True(graphicsBounds.Bottom <= performanceBounds.Top); Assert.Equal(graphicsBounds.Left, performanceBounds.Left, 3); Assert.Equal(graphicsBounds.Width, performanceBounds.Width, 3);
                 Assert.False(window.TitleInput.IsVisible); Assert.False(window.CornerInput.IsVisible);
                 var save = Assert.Single(Descendants(content).OfType<Button>(), button => Equals(button.Content, "Сохранить")); var cancel = Assert.Single(Descendants(content).OfType<Button>(), button => Equals(button.Content, "Отмена"));
                 Assert.Same(save.Parent, cancel.Parent); Assert.True(cancel.IsCancel); Rect saveBounds = save.TransformToAncestor(content).TransformBounds(new Rect(save.RenderSize));

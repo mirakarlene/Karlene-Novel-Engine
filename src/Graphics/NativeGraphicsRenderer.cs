@@ -15,6 +15,8 @@ internal sealed record GraphicsTexture(long Id, int Width, int Height, byte[] Pi
 internal sealed record GraphicsSprite(GraphicsTexture Texture, Rect Bounds, float Opacity = 1);
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct GraphicsVertex(Vector2 Position, Vector2 Uv, Vector4 Color);
+[StructLayout(LayoutKind.Sequential)]
+internal readonly record struct GraphicsShaderGlobals(Vector4 Frame, Vector4 Origin);
 internal sealed record GraphicsFrame(int Width, int Height, IReadOnlyList<GraphicsSprite> Sprites, IReadOnlyList<GraphicsVertex>? Geometry = null);
 internal sealed class GraphicsPixels(int width, int height, byte[] pixels, string backend, int draws, long bytes, double milliseconds, int samples, Action<byte[]>? release = null) : IDisposable
 {
@@ -34,7 +36,7 @@ internal sealed class GraphicsPixels(int width, int height, byte[] pixels, strin
     }
 }
 
-/// <summary>Native offscreen OpenGL/Vulkan compositor. All creation, rendering and disposal belong to its worker thread.</summary>
+/// <summary>Native offscreen compositor. All creation, rendering and disposal belong to its worker thread.</summary>
 internal sealed class NativeGraphicsRenderer : IDisposable
 {
     private readonly GraphicsDevice device;
@@ -63,7 +65,12 @@ internal sealed class NativeGraphicsRenderer : IDisposable
     private long textureBytes;
     private long cacheBudget = 64 * 1024 * 1024;
     private static readonly object glCreation = new();
-    internal string Backend => device.BackendType == GraphicsBackend.Vulkan ? "vulkan" : "opengl";
+    internal string Backend => device.BackendType switch
+    {
+        GraphicsBackend.Direct3D11 => "directx",
+        GraphicsBackend.Vulkan => "vulkan",
+        _ => "opengl"
+    };
     internal int SurfaceCreations { get; private set; }
     internal int PipelineCreations { get; private set; }
     internal int Readbacks { get; private set; }
@@ -75,25 +82,40 @@ internal sealed class NativeGraphicsRenderer : IDisposable
     {
         if (api == "auto")
         {
-            try { return Create("opengl", vsync); }
-            catch (Exception gl) when (gl is not OutOfMemoryException)
+            var failures = new List<Exception>();
+            foreach (string candidate in new[] { "opengl", "vulkan", "directx" })
             {
-                try { return Create("vulkan", vsync); }
-                catch (Exception vulkan) when (vulkan is not OutOfMemoryException) { throw new AggregateException("OpenGL и Vulkan недоступны.", gl, vulkan); }
+                try { return Create(candidate, vsync); }
+                catch (Exception error) when (error is not OutOfMemoryException) { failures.Add(error); }
             }
+            throw new AggregateException("OpenGL, Vulkan и DirectX недоступны.", failures);
         }
-        if (api is not ("vulkan" or "opengl")) throw new ArgumentException("Неизвестный графический API.", nameof(api));
+        var backend = api switch
+        {
+            "directx" => GraphicsBackend.Direct3D11,
+            "vulkan" => GraphicsBackend.Vulkan,
+            "opengl" => GraphicsBackend.OpenGL,
+            _ => throw new ArgumentException("Неизвестный графический API.", nameof(api))
+        };
         var options = new GraphicsDeviceOptions(false, null, vsync, ResourceBindingModel.Improved, true, true);
         GraphicsDevice? device = null; Sdl2Window? window = null;
         try
         {
-            if (api == "vulkan") device = GraphicsDevice.CreateVulkan(options);
+            if (backend == GraphicsBackend.Direct3D11) device = GraphicsDevice.CreateD3D11(options);
+            else if (backend == GraphicsBackend.Vulkan) device = GraphicsDevice.CreateVulkan(options);
             else lock (glCreation)
                 VeldridStartup.CreateWindowAndGraphicsDevice(new WindowCreateInfo(0, 0, 1, 1, Veldrid.WindowState.Hidden, "KNE · OpenGL context"), options, GraphicsBackend.OpenGL, out window, out device);
-            if (device.BackendType != (api == "vulkan" ? GraphicsBackend.Vulkan : GraphicsBackend.OpenGL)) throw new InvalidOperationException("Драйвер создал другой API вместо выбранного: " + api);
+            if (device.BackendType != backend) throw new InvalidOperationException("Драйвер создал другой API вместо выбранного: " + api);
             return new(device, window);
         }
-        catch { device?.Dispose(); window?.Close(); throw; }
+        catch (Exception error)
+        {
+            device?.Dispose();
+            window?.Close();
+            if (backend == GraphicsBackend.Direct3D11 && error is not OutOfMemoryException)
+                throw new InvalidOperationException("DirectX (Direct3D 11) недоступен: " + error.Message, error);
+            throw;
+        }
     }
 
     private NativeGraphicsRenderer(GraphicsDevice device, Sdl2Window? window)
@@ -130,8 +152,10 @@ internal sealed class NativeGraphicsRenderer : IDisposable
         Validate(frame, msaaSamples);
         if (!float.IsFinite(seconds) || !float.IsFinite(screenOrigin.X) || !float.IsFinite(screenOrigin.Y) || !float.IsFinite(screenSize.X) || !float.IsFinite(screenSize.Y)) throw new ArgumentException("Некорректные часы или координаты шейдера.");
         SelectShader(shader?.Glsl ?? FragmentShader);
-        device.UpdateBuffer(shaderGlobals, 0, new Vector4(seconds, frame.Width, frame.Height, 0));
-        device.UpdateBuffer(shaderGlobals, 16, new Vector4(screenOrigin.X, screenOrigin.Y, screenSize.X == 0 ? frame.Width : screenSize.X, screenSize.Y == 0 ? frame.Height : screenSize.Y));
+        // Upload the complete constant buffer in one call, including both its aligned vectors.
+        device.UpdateBuffer(shaderGlobals, 0, new GraphicsShaderGlobals(
+            new Vector4(seconds, frame.Width, frame.Height, 0),
+            new Vector4(screenOrigin.X, screenOrigin.Y, screenSize.X == 0 ? frame.Width : screenSize.X, screenSize.Y == 0 ? frame.Height : screenSize.Y)));
         var watch = Stopwatch.StartNew();
         EnsureSurface(frame.Width, frame.Height, msaaSamples);
         Pipeline[] passPipelines = [];

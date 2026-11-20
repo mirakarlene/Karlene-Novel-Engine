@@ -96,7 +96,8 @@ namespace KNE
                 catch (Exception helperError) { diagnostics.Record("Наблюдатель недоступен", helperError.Message); }
                 base.OnStartup(e);
 #if KNE_PLAYER
-                MainWindow = new GameWindow(standaloneProject, StandalonePlayer.Saves(standaloneProject));
+                MainWindow = new GameWindow(standaloneProject, StandalonePlayer.Saves(standaloneProject))
+                { CountSystemLaunch = !e.Args.Contains("--system-restart", StringComparer.Ordinal) };
 #else
                 MainWindow = new MainWindow();
                 ShutdownMode = ShutdownMode.OnMainWindowClose;

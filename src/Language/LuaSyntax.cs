@@ -66,7 +66,7 @@ public static class LuaSyntax
                 while (position < text.Length && (char.IsAsciiLetterOrDigit(text[position]) || text[position] == '_')) position++;
                 string name = text[start..position];
                 kind = Keywords.Contains(name) ? LuaTokenKind.Keyword : Controls.Contains(name) ? LuaTokenKind.Control
-                    : Functions.Contains(name) ? LuaTokenKind.Function : LuaTokenKind.Identifier;
+                    : Functions.Contains(name) || SystemBlocks.FunctionNames.Contains(name) ? LuaTokenKind.Function : LuaTokenKind.Identifier;
             }
             else if (char.IsAsciiDigit(character) || (character == '.' && position + 1 < text.Length && char.IsAsciiDigit(text[position + 1])))
             {
