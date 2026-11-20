@@ -9,9 +9,12 @@
         </DockPanel>
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions><ColumnDefinition Width="166"/><ColumnDefinition Width="20"/><ColumnDefinition Width="992"/></Grid.ColumnDefinitions>
+            <StackPanel>
             <ListBox x:Name="BlockGroups" SelectionChanged="Group_Changed" BorderThickness="0" Background="Transparent" Padding="0" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled" ItemContainerStyle="{DynamicResource CategoryHover.Item}">
                 <ListBox.ItemTemplate><DataTemplate><Border BorderBrush="{Binding Color}" local:BlockAccessibility.Category="{Binding Id}" BorderThickness="3,0,0,0" Padding="6,0"><DockPanel><local:CategoryIcon Group="{Binding Id}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Margin="0,0,5,0"/><TextBlock Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center"/></DockPanel></Border></DataTemplate></ListBox.ItemTemplate>
             </ListBox>
+            <TextBlock x:Name="LuaVersionNote" Text="KNE использует Lua 5.4" Margin="4,8,0,0" TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Visibility="Collapsed"/>
+            </StackPanel>
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="58"/><RowDefinition Height="426"/><RowDefinition Height="42"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                 <TextBox x:Name="BlockSearch" Margin="0,0,12,8" Padding="8" TextChanged="Search_Changed" ToolTip="Поиск в выбранной группе" AutomationProperties.Name="Поиск блока"/>

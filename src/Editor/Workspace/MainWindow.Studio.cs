@@ -26,17 +26,18 @@ public partial class MainWindow
     }
 
     private void BtnExit_Click(object sender, RoutedEventArgs e) => Close();
-    private async void BtnSaveAllExit_Click(object sender, RoutedEventArgs e)
-    {
-        bool saved = false;
-        await RunOperationAsync(async () => { await SaveAllEditorsAsync(); await LibraryView.FlushPendingPreferencesAsync(); saved = true; }, "Сохранение проекта…");
-        if (saved && !closed) { closeApproved = true; Close(); }
-    }
+    private async void BtnSaveAll_Click(object sender, RoutedEventArgs e) =>
+        await RunOperationAsync(SaveAllEditorsAsync, "Сохранение проекта…");
 
     private async void BtnImportFile_Click(object sender, RoutedEventArgs e)
     {
-        if (currentProject is not { } project) return;
-        var source = new OpenFileDialog { Title = "Выберите файл для импорта", Filter = "Все файлы (*.*)|*.*" };
+        if (currentProject is not { } project || PickProjectFormat(import: true) is not { } format) return;
+        if (format.Extension is ".rpy" or ".docx")
+        {
+            await ImportScriptAsync(project, format.Extension);
+            return;
+        }
+        var source = new OpenFileDialog { Title = "Выберите файл для импорта", Filter = format.Filter };
         if (source.ShowDialog(this) != true) return;
         var destination = CreateFileDialog(Path.Combine(project.Path, "game"), Path.GetFileName(source.FileName));
         destination.Title = "Куда импортировать файл внутри game";
@@ -48,10 +49,8 @@ public partial class MainWindow
         }, "Импорт файла…");
     }
 
-    private async void BtnImportScript_Click(object sender, RoutedEventArgs e)
+    private async Task ImportScriptAsync(ProjectInfo project, string extension)
     {
-        if (currentProject is not { } project || sender is not Button button) return;
-        string extension = (string)button.Tag;
         var source = new OpenFileDialog { Title = "Экспериментальный импорт " + extension, Filter = $"Сценарий (*{extension})|*{extension}" };
         if (source.ShowDialog(this) != true) return;
         await RunOperationAsync(async () =>

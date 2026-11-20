@@ -20,13 +20,13 @@ public sealed class CategoryIcon : FrameworkElement
     private static void Changed(DependencyObject view, DependencyPropertyChangedEventArgs args) => ((CategoryIcon)view).Update();
     private void Update()
     {
-        string label = BlockLibrary.Groups.FirstOrDefault(group => group.Id == Group)?.Title ?? Group;
+        string label = BlockLibrary.Groups.FirstOrDefault(group => group.Id == Group)?.Title ?? VisualLuaCatalog.Groups.FirstOrDefault(group => group.Id == Group)?.Title ?? Group;
         ToolTip = label; AutomationProperties.SetName(this, "Категория: " + label);
         BlockAccessibility.Decorate(this, Group, mode => Visibility = mode.Badges || BlockLibrary.Groups.Any(g => g.Id == Group && g.Icon.Length > 0) ? Visibility.Visible : Visibility.Collapsed);
     }
     /// <summary>Returns a stable silhouette discriminator for a category.</summary>
     /// <param name="group">Catalog group ID.</param><returns>A vector symbol name.</returns>
-    public static string SymbolFor(string group) => group switch { "narrative" => "speech", "logic" => "gear", "visual" => "eye", "audio" => "note", "flows" => "arrows", "calculations" => "calculator", "async" => "branches", "triggers" => "lightning", "configurations" => "sliders", "meta_system" => "terminal", "shaders" => "prism", "plugins" => "puzzle", _ => "play" };
+    public static string SymbolFor(string group) => group switch { "narrative" => "speech", "logic" => "gear", "visual" => "eye", "audio" => "note", "flows" => "arrows", "calculations" => "calculator", "async" => "branches", "triggers" => "lightning", "configurations" => "sliders", "meta_system" => "terminal", "shaders" => "prism", "plugins" => "puzzle", "lua_flow" => "arrows", "lua_raw" => "terminal", "lua_variables" => "sliders", "lua_tables" => "branches", "lua_functions" => "lightning", "lua_operators" => "calculator", "lua_types" => "prism", "lua_libraries" => "puzzle", "lua_meta" => "gear", _ => "play" };
     private static readonly Dictionary<string, Geometry> symbols = Build();
     private static Dictionary<string, Geometry> Build()
     {

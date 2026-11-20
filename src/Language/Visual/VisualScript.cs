@@ -13,6 +13,8 @@ public sealed partial class VisualScript
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool IsShader { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool IsVisualLua { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? LuaTrailingSource { get; set; }
+    [JsonInclude, JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal List<LuaCommentPlacement>? LuaComments { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? LuaEncoding { get; set; }
     /// <summary>The persisted schema version; this editor supports version 1.</summary>
     public int Version { get; set; } = 1;
@@ -118,9 +120,10 @@ public sealed partial class VisualScript
             if (node.Text == null || node.Speaker == null || node.Path == null || node.Variable == null ||
                 node.Value == null || node.CompareVariable == null || node.Position == null || node.Channel == null || node.Target == null || node.IterationKey == null || node.Category == null || node.ScreenLayer == null || node.UiTarget == null || node.SpeakerId == null)
                 throw new InvalidDataException("Свойства блока не должны содержать null.");
-            if (node.Kind is not (ScriptNodeKind.Plugin or ScriptNodeKind.LuaBlock) && node.Category.Length != 0 && !BlockLibrary.BuiltInGroups.Any(group => group.Id == node.Category))
+            bool luaComment = IsVisualLua && node.Kind == ScriptNodeKind.Comment && node.Category == "lua_raw";
+            if (!luaComment && node.Kind is not (ScriptNodeKind.Plugin or ScriptNodeKind.LuaBlock) && node.Category.Length != 0 && !BlockLibrary.BuiltInGroups.Any(group => group.Id == node.Category))
                 throw new InvalidDataException("Неизвестная группа блока.");
-            if (IsVisualLua && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.LuaBlock) || !IsVisualLua && (node.Kind == ScriptNodeKind.LuaBlock || node.Lua != null))
+            if (IsVisualLua && !luaComment && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.LuaBlock) || !IsVisualLua && (node.Kind == ScriptNodeKind.LuaBlock || node.Lua != null))
                 Fail(node, "блоки Lua доступны только в .vlua");
             if (node.Kind == ScriptNodeKind.LuaBlock && (node.Lua is not { Code: not null, Otherwise: not null, Close: not null } lua ||
                 string.IsNullOrEmpty(lua.Operation) || !VisualLuaCatalog.Blocks.TryGetValue(lua.Operation, out var spec) || spec.Group.Id != node.Category ||

@@ -7,7 +7,7 @@ namespace KNE;
 public partial class MainWindow
 {
     /// <summary>The project currently open in the editor.</summary>
-    public ProjectInfo? Project => currentProject;
+    public ProjectInfo? Project => ProjectPanel.Visibility == Visibility.Visible ? currentProject : null;
     private PluginHost? editorPlugins;
     private string? pluginProject;
     private void LoadEditorPlugins(string? projectDirectory)

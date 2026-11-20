@@ -223,10 +223,25 @@ public sealed partial class LuaRuntime : IGameSession
         InstallHook();
         using (var declare = (LuaFunction)lua["kne_declare_function"])
             foreach (var function in scripts.Functions) declare.Call(function.Name, function.Path);
+        string? debugFile = editorSource?.LuaDebug == true ? editorSource.RelativePath(project.Path) : null;
         using (var load = (LuaFunction)lua["kne_load_script"])
         {
-            foreach (var script in scripts.Initialization) load.Call(script.Path);
-            load.Call(preview ? Path.GetRelativePath(project.Path, scenePath).Replace('\\', '/') : scripts.Main.Path);
+            foreach (var script in scripts.Initialization)
+                if (!script.Path.Equals(debugFile, StringComparison.OrdinalIgnoreCase)) load.Call(script.Path);
+            if (debugFile == null)
+                load.Call(preview ? Path.GetRelativePath(project.Path, scenePath).Replace('\\', '/') : scripts.Main.Path);
+        }
+        if (debugFile != null)
+        {
+            lua["kne_debug_module"] = scripts.FindFile(debugFile).Path;
+            lua.DoString("""
+                kne_story = kne_scene_thread(function()
+                    return kne_run_scene(function() kne_load_script(kne_debug_module) end)
+                end)
+                """, "KNE Visual Lua debug");
+            ResumeStory(null);
+            initialized = true;
+            return;
         }
         string entryName = editorSource?.EntryFunction ?? (preview ? scripts.PreviewFunction(Path.GetRelativePath(project.Path, scenePath)) : "main");
         if (editorSource?.EntryFunction != null && !scripts.Functions.Any(f => f.Name == entryName &&

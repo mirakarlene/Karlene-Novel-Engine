@@ -105,7 +105,7 @@ public sealed partial class ProjectParametersWindow : Window
         AddSwitch(storage, "autosave", "Автосохранение", project.Engine.Game.AutoSave);
         AddField(storage, "Интервал", AutosaveInput); AddField(storage, "Каждые N действий", AutosaveActionsInput);
         AddField(storage, "Фоновая музыка по умолчанию (главное меню, необязательно)", MusicRow());
-        var footer = new StackPanel { Orientation = Orientation.Horizontal, Margin = new(0, 8, 0, 0) };
+        var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new(0, 8, 0, 0) };
         var save = new Button { Content = "Сохранить", Foreground = Brushes.White, Padding = new(16, 7, 16, 7) }; save.SetResourceReference(BackgroundProperty, "KNE.AccentBrush");
         var cancel = new Button { Content = "Отмена", Background = new SolidColorBrush(Color.FromRgb(65, 62, 74)), Foreground = Brushes.WhiteSmoke, Margin = new(8, 0, 0, 0), Padding = new(16, 7, 16, 7), IsCancel = true };
         save.Click += async (_, _) => { try { await SaveAsync(); DialogResult = true; } catch (Exception error) { status.Text = error.Message; } }; cancel.Click += (_, _) => Close();

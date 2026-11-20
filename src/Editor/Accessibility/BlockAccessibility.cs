@@ -56,7 +56,7 @@ public static class BlockAccessibility
     {
         if (view.GetValue(DecorationProperty) is Decoration decoration) decoration.Update(Presentation(decoration.Group, GetMode(view)));
         if (view is CategoryIcon icon) icon.InvalidateVisual();
-        if (view is System.Windows.Controls.Border border && BlockLibrary.Groups.Any(group => group.Id == GetCategory(view)))
+        if (view is System.Windows.Controls.Border border && (BlockLibrary.Groups.Any(group => group.Id == GetCategory(view)) || VisualLuaCatalog.Groups.Any(group => group.Id == GetCategory(view))))
             border.BorderBrush = GetCategory(view) == "shaders" && GetMode(view) == "normal" ? ShaderRainbow.Create(border) : new SolidColorBrush(Presentation(GetCategory(view), GetMode(view)).Color);
     }
     /// <summary>Resolves a category tint, readable text and non-color cues.</summary>
@@ -64,10 +64,12 @@ public static class BlockAccessibility
     /// <returns>Presentation for the editor; the normal mode retains the catalog tint.</returns>
     public static CategoryPresentation Presentation(string group, string mode)
     {
-        mode = Normalize(mode); var groups = BlockLibrary.Groups;
+        mode = Normalize(mode);
+        bool lua = group.StartsWith("lua_", StringComparison.Ordinal);
+        var groups = lua ? VisualLuaCatalog.Groups : BlockLibrary.Groups;
         int index = groups.ToList().FindIndex(item => item.Id == group);
         if (index < 0) index = 0;
-        string original = PluginCatalog.Current?.ActivePalette?.Groups?.GetValueOrDefault(group) ?? groups[index].Color;
+        string original = lua ? groups[index].Color : PluginCatalog.Current?.ActivePalette?.Groups?.GetValueOrDefault(group) ?? groups[index].Color;
         int metaIndex = groups.ToList().FindIndex(item => item.Id == "meta_system");
         bool meta = group == "meta_system";
         int paletteIndex = metaIndex >= 0 && index > metaIndex ? index - 1 : index;

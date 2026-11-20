@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -13,6 +14,9 @@ public sealed partial class ScriptDocument
         string source = PathSafety.EnsureInside(root, FilePath);
         string target = PathSafety.EnsureInside(root, Path.ChangeExtension(source, IsVisual ? ".lua" : ".vlua"));
         if (File.Exists(target) || Directory.Exists(target)) throw new IOException("Файл назначения уже существует: " + Path.GetFileName(target));
+        string luaPath = IsVisual ? target : source;
+        string layoutKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetRelativePath(root, luaPath).ToUpperInvariant())));
+        string layoutPath = PathSafety.ResolveRelative(root, VisualLua.LayoutDirectory + "/" + layoutKey + ".json");
         string content;
         Encoding encoding = new UTF8Encoding(false);
         if (IsVisual)
@@ -26,7 +30,7 @@ public sealed partial class ScriptDocument
         }
         else
         {
-            var graph = VisualLua.ParseSource(Code);
+            var graph = await RecoverLuaLayoutAsync(layoutPath, Code, token);
             graph.LuaEncoding = DetectLuaEncoding(source);
             content = graph.Serialize();
         }
@@ -52,9 +56,15 @@ public sealed partial class ScriptDocument
             displaced = true;
             File.Move(staging, target);
             installed = true;
-            if (updatedConfig != null)
-                await ProjectSettingsTransaction.CommitAsync(new Dictionary<string, byte[]> { [configPath] = updatedConfig },
-                    new Dictionary<string, byte[]?> { [configPath] = config });
+            var changes = new Dictionary<string, byte[]>();
+            var originals = new Dictionary<string, byte[]?>();
+            if (updatedConfig != null) { changes.Add(configPath, updatedConfig); originals.Add(configPath, config); }
+            if (IsVisual)
+            {
+                changes.Add(layoutPath, Encoding.UTF8.GetBytes(Graph!.Serialize()));
+                originals.Add(layoutPath, ProjectSettingsTransaction.Read(layoutPath));
+            }
+            if (changes.Count > 0) await ProjectSettingsTransaction.CommitAsync(changes, originals);
         }
         catch
         {
@@ -67,6 +77,41 @@ public sealed partial class ScriptDocument
         catch (IOException error) { EngineDiagnostics.Trace("Осталась временная копия Lua", error.Message); }
         catch (UnauthorizedAccessException error) { EngineDiagnostics.Trace("Осталась временная копия Lua", error.Message); }
         return target;
+    }
+
+    private static async Task<VisualScript> RecoverLuaLayoutAsync(string path, string code, CancellationToken token)
+    {
+        VisualScript? cached = null;
+        if (File.Exists(path) && new FileInfo(path).Length <= 8 * 1024 * 1024)
+        {
+            try
+            {
+                cached = VisualScript.Parse(await File.ReadAllTextAsync(path, token));
+                if (!cached.IsVisualLua) cached = null;
+                if (cached?.Compile() == code) return cached;
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidDataException)
+            { EngineDiagnostics.Trace("Не прочитана разметка Visual Lua", error.Message); }
+        }
+
+        var graph = VisualLua.ParseSource(code);
+        if (cached == null) return graph;
+        var positions = cached.Nodes.ToLookup(LuaLayoutKey).ToDictionary(group => group.Key, group => new Queue<ScriptNode>(group));
+        foreach (var node in graph.Nodes)
+        {
+            if (!positions.TryGetValue(LuaLayoutKey(node), out var matches) || !matches.TryDequeue(out var match)) continue;
+            node.X = match.X; node.Y = match.Y; node.Width = match.Width; node.Height = match.Height;
+        }
+        return graph;
+
+        static (ScriptNodeKind Kind, string? Operation, string Text) LuaLayoutKey(ScriptNode node)
+        {
+            if (node.Lua is not { } lua) return (node.Kind, null, node.Text);
+            string signature = lua.Operation == "raw" ? lua.Code.Trim() :
+                string.Join('\0', LuaSyntax.Parse(lua.Code).Where(token => token.Kind != LuaTokenKind.Comment)
+                    .Select(token => lua.Code[token.Start..token.End]));
+            return (node.Kind, lua.Operation, signature);
+        }
     }
 
     private static string? DetectLuaEncoding(string source)

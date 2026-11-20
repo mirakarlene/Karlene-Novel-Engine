@@ -2,7 +2,7 @@ namespace KNE;
 
 /// <summary>An unsaved document executed only by an isolated editor preview session.</summary>
 public sealed record EditorPreviewSource(string FilePath, string Source, string? EntryFunction = null,
-    bool StepCommands = true, bool SceneTest = false, int? Seed = null)
+    bool StepCommands = true, bool SceneTest = false, int? Seed = null, bool LuaDebug = false)
 {
     internal string RelativePath(string projectPath)
     {
