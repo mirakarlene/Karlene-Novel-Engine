@@ -9,6 +9,7 @@ public sealed class EditorPreviewTests
     public async Task Seek_FromMainCarriesCallerVariablesArgumentsAndBackground_StandaloneStartsSelectedFunction()
     {
         using var fixture = new TempProject();
+        fixture.Write("engine/state.json", """{"score":0}""");
         string bg = fixture.Write("bg.png", "resource");
         fixture.Write("game/scenes/main.krl", "function main() state.score=9; background('bg.png'); call(chapter,'Вызов') end");
         string path = fixture.Write("game/scenes/chapter.krl", "function chapter(title) d(nil,'Старое') end");

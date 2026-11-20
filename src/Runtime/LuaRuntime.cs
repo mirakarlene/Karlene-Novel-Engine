@@ -172,6 +172,7 @@ public sealed partial class LuaRuntime : IGameSession
             end
             """, "KNE API");
         lua.DoString(RuntimeDiagnosticsLua.Source, "KNE diagnostics");
+        InitializeProjectDiagnostics();
         lua.DoString(SceneRuntimeLua.Source, "KNE scene scheduler");
         lua.DoString(CalculationRuntimeLua.Source, "KNE calculations");
         InitializeLogic();

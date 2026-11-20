@@ -127,6 +127,34 @@ public sealed class StartupErrorUiTests
     }
 
     [Fact]
+    public async Task UnavailableStorage_WarnsAtStartupAndContinuesPastNamedSave()
+    {
+        using var fixture = new TempProject();
+        string conflict = fixture.Write("unavailable-saves", "existing data");
+        await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, new() { SavesPath = "unavailable-saves", PersistentLocation = "saves" });
+        fixture.Write("game/scenes/main.krl", "function main() save_named('chapter'); d(nil, 'story continues') end");
+        var project = await fixture.LoadAsync();
+        await Sta(async () =>
+        {
+            var window = new GameWindow(project);
+            try
+            {
+                window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+                var initialization = (Task)typeof(GameWindow).GetField("systemInitialization", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+                await initialization;
+                Assert.Equal(Visibility.Visible, Find<Border>(window, "NoticePanel").Visibility);
+                Assert.Contains("папку сохранений", Find<TextBlock>(window, "NoticeText").Text);
+                await InvokeTask(window, "StartGameAsync");
+                Assert.Equal(Visibility.Collapsed, Find<Border>(window, "StartupErrorOverlay").Visibility);
+                Assert.Equal("story continues", Find<TextBlock>(window, "DialogueText").Text);
+                Assert.False(Find<Button>(window, "SaveButton").IsEnabled);
+                Assert.Equal("existing data", File.ReadAllText(conflict));
+            }
+            finally { window.Close(); }
+        });
+    }
+
+    [Fact]
     public async Task StartupError_BlocksHotkeysMenuAndSaveActions_AndKeepsExitAvailable()
     {
         using var fixture = new TempProject();

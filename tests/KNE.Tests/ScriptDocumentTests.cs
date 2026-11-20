@@ -1,10 +1,41 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Controls;
 using Xunit;
 
 namespace KNE.Tests;
 
 public sealed class ScriptDocumentTests
 {
+    [Theory]
+    [InlineData(1500, 950)]
+    [InlineData(1100, 700)]
+    public Task ModeSwitch_UsesTheColorSegmentsOnlyInLua(double width, double height) => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        string lua = fixture.Write("game/scripts/helper.lua", "-- helper");
+        var editor = new ScriptEditor();
+        var code = (RadioButton)editor.FindName("CodeMode");
+        var graph = (RadioButton)editor.FindName("GraphMode");
+        var track = (Border)editor.FindName("ModeTrack");
+
+        await editor.OpenAsync(fixture.ProjectPath, lua);
+        editor.Measure(new Size(width, height));
+        editor.Arrange(new Rect(0, 0, width, height));
+        var style = editor.Resources["LuaModeSegment"];
+        Assert.Same(style, code.Style);
+        Assert.Same(style, graph.Style);
+        var trackBounds = track.TransformToAncestor(editor).TransformBounds(new Rect(track.RenderSize));
+        Assert.True(trackBounds.Left >= 0 && trackBounds.Bottom <= height && trackBounds.Right <= width);
+        Assert.True(code.ActualWidth > 30 && graph.ActualWidth > 60);
+
+        await editor.OpenAsync(fixture.ProjectPath, Path.Combine(fixture.ProjectPath, "game/scenes/main.krl"));
+        Assert.NotSame(style, code.Style);
+        Assert.NotSame(style, graph.Style);
+        Assert.Equal(new Thickness(0), track.Padding);
+        Assert.Equal(new Thickness(8, 0, 8, 0), code.Margin);
+    });
+
     [Fact]
     public async Task NewGraphs_UseUniqueNamedFunctions_AndLeaveMainUnique()
     {

@@ -80,7 +80,11 @@ public partial class GameWindow : Window
         catch (Exception ex) { ShowStartupError(ex, "Проверка сценариев перед запуском"); return; }
         if (closed) return;
         MenuOverlay.IsEnabled = true;
-        if (!useMenu) await StartGameAsync();
+        if (!useMenu)
+        {
+            await StartGameAsync();
+            if (!closed && saveStorage is { Writable: false } storage) Notify(storage.Message);
+        }
     }
 
     private void ApplyEngineTheme()
@@ -357,7 +361,8 @@ public partial class GameWindow : Window
             if (before != null) rollback.Push(before);
             if (closed) return;
             if (starting) ready = true;
-            if (ready && SceneSavePolicy.AllowAuto(runtime.Visuals.Scene) && (starting && project.Engine.Game.AutoSave && !saves.Exists("auto") || playerAction && autosave.Completed(project.Engine.Game, previousKind)))
+            if (ready && SaveStorageWritable && SceneSavePolicy.AllowAuto(runtime.Visuals.Scene) &&
+                (starting && project.Engine.Game.AutoSave && !saves.Exists("auto") || playerAction && autosave.Completed(project.Engine.Game, previousKind)))
             {
                 try { await saves.SaveAsync("auto", await CheckpointAsync(execution.Token), execution.Token); }
                 catch (Exception ex) when (GameErrorReport.TryGet(ex) == null)

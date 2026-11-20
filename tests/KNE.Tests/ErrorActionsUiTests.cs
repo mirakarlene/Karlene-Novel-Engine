@@ -167,7 +167,7 @@ public sealed class ErrorActionsUiTests
     public async Task OrdinaryScriptFailure_ReturnIsDisabled_ConsoleShowsLogsAndFailedVariables_WithoutResumingGame()
     {
         using var fixture = new TempProject();
-        fixture.Write("game/scenes/main.krl", "function main() d(nil, 'Safe'); error_flag='captured'; print('LOG_BEFORE_FAILURE'); error('DIRECT_FAILURE') end");
+        fixture.Write("game/scenes/main.krl", "function main() player_name='Игрок'; d(nil, 'Safe'); error_flag='captured'; print('LOG_BEFORE_FAILURE'); error('DIRECT_FAILURE') end");
         var project = await fixture.LoadAsync();
         await Sta(async () =>
         {

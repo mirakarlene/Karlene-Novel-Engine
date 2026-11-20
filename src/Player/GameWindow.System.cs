@@ -14,6 +14,8 @@ public partial class GameWindow
     private GameSystemServices? systemServices;
     private GameSystemConsent? systemConsent;
     private Task systemInitialization = Task.CompletedTask;
+    private GameStorageStatus? saveStorage;
+    private bool SaveStorageWritable => saveStorage?.Writable != false;
     internal bool CountSystemLaunch { get; init; } = true;
     private bool systemFrozen;
     private Action<string>? scanInput;
@@ -60,10 +62,23 @@ public partial class GameWindow
 
     private async Task InitializeSystemServicesAsync(bool usesFiles)
     {
+        saveStorage = await Task.Run(() => GameStartupDiagnostics.CheckStorage(saves.DirectoryPath), blockFlowLifetime.Token);
+        if (!saveStorage.Writable)
+        {
+            QueueOutput("Сохранения: " + saveStorage.Message);
+            if (!closed) Notify(saveStorage.Message);
+        }
+        if (saves.LegacyImportError is { } importError) QueueOutput("Старые сохранения не перенесены. " + importError);
         systemServices = new(project, saves);
         systemConsent = new(systemServices.ConsentDirectory);
         if (CountSystemLaunch && !preview)
-            await Task.Run(systemServices.RecordLaunch, blockFlowLifetime.Token);
+        {
+            try { await Task.Run(systemServices.RecordLaunch, blockFlowLifetime.Token); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                QueueOutput("Не удалось обновить счётчик запусков в persistent. " + error.Message);
+            }
+        }
         if (usesFiles) await AskForFileAccessAsync(blockFlowLifetime.Token);
     }
 
@@ -102,6 +117,9 @@ public partial class GameWindow
             return SystemReply.Failure("Игрок запретил доступ к файловой системе.");
         switch (call.Operation)
         {
+            case "save_checkpoint" when !SaveStorageWritable:
+                QueueOutput("Именованный слот пропущен. " + saveStorage!.Message);
+                return SystemReply.From(false);
             case "play_time": return SystemReply.From(ReadPlayTime() / 60d);
             case "persistent_clear":
                 bool confirmed = await OnGameThreadAsync(() => MessageBox.Show(this,

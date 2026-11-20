@@ -247,6 +247,7 @@ public sealed class ChoicePresentationTests
     public async Task EditorPreview_RejectsLockedChoiceWithoutRememberingIt_AndReplaysAvailableChoice()
     {
         using var fixture = new TempProject(); var graph = VisualScript.Create(); graph.FunctionName = "chapter";
+        fixture.Write("engine/state.json", """{"score":0}""");
         graph.Nodes[1].Kind = ScriptNodeKind.Choice; graph.Nodes[1].Options = [new() { Text = "Locked", Target = "end", Lock = new() { Variable = "score", ValueType = "number", Value = "0" } }, new() { Text = "Open", Target = "end" }];
         string path = fixture.Write("game/scenes/choice.knegraph", graph.Serialize()); var project = await fixture.LoadAsync();
         var target = new EditorSelection(path, graph.Compile(editorPreview: true), 1, "end", false, "chapter", false);

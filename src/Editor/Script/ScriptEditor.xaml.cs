@@ -157,6 +157,7 @@ public partial class ScriptEditor : UserControl
         updating = true;
         CodeEditor.Text = document.IsVisual ? "" : document.Code;
         CodeEditor.IsReadOnly = document.IsVisual;
+        ApplyLuaModeAppearance(System.IO.Path.GetExtension(document.FilePath).Equals(".lua", StringComparison.OrdinalIgnoreCase));
         CodeMode.IsEnabled = true;
         GraphMode.IsEnabled = document.IsVisual;
         GraphMode.ToolTip = document.IsVisual
@@ -215,6 +216,7 @@ public partial class ScriptEditor : UserControl
         CodeMode.IsEnabled = GraphMode.IsEnabled = SaveButton.IsEnabled = RunButton.IsEnabled =
             TestSceneButton.IsEnabled = MainSceneButton.IsEnabled = ExportButton.IsEnabled = CloseDocumentButton.IsEnabled = false;
         CodeMode.IsChecked = GraphMode.IsChecked = false;
+        ApplyLuaModeAppearance(false);
         CodeEditor.Visibility = GraphPanel.Visibility = Visibility.Collapsed;
         ExternalEditorButton.Visibility = Visibility.Collapsed;
         PropertiesPanel.IsEnabled = false;
