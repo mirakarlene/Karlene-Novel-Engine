@@ -16,8 +16,8 @@ public sealed class BlockLibraryTests
     public void Catalog_ContainsAllOldAndNewCommandsInOrderedGroups_AndPreservesConditionCategoryColors()
     {
         Assert.Equal(new[] { "Начало и конец", "Нарратив", "Логика", "Визуал", "Звук", "Потоки", "Вычисления", "Асинхронность", "Триггеры", "Конфигурации", "Мета и система", "Шейдеры", "Плагины" }, BlockLibrary.Groups.Select(group => group.Title));
-        // Custom Plugin entries are supplied by the active project, rather than the built-in catalog.
-        Assert.Equal(Enum.GetValues<ScriptNodeKind>().Where(kind => kind is not (ScriptNodeKind.Condition or ScriptNodeKind.Plugin)).Order(), BlockLibrary.Definitions.Select(entry => entry.Kind).Distinct().Order());
+        Assert.Equal(Enum.GetValues<ScriptNodeKind>().Where(kind => kind is not (ScriptNodeKind.Condition or ScriptNodeKind.Plugin or ScriptNodeKind.LuaBlock)).Order(), BlockLibrary.Definitions.Select(entry => entry.Kind).Distinct().Order());
+        Assert.Contains(VisualLuaCatalog.Definitions, entry => entry is { Kind: ScriptNodeKind.LuaBlock, LuaOperation: "raw", Color: "#000000" });
         Assert.Throws<ArgumentOutOfRangeException>(() => BlockLibrary.Create(ScriptNodeKind.Condition));
         Assert.Single(BlockLibrary.Definitions, entry => entry.Kind == ScriptNodeKind.Branching && entry.Group == "narrative");
         Assert.Single(BlockLibrary.Definitions, entry => entry.Kind == ScriptNodeKind.CompareVariables && entry.Group == "logic");

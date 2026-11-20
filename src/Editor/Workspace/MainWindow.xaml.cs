@@ -35,6 +35,7 @@ public partial class MainWindow : Window
         BehaviorSettingsPage.Content = GeneralSettingsPage.BehaviorPage;
         InitializeAutomation();
         SceneEditor.Saved += EditorSaved;
+        SceneEditor.LuaFileConverted += SceneEditor_LuaFileConverted;
         EditorTheme.Apply(this, settings.Theme);
         ThemeInput.ItemsSource = EditorTheme.Themes;
         WelcomeObjectInput.ItemsSource = WelcomeBubbles.Objects;
@@ -534,14 +535,16 @@ public partial class MainWindow : Window
         var dialog = new SaveFileDialog
         {
             Title = "Создать визуальную сцену", InitialDirectory = project.Path,
-            FileName = "scene", Filter = "Игровая блок-схема (*.knegraph)|*.knegraph|Шейдерная блок-схема (*.kneshader)|*.kneshader",
+            FileName = "scene", Filter = "Игровая блок-схема (*.knegraph)|*.knegraph|Шейдерная блок-схема (*.kneshader)|*.kneshader|Visual Lua (*.vlua)|*.vlua",
             DefaultExt = ".knegraph", AddExtension = true, OverwritePrompt = false
         };
         if (dialog.ShowDialog(this) != true) return;
         await RunOperationAsync(async () =>
         {
             string path = dialog.FileName;
-            path = ProjectShaderPaths.NewFile(project.Path, path, dialog.FilterIndex == 2 || ScriptDocument.IsShaderPath(path));
+            path = dialog.FilterIndex == 3 || ScriptDocument.IsVisualLuaPath(path)
+                ? PathSafety.EnsureInside(project.Path, Path.ChangeExtension(path, ".vlua"))
+                : ProjectShaderPaths.NewFile(project.Path, path, dialog.FilterIndex == 2 || ScriptDocument.IsShaderPath(path));
             await ScriptDocument.CreateVisualAsync(project.Path, path, lifetime.Token);
             await OpenProjectAsync(project.Path);
             await OpenScriptAsync(path);
@@ -553,12 +556,23 @@ public partial class MainWindow : Window
 
     private async void SceneEditor_ExternalEditorRequested(object? sender, EventArgs e)
     {
+        if (sender is ScriptEditor { SelectedRawLua: true } raw)
+        {
+            await RunOperationAsync(() => raw.EditRawLuaAsync(settings.EditorPath), "Открытие исходного кода…");
+            return;
+        }
         if (ActiveEditor.Document is not { IsVisual: false } document) return;
         await RunOperationAsync(async () =>
         {
             await ActiveEditor.SaveAsync();
             using (Process.Start(EditorLauncher.CreateStartInfo(settings.EditorPath, document.FilePath))) { }
         }, "Открытие внешнего редактора…");
+    }
+
+    private async void SceneEditor_LuaFileConverted(object? sender, EventArgs e)
+    {
+        if (currentProject is { } project)
+            await RunOperationAsync(() => OpenProjectAsync(project.Path), "Обновление списка файлов…");
     }
 
     private async void SceneEditor_MainSceneRequested(object? sender, EventArgs e)

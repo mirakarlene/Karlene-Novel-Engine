@@ -32,7 +32,7 @@ public partial class GameWindow
 
     private void FlushPreferences()
     {
-        if (!preferencesDirty) return;
+        if (!preferencesDirty || !SaveStorageWritable) return;
         string path = PathSafety.ResolveRelative(saves.DirectoryPath, "preferences.json");
         string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try

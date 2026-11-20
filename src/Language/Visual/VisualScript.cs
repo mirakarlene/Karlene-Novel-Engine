@@ -11,6 +11,9 @@ public sealed partial class VisualScript
 {
     /// <summary>Shader graphs use data ports and never export a Lua entry point.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool IsShader { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool IsVisualLua { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? LuaTrailingSource { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? LuaEncoding { get; set; }
     /// <summary>The persisted schema version; this editor supports version 1.</summary>
     public int Version { get; set; } = 1;
 
@@ -80,10 +83,14 @@ public sealed partial class VisualScript
         return JsonSerializer.Serialize(this, JsonOptions);
     }
 
-    private void ValidateStructure()
+    internal void ValidateStructure()
     {
         SetShaderContext();
         if (Version != 1) throw new InvalidDataException("Неподдерживаемая версия блок-схемы.");
+        if (IsVisualLua && IsShader || LuaTrailingSource != null && (!IsVisualLua || LuaTrailingSource.Length > 8 * 1024 * 1024))
+            throw new InvalidDataException("Некорректный формат Visual Lua.");
+        if (LuaEncoding != null && (!IsVisualLua || LuaEncoding is not ("utf8-bom" or "utf16-le" or "utf16-be" or "utf32-le" or "utf32-be")))
+            throw new InvalidDataException("Неизвестная кодировка исходного файла Lua.");
         if (!LuaSource.IsIdentifier(FunctionName)) throw new InvalidDataException("Имя функции блок-схемы: латинские буквы, цифры и _, без цифры в начале и ключевых слов Lua.");
         if (Nodes == null || Nodes.Count > 500) throw new InvalidDataException("Допускается не более 500 блоков.");
         if (Nodes.Count(node => node?.Kind == ScriptNodeKind.Initialization) > 1)
@@ -111,8 +118,15 @@ public sealed partial class VisualScript
             if (node.Text == null || node.Speaker == null || node.Path == null || node.Variable == null ||
                 node.Value == null || node.CompareVariable == null || node.Position == null || node.Channel == null || node.Target == null || node.IterationKey == null || node.Category == null || node.ScreenLayer == null || node.UiTarget == null || node.SpeakerId == null)
                 throw new InvalidDataException("Свойства блока не должны содержать null.");
-            if (node.Kind != ScriptNodeKind.Plugin && node.Category.Length != 0 && !BlockLibrary.BuiltInGroups.Any(group => group.Id == node.Category))
+            if (node.Kind is not (ScriptNodeKind.Plugin or ScriptNodeKind.LuaBlock) && node.Category.Length != 0 && !BlockLibrary.BuiltInGroups.Any(group => group.Id == node.Category))
                 throw new InvalidDataException("Неизвестная группа блока.");
+            if (IsVisualLua && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.LuaBlock) || !IsVisualLua && (node.Kind == ScriptNodeKind.LuaBlock || node.Lua != null))
+                Fail(node, "блоки Lua доступны только в .vlua");
+            if (node.Kind == ScriptNodeKind.LuaBlock && (node.Lua is not { Code: not null, Otherwise: not null, Close: not null } lua ||
+                string.IsNullOrEmpty(lua.Operation) || !VisualLuaCatalog.Blocks.TryGetValue(lua.Operation, out var spec) || spec.Group.Id != node.Category ||
+                (long)lua.Code.Length + lua.Otherwise.Length + lua.Close.Length > 8 * 1024 * 1024 ||
+                !spec.HasBody && node.True != null || spec.Shape != LuaBlockShape.If && (node.False != null || lua.ElseIf)))
+                Fail(node, "неверные поля или порты блока Visual Lua");
             if (!ShaderLibrary.CanPlace(node.Kind, IsShader)) throw new InvalidDataException("Блоки «Шейдеры» размещаются только в .kneshader, кроме контейнера; игровые блоки — в .knegraph.");
             if (ShaderLibrary.IsShader(node.Kind)) ShaderLibrary.ValidateNode(node);
             if (new[] { node.Duration, node.OffsetX, node.OffsetY, node.Amount, node.Minimum, node.Maximum, node.Opacity }.Any(v => !double.IsFinite(v)))
@@ -160,7 +174,8 @@ public sealed partial class VisualScript
 
     /// <summary>Validates the graph and generates its named Lua function using the KNE API.</summary>
     /// <returns>Lua source for a complete, acyclic scene.</returns>
-    public string Compile(bool editorPreview = false, bool subsystem = false) => IsShader ? throw new InvalidDataException("Шейдер нельзя выполнять как сценарий Lua.") : CompileCore(editorPreview, subsystem);
+    public string Compile(bool editorPreview = false, bool subsystem = false) => IsVisualLua ? VisualLua.Compile(this) :
+        IsShader ? throw new InvalidDataException("Шейдер нельзя выполнять как сценарий Lua.") : CompileCore(editorPreview, subsystem);
 
     private void DetachLegacyComments()
     {
@@ -250,7 +265,7 @@ public enum ScriptNodeKind
     MinimizeGame, FullscreenGame, WindowedGame, OpenBrowser, ClipboardWrite, ClipboardRead,
     Screenshot, FileRead, FileWrite, PathExists, FileSize, FileList,
     DirectoryCreate, ProjectPath, FreezeScan, DeviceInfo, ShowFps,
-    Initialization, ReverseDialogue, Watermark, ShowInput, GlobalTimer, BuildInfo, ConnectFont
+    Initialization, ReverseDialogue, Watermark, ShowInput, GlobalTimer, BuildInfo, ConnectFont, LuaBlock
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -308,6 +323,7 @@ public sealed class ScriptNode
 
     /// <summary>Catalog group selected by the author; empty keeps the legacy group mapping.</summary>
     public string Category { get; set; } = "";
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public LuaBlockSettings? Lua { get; set; }
 
     /// <summary>Horizontal canvas position in unscaled device-independent pixels.</summary>
     public double X { get; set; }
@@ -422,6 +438,7 @@ public sealed class ScriptNode
     public string Title => Kind == ScriptNodeKind.Plugin ? Plugin?.Title ?? "Блок плагина" : Kind switch
     {
         ScriptNodeKind.RemoveLayerShaders => "Удалить шейдер с слоя", ScriptNodeKind.RemoveAllShaders => "Удалить все шейдеры",
+        ScriptNodeKind.LuaBlock when Lua?.Operation is { } operation && VisualLuaCatalog.Blocks.TryGetValue(operation, out var lua) => lua.Title,
         _ when ShaderLibrary.IsShader(Kind) => Kind == ScriptNodeKind.ShaderContainer && Path.Length > 0 ? System.IO.Path.GetFileName(Path) : ShaderLibrary.Get(Kind).Title,
         ScriptNodeKind.Start => "Начало", ScriptNodeKind.Dialogue => "Реплика", ScriptNodeKind.Choice => "Выбор", ScriptNodeKind.TimedChoice => "Выбор с таймером",
         _ when LogicCompiler.IsLogic(Kind) => LogicCompiler.Label(Kind),
@@ -464,6 +481,13 @@ public sealed class ScriptNode
     /// <returns>Labels and optional destination identifiers in display order.</returns>
     public IEnumerable<(string Label, string? Target)> Outputs()
     {
+        if (Kind == ScriptNodeKind.LuaBlock && Lua?.Operation is { } operation && VisualLuaCatalog.Blocks.TryGetValue(operation, out var lua))
+        {
+            if (lua.HasBody) yield return (lua.Shape == LuaBlockShape.If ? "Если" : "Тело", True);
+            if (lua.Shape == LuaBlockShape.If) yield return ("Иначе", False);
+            yield return ("Далее", Next);
+            yield break;
+        }
         if (Kind == ScriptNodeKind.Plugin) { foreach (var port in Options) yield return (port.Text, port.Target); yield break; }
         if (ShaderLibrary.IsData(this)) { foreach (string output in ShaderLibrary.Get(Kind).Outputs) yield return (output, null); yield break; }
         if (Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.SendFlow or ScriptNodeKind.Comment or ScriptNodeKind.Initialization || SystemBlocks.EndsSession(Kind)) yield break;
@@ -502,7 +526,13 @@ public sealed class ScriptNode
         if (input is < 0 or >= 20) throw new ArgumentOutOfRangeException(nameof(input));
         if (target != null && input > 0) (TargetInputs ??= [])[index] = input;
         else TargetInputs?.Remove(index);
-        if (Kind == ScriptNodeKind.Plugin) Options[index].Target = target;
+        if (Kind == ScriptNodeKind.LuaBlock && Lua is { } lua && VisualLuaCatalog.Blocks[lua.Operation].HasBody)
+        {
+            if (index == 0) True = target;
+            else if (index == 1 && VisualLuaCatalog.Blocks[lua.Operation].Shape == LuaBlockShape.If) False = target;
+            else Next = target;
+        }
+        else if (Kind == ScriptNodeKind.Plugin) Options[index].Target = target;
         else if (Kind == ScriptNodeKind.TextInput)
         {
             if (index == 0) Next = target;

@@ -205,14 +205,14 @@ public sealed class FrameCatalog
     private static IEnumerable<Candidate> Discover(ProjectInfo project, GameScripts? scripts, EditorPreviewSource? editorSource)
     {
         var files = scripts?.Files ?? ProjectLoader.EnumerateFiles(project.Path, CancellationToken.None).Files
-            .Where(path => ScriptDocument.IsCodePath(path) || ScriptDocument.IsVisualPath(path))
+            .Where(ScriptDocument.IsExecutablePath)
             .OrderBy(path => Path.GetRelativePath(project.Path, path), StringComparer.Ordinal)
             .Select(path =>
             {
                 path = PathSafety.EnsureInside(project.Path, path);
                 string relative = Path.GetRelativePath(project.Path, path).Replace('\\', '/');
                 bool overridden = editorSource != null && editorSource.RelativePath(project.Path).Equals(relative, StringComparison.OrdinalIgnoreCase);
-                string source = overridden ? editorSource!.Source : ScriptProtection.ReadText(path);
+                string source = overridden ? editorSource!.Source : VisualLua.ReadProjectSource(path);
                 return new GameScript(relative, source, null,
                     ScriptDocument.IsVisualPath(path) && !overridden ? VisualScript.Parse(source) : null);
             }).ToArray();

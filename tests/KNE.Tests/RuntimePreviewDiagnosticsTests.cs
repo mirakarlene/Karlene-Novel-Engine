@@ -102,6 +102,7 @@ public sealed class RuntimePreviewDiagnosticsTests
     public async Task Worker_StreamsGlobalsAndCallerLocals_AndReturnsAfterFailedTransition()
     {
         using var fixture = new TempProject();
+        fixture.Write("engine/state.json", """{"score":0}""");
         fixture.Write("game/scenes/main.krl", """
             function main()
                 local caller_value = 42

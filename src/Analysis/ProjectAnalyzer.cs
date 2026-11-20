@@ -83,13 +83,14 @@ public static class ProjectAnalyzer
         {
             token.ThrowIfCancellationRequested();
             string path = Path.GetRelativePath(root, file).Replace('\\', '/');
-            bool code = ScriptDocument.IsCodePath(file), graph = ScriptDocument.IsVisualPath(file), shader = ScriptDocument.IsShaderPath(file);
+            bool code = ScriptDocument.IsCodePath(file) || ScriptDocument.IsVisualLuaPath(file), graph = ScriptDocument.IsVisualPath(file), shader = ScriptDocument.IsShaderPath(file);
             bool config = path.StartsWith("engine/", StringComparison.OrdinalIgnoreCase) && Path.GetExtension(file).Equals(".json", StringComparison.OrdinalIgnoreCase);
             if (!code && !graph && !shader && !config) continue;
             try
             {
                 if (new FileInfo(file).Length > SourceLimit) { Add("KNE004", path, null, "Файл превышает допустимые 8 МБ."); continue; }
                 string text = await File.ReadAllTextAsync(file, token).ConfigureAwait(false);
+                if (ScriptDocument.IsVisualLuaPath(file)) text = VisualScript.Parse(text).Compile();
                 if (shader)
                 {
                     try { var compiled = ShaderGraphCompiler.Compile(VisualScript.Parse(text), root, file); _ = compiled.ToHlsl(); }
@@ -324,7 +325,7 @@ public static class ProjectAnalyzer
     {
         try
         {
-            string full = PathSafety.ResolveRelative(root, resource);
+            string full = PathSafety.EnsureInside(root, VisualLua.ResolveTwin(PathSafety.ResolveRelative(root, resource)));
             if (!File.Exists(full)) findings.Add(new(ProjectDiagnosticSeverity.Warning, "KNE302", path, line, "Не найден ресурс с буквальным путём: " + resource, block));
         }
         catch (Exception error) when (error is ArgumentException or IOException or UnauthorizedAccessException)

@@ -103,6 +103,7 @@ public partial class ScriptEditor
         ApplyProperties();
         var graph = Document.Graph;
         var pasted = VisualScript.Parse(json);
+        if (pasted.IsVisualLua != graph.IsVisualLua) throw new InvalidDataException("Блоки Visual Lua можно вставлять только в .vlua.");
         if (pasted.Nodes.Any(node => !ShaderLibrary.CanPlace(node.Kind, graph.IsShader))) throw new InvalidDataException("Шейдерные блоки можно вставлять только в .kneshader, кроме контейнера и плагинов.");
         pasted.Nodes.RemoveAll(node => node.Kind == ScriptNodeKind.Start);
         if (graph.InitPriority != null && pasted.InitPriority != null)

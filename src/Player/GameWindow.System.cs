@@ -14,6 +14,9 @@ public partial class GameWindow
     private GameSystemServices? systemServices;
     private GameSystemConsent? systemConsent;
     private Task systemInitialization = Task.CompletedTask;
+    private GameStorageStatus? saveStorage;
+    private string? startupStorageNotice;
+    private bool SaveStorageWritable => saveStorage?.Writable != false;
     internal bool CountSystemLaunch { get; init; } = true;
     private bool systemFrozen;
     private Action<string>? scanInput;
@@ -60,10 +63,32 @@ public partial class GameWindow
 
     private async Task InitializeSystemServicesAsync(bool usesFiles)
     {
+        var storage = await Task.Run(() => GameStartupDiagnostics.SelectStorage(project, saves.DirectoryPath), blockFlowLifetime.Token);
+        saveStorage = storage.Effective;
+        if (storage.Effective.Directory != storage.Requested.Directory)
+        {
+            saves = new GameSaveStore(project.Path, storage.Effective.Directory);
+            LoadPreferences();
+            ContinueButton.IsEnabled = saves.Exists("auto") || saves.Exists("quick");
+            UpdateScreenButtons();
+        }
+        if (!storage.Requested.Writable)
+        {
+            startupStorageNotice = storage.Requested.Message + (saveStorage.Writable ? " Игра использует папку сохранений в LocalAppData." : "");
+            QueueOutput("Сохранения: " + startupStorageNotice);
+            if (!closed) Notify(startupStorageNotice);
+        }
+        if (saves.LegacyImportError is { } importError) QueueOutput("Старые сохранения не перенесены. " + importError);
         systemServices = new(project, saves);
         systemConsent = new(systemServices.ConsentDirectory);
         if (CountSystemLaunch && !preview)
-            await Task.Run(systemServices.RecordLaunch, blockFlowLifetime.Token);
+        {
+            try { await Task.Run(systemServices.RecordLaunch, blockFlowLifetime.Token); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                QueueOutput("Не удалось обновить счётчик запусков в persistent. " + error.Message);
+            }
+        }
         if (usesFiles) await AskForFileAccessAsync(blockFlowLifetime.Token);
     }
 
@@ -102,6 +127,9 @@ public partial class GameWindow
             return SystemReply.Failure("Игрок запретил доступ к файловой системе.");
         switch (call.Operation)
         {
+            case "save_checkpoint" when !SaveStorageWritable:
+                QueueOutput("Именованный слот пропущен. " + saveStorage!.Message);
+                return SystemReply.From(false);
             case "play_time": return SystemReply.From(ReadPlayTime() / 60d);
             case "persistent_clear":
                 bool confirmed = await OnGameThreadAsync(() => MessageBox.Show(this,

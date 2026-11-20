@@ -50,13 +50,21 @@ public interface IGameSession : IAsyncDisposable
 public sealed class GameSaveStore
 {
     public string DirectoryPath { get; }
+    internal string? LegacyImportError { get; }
     private readonly string projectPath;
 
     public GameSaveStore(string projectPath, string? storageDirectory = null, string? legacyDirectory = null)
     {
         this.projectPath = PathSafety.NormalizeDirectory(projectPath);
         DirectoryPath = storageDirectory == null ? PerformanceSettingsStore.LoadProject(projectPath).ResolveSavesPath(projectPath) : PathSafety.NormalizeDirectory(storageDirectory);
-        if ((legacyDirectory != null || storageDirectory == null) && !File.Exists(Path.Combine(DirectoryPath, ".legacy-import-complete"))) ImportLegacySlots(legacyDirectory ?? LegacyDirectory(projectPath));
+        if ((legacyDirectory != null || storageDirectory == null) && !File.Exists(Path.Combine(DirectoryPath, ".legacy-import-complete")))
+        {
+            try { ImportLegacySlots(legacyDirectory ?? LegacyDirectory(projectPath)); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+                LegacyImportError = error.Message;
+            }
+        }
     }
 
     /// <summary>Locates save slots created by versions that stored progress in the user profile.</summary>

@@ -172,6 +172,7 @@ public sealed partial class LuaRuntime : IGameSession
             end
             """, "KNE API");
         lua.DoString(RuntimeDiagnosticsLua.Source, "KNE diagnostics");
+        InitializeProjectDiagnostics();
         lua.DoString(SceneRuntimeLua.Source, "KNE scene scheduler");
         lua.DoString(CalculationRuntimeLua.Source, "KNE calculations");
         InitializeLogic();
@@ -250,9 +251,9 @@ public sealed partial class LuaRuntime : IGameSession
     /// <summary>Canonicalizes a project scene path for the coroutine scheduler's per-session cache.</summary>
     public string ResolveScenePath(string relative)
     {
-        string path = PathSafety.ResolveRelative(project.Path, relative);
-        if (!ScriptDocument.IsCodePath(path) && !ScriptDocument.IsVisualPath(path))
-            throw new ArgumentException("Сцена должна быть Lua, KRL или .knegraph.");
+        string path = PathSafety.EnsureInside(project.Path, VisualLua.ResolveTwin(PathSafety.ResolveRelative(project.Path, relative)));
+        if (!ScriptDocument.IsExecutablePath(path))
+            throw new ArgumentException("Сцена должна быть Lua, Visual Lua, KRL или .knegraph.");
         if (!File.Exists(path)) throw new FileNotFoundException("Сцена не найдена: " + relative, path);
         return Path.GetRelativePath(project.Path, path).Replace('\\', '/').ToUpperInvariant();
     }
@@ -266,7 +267,7 @@ public sealed partial class LuaRuntime : IGameSession
             return script.Graph?.Compile(editorPreview: editorSource?.StepCommands == true) ?? FrameCatalog.Instrument(script.Path, script.Source);
         }
         string path = PathSafety.ResolveRelative(project.Path, ResolveScenePath(relative));
-        string code = ScriptProtection.ReadText(path);
+        string code = VisualLua.ReadProjectSource(path);
         return ScriptDocument.IsVisualPath(path) ? VisualScript.Parse(code).Compile() : LuaSource.Prepare(code);
     }
 

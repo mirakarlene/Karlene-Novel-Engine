@@ -62,6 +62,7 @@ public sealed class ProjectPerformanceSettings
     /// <summary>Profile selecting two bounded audio output buffers per channel.</summary>
     public string AudioBuffer { get; set; } = "balanced";
     public string SavesPath { get; set; } = "saves";
+    public string UnavailableSaves { get; set; } = "read_only";
     /// <summary>New projects store persistent in local saves. The old saves value still opens existing storage.</summary>
     public string PersistentLocation { get; set; } = "local";
     public string ConsoleMode { get; set; } = "embedded";
@@ -75,6 +76,8 @@ public sealed class ProjectPerformanceSettings
         Graphics.Validate();
         if (PersistentLocation is not ("saves" or "appdata" or "local"))
             throw new InvalidDataException("Хранилище persistent: saves, appdata или local.");
+        if (UnavailableSaves is not ("read_only" or "appdata"))
+            throw new InvalidDataException("Режим недоступных сохранений: read_only или appdata.");
         if (ConsoleMode is not ("embedded" or "window" or "terminal"))
             throw new InvalidDataException("Неизвестный режим консоли.");
         ConsoleHotkey = GameConsoleShortcut.Normalize(ConsoleHotkey);

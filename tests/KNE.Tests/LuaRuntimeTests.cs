@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.IO;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using Xunit;
 
 namespace KNE.Tests;
@@ -67,20 +69,67 @@ public sealed class LuaRuntimeTests
     }
 
     [Fact]
-    public async Task Start_NewProject_PrintsInitializationAndMainDialogueInOrder()
+    public async Task Start_NewProject_PrintDiagnosticsBeforeDialogueAndSupportARepeatCheck()
     {
         using var fixture = new TempProject();
         var output = new ConcurrentQueue<string>();
         await using var runtime = new LuaRuntime(await fixture.LoadAsync(), output.Enqueue);
         await runtime.StartAsync();
+        Assert.Equal("Диагностика KNE — Новелла с пробелами", output.First());
+        Assert.Contains(output, line => line.StartsWith("Точка входа: game/scenes/main.krl", StringComparison.Ordinal));
+        Assert.Contains("Сохранения: Папка доступна для записи.", output);
         Assert.Equal(new[]
         {
-            "Игра инициализирована!",
             "Добро пожаловать! Это базовая сцена.",
             "Игрок: Нажмите «Далее» или пробел, чтобы продолжить."
-        }, output.ToArray());
-        await runtime.ProcessCommandAsync("Привет мир");
-        Assert.Equal("Игрок: Привет мир", output.Last());
+        }, output.TakeLast(2));
+        await runtime.ProcessCommandAsync("diagnostics");
+        Assert.Equal(2, output.Count(line => line.StartsWith("Диагностика KNE", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task Start_NewProject_DiagnosesUnavailableSaveDirectoryAndStillRunsTheMainScene()
+    {
+        using var fixture = new TempProject();
+        string blocked = fixture.Write("blocked-save-path.txt", "keep");
+        await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, new() { SavesPath = "blocked-save-path.txt" });
+        var output = new ConcurrentQueue<string>();
+        await using var runtime = new LuaRuntime(await fixture.LoadAsync(), output.Enqueue);
+        await runtime.StartAsync();
+
+        Assert.Contains(output, line => line.StartsWith("Сохранения: Не удалось записать проверочный файл", StringComparison.Ordinal));
+        Assert.Contains("Добро пожаловать! Это базовая сцена.", output);
+        Assert.Equal("keep", File.ReadAllText(blocked));
+        Assert.Empty(Directory.GetFiles(fixture.ProjectPath, ".kne-write-check-*", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public void StorageProbe_DistinguishesWindowsAccessDenialFromAnAvailableDirectory()
+    {
+        using var fixture = new TempProject();
+        var directory = Directory.CreateDirectory(Path.Combine(fixture.ProjectPath, "probe-storage"));
+        using var identity = WindowsIdentity.GetCurrent();
+        var restricted = directory.GetAccessControl();
+        var denial = new FileSystemAccessRule(identity.User!, FileSystemRights.CreateFiles, AccessControlType.Deny);
+        restricted.AddAccessRule(denial);
+        directory.SetAccessControl(restricted);
+        try
+        {
+            var blocked = GameStartupDiagnostics.CheckStorage(directory.FullName);
+            Assert.False(blocked.Writable);
+            Assert.Equal("access_denied", blocked.Code);
+            Assert.Empty(directory.EnumerateFileSystemInfos());
+        }
+        finally
+        {
+            restricted.RemoveAccessRuleSpecific(denial);
+            directory.SetAccessControl(restricted);
+        }
+
+        var restored = GameStartupDiagnostics.CheckStorage(directory.FullName);
+        Assert.True(restored.Writable);
+        Assert.Equal("ok", restored.Code);
+        Assert.Empty(directory.EnumerateFileSystemInfos());
     }
 
     [Fact]

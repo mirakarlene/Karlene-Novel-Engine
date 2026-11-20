@@ -21,7 +21,7 @@ internal sealed class PluginHost : IDisposable
             paths.Add(PluginFailure.Invoke(path, "Чтение манифеста", () =>
             {
                 PathSafety.EnsureInside(directory, path);
-                return PathSafety.ResolveRelative(directory, PluginMetadata.ReadManifest(path).Source);
+                return PathSafety.EnsureInside(directory, VisualLua.ResolveTwin(PathSafety.ResolveRelative(directory, PluginMetadata.ReadManifest(path).Source)));
             }));
         }
         return paths;
@@ -65,8 +65,9 @@ internal sealed class PluginHost : IDisposable
                 var manifest = PluginMetadata.ReadManifest(path);
                 PluginApi.Id(manifest.Id);
                 if (!ids.Add(manifest.Id)) throw new InvalidDataException("Повторный ID плагина: " + manifest.Id);
-                string source = PathSafety.ResolveRelative(Api.ProjectDirectory, manifest.Source);
-                if (Path.GetExtension(source).ToLowerInvariant() is not (".cs" or ".lua")) throw new InvalidDataException("Расширение требует исходный .cs или .lua до 8 МБ.");
+                string source = PathSafety.EnsureInside(Api.ProjectDirectory, VisualLua.ResolveTwin(PathSafety.ResolveRelative(Api.ProjectDirectory, manifest.Source)));
+                if (!ScriptDocument.IsLuaPath(source) && !Path.GetExtension(source).Equals(".cs", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Расширение требует исходный .cs, .lua или .vlua до 8 МБ.");
                 if (loadedSources.Add(source)) LoadSource(source, manifest.Source, context);
                 return true;
             });
@@ -81,13 +82,14 @@ internal sealed class PluginHost : IDisposable
         });
     private void LoadSourceCore(string source, string diagnosticPath, Func<IPluginContext> context)
     {
-        if (source.EndsWith(".lua", StringComparison.OrdinalIgnoreCase))
+        if (ScriptDocument.IsLuaPath(source))
         {
-            if (Api.Engine is LuaRuntime runtime) runtime.LoadLuaPluginManifest(diagnosticPath, ScriptProtection.ReadText(source));
+            string code = VisualLua.ReadProjectSource(source);
+            if (Api.Engine is LuaRuntime runtime) runtime.LoadLuaPluginManifest(diagnosticPath, code);
             else
             {
                 editorLua ??= new NLua.Lua(); editorLua.State.Encoding = System.Text.Encoding.UTF8;
-                new LuaPluginModule(Api, editorLua).Install(); LuaExecutionPolicy.Apply(editorLua, policy); editorLua.DoString(ScriptProtection.ReadText(source), "@" + diagnosticPath);
+                new LuaPluginModule(Api, editorLua).Install(); LuaExecutionPolicy.Apply(editorLua, policy); editorLua.DoString(code, "@" + diagnosticPath);
             }
             return;
         }

@@ -68,23 +68,39 @@ public static class ProjectCreator
                 -- Главная сцена. KRL использует синтаксис Lua.
                 function main()
                     d(nil, "Добро пожаловать! Это базовая сцена.")
-                    d(player_name, "Нажмите «Далее» или пробел, чтобы продолжить.")
+                    d("Игрок", "Нажмите «Далее» или пробел, чтобы продолжить.")
                 end
                 """);
             File.WriteAllText(Path.Combine(staging, "game", "scripts", "gamelogic.lua"), """
-                -- Для смены приоритета добавьте init(-10) первым оператором; меньшие числа загружаются раньше.
-                player_name = "Игрок"
-                state.score = state.score or 0
-                print("Игра инициализирована!")
+                -- Отчёт о запуске: вход в сценарий, запись сохранений и среда выполнения.
+                local function print_diagnostics()
+                    local report = project_diagnostics()
+                    print("Диагностика KNE — " .. report.project)
+                    print("Точка входа: " .. (report.entry or "не определена") .. " · файлов сценария: " .. report.files)
+                    print("Среда: " .. report.environment .. " · " .. report.process_architecture .. " / " .. report.os_architecture)
+                    print("Сохранения: " .. report.saves.message)
+                    if report.saves.available_bytes then
+                        print("Доступно байт: " .. report.saves.available_bytes)
+                    end
+                    if report.persistent.directory ~= report.saves.directory then
+                        print("Глобальные данные: " .. report.persistent.message)
+                    end
+                    for _, warning in ipairs(report.warnings) do print("Предупреждение: " .. warning) end
+                end
+
+                print_diagnostics()
+
                 function process_command(command)
-                    d(player_name, command)
+                    if command == "diagnostics" then print_diagnostics()
+                    else print("Для повторной проверки введите diagnostics.") end
                 end
                 """);
             File.WriteAllText(Path.Combine(staging, "README.txt"), $$"""
                 Проект: {{projectName}}
                 Точки входа задаются в project.json.
                 engine/*.json — окно, оформление, меню и начальное состояние; см. engine/README.txt.
-                game/scripts/gamelogic.lua — инициализация и process_command(command).
+                game/scripts/gamelogic.lua — стартовый отчёт о состоянии проекта. Команда diagnostics повторяет проверку.
+                Проверка записи использует отдельный временный файл в папке сохранений. Отчёт учитывает рекомендации Microsoft и Valve и модель качества ISO/IEC 25010.
                 {{mainScene}} — главная сцена с функцией main().
                 game/shaders — шейдерные файлы .kneshader; подключайте контейнером в нужном месте сценария.
                 Основной способ: {{(authoringMode == ProjectAuthoringMode.Visual ? "визуальные блок-схемы; откройте main.knegraph и редактируйте связанные блоки" : "традиционный код; откройте main.krl и редактируйте функцию main()")}}.

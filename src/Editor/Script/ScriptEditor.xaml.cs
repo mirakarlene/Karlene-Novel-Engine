@@ -51,6 +51,14 @@ public partial class ScriptEditor : UserControl
         if (Document == null) return null;
         ApplyProperties();
         var graph = Document.Graph;
+        if (graph?.IsVisualLua == true)
+        {
+            var lines = new Dictionary<string, int>(StringComparer.Ordinal);
+            string source = VisualLua.Compile(graph, lines);
+            int luaLine = Selected is { } node ? lines.GetValueOrDefault(node.Id, 1) : 1;
+            string? luaFunction = LuaSource.Functions(source).LastOrDefault(item => item.Line <= luaLine)?.Name;
+            return new(Document.FilePath, source, luaLine, null, false, luaFunction);
+        }
         if (graph != null)
         {
             string source = graph.Compile(editorPreview: !sceneTest);
@@ -157,16 +165,18 @@ public partial class ScriptEditor : UserControl
         updating = true;
         CodeEditor.Text = document.IsVisual ? "" : document.Code;
         CodeEditor.IsReadOnly = document.IsVisual;
+        bool luaFile = ScriptDocument.IsLuaPath(document.FilePath);
+        ApplyLuaModeAppearance(luaFile);
         CodeMode.IsEnabled = true;
-        GraphMode.IsEnabled = document.IsVisual;
-        GraphMode.ToolTip = document.IsVisual
+        GraphMode.IsEnabled = document.IsVisual || luaFile;
+        GraphMode.ToolTip = luaFile && !document.IsVisual ? "Преобразовать файл в .vlua" : document.IsVisual
             ? null
             : "Произвольный Lua/KRL не преобразуется в блоки. Создайте визуальную сцену.";
-        ExportButton.IsEnabled = document.IsVisual;
+        ExportButton.IsEnabled = document.IsVisual && !luaFile;
         SaveButton.IsEnabled = RunButton.IsEnabled = TestSceneButton.IsEnabled = MainSceneButton.IsEnabled = CloseDocumentButton.IsEnabled = true;
         bool shader = document.Graph?.IsShader == true;
         FunctionNameInput.IsEnabled = !shader; RunButton.Content = shader ? "Предпросмотр шейдера" : "Предпросмотр фрейма";
-        FunctionLabel.Visibility = FunctionNameInput.Visibility = shader ? Visibility.Collapsed : Visibility.Visible;
+        FunctionLabel.Visibility = FunctionNameInput.Visibility = shader || luaFile ? Visibility.Collapsed : Visibility.Visible;
         ExportButton.Content = shader ? "Экспорт GLSL / HLSL…" : "Копия как KRL…";
         TestSceneButton.IsEnabled = MainSceneButton.IsEnabled = !shader;
         if (document.IsVisual)
@@ -215,6 +225,7 @@ public partial class ScriptEditor : UserControl
         CodeMode.IsEnabled = GraphMode.IsEnabled = SaveButton.IsEnabled = RunButton.IsEnabled =
             TestSceneButton.IsEnabled = MainSceneButton.IsEnabled = ExportButton.IsEnabled = CloseDocumentButton.IsEnabled = false;
         CodeMode.IsChecked = GraphMode.IsChecked = false;
+        ApplyLuaModeAppearance(false);
         CodeEditor.Visibility = GraphPanel.Visibility = Visibility.Collapsed;
         ExternalEditorButton.Visibility = Visibility.Collapsed;
         PropertiesPanel.IsEnabled = false;
@@ -297,9 +308,15 @@ public partial class ScriptEditor : UserControl
         PreviewRequested?.Invoke(this, EventArgs.Empty);
     }
 
-    private void Mode_Changed(object sender, RoutedEventArgs e)
+    private async void Mode_Changed(object sender, RoutedEventArgs e)
     {
         if (updating || Document == null) return;
+        if (ScriptDocument.IsLuaPath(Document.FilePath))
+        {
+            if (Document.IsVisual && ReferenceEquals(sender, CodeMode) || !Document.IsVisual && ReferenceEquals(sender, GraphMode))
+                await ConvertLuaModeAsync();
+            return;
+        }
         Guard(() =>
         {
             ApplyProperties();
@@ -465,7 +482,7 @@ public partial class ScriptEditor : UserControl
 
     private void ApplyProperties(bool repaint = true)
     {
-        if (Document?.Graph is { } graph && FunctionNameInput.Text.Trim() != graph.FunctionName)
+        if (Document?.Graph is { IsVisualLua: false } graph && FunctionNameInput.Text.Trim() != graph.FunctionName)
         {
             var renamed = VisualScript.Parse(graph.Serialize());
             renamed.FunctionName = FunctionNameInput.Text.Trim();
@@ -543,6 +560,7 @@ public partial class ScriptEditor : UserControl
 
     private string Summary(ScriptNode node) => node.Kind switch
     {
+        ScriptNodeKind.LuaBlock => node.Lua?.Code.Trim() ?? "",
         _ when ShaderLibrary.IsShader(node.Kind) => node.Kind == ScriptNodeKind.ShaderContainer ? node.Path : node.Kind == ScriptNodeKind.ShaderTexture ? "Цель: " + node.Shader?.Target + " " + node.Shader?.Screen : ShaderLibrary.Get(node.Kind).Description,
         _ when CalculationCompiler.IsCalculation(node.Kind) => "state." + node.Variable + " ← " + (node.Kind == ScriptNodeKind.Formula ? node.Calculation?.FormulaName : node.Calculation?.A),
         ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue or ScriptNodeKind.ReverseDialogue => (node.Speaker.Length == 0 ? "" : node.Speaker + ": ") + node.Text,

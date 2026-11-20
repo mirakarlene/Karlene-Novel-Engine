@@ -4,7 +4,7 @@ using System.Text;
 namespace KNE;
 
 /// <summary>A project-confined code or visual document with atomic saves and conflict detection.</summary>
-public sealed class ScriptDocument
+public sealed partial class ScriptDocument
 {
     private string savedContent;
     private readonly string root;
@@ -35,7 +35,8 @@ public sealed class ScriptDocument
         if (IsGraphPath(path))
         {
             Graph = VisualScript.Parse(content);
-            if (Graph.IsShader != IsShaderPath(path)) throw new InvalidDataException("Формат графа должен соответствовать расширению .knegraph / .kneshader.");
+            if (Graph.IsShader != IsShaderPath(path) || Graph.IsVisualLua != IsVisualLuaPath(path))
+                throw new InvalidDataException("Тип схемы должен соответствовать расширению файла.");
             savedContent = Graph.Serialize();
         }
 
@@ -52,7 +53,10 @@ public sealed class ScriptDocument
     /// <summary>Recognizes dedicated GPU data-flow graphs.</summary>
     public static bool IsShaderPath(string path) => Path.GetExtension(path).Equals(".kneshader", StringComparison.OrdinalIgnoreCase);
     /// <summary>Recognizes either editable visual document without treating shaders as game scripts.</summary>
-    public static bool IsGraphPath(string path) => IsVisualPath(path) || IsShaderPath(path);
+    public static bool IsGraphPath(string path) => IsVisualPath(path) || IsShaderPath(path) || IsVisualLuaPath(path);
+    public static bool IsVisualLuaPath(string path) => Path.GetExtension(path).Equals(".vlua", StringComparison.OrdinalIgnoreCase);
+    public static bool IsLuaPath(string path) => Path.GetExtension(path).Equals(".lua", StringComparison.OrdinalIgnoreCase) || IsVisualLuaPath(path);
+    public static bool IsExecutablePath(string path) => IsCodePath(path) || IsVisualPath(path) || IsVisualLuaPath(path);
 
     /// <summary>Recognizes manually editable scenario source extensions.</summary>
     /// <param name="path">A filename or path.</param>
@@ -69,7 +73,7 @@ public sealed class ScriptDocument
     {
         path = PathSafety.EnsureInside(root, path);
         if (!IsGraphPath(path) && !IsCodePath(path))
-            throw new ArgumentException("Редактор поддерживает .lua, .krl, .knegraph и .kneshader.");
+            throw new ArgumentException("Редактор поддерживает .lua, .vlua, .krl, .knegraph и .kneshader.");
         if (new FileInfo(path).Length > 8 * 1024 * 1024) throw new InvalidDataException("Сценарий больше 8 МБ.");
         string content = await File.ReadAllTextAsync(path, cancellationToken);
         return new ScriptDocument(root, path, content);
@@ -85,6 +89,12 @@ public sealed class ScriptDocument
     {
         path = PathSafety.EnsureInside(root, path);
         if (!IsGraphPath(path)) throw new ArgumentException("Выберите расширение .knegraph или .kneshader.");
+        if (IsVisualLuaPath(path))
+        {
+            string luaContent = VisualLua.ParseSource("").Serialize();
+            await WriteNewAsync(root, path, luaContent, cancellationToken);
+            return new ScriptDocument(root, path, luaContent);
+        }
         if (IsShaderPath(path))
         {
             string shaderContent = ShaderGraphCompiler.Create().Serialize();
@@ -146,6 +156,12 @@ public sealed class ScriptDocument
     public Task ExportAsync(string path, CancellationToken cancellationToken = default)
     {
         if (Graph == null) throw new InvalidOperationException("Экспорт доступен для блок-схем.");
+        if (Graph.IsVisualLua)
+        {
+            if (!Path.GetExtension(path).Equals(".lua", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("Выберите расширение .lua.");
+            return WriteNewAsync(root, path, Graph.Compile(), cancellationToken);
+        }
         if (Graph.IsShader)
         {
             var shader = ShaderGraphCompiler.Compile(Graph, root, FilePath);

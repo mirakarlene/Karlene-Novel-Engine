@@ -11,13 +11,13 @@ public static class StartupScripts
     public static IReadOnlyList<StartupScript> Plan(ProjectInfo project)
     {
         string primary = project.InitScriptPath;
-        var paths = project.Files.Where(f => ScriptDocument.IsCodePath(f.FilePath) || ScriptDocument.IsVisualPath(f.FilePath)).Select(f => f.FilePath)
+        var paths = project.Files.Where(f => ScriptDocument.IsExecutablePath(f.FilePath)).Select(f => f.FilePath)
             .Append(primary).Distinct(StringComparer.OrdinalIgnoreCase);
         var scripts = new List<StartupScript>();
         foreach (string candidate in paths)
         {
             string path = PathSafety.EnsureInside(project.Path, candidate);
-            string source = ScriptProtection.ReadText(path);
+            string source = VisualLua.ReadProjectSource(path);
             (int? Priority, string Source) declaration;
             try
             {

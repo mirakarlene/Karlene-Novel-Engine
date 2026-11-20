@@ -3,6 +3,36 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:KNE"
              PreviewKeyDown="Editor_KeyDown" PreviewKeyUp="Editor_KeyUp" Background="{DynamicResource Editor.Surface}">
+    <UserControl.Resources>
+        <Style x:Key="LuaModeSegment" TargetType="RadioButton">
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Segment" Background="Transparent" BorderBrush="Transparent" BorderThickness="1"
+                                CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Segment" Property="Background" Value="{DynamicResource Editor.Hover}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Segment" Property="Background" Value="{DynamicResource KNE.AccentBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Segment" Property="BorderBrush" Value="{DynamicResource Editor.Text}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Segment" Property="Opacity" Value=".56"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <StackPanel Grid.Row="0" Margin="0,0,0,8">
@@ -72,10 +102,12 @@
         <Grid Grid.Row="2" Margin="0,8,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <TextBlock x:Name="EditorStatus" TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,0,8,0"/>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom">
-                <RadioButton x:Name="CodeMode" Content="Код" GroupName="EditorMode" Margin="8,0" Checked="Mode_Changed" IsEnabled="False"/>
-                <RadioButton x:Name="GraphMode" Content="Блок-схема" GroupName="EditorMode" Checked="Mode_Changed" IsEnabled="False"/>
-            </StackPanel>
+            <Border x:Name="ModeTrack" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="CodeMode" Content="Код" GroupName="EditorMode" Margin="8,0" Checked="Mode_Changed" IsEnabled="False"/>
+                    <RadioButton x:Name="GraphMode" Content="Блок-схема" GroupName="EditorMode" Checked="Mode_Changed" IsEnabled="False"/>
+                </StackPanel>
+            </Border>
         </Grid>
         <Border x:Name="CharacterPickerOverlay" Grid.RowSpan="3" Panel.ZIndex="50" Background="#AA101827" Visibility="Collapsed">
             <Border Width="430" MaxHeight="560" Background="{DynamicResource Editor.Surface}" CornerRadius="12" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center">

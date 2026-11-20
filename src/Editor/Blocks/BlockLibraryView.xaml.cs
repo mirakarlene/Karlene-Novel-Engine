@@ -15,6 +15,8 @@ public partial class BlockLibraryView : UserControl
     private Task saving = Task.CompletedTask;
     private readonly List<Task> preferenceEdits = [];
     private Func<ScriptNodeKind, bool> canAdd = _ => true;
+    private bool luaMode;
+    private IEnumerable<BlockDefinition> Definitions => luaMode ? VisualLuaCatalog.Definitions : BlockLibrary.Definitions;
     private int page;
     /// <summary>Raised when a selectable command is chosen.</summary>
     public event EventHandler<BlockDefinition>? BlockSelected;
@@ -42,13 +44,16 @@ public partial class BlockLibraryView : UserControl
     }
 
     /// <summary>Resets search and page while loading preferences without blocking the UI thread.</summary>
-    public void Open(Func<ScriptNodeKind, bool> availability)
+    public void Open(Func<ScriptNodeKind, bool> availability, bool visualLua = false)
     {
         ArgumentNullException.ThrowIfNull(availability);
+        luaMode = visualLua;
         canAdd = availability; BlockSearch.Clear(); page = 0;
         ScrollViewer.SetVerticalScrollBarVisibility(BlockGroups, PluginCatalog.Current?.Groups.Count > 0 ? ScrollBarVisibility.Hidden : ScrollBarVisibility.Disabled);
-        BlockGroups.ItemsSource = new[] { new BlockGroup("favorites", "Избранное", "#B58B20"), new BlockGroup("recent", "Недавнее", "#697384") }.Concat(BlockLibrary.Groups).ToArray();
-        BlockGroups.SelectedItem = BlockGroups.Items.Cast<BlockGroup>().First(group => group.Id == (availability(ScriptNodeKind.ShaderOutput) && !availability(ScriptNodeKind.Dialogue) ? "shaders" : "narrative"));
+        BlockGroups.ItemsSource = new[] { new BlockGroup("favorites", "Избранное", "#B58B20"), new BlockGroup("recent", "Недавнее", "#697384") }
+            .Concat(luaMode ? VisualLuaCatalog.Groups : BlockLibrary.Groups).ToArray();
+        BlockGroups.SelectedItem = BlockGroups.Items.Cast<BlockGroup>().First(group => group.Id == (luaMode ? "lua_flow" :
+            availability(ScriptNodeKind.ShaderOutput) && !availability(ScriptNodeKind.Dialogue) ? "shaders" : "narrative"));
         Render(); BlockSearch.Focus(); _ = LoadPreferencesAsync();
     }
 
@@ -103,12 +108,12 @@ public partial class BlockLibraryView : UserControl
     private void NextPage_Click(object sender, RoutedEventArgs e) { page++; Render(); }
     private IReadOnlyList<BlockDefinition> Entries(BlockGroup group)
     {
-        var lookup = BlockLibrary.Definitions.ToDictionary(BlockLibraryPreferences.Key, StringComparer.Ordinal);
+        var lookup = Definitions.ToDictionary(BlockLibraryPreferences.Key, StringComparer.Ordinal);
         IEnumerable<BlockDefinition> entries = group.Id switch
         {
             "favorites" => preferences.Favorites.Where(lookup.ContainsKey).Select(key => lookup[key]),
             "recent" => preferences.Recent.Where(lookup.ContainsKey).Select(key => lookup[key]),
-            _ => BlockLibrary.Definitions.Where(entry => entry.Group == group.Id)
+            _ => Definitions.Where(entry => entry.Group == group.Id)
         };
         string search = BlockSearch.Text.Trim();
         return entries.Where(entry => entry.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
@@ -154,10 +159,11 @@ public partial class BlockLibraryView : UserControl
         button.SetResourceReference(BackgroundProperty, "Editor.Surface");
         BlockAccessibility.Decorate(button, entry.Group, presentation =>
         {
-            Color tint = entry.Kind == ScriptNodeKind.Start ? Colors.White : entry.Kind == ScriptNodeKind.End ? Colors.Black : presentation.Color;
+            Color tint = entry.LuaOperation != null ? color : entry.Kind == ScriptNodeKind.Start ? Colors.White : entry.Kind == ScriptNodeKind.End ? Colors.Black : presentation.Color;
             CategoryHover.SetColor(button, new SolidColorBrush(tint));
-            CategoryHover.SetInk(button, entry.Kind == ScriptNodeKind.Start ? Brushes.Black : entry.Kind == ScriptNodeKind.End ? Brushes.White : new SolidColorBrush(presentation.Foreground));
-            button.BorderBrush = new SolidColorBrush(entry.Kind == ScriptNodeKind.Start ? Colors.White : entry.Kind == ScriptNodeKind.End ? Colors.Black : presentation.Color);
+            CategoryHover.SetInk(button, entry.Kind == ScriptNodeKind.Start || entry.Group is "lua_flow" or "lua_functions" ? Brushes.Black :
+                entry.Kind == ScriptNodeKind.End || entry.LuaOperation != null ? Brushes.White : new SolidColorBrush(presentation.Foreground));
+            button.BorderBrush = new SolidColorBrush(tint);
             button.BorderThickness = presentation.BorderWidth == 3 ? new Thickness(3, 5, 3, 3) : new Thickness(0, 5, 0, 1);
             if (entry.Group == "shaders" && BlockAccessibility.GetMode(button) == "normal") { var rainbow = ShaderRainbow.Create(button); button.BorderBrush = rainbow; CategoryHover.SetColor(button, rainbow); CategoryHover.SetInk(button, Brushes.Black); }
             text.Children.OfType<TextBlock>().First().Margin = new Thickness(0, 0, presentation.Badges ? 52 : 25, 8);

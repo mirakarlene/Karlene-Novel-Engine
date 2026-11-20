@@ -50,7 +50,7 @@ public sealed record GameErrorReport(string ProjectName, string ProjectTitle, st
     private static (string? File, int? Line) FindLocation(ProjectInfo project, string message)
     {
         string normalized = message.Replace('\\', '/');
-        foreach (var file in project.Files.Where(f => ScriptDocument.IsCodePath(f.FilePath) || ScriptDocument.IsVisualPath(f.FilePath)))
+        foreach (var file in project.Files.Where(f => ScriptDocument.IsExecutablePath(f.FilePath)))
         {
             string relative = Path.GetRelativePath(project.Path, file.FilePath).Replace('\\', '/');
             var match = Regex.Match(normalized, Regex.Escape(relative) + @":(\d+)\b");
