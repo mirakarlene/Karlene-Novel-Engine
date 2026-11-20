@@ -52,9 +52,14 @@ public partial class ScriptEditor : UserControl
         ApplyProperties();
         var graph = Document.Graph;
         if (graph != null)
-            return new(Document.FilePath, graph.Compile(editorPreview: !sceneTest), 1,
-                Selected?.Id ?? graph.Nodes.Single(n => n.Kind == ScriptNodeKind.Start).Id,
+        {
+            string source = graph.Compile(editorPreview: !sceneTest);
+            if (graph.InitPriority is int priority)
+                source = source.Insert(source.IndexOf('\n') + 1, FormattableString.Invariant($"init({priority})\n"));
+            return new(Document.FilePath, source, 1,
+                Selected is { Kind: not ScriptNodeKind.Initialization } node ? node.Id : graph.Nodes.Single(n => n.Kind == ScriptNodeKind.Start).Id,
                 Selected?.PreviewAnimation == true, graph.FunctionName);
+        }
         int line = 1;
         for (int index = 0; index < Math.Min(CodeEditor.CaretIndex, Document.Code.Length); index++)
             if (Document.Code[index] == '\n') line++;
@@ -540,7 +545,7 @@ public partial class ScriptEditor : UserControl
     {
         _ when ShaderLibrary.IsShader(node.Kind) => node.Kind == ScriptNodeKind.ShaderContainer ? node.Path : node.Kind == ScriptNodeKind.ShaderTexture ? "Цель: " + node.Shader?.Target + " " + node.Shader?.Screen : ShaderLibrary.Get(node.Kind).Description,
         _ when CalculationCompiler.IsCalculation(node.Kind) => "state." + node.Variable + " ← " + (node.Kind == ScriptNodeKind.Formula ? node.Calculation?.FormulaName : node.Calculation?.A),
-        ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue => (node.Speaker.Length == 0 ? "" : node.Speaker + ": ") + node.Text,
+        ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue or ScriptNodeKind.ReverseDialogue => (node.Speaker.Length == 0 ? "" : node.Speaker + ": ") + node.Text,
         ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.Comment or ScriptNodeKind.Title or ScriptNodeKind.ConsoleWrite => node.Text,
         ScriptNodeKind.RegisterCharacter or ScriptNodeKind.UpdateCharacter => node.Character == null ? "Профиль не настроен" : node.Character.Name + " · " + node.Character.Id,
         ScriptNodeKind.SetSpeaker => "Спикер по умолчанию: " + node.SpeakerId,
@@ -614,7 +619,7 @@ public partial class ScriptEditor : UserControl
         if (destination.Plugin is { Inputs.Length: 0 }) throw new InvalidOperationException("У блока нет входных портов.");
         if (ShaderLibrary.IsData(graph.Nodes.Single(n => n.Id == connection.Id)) != ShaderLibrary.IsData(destination))
         { pendingConnection = null; EditorStatus.Text = "Команды плагинов и порты значений шейдера соединяются отдельно."; return; }
-        if (destination.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment || target == connection.Id)
+        if (destination.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment or ScriptNodeKind.Initialization || target == connection.Id)
             throw new InvalidOperationException("Выберите другой блок, кроме «Начала».");
         Remember();
         graph.Nodes.Single(n => n.Id == connection.Id).SetOutput(connection.Port, target);

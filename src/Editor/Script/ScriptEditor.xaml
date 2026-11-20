@@ -38,9 +38,15 @@
                 <Border x:Name="GraphScroll" Grid.Row="1" Focusable="True" ClipToBounds="True" Background="{DynamicResource Editor.Canvas}"
                         PreviewMouseRightButtonDown="GraphPan_Start" PreviewMouseRightButtonUp="GraphPan_End"
                         PreviewMouseMove="GraphPan_Move" LostMouseCapture="GraphPan_LostCapture" PreviewMouseWheel="Canvas_MouseWheel">
-                    <Canvas x:Name="GraphCanvas" Width="1600" Height="1000" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top">
-                        <Canvas.RenderTransform><TransformGroup><ScaleTransform x:Name="CanvasScale"/><TranslateTransform x:Name="CanvasPan"/></TransformGroup></Canvas.RenderTransform>
-                    </Canvas>
+                    <Grid>
+                        <Border x:Name="GraphTexture" IsHitTestVisible="False" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                Width="{Binding Width, ElementName=GraphCanvas}" Height="{Binding Height, ElementName=GraphCanvas}"
+                                RenderTransform="{Binding RenderTransform, ElementName=GraphCanvas}"/>
+                        <Border x:Name="GraphGrid" IsHitTestVisible="False" Visibility="Collapsed"/>
+                        <Canvas x:Name="GraphCanvas" Width="1600" Height="1000" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top">
+                            <Canvas.RenderTransform><TransformGroup><ScaleTransform x:Name="CanvasScale"/><TranslateTransform x:Name="CanvasPan"/></TransformGroup></Canvas.RenderTransform>
+                        </Canvas>
+                    </Grid>
                 </Border>
             </Grid>
             <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch"/>

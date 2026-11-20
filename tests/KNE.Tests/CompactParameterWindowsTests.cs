@@ -71,8 +71,8 @@ public sealed class CompactParameterWindowsTests
             var fixedBounds = new FrameworkElement[] { save, cancel, window.PreviousPage, pageLabel, window.NextPage }.ToDictionary(input => input, input => Bounds(input, root));
             FrameworkElement[][] pages =
             [
-                [window.GraphicsInput.ApiInput, window.GraphicsInput.VSyncInput, window.GraphicsInput.FpsInput, window.GraphicsInput.MsaaInput, window.TextureInput, window.ResolutionInput, window.CustomWidthInput, window.CustomHeightInput, window.PaletteInput, window.GraphicsInput.LimitCacheInput, window.GraphicsInput.CacheLimitInput, window.AsyncTasksInput, window.AudioBufferInput, window.PreloadInput],
-                [window.SavesInput, window.PersistentLocationInput, window.RollbackInput, window.AutosaveInput, window.AutosaveActionsInput, window.MenuMusicInput, window.CornerInput, window.DangerZone],
+                [window.GraphicsInput.ApiInput, window.GraphicsInput.VSyncInput, window.GraphicsInput.FpsInput, window.GraphicsInput.MsaaInput, window.TextureInput, window.ResolutionInput, window.CustomWidthInput, window.CustomHeightInput, window.PaletteInput, window.GraphicsInput.LimitCacheInput, window.GraphicsInput.CacheLimitInput, window.AsyncTasksInput, window.AudioBufferInput, window.PreloadInput, window.ConsoleModeInput, window.ConsoleHotkeyInput],
+                [window.SavesInput, window.PersistentLocationInput, window.RollbackInput, window.AutosaveInput, window.AutosaveActionsInput, window.MenuMusicInput, window.CornerInput, window.DeleteCrashReportsButton, window.DangerZone],
                 [window.BuildInput.TestMode, window.BuildInput.TestPath, window.BuildInput.ReleaseMode, window.BuildInput.ReleasePath, window.BuildInput.Saves, window.FileSystemInput],
                 [window.TitleInput, window.BuildInput.Author, window.BuildInput.Team, window.BuildInput.Version, window.MetadataInput["game_info.description"], window.MetadataInput["metadata.icon"], window.MetadataInput["metadata.default_language"]],
                 [window.MetadataInput["metadata.created_date"], window.MetadataInput["metadata.kne_version"], window.MetadataInput["entry_points.main_scene"], window.MetadataInput["entry_points.init_script"], window.MetadataInput.Additional]
@@ -84,7 +84,7 @@ public sealed class CompactParameterWindowsTests
                 Assert.Equal(page, window.Page); Layout(window); Capture(root, $"project-compact-{width}-{page + 1}"); Assert.Empty(Logical(root).OfType<ScrollViewer>());
                 Assert.Equal($"{page + 1} / 5", pageLabel.Text);
                 Assert.Equal(page > 0, window.PreviousPage.IsEnabled); Assert.Equal(page < pages.Length - 1, window.NextPage.IsEnabled);
-                if (page < 2) AssertStackedCardsFit(root);
+                if (page < 2) AssertStackedCardsFit(root, page == 0 ? 3 : 2);
                 if (page == 3) for (int field = 1; field < pages[page].Length; field++)
                     Assert.True(Bounds(pages[page][field - 1], root).Bottom <= Bounds(pages[page][field], root).Top, "Metadata fields must follow one another in a single vertical column.");
                 AssertVisibleInputs(root, pages[page]);
@@ -164,15 +164,20 @@ public sealed class CompactParameterWindowsTests
             Assert.False(Rect.Intersect(Bounds(inputs[left], root), Bounds(inputs[right], root)) is { Width: > .5, Height: > .5 }, $"Overlapping fields: {inputs[left].GetType().Name}/{inputs[left].Name} and {inputs[right].GetType().Name}/{inputs[right].Name}");
     }
     static ContentControl PageViewport(FrameworkElement root) => Logical(root).OfType<ContentControl>().Single(control => control.GetType() == typeof(ContentControl));
-    static void AssertStackedCardsFit(FrameworkElement root)
+    static void AssertStackedCardsFit(FrameworkElement root, int count)
     {
         var viewport = PageViewport(root); var stack = Assert.IsType<StackPanel>(viewport.Content);
-        Assert.Equal(Orientation.Vertical, stack.Orientation); Assert.Equal(2, stack.Children.Count);
+        Assert.Equal(Orientation.Vertical, stack.Orientation); Assert.Equal(count, stack.Children.Count);
         var cards = stack.Children.Cast<FrameworkElement>().ToArray();
         foreach (var card in cards) FitsPage(card, root);
-        Rect first = Bounds(cards[0], viewport), second = Bounds(cards[1], viewport);
-        Assert.True(first.Bottom <= second.Top, $"Cards overlap vertically: {first}, {second}");
-        Assert.Equal(first.Left, second.Left, 1); Assert.Equal(first.Right, second.Right, 1);
+        Rect first = Bounds(cards[0], viewport), previous = first;
+        foreach (var card in cards.Skip(1))
+        {
+            Rect current = Bounds(card, viewport);
+            Assert.True(previous.Bottom <= current.Top, $"Cards overlap vertically: {previous}, {current}");
+            Assert.Equal(first.Left, current.Left, 1); Assert.Equal(first.Right, current.Right, 1);
+            previous = current;
+        }
         Assert.True(first.Left > 0 && first.Right < viewport.ActualWidth, $"Cards must retain side margins: {first}, viewport {viewport.RenderSize}");
         Assert.Equal(first.Left, viewport.ActualWidth - first.Right, 1);
     }

@@ -105,7 +105,7 @@ public partial class ScriptEditor
             string[] shaderInputs = ShaderLibrary.IsData(node) ? ShaderLibrary.Get(node.Kind).Inputs : node.Plugin?.Inputs ?? [];
             int rows = Math.Max(1, Math.Max(outputs.Length, shaderInputs.Length));
             for (int i = 0; i < rows; i++) ports.RowDefinitions.Add(new RowDefinition());
-            if (!ShaderLibrary.IsData(node) && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.Comment or ScriptNodeKind.Plugin))
+            if (!ShaderLibrary.IsData(node) && node.Kind is not (ScriptNodeKind.Start or ScriptNodeKind.Comment or ScriptNodeKind.Initialization or ScriptNodeKind.Plugin))
             {
                 var input = CreateGraphPort(node, null, portBrush, "Вход");
                 input.HorizontalAlignment = HorizontalAlignment.Left; input.Margin = new Thickness(-12, 0, 0, 0);
@@ -279,7 +279,7 @@ public partial class ScriptEditor
         int input = encodedInput is < 0 ? -encodedInput.Value - 1 : 0;
         var from = graph.Nodes.FirstOrDefault(n => n.Id == source);
         var to = graph.Nodes.FirstOrDefault(n => n.Id == target);
-        if (from == null || to == null || to.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment ||
+        if (from == null || to == null || to.Kind is ScriptNodeKind.Start or ScriptNodeKind.Comment or ScriptNodeKind.Initialization ||
             output < 0 || output >= from.Outputs().Count() || input >= (to.Plugin?.Inputs.Length ?? 1)) return false;
         ApplyProperties(repaint: false);
         from = Document!.Graph!.Nodes.Single(n => n.Id == source);

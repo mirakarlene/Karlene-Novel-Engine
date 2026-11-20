@@ -223,6 +223,7 @@
                                 </ItemsControl>
                                 <TextBlock Text="Отображение файлов проекта" Margin="0,12,0,7"/>
                                 <ComboBox x:Name="ProjectBrowserViewInput" SelectedIndex="0" SelectedValuePath="Tag"><ComboBoxItem Content="Плитки" Tag="tiles"/><ComboBoxItem Content="Таблица" Tag="table"/></ComboBox>
+                                <CheckBox x:Name="GraphGridInput" Content="Показывать сетку в редакторе блок-схем" Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>
                     </Grid>

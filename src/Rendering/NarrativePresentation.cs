@@ -41,11 +41,11 @@ internal static class NarrativePresentation
             int count = Math.Clamp((int)Math.Ceiling(elements.Length * (1 - story.EraseProgress)), 0, elements.Length);
             visible = elements.Take(count).Sum(element => element.Length);
         }
-        InlineTextPresentation.Apply(text, story.Text, visible);
+        InlineTextPresentation.Apply(text, story.Text, visible, story.VisibleSuffix, preserveLayout: story.VisibleSuffix.HasValue);
         bool continuation = story.PresentationId > 0 && Equals(cache.SpokenFrame, story.PresentationId);
         if (story.PresentationId > 0) cache.SpokenFrame = story.PresentationId;
         else if (story.Kind == "dialogue") cache.SpokenFrame = story.Identity;
-        effects.Present(text, story.TextEffect, animate, cache.SpokenFrame, continuation || story.Kind is "text_pause" or "clear_text");
+        effects.Present(text, story.VisibleSuffix.HasValue ? null : story.TextEffect, animate, cache.SpokenFrame, continuation || story.Kind is "text_pause" or "clear_text");
     }
 
     private static Brush Brush(string value)

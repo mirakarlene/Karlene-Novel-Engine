@@ -154,7 +154,8 @@ public sealed class ScriptDocument
         }
         if (!Path.GetExtension(path).Equals(".krl", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Выберите расширение .krl.");
-        return WriteNewAsync(root, path, Graph.Compile(), cancellationToken);
+        string directive = Graph.InitPriority is int priority ? FormattableString.Invariant($"init({priority})\n") : "";
+        return WriteNewAsync(root, path, directive + Graph.Compile(), cancellationToken);
     }
 
     private static async Task WriteNewAsync(string root, string path, string content,

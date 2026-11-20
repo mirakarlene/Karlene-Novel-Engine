@@ -46,7 +46,7 @@ public partial class MainWindow
 
     private ScriptEditor CreateTabEditor()
     {
-        var editor = new ScriptEditor();
+        var editor = new ScriptEditor { ShowGraphGrid = settings.ShowGraphGrid };
         editor.Saved += EditorSaved;
         editor.BlockLibraryRequested += SceneEditor_BlockLibraryRequested;
         editor.TestSceneRequested += SceneEditor_TestSceneRequested;

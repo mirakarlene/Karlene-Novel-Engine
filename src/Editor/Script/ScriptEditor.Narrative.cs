@@ -12,7 +12,7 @@ public partial class ScriptEditor
     private string? characterPickerNode;
     private int characterPickerGeneration;
 
-    private static bool IsDialogue(ScriptNodeKind kind) => kind is ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue;
+    private static bool IsDialogue(ScriptNodeKind kind) => kind is ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue or ScriptNodeKind.ReverseDialogue;
     private static bool HasCharacterPicker(ScriptNodeKind kind) => IsDialogue(kind) || kind is ScriptNodeKind.SetSpeaker or ScriptNodeKind.UpdateCharacter;
 
     private void UpdateSpeakerReference()
@@ -24,6 +24,12 @@ public partial class ScriptEditor
 
     private void AddNarrativeFields(ScriptNode node)
     {
+        if (node.Kind == ScriptNodeKind.ReverseDialogue)
+        {
+            Check("RevealFromEndInput", "Раскрывать текст с конца", !node.RevealFromStart, (value, enabled) => value.RevealFromStart = !enabled);
+            Check("ReverseWordsInput", "Инвертировать порядок слов", node.ReverseWords, (value, enabled) => value.ReverseWords = enabled);
+            Check("ReverseLettersInput", "Инвертировать порядок букв", node.ReverseLetters, (value, enabled) => value.ReverseLetters = enabled);
+        }
         if (node.Kind is ScriptNodeKind.RegisterCharacter or ScriptNodeKind.UpdateCharacter)
         {
             var profile = node.Character ?? new CharacterProfile();

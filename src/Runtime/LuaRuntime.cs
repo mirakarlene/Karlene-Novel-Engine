@@ -138,7 +138,7 @@ public sealed partial class LuaRuntime : IGameSession
                                   "show_character", "hide_character", "play_music", "stop_music", "play_sound",
                                   "show_title", "hide_background", "move_visual", "animate_visual", "screen_shake",
                                   "screen_flash", "camera", "show_screen", "set_audio_channel", "play_audio", "stop_audio", "set_master_volume",
-                                  "clear_backgrounds", "clear_sprites", "configure_ui"}) do
+                                  "clear_backgrounds", "clear_sprites", "configure_ui", "show_fps", "show_input", "watermark", "connect_font"}) do
                 _G[name] = function(...)
                     local problem = kne_script_api(name, table.pack(...))
                     if problem ~= "" then error(problem, 2) end
@@ -510,9 +510,10 @@ public sealed partial class LuaRuntime : IGameSession
     private static string FrameSignature(StoryFrame frame)
     {
         string original = JsonSerializer.Serialize(new { frame.Kind, frame.Speaker, frame.Text, frame.Options, frame.Completed });
-        if (frame.Character is null && frame.TextEffect is null && frame.RemainingSeconds is null && frame.IsSkippable && frame.EraseProgress == 0 && frame.Input is null && frame.ChoiceOptions is null && frame.ChoiceTimer is null) return original;
+        if (frame.Character is null && frame.TextEffect is null && frame.RemainingSeconds is null && frame.IsSkippable && frame.EraseProgress == 0 && frame.Input is null && frame.ChoiceOptions is null && frame.ChoiceTimer is null && frame.VisibleSuffix is null) return original;
         string narrative = original + JsonSerializer.Serialize(new { frame.Character, frame.TextEffect, frame.RemainingSeconds, frame.IsSkippable, frame.EraseProgress });
         if (frame.Input != null) narrative += JsonSerializer.Serialize(new { frame.Input, frame.InputFeedback });
+        if (frame.VisibleSuffix != null) narrative += JsonSerializer.Serialize(frame.VisibleSuffix);
         return frame.ChoiceOptions is null && frame.ChoiceTimer is null ? narrative : narrative + JsonSerializer.Serialize(new { frame.ChoiceOptions, frame.ChoiceTimer });
     }
 
@@ -672,6 +673,19 @@ public sealed partial class LuaRuntime : IGameSession
         {
             switch (name)
             {
+                case "show_fps":
+                    if (arguments[1] is not bool fpsVisible)
+                        throw new ArgumentException("show_fps: укажите true или false.");
+                    lock (stateLock) visuals = visuals with { FpsVisible = fpsVisible };
+                    break;
+                case "show_input":
+                    if (arguments[1] is not bool inputVisible)
+                        throw new ArgumentException("Укажите true или false.");
+                    lock (stateLock) visuals = visuals with { InputVisible = inputVisible };
+                    break;
+                case "watermark": SetWatermark(Text(1)!, Text(2, true) ?? "top_right", arguments[3]); break;
+                case "global_timer": SetGlobalTimer(Text(1)!, Text(2, true) ?? "HH:mm:ss", arguments[3]); break;
+                case "connect_font": ConnectFont(Text(1)!, Text(2)!); break;
                 case "apply_shader": SetShader(Text(1)!, arguments[2] is not false, Text(3, true), Text(4, true), Text(5, true) ?? "startup"); break;
                 case "clear_layer_shaders": RemoveShaders(Text(1)!, Text(2)!, arguments[3] is true, Text(4, true) ?? "startup"); break;
                 case "clear_shaders": RemoveShaders(null, "", arguments[1] is true, Text(2, true) ?? "startup"); break;
@@ -694,7 +708,7 @@ public sealed partial class LuaRuntime : IGameSession
             }
             return "";
         }
-        catch (Exception ex) when (ex is IOException or ArgumentException or FormatException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or ArgumentException or FormatException or UnauthorizedAccessException or InvalidDataException)
         { return name + ": " + ex.Message; }
     }
 

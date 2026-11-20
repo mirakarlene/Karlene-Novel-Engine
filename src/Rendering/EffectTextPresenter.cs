@@ -22,6 +22,7 @@ public sealed class EffectTextPresenter : Canvas
     private readonly List<(string Text, Point Position, double Width)> layoutGlyphs = [];
     private readonly List<Brush> glyphColors = [];
     private readonly List<bool> glyphExplicitColors = [];
+    private readonly List<(Typeface Typeface, double Size)> glyphFonts = [];
     private ScrollViewer? scroll;
     private int firstVisible = -1, lastVisible = -1;
     private double lineHeight;
@@ -84,7 +85,8 @@ public sealed class EffectTextPresenter : Canvas
         text.Opacity = Visibility == Visibility.Visible && !IsEffectSuppressedForCapacity ? 0 : 1;
         var key = new LayoutSignature(text.Text, text.FontFamily.Source, text.FontSize, text.FontWeight,
             text.FontStyle, text.FontStretch, text.Foreground.ToString(), text.TextAlignment,
-            string.Join(";", text.Inlines.OfType<Run>().Select(run => run.Text.Length + ":" + run.Foreground)));
+            string.Join(";", text.Inlines.OfType<Run>().Select(run =>
+                $"{run.Text.Length}:{run.Foreground}:{run.FontFamily.BaseUri}:{run.FontFamily.Source}:{run.FontSize}:{run.FontWeight}:{run.FontStyle}:{run.FontStretch}")));
         if (layoutKey != key)
         {
             layoutKey = key; measuredWidth = double.NaN; InvalidateMeasure();
@@ -132,45 +134,52 @@ public sealed class EffectTextPresenter : Canvas
     private void BuildLayout(double width)
     {
         if (source is null) return;
-        measuredWidth = width; layoutGlyphs.Clear(); glyphColors.Clear(); glyphExplicitColors.Clear(); firstVisible = lastVisible = -1;
+        measuredWidth = width; layoutGlyphs.Clear(); glyphColors.Clear(); glyphExplicitColors.Clear(); glyphFonts.Clear(); firstVisible = lastVisible = -1;
         elements = TextElements(PlainText);
         var ranges = source.Inlines.OfType<Run>().ToArray();
         int range = 0, rangeEnd = ranges.Length == 0 ? 0 : ranges[0].Text.Length, textOffset = 0;
         double x = 0, y = 0;
         var typeface = new Typeface(source.FontFamily, source.FontStyle, source.FontWeight, source.FontStretch);
+        var fonts = ranges.Select(run => (new Typeface(run.FontFamily, run.FontStyle, run.FontWeight, run.FontStretch), run.FontSize)).ToArray();
         double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         lineHeight = new FormattedText("Mg", CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
             typeface, source.FontSize, source.Foreground, dpi).Height;
-        var advances = new Dictionary<string, double>(StringComparer.Ordinal);
-        double Advance(string element)
+        foreach (var (face, size) in fonts.Distinct())
+            lineHeight = Math.Max(lineHeight, new FormattedText("Mg", CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, face, size, source.Foreground, dpi).Height);
+        var advances = new Dictionary<(string Text, Typeface Font, double Size), double>();
+        var metrics = new (double Width, Brush Color, bool Explicit, Typeface Font, double Size)[elements.Length];
+        for (int i = 0; i < elements.Length; i++)
         {
-            if (!advances.TryGetValue(element, out double value))
+            while (range + 1 < ranges.Length && textOffset >= rangeEnd) rangeEnd += ranges[++range].Text.Length;
+            var (face, size) = range < fonts.Length ? fonts[range] : (typeface, source.FontSize);
+            string element = elements[i];
+            if (!advances.TryGetValue((element, face, size), out double value))
             {
                 value = new FormattedText(element, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
-                    typeface, source.FontSize, source.Foreground, dpi).WidthIncludingTrailingWhitespace;
-                advances[element] = value;
+                    face, size, source.Foreground, dpi).WidthIncludingTrailingWhitespace;
+                advances[(element, face, size)] = value;
             }
-            return value;
+            var run = range < ranges.Length ? ranges[range] : null;
+            metrics[i] = (value, run?.Foreground ?? source.Foreground, run != null && run.ReadLocalValue(TextElement.ForegroundProperty) != DependencyProperty.UnsetValue, face, size);
+            textOffset += element.Length;
         }
         var lines = new List<(int Start, int Count, double Width)>(); int start = 0;
         for (int elementIndex = 0; elementIndex < elements.Length; elementIndex++)
         {
             string element = elements[elementIndex];
-            while (range + 1 < ranges.Length && textOffset >= rangeEnd) rangeEnd += ranges[++range].Text.Length;
-            Brush color = range < ranges.Length ? ranges[range].Foreground : source.Foreground;
-            textOffset += element.Length;
+            var metric = metrics[elementIndex];
             if (element is "\n" or "\r" or "\r\n")
             {
                 lines.Add((start, layoutGlyphs.Count - start, x)); start = layoutGlyphs.Count; x = 0; y += lineHeight; continue;
             }
-            double advance = Advance(element);
+            double advance = metric.Width;
             // Match normal word wrapping, while still splitting a word longer than the available line.
             if (x > 0 && !string.IsNullOrWhiteSpace(element) && elementIndex > 0 && string.IsNullOrWhiteSpace(elements[elementIndex - 1]))
             {
                 double wordWidth = 0;
                 for (int wordIndex = elementIndex; wordIndex < elements.Length && !string.IsNullOrWhiteSpace(elements[wordIndex]); wordIndex++)
                 {
-                    wordWidth += Advance(elements[wordIndex]);
+                    wordWidth += metrics[wordIndex].Width;
                 }
                 if (wordWidth <= width && x + wordWidth > width)
                 {
@@ -182,8 +191,9 @@ public sealed class EffectTextPresenter : Canvas
                 lines.Add((start, layoutGlyphs.Count - start, x)); start = layoutGlyphs.Count; x = 0; y += lineHeight;
             }
             layoutGlyphs.Add((element, new Point(x, y), advance));
-            glyphColors.Add(color);
-            glyphExplicitColors.Add(range < ranges.Length && ranges[range].ReadLocalValue(TextElement.ForegroundProperty) != DependencyProperty.UnsetValue);
+            glyphColors.Add(metric.Color);
+            glyphExplicitColors.Add(metric.Explicit);
+            glyphFonts.Add((metric.Font, metric.Size));
             x += advance;
         }
         lines.Add((start, layoutGlyphs.Count - start, x));
@@ -237,12 +247,13 @@ public sealed class EffectTextPresenter : Canvas
         for (int i = first; i < last; i++)
         {
             var glyph = layoutGlyphs[i];
+            var (font, size) = glyphFonts[i];
             var animation = new GlyphAnimation { Original = glyph.Text, OriginalColor = glyphColors[i], HasInlineColor = glyphExplicitColors[i] };
             animations.Add(animation);
             var letter = new TextBlock
             {
-                Text = glyph.Text, Tag = glyph.Text, FontFamily = source.FontFamily, FontSize = source.FontSize, FontWeight = source.FontWeight,
-                FontStyle = source.FontStyle, FontStretch = source.FontStretch, Foreground = animation.OriginalColor,
+                Text = glyph.Text, Tag = glyph.Text, FontFamily = font.FontFamily, FontSize = size, FontWeight = font.Weight,
+                FontStyle = font.Style, FontStretch = font.Stretch, Foreground = animation.OriginalColor,
                 RenderTransformOrigin = new Point(.5, .5), RenderTransform = animation.Transform, IsHitTestVisible = false
             };
             letter.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));

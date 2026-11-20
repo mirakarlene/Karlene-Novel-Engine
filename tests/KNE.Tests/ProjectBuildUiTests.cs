@@ -54,8 +54,8 @@ public sealed class ProjectBuildUiTests
                 Assert.Equal(0, window.Page); Assert.False(window.PreviousPage.IsEnabled); Assert.True(window.NextPage.IsEnabled);
                 Assert.Equal("vm", window.BuildInput.Value.TestMode); Assert.Equal("self_contained", window.BuildInput.Value.ReleaseMode);
                 Click(window.NextPage); Assert.Equal(1, window.Page); window.SavesInput.Text = "draft/saves";
-                Assert.Equal("saves", window.PersistentLocationInput.SelectedValue);
-                Assert.Equal(new[] { "saves", "appdata", "local" }, window.PersistentLocationInput.Items.Cast<GraphicsOption<string>>().Select(option => option.Value));
+                Assert.Equal("local", window.PersistentLocationInput.SelectedValue);
+                Assert.Equal(new[] { "local", "appdata" }, window.PersistentLocationInput.Items.Cast<GraphicsOption<string>>().Select(option => option.Value));
                 window.PersistentLocationInput.SelectedValue = "appdata";
                 Click(window.NextPage); Assert.Equal(2, window.Page); Assert.Equal(Visibility.Visible, window.BuildInput.Visibility);
                 window.BuildInput.TestMode.SelectedValue = "remote_debug"; Assert.True(window.BuildInput.TestPath.IsEnabled);

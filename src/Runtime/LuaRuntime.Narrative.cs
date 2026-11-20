@@ -91,7 +91,18 @@ public sealed partial class LuaRuntime
             PresentationId = Convert.ToInt64(value["presentation_id"] ?? 0),
             RemainingSeconds = value["remaining"] is { } remaining ? Convert.ToDouble(remaining) : null,
             IsSkippable = value["skippable"] as bool? != false,
-            EraseProgress = value["erase_progress"] is { } progress ? Convert.ToDouble(progress) : 0
+            EraseProgress = value["erase_progress"] is { } progress ? Convert.ToDouble(progress) : 0,
+            VisibleSuffix = value["reveal_count"] is { } count
+                ? VisibleSuffix(value, Convert.ToInt32(count))
+                : value["reveal_visible"] is { } visible ? Convert.ToInt32(visible) : null
         };
+    }
+
+    private static int VisibleSuffix(LuaTable value, int count)
+    {
+        int start = Convert.ToInt32(value["reveal_from"]);
+        double duration = Convert.ToDouble(value["seconds"]);
+        double progress = Math.Clamp(1 - Convert.ToDouble(value["remaining"] ?? duration) / duration, 0, 1);
+        return start + (int)Math.Floor(progress * (count - start));
     }
 }

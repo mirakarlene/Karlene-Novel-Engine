@@ -39,6 +39,13 @@ namespace KNE
                 int exitCode = Task.Run(SyntaxCheckWorker.RunAsync).GetAwaiter().GetResult();
                 Shutdown(exitCode); return;
             }
+            if (e.Args.Length == 3 && e.Args[0] == "--game-console")
+            {
+                ShutdownMode = ShutdownMode.OnExplicitShutdown;
+                try { Shutdown(await GameTerminal.RunHelperAsync(e.Args[1], GameConsoleShortcut.Normalize(e.Args[2]))); }
+                catch (Exception error) { Trace.TraceError("Game console: {0}", error); Shutdown(1); }
+                return;
+            }
             if (e.Args.Length is 2 or 3 or 4 && e.Args[0] == "--lua-worker")
             {
                 int exitCode = Task.Run(() => LuaWorker.RunAsync(e.Args[1], e.Args.Length >= 3 ? e.Args[2] : null, e.Args.Length == 4 && e.Args[3] == "--preview")).GetAwaiter().GetResult();

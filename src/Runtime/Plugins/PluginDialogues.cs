@@ -14,7 +14,8 @@ public static class PluginDialogues
 {
     private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     private const int Limit = 16 * 1024 * 1024;
-    public static IReadOnlyList<PluginDialogue> Read(VisualScript graph) => graph.Nodes.Where(n => n.Kind is ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue)
+    public static IReadOnlyList<PluginDialogue> Read(VisualScript graph) => graph.Nodes.Where(n =>
+        n.Kind is ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue or ScriptNodeKind.ReverseDialogue)
         .Select(n => new PluginDialogue(n.Id, n.Speaker, n.Text)).ToArray();
     public static VisualScript Apply(VisualScript graph, IReadOnlyList<PluginDialogue> translation)
     {

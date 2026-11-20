@@ -42,7 +42,7 @@ public sealed class GameScripts
                 if (ScriptDocument.IsVisualPath(full) && !overridden)
                 {
                     var graph = VisualScript.Parse(source);
-                    files.Add(new(path, source, null, graph));
+                    files.Add(new(path, source, graph.InitPriority, graph));
                     functions.Add(new(graph.FunctionName, path, 1));
                 }
                 else

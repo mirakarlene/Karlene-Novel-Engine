@@ -20,7 +20,7 @@ public sealed partial class LuaRuntime
     {
         Register(nameof(InvokeSystemForLua), "kne_system_call");
         string globalFunctions = string.Join(",", SystemBlocks.All.Values
-            .Where(block => block.Function is not ("save_named" or "restart_game" or "exit_game" or "return_to_menu"))
+            .Where(block => block.Function is not ("save_named" or "restart_game" or "exit_game" or "return_to_menu") && !SystemBlocks.IsPresentation(block.Function))
             .Select(block => LuaQuote(block.Function)));
         lua!.DoString("local functions = {" + globalFunctions + "}\n" + """
             local host, compile = kne_system_call, load
@@ -42,6 +42,12 @@ public sealed partial class LuaRuntime
             function restart_game() kne_end('restart') end
             function exit_game() kne_end('exit') end
             function return_to_menu() kne_end('menu_reset') end
+            function global_timer(action, format)
+                local now = action == 'show' or action == 'reset'
+                local problem = kne_script_api('global_timer', {action, format, now and request('play_time') * 60 or 0})
+                if problem ~= '' then error(problem, 2) end
+                kne_editor_pause()
+            end
             function save_named(slot)
                 if type(slot) ~= 'string' then error('Нужно имя слота сохранения', 2) end
                 if not kne_interactive or not kne_scene_owned(coroutine.running()) then
@@ -59,7 +65,7 @@ public sealed partial class LuaRuntime
         {
             try
             {
-                if (!SystemBlocks.FunctionNames.Contains(operation) || operation == "save_named")
+                if (!SystemBlocks.FunctionNames.Contains(operation) || operation == "save_named" || SystemBlocks.IsPresentation(operation))
                     throw new InvalidOperationException("Неизвестная системная команда.");
                 int count = Convert.ToInt32(arguments["n"]);
                 if (count is < 0 or > 3) throw new ArgumentException("Слишком много аргументов системной команды.");

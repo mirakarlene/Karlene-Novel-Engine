@@ -224,9 +224,9 @@ public sealed class FrameCatalog
                 var lines = new Dictionary<string, int>(StringComparer.Ordinal);
                 try { lines = GraphLines(file.Graph.Compile(editorSource?.StepCommands == true)); }
                 catch (InvalidDataException) { }
-                foreach (var node in file.Graph.Nodes)
+                foreach (var node in file.Graph.Nodes.Where(node => node.Kind != ScriptNodeKind.Initialization))
                     yield return new(Key(file.Path, file.Graph.FunctionName, "node:" + node.Id), file.Path, file.Graph.FunctionName,
-                        2, lines.GetValueOrDefault(node.Id, 1), node.Id, node.Kind is ScriptNodeKind.Dialogue or ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue or ScriptNodeKind.TextInput);
+                        2, lines.GetValueOrDefault(node.Id, 1), node.Id, node.Kind is ScriptNodeKind.Dialogue or ScriptNodeKind.Choice or ScriptNodeKind.TimedChoice or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue or ScriptNodeKind.ReverseDialogue or ScriptNodeKind.TextInput);
                 continue;
             }
             if (ScriptDocument.IsVisualPath(file.Path) && file.Source.StartsWith("-- Сгенерировано из блок-схемы KNE.", StringComparison.Ordinal))

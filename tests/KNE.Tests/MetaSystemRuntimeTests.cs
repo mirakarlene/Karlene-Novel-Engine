@@ -222,18 +222,27 @@ public sealed class MetaSystemRuntimeTests
     }
 
     [Fact]
-    public void MetaCatalogueContainsAllThirtyThreeCommandsInTheYellowGroupBetweenConfigurationsAndShaders()
+    public void MetaCatalogueDescribesItsCommandsAndKeepsTheYellowGroupBetweenConfigurationsAndShaders()
     {
         string[] expected = ["persistent_set", "persistent_get", "persistent_has", "persistent_clear", "persistent_delete", "save_named", "save_exists", "save_read", "save_delete", "save_list", "real_time", "real_date", "play_time", "build_version", "launch_count", "restart_game", "exit_game", "return_to_menu", "minimize_game", "fullscreen_game", "windowed_game", "open_browser", "clipboard_write", "clipboard_read", "take_screenshot", "read_text_file", "write_text_file", "path_exists", "file_size", "list_files", "create_folder", "project_path", "freeze_and_scan"];
-        Assert.Equal(expected.Order(), SystemBlocks.All.Values.Select(block => block.Function).Order());
+        Assert.Equal(expected.Concat(["device_info", "show_fps", "show_input", "watermark", "global_timer", "build_info", "connect_font"]).Order(),
+            SystemBlocks.All.Values.Select(block => block.Function).Order());
         var groups = BlockLibrary.BuiltInGroups.ToArray(); int index = Array.FindIndex(groups, group => group.Id == "meta_system");
         Assert.True(index > 0 && index < groups.Length - 1); Assert.Equal("configurations", groups[index - 1].Id); Assert.Equal("shaders", groups[index + 1].Id); Assert.Equal("#E3B52D", groups[index].Color);
-        Assert.Equal(33, BlockLibrary.Definitions.Count(block => block.Group == "meta_system"));
+        Assert.Equal(SystemBlocks.All.Count + 2, BlockLibrary.Definitions.Count(block => block.Group == "meta_system"));
+        var console = Assert.Single(BlockLibrary.Definitions, block => block.Kind == ScriptNodeKind.ConsoleWrite);
+        Assert.Equal("meta_system", console.Group);
+        var preferences = new BlockLibraryPreferences { Favorites = ["narrative/ConsoleWrite"], Recent = ["narrative/ConsoleWrite"] };
+        preferences.Normalize();
+        Assert.Equal("meta_system/ConsoleWrite", Assert.Single(preferences.Favorites));
+        Assert.Equal("meta_system/ConsoleWrite", Assert.Single(preferences.Recent));
         foreach (var (kind, command) in SystemBlocks.All)
         {
             var definition = Assert.Single(BlockLibrary.Definitions, block => block.Kind == kind); Assert.Equal("meta_system", definition.Group); Assert.Equal(groups[index].Color, definition.Color);
+            Assert.EndsWith(".", definition.Description);
+            Assert.DoesNotContain(command.Function + "(", definition.Description);
             var node = BlockLibrary.Create(kind); node.Id = "system"; node.Variable = "result";
-            node.SystemArguments = command.Parameters.ToDictionary(key => key, key => new LogicOperand(key == "seconds" ? "number" : "string", key == "seconds" ? "2.5" : SystemBlocks.Default(key)));
+            node.SystemArguments = command.Parameters.ToDictionary(key => key, key => key == "seconds" ? new LogicOperand("number", "2.5") : SystemBlocks.DefaultOperand(key));
             var graph = new VisualScript { FunctionName = "main", Nodes = [new() { Id = "start", Kind = ScriptNodeKind.Start, Next = node.Id }, node] };
             string encoded = graph.Serialize(); var decoded = VisualScript.Parse(encoded); Assert.Equal(encoded, decoded.Serialize());
             string compiled = SystemBlocks.Compile(decoded.Nodes.Single(block => block.Id == "system")); Assert.Contains(command.Function + "(", compiled);

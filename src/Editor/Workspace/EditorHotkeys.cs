@@ -41,7 +41,7 @@ internal static class EditorHotkeys
             (modifiers.HasFlag(ModifierKeys.Shift) ? "Shift+" : "") + (modifiers.HasFlag(ModifierKeys.Windows) ? "Win+" : "") + key;
     }
 
-    private static (Key, ModifierKeys) Parse(string text)
+    internal static (Key, ModifierKeys) Parse(string text)
     {
         var parts = text.Split('+'); ModifierKeys modifiers = ModifierKeys.None;
         if (parts.Length > 5 || !Enum.TryParse<Key>(parts[^1], true, out var key) || !Enum.IsDefined(key)) throw new InvalidDataException("Некорректная клавиша: " + text);
