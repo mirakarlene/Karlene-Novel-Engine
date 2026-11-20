@@ -14,7 +14,7 @@ public static class BlockLibrary
         new("terminals", "Начало и конец", "#64748B"), new("narrative", "Нарратив", "#C65C16"),
         new("logic", "Логика", "#2563A6"), new("visual", "Визуал", "#8246B3"),
         new("audio", "Звук", "#228052"), new("flows", "Потоки", "#C44A88"), new("calculations", "Вычисления", "#83CFF0"), new("async", "Асинхронность", "#BA3846"), new("triggers", "Триггеры", "#8B5A35"),
-        new("configurations", "Конфигурации", "#137C83"), new("shaders", "Шейдеры", "#AF5CFF"), new("plugins", "Плагины", "#6B7280")];
+        new("configurations", "Конфигурации", "#137C83"), new("meta_system", "Мета и система", "#E3B52D"), new("shaders", "Шейдеры", "#AF5CFF"), new("plugins", "Плагины", "#6B7280")];
 
     /// <summary>All selectable entries with distinct narrative branching and logic comparisons.</summary>
     private static IReadOnlyList<BlockDefinition> BuiltInDefinitions { get; } = Build();
@@ -88,6 +88,8 @@ public static class BlockLibrary
         Add("logic", ScriptNodeKind.CompareVariables, "Условие", "Сравнить две переменные state без реплики или остановки игры.");
         foreach (var kind in Enum.GetValues<ScriptNodeKind>().Where(LogicCompiler.IsLogic))
             Add("logic", kind, LogicCompiler.Label(kind), "Работа со списками, текстом и переменными. Индексы списков начинаются с 0; результат записывается в state.");
+        foreach (var (kind, block) in SystemBlocks.All)
+            Add("meta_system", kind, block.Title, block.Function + "(" + string.Join(", ", block.Parameters) + ")");
         Add("logic", ScriptNodeKind.SetVariable, "Переменная", "Записать значение в state.");
         Add("logic", ScriptNodeKind.Switch, "Switch / Case", "Сравнить переменную с вариантами; предусмотрен выход по умолчанию.");
         Add("logic", ScriptNodeKind.While, "Цикл While", "Повторять тело, пока условие истинно. Конец тела возвращает к проверке.");

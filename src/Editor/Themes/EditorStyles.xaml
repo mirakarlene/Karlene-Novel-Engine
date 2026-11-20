@@ -111,7 +111,7 @@
         </ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style x:Key="CategoryHover.Item" TargetType="ListBoxItem" BasedOn="{StaticResource Editor.Control}">
-        <Setter Property="local:CategoryHover.Group" Value="{Binding Id}"/><Setter Property="Margin" Value="0,0,0,4"/>
+        <Setter Property="local:CategoryHover.Group" Value="{Binding Id}"/><Setter Property="Margin" Value="0,0,0,3"/>
         <Setter Property="Height" Value="35"/><Setter Property="Padding" Value="6,4"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">

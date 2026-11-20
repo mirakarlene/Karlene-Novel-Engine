@@ -103,7 +103,7 @@ public sealed partial class VisualScript
             if (node.Text == null || node.Speaker == null || node.Path == null || node.Variable == null ||
                 node.Value == null || node.CompareVariable == null || node.Position == null || node.Channel == null || node.Target == null || node.IterationKey == null || node.Category == null || node.ScreenLayer == null || node.UiTarget == null || node.SpeakerId == null)
                 throw new InvalidDataException("Свойства блока не должны содержать null.");
-            if (node.Kind != ScriptNodeKind.Plugin && node.Category is not ("" or "terminals" or "narrative" or "logic" or "visual" or "audio" or "flows" or "calculations" or "async" or "triggers" or "configurations" or "shaders" or "plugins"))
+            if (node.Kind != ScriptNodeKind.Plugin && node.Category.Length != 0 && !BlockLibrary.BuiltInGroups.Any(group => group.Id == node.Category))
                 throw new InvalidDataException("Неизвестная группа блока.");
             if (!ShaderLibrary.CanPlace(node.Kind, IsShader)) throw new InvalidDataException("Блоки «Шейдеры» размещаются только в .kneshader, кроме контейнера; игровые блоки — в .knegraph.");
             if (ShaderLibrary.IsShader(node.Kind)) ShaderLibrary.ValidateNode(node);
@@ -124,6 +124,7 @@ public sealed partial class VisualScript
                 node.Character?.Validate(); node.TextEffect?.Validate(); node.Input?.Validate(); node.Trigger?.Validate();
                 if (CalculationCompiler.IsCalculation(node.Kind)) _ = CalculationCompiler.Compile(node.Kind, node.Calculation ?? new CalculationSettings(), node.Variable);
                 if (LogicCompiler.IsLogic(node.Kind)) _ = LogicCompiler.Compile(node.Kind, node.Logic ?? new(), node.Variable);
+                if (SystemBlocks.All.ContainsKey(node.Kind)) _ = SystemBlocks.Compile(node);
                 node.ChoiceSettings?.Validate();
                 foreach (var option in node.Options) option.Lock?.Validate();
             }
@@ -231,7 +232,13 @@ public enum ScriptNodeKind
     RemoveLayerShaders, RemoveAllShaders, Plugin,
     Anchor, SendFlow, ConditionalGoto,
     CreateList, DeleteList, ClearList, ListAdd, ListRemove, ListRemoveAt, ListInsert, ListSet, ListLength, ListGet, ListContains, ListIndexOf, ListIsEmpty, ListShuffle, ListSort, ListMerge, ListCopy, ListExists, ListRandom,
-    CompoundCondition, StringConcat, StringLength, StringContains, StringReplace, StringUpper, StringLower, ConvertType, CopyVariable, ResetVariable
+    CompoundCondition, StringConcat, StringLength, StringContains, StringReplace, StringUpper, StringLower, ConvertType, CopyVariable, ResetVariable,
+    PersistentSet, PersistentGet, PersistentHas, PersistentClear, PersistentDelete, SaveNamed,
+    SaveExists, SaveRead, SaveDelete, SaveList, RealTime, RealDate,
+    PlayTime, BuildVersion, LaunchCount, RestartGame, ExitGame, MainMenu,
+    MinimizeGame, FullscreenGame, WindowedGame, OpenBrowser, ClipboardWrite, ClipboardRead,
+    Screenshot, FileRead, FileWrite, PathExists, FileSize, FileList,
+    DirectoryCreate, ProjectPath, FreezeScan
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -273,6 +280,8 @@ public sealed class ScriptNode
     /// <summary>Operands, weighted rows, or reusable named formula steps.</summary>
     public CalculationSettings? Calculation { get; set; }
     public LogicSettings? Logic { get; set; }
+    /// <summary>Typed arguments of a Meta and System block.</summary>
+    public Dictionary<string, LogicOperand>? SystemArguments { get; set; }
     /// <summary>Event block: connected blocks await the event; disconnected roots register an independent handler.</summary>
     [JsonIgnore] public bool IsTrigger => Kind is ScriptNodeKind.TriggerKey or ScriptNodeKind.TriggerButton or ScriptNodeKind.TriggerHotspot or ScriptNodeKind.TriggerTextClosed or ScriptNodeKind.TriggerCombination;
     /// <summary>Wait for a subsystem; false spawns it as a background task.</summary>
@@ -400,6 +409,7 @@ public sealed class ScriptNode
         _ when ShaderLibrary.IsShader(Kind) => Kind == ScriptNodeKind.ShaderContainer && Path.Length > 0 ? System.IO.Path.GetFileName(Path) : ShaderLibrary.Get(Kind).Title,
         ScriptNodeKind.Start => "Начало", ScriptNodeKind.Dialogue => "Реплика", ScriptNodeKind.Choice => "Выбор", ScriptNodeKind.TimedChoice => "Выбор с таймером",
         _ when LogicCompiler.IsLogic(Kind) => LogicCompiler.Label(Kind),
+        _ when SystemBlocks.All.TryGetValue(Kind, out var system) => system.Title,
         ScriptNodeKind.Condition => "Условие (значение, прежний формат)", ScriptNodeKind.Branching => "Ветвление", ScriptNodeKind.CompareVariables => "Условие", ScriptNodeKind.SetVariable => "Переменная",
         ScriptNodeKind.Subsystem => Path.Length == 0 ? "Подсистема" : System.IO.Path.GetFileName(Path),
         ScriptNodeKind.TriggerKey => "При клике на клавишу", ScriptNodeKind.TriggerButton => "При клике на кнопку",
@@ -439,7 +449,7 @@ public sealed class ScriptNode
     {
         if (Kind == ScriptNodeKind.Plugin) { foreach (var port in Options) yield return (port.Text, port.Target); yield break; }
         if (ShaderLibrary.IsData(this)) { foreach (string output in ShaderLibrary.Get(Kind).Outputs) yield return (output, null); yield break; }
-        if (Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.SendFlow or ScriptNodeKind.Comment) yield break;
+        if (Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.SendFlow or ScriptNodeKind.Comment || SystemBlocks.EndsSession(Kind)) yield break;
         if (Kind == ScriptNodeKind.TextInput)
         {
             yield return (Input?.BranchOnResult == true ? "Успех" : "Далее", Next);

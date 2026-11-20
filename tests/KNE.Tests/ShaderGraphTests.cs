@@ -427,6 +427,7 @@ public sealed class ShaderGraphTests
     [GpuTheory]
     [InlineData("vulkan")]
     [InlineData("opengl")]
+    [InlineData("directx")]
     public void NativeGpu_ShaderInvertsTwoByTwoTextureAndPreservesPremultipliedAlpha(string api)
     {
         using var fixture = new TempProject();
@@ -442,6 +443,7 @@ public sealed class ShaderGraphTests
     [GpuTheory]
     [InlineData("vulkan")]
     [InlineData("opengl")]
+    [InlineData("directx")]
     public void NativeGpu_ShaderUvTimeAndPipelineResetChangeActualPixels(string api)
     {
         using var fixture = new TempProject();
@@ -465,6 +467,7 @@ public sealed class ShaderGraphTests
     [GpuTheory]
     [InlineData("vulkan")]
     [InlineData("opengl")]
+    [InlineData("directx")]
     public void NativeGpu_GrayscaleAndPixelateApplyTheirNumericalOperations(string api)
     {
         using var fixture = new TempProject();

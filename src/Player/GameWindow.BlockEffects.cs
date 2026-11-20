@@ -104,6 +104,9 @@ public partial class GameWindow
             case "menu": ready = false; ShowMenu(); break;
             case "screen": ready = false; ShowLayout(project.Engine.Screens.ResolveReference(frame.EndScreen!).Id); break;
             case "exit": Close(); break;
+            case "restart": case "menu_reset":
+                _ = Dispatcher.BeginInvoke(new Action(async () => await ResetSystemSessionAsync(frame.EndAction == "restart")));
+                break;
         }
     }
 }

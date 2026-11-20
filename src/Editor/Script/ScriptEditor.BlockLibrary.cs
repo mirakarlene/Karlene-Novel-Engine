@@ -55,6 +55,7 @@ public partial class ScriptEditor
         AddFlowFields(node);
         AddCalculationFields(node);
         AddLogicFields(node);
+        AddSystemFields(node);
         AddTextInputFields(node);
         AddChoiceFields(node);
         bool literal = node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.ConditionalGoto or ScriptNodeKind.SetVariable or ScriptNodeKind.While or ScriptNodeKind.WaitCondition;

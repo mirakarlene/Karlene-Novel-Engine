@@ -24,6 +24,11 @@ public sealed class ProcessGameSession : IGameSession
     private bool canReturnAfterError;
     private long requestId;
     private volatile bool debuggerPaused;
+    private volatile bool systemHostWaiting;
+    private GameSystemServices? localSystem;
+    internal Func<SystemCall, CancellationToken, Task<SystemReply>>? SystemHost { get; init; }
+    internal Func<double>? PlayClock { get; init; }
+    private double playedSeconds;
     private readonly bool pluginsEnabled;
     private readonly string[] applicationPlugins;
     private readonly string? debuggerPipe;
@@ -212,7 +217,7 @@ public sealed class ProcessGameSession : IGameSession
 
     private async Task<WorkerMessage> SendAsync(Process process, WorkerRequest request, CancellationToken token)
     {
-        request = request with { ApplicationPlugins = applicationPlugins };
+        request = request with { ApplicationPlugins = applicationPlugins, PlayedSeconds = PlayClock?.Invoke() ?? playedSeconds };
         var reader = responses!;
         await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(request).AsMemory(), token).ConfigureAwait(false);
         await process.StandardInput.FlushAsync(token).ConfigureAwait(false);
@@ -231,6 +236,27 @@ public sealed class ProcessGameSession : IGameSession
             }
             if (message.Type == "fatal") throw new IOException(message.Error);
             if (message.Id != request.Id) throw new InvalidDataException("Нарушен порядок ответов Lua.");
+            if (message.Type == "system" && message.SystemCall is { } call)
+            {
+                SystemReply reply;
+                systemHostWaiting = true;
+                try
+                {
+                    if (SystemHost != null) reply = await SystemHost(call, token).ConfigureAwait(false);
+                    else
+                    {
+                        localSystem ??= new(project);
+                        localSystem.PlayedSeconds = request.PlayedSeconds;
+                        reply = await localSystem.InvokeAsync(call, token).ConfigureAwait(false);
+                    }
+                }
+                catch (Exception error) when (error is not OperationCanceledException) { reply = SystemReply.Failure("Мета и система: " + error.Message); }
+                finally { systemHostWaiting = false; }
+                var response = new WorkerRequest(request.Id, "system_result", SystemReply: reply);
+                await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(response).AsMemory(), token).ConfigureAwait(false);
+                await process.StandardInput.FlushAsync(token).ConfigureAwait(false);
+                continue;
+            }
             if (message.Type == "error")
             {
                 lock (sync)
@@ -241,18 +267,18 @@ public sealed class ProcessGameSession : IGameSession
                 throw CreateException(message);
             }
             if (message.Type != "result" || message.Snapshot == null) throw new InvalidDataException("Некорректный ответ Lua.");
+            if (request.Command == "restore" && request.Checkpoint != null) playedSeconds = request.Checkpoint.PlayedSeconds;
             return message;
         }
     }
 
     private async Task<WorkerMessage> WaitForExecutionAsync(Task<WorkerMessage> exchange, CancellationToken token)
     {
-        if (string.IsNullOrEmpty(debuggerPipe)) return await exchange.WaitAsync(ExecutionLimit, token).ConfigureAwait(false);
         var remaining = ExecutionLimit; long last = Stopwatch.GetTimestamp();
         while (!exchange.IsCompleted)
         {
             await Task.WhenAny(exchange, Task.Delay(50, token)).ConfigureAwait(false); token.ThrowIfCancellationRequested();
-            long now = Stopwatch.GetTimestamp(); if (!debuggerPaused) remaining -= Stopwatch.GetElapsedTime(last, now); last = now;
+            long now = Stopwatch.GetTimestamp(); if (!debuggerPaused && !systemHostWaiting) remaining -= Stopwatch.GetElapsedTime(last, now); last = now;
             if (remaining <= TimeSpan.Zero) throw new TimeoutException("Превышено время выполнения игрового worker.");
         }
         return await exchange.ConfigureAwait(false);

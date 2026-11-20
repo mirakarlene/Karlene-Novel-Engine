@@ -43,7 +43,7 @@ public sealed class ProjectBuildUiTests
     }
 
     [Fact]
-    public async Task SixProjectPagesKeepAllDraftsAndSaveBuildMetadataAndPerformanceTogether()
+    public async Task FiveProjectPagesKeepAllDraftsAndSaveBuildMetadataAndPerformanceTogether()
     {
         using var fixture = new TempProject(); var project = await fixture.LoadAsync();
         await WorkspaceTabsTests.Sta(async () =>
@@ -54,22 +54,25 @@ public sealed class ProjectBuildUiTests
                 Assert.Equal(0, window.Page); Assert.False(window.PreviousPage.IsEnabled); Assert.True(window.NextPage.IsEnabled);
                 Assert.Equal("vm", window.BuildInput.Value.TestMode); Assert.Equal("self_contained", window.BuildInput.Value.ReleaseMode);
                 Click(window.NextPage); Assert.Equal(1, window.Page); window.SavesInput.Text = "draft/saves";
+                Assert.Equal("saves", window.PersistentLocationInput.SelectedValue);
+                Assert.Equal(new[] { "saves", "appdata", "local" }, window.PersistentLocationInput.Items.Cast<GraphicsOption<string>>().Select(option => option.Value));
+                window.PersistentLocationInput.SelectedValue = "appdata";
                 Click(window.NextPage); Assert.Equal(2, window.Page); Assert.Equal(Visibility.Visible, window.BuildInput.Visibility);
                 window.BuildInput.TestMode.SelectedValue = "remote_debug"; Assert.True(window.BuildInput.TestPath.IsEnabled);
                 window.BuildInput.ReleaseMode.SelectedValue = "portable"; Assert.Equal("local", window.BuildInput.Value.EffectiveSaveLocation); Assert.False(window.BuildInput.Saves.IsEnabled);
                 Assert.DoesNotContain(window.BuildInput.Children.OfType<Button>(), button => Equals(button.Content, "Собрать релиз"));
-                Click(window.NextPage); Assert.Equal(3, window.Page);
-                Click(window.NextPage); Assert.Equal(4, window.Page); Assert.False(window.TitleInput.IsReadOnly); window.BuildInput.Author.Text = "Draft author";
-                Click(window.NextPage); Assert.Equal(5, window.Page); Assert.False(window.NextPage.IsEnabled);
+                Click(window.NextPage); Assert.Equal(3, window.Page); Assert.False(window.TitleInput.IsReadOnly); window.BuildInput.Author.Text = "Draft author";
+                Click(window.NextPage); Assert.Equal(4, window.Page); Assert.False(window.NextPage.IsEnabled);
                 Assert.Empty(Descendants(window.Content).OfType<ScrollViewer>());
-                for (int page = 4; page >= 0; page--) { Click(window.PreviousPage); Assert.Equal(page, window.Page); }
+                for (int page = 3; page >= 0; page--) { Click(window.PreviousPage); Assert.Equal(page, window.Page); }
                 Assert.Equal("draft/saves", window.SavesInput.Text); Assert.Equal("Draft author", window.BuildInput.Author.Text); Assert.Equal("remote_debug", window.BuildInput.Value.TestMode);
                 Assert.False(File.Exists(Path.Combine(project.Path, "engine", "build.json")));
                 await window.SaveAsync(); var saved = ProjectBuildSettingsStore.Load(project.Path); Assert.Equal("remote_debug", saved.TestMode); Assert.Equal("portable", saved.ReleaseMode); Assert.Equal("Draft author", saved.Author); Assert.Equal("draft/saves", PerformanceSettingsStore.LoadProject(project.Path).SavesPath);
+                Assert.Equal("appdata", PerformanceSettingsStore.LoadProject(project.Path).PersistentLocation);
             }
             finally { window.Close(); }
             var cancel = new ProjectParametersWindow(project);
-            try { cancel.ShowPage(4); cancel.BuildInput.Version.Text = "9.9"; cancel.ShowPage(5); cancel.Close(); Assert.Equal("1.0.0", ProjectBuildSettingsStore.Load(project.Path).Version); }
+            try { cancel.ShowPage(1); cancel.PersistentLocationInput.SelectedValue = "local"; cancel.ShowPage(3); cancel.BuildInput.Version.Text = "9.9"; cancel.ShowPage(4); cancel.Close(); Assert.Equal("1.0.0", ProjectBuildSettingsStore.Load(project.Path).Version); Assert.Equal("appdata", PerformanceSettingsStore.LoadProject(project.Path).PersistentLocation); }
             finally { cancel.Close(); }
         });
     }

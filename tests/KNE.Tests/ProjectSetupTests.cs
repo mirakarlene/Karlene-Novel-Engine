@@ -78,6 +78,7 @@ public sealed class ProjectSetupTests
     [InlineData("vulkan", 144, "rose")]
     [InlineData("opengl", 0, "forest")]
     [InlineData("vulkan", 30, "amber")]
+    [InlineData("directx", 144, "ocean")]
     public async Task Creation_ArchitectureFpsAndPaletteRoundTripTogetherWithoutScreensOverridingTheSelection(string api, int fps, string palette)
     {
         using var fixture = new TempProject(); var options = new ProjectCreationOptions { Width = 1080, Height = 1920, GraphicsApi = api, MaxFps = fps, Palette = palette };
@@ -104,7 +105,7 @@ public sealed class ProjectSetupTests
     {
         foreach (int width in new[] { 639, 3841, 0, int.MaxValue }) yield return [new ProjectCreationOptions { Width = width }];
         foreach (int height in new[] { 479, 2161, 0, int.MaxValue }) yield return [new ProjectCreationOptions { Height = height }];
-        foreach (string api in new[] { "", "directx", "OpenGL", null! }) yield return [new ProjectCreationOptions { GraphicsApi = api }];
+        foreach (string api in new[] { "", "direct3d12", "OpenGL", null! }) yield return [new ProjectCreationOptions { GraphicsApi = api }];
         foreach (int fps in new[] { -1, 1, 59, 145 }) yield return [new ProjectCreationOptions { MaxFps = fps }];
         foreach (string palette in new[] { "", "missing", "custom", null! }) yield return [new ProjectCreationOptions { Palette = palette }];
     }

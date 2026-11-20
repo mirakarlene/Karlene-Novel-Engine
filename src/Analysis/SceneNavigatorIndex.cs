@@ -37,7 +37,7 @@ public sealed record SceneNavigationIndex(IReadOnlyList<SceneNavigationNode> Nod
             try
             {
                 if (File.Exists(full) && new FileInfo(full).Length > 8 * 1024 * 1024) throw new InvalidDataException("Сценарий больше 8 МБ.");
-                string source = openSources?.GetValueOrDefault(full) ?? await File.ReadAllTextAsync(full, token).ConfigureAwait(false);
+                string source = openSources?.GetValueOrDefault(full) ?? ScriptProtection.ReadText(full);
                 if (source.Length > 8 * 1024 * 1024) throw new InvalidDataException("Сценарий больше 8 МБ.");
                 if (ScriptDocument.IsVisualPath(full))
                 {

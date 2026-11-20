@@ -21,8 +21,8 @@ public sealed class PerformanceWindowsTests
                 Assert.Equal(new GraphicsSettings { Api = "opengl", MaxFps = 30, MsaaSamples = 2 }, window.GraphicsInput.Value);
                 Assert.Equal("bottom_right", window.CornerInput.SelectedValue); Assert.Equal("saves", window.SavesInput.Text);
                 window.GraphicsInput.Value = new() { Api = "vulkan", MaxFps = 144, MsaaSamples = 4, TextureQuality = "quarter", VSync = false, LimitResourceCache = false, ResourceCacheLimitMb = 128 };
-                window.ShowPage(4);
-                Assert.Equal(4, window.Page); Assert.Equal(project.Title, window.TitleInput.Text);
+                window.ShowPage(3);
+                Assert.Equal(3, window.Page); Assert.Equal(project.Title, window.TitleInput.Text);
                 Assert.False(window.TitleInput.IsReadOnly); window.TitleInput.Text = "  Новое название  ";
                 window.ShowPage(0);
                 window.AsyncTasksInput.SelectedValue = 32; window.AudioBufferInput.SelectedValue = "low_latency";
@@ -60,7 +60,7 @@ public sealed class PerformanceWindowsTests
         {
             var canceled = new ProjectParametersWindow(project);
             canceled.GraphicsInput.Value = new() { Api = "vulkan", MaxFps = 0, TextureQuality = "half" }; canceled.SavesInput.Text = "draft";
-            canceled.ShowPage(4);
+            canceled.ShowPage(3);
             canceled.TitleInput.Text = "  Cancelled title  ";
             Assert.False(canceled.TitleInput.IsReadOnly); Assert.Equal("  Cancelled title  ", canceled.TitleInput.Text);
             Assert.Equal(originalManifest, File.ReadAllText(manifest));

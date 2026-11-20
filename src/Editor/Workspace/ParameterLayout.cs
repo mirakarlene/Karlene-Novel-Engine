@@ -6,6 +6,34 @@ namespace KNE;
 /// <summary>Compact parameter pages with natural fields and no page-level scrolling or scaling.</summary>
 internal static class ParameterLayout
 {
+    internal static StackPanel Cards(params UIElement[] cards)
+    {
+        var panel = new StackPanel { Margin = new(12, 0, 12, 0) };
+        foreach (var card in cards)
+        {
+            if (card is FrameworkElement element) element.Margin = new(0, 0, 0, 8);
+            panel.Children.Add(card);
+        }
+        return panel;
+    }
+    internal static void SpreadFields(Panel panel)
+    {
+        var fields = new List<UIElement>();
+        var children = panel.Children.Cast<UIElement>().ToArray(); panel.Children.Clear();
+        int first = 0;
+        if (children.FirstOrDefault() is TextBlock { FontSize: >= 15 } heading) { panel.Children.Add(heading); first = 1; }
+        for (int i = first; i < children.Length; i++)
+        {
+            if (children[i] is TextBlock { FontSize: 12, Opacity: 1 } && i + 1 < children.Length)
+            {
+                var field = new StackPanel(); field.Children.Add(children[i]); field.Children.Add(children[++i]); fields.Add(field);
+            }
+            else fields.Add(children[i]);
+        }
+        var left = new StackPanel(); var right = new StackPanel();
+        for (int i = 0; i < fields.Count; i++) (i < (fields.Count + 1) / 2 ? left : right).Children.Add(fields[i]);
+        panel.Children.Add(Columns(left, right));
+    }
     internal static Grid Columns(UIElement left, UIElement right)
     {
         var grid = new Grid { VerticalAlignment = VerticalAlignment.Top };

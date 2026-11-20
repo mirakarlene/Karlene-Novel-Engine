@@ -191,7 +191,8 @@ public static class ShaderGraphCompiler
         }
         string final = CompileGraph(graph, sourcePath == null ? "shader" : Path.GetRelativePath(root, sourcePath).Replace('\\', '/'), 0);
         if (samples > 512 || source.Length > 256 * 1024) throw new InvalidDataException("Шейдер слишком сложный: уменьшите вложенность размытия / количество блоков.");
-        source.Append("void main(){vec4 c=clamp(").Append(final).Append("(fsUv),0.0,1.0);outputColor=vec4(c.rgb*c.a,c.a)*fsColor;}");
+        // Keep TEXCOORD0 in the D3D11 pixel signature even for graphs that never sample UV.
+        source.Append("void main(){if(any(isnan(fsUv)))discard;vec4 c=clamp(").Append(final).Append("(fsUv),0.0,1.0);outputColor=vec4(c.rgb*c.a,c.a)*fsColor;}");
         var targets = graph.Nodes.Where(node => node.Kind == ScriptNodeKind.ShaderTexture).Select(node => (node.Shader!.Target, node.Shader.Screen)).Distinct().ToArray();
         if (targets.Length > 1) throw new InvalidDataException("Один .kneshader применяется к одной цели. Используйте отдельный файл для другой цели.");
         var target = targets.FirstOrDefault();

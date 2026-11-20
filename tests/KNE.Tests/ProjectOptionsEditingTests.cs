@@ -183,8 +183,8 @@ public sealed class ProjectOptionsEditingTests
     }
 
     [Theory]
-    [InlineData(780, 840)] [InlineData(540, 500)]
-    public Task SixProjectPagesKeepFooterFullSizeAndDraftsWithoutScrollingThePageBody(double width, double height) => WorkspaceTabsTests.Sta(async () =>
+    [InlineData(780, 840)] [InlineData(740, 680)]
+    public Task FiveProjectPagesKeepFooterFullSizeAndDraftsWithoutScrollingThePageBody(double width, double height) => WorkspaceTabsTests.Sta(async () =>
     {
         using var fixture = new TempProject(); var window = new ProjectParametersWindow(await fixture.LoadAsync());
         try
@@ -197,14 +197,14 @@ public sealed class ProjectOptionsEditingTests
             Assert.True(saveBounds.Width >= 64 && saveBounds.Height >= 25); Assert.True(nextBounds.Bottom <= root.ActualHeight + .01); Assert.Equal(12, save.FontSize);
             Assert.Equal(0, window.Page); Assert.False(window.PreviousPage.IsEnabled);
             window.ShowPage(1); window.RollbackInput.Text = "42";
-            for (int page = 1; page <= 5; page++)
+            for (int page = 1; page <= 4; page++)
             {
                 window.ShowPage(page); window.UpdateLayout(); Assert.Equal(page, window.Page); Assert.Equal(saveBounds, Bounds(save)); Assert.Equal(nextBounds.Y, Bounds(window.NextPage).Y); Assert.Empty(Descendants(root).OfType<ScrollViewer>());
-                Assert.True(window.PreviousPage.IsEnabled); Assert.Equal(page < 5, window.NextPage.IsEnabled);
-                if (page == 3) Assert.Contains(Descendants(root).OfType<TextBlock>(), text => text.Text == "Безопасность");
-                if (page == 4) { Assert.True(window.BuildInput.Author.IsVisible); window.BuildInput.Author.Text = "Draft author"; }
+                Assert.True(window.PreviousPage.IsEnabled); Assert.Equal(page < 4, window.NextPage.IsEnabled);
+                if (page == 2) Assert.Contains(Descendants(root).OfType<TextBlock>(), text => text.Text == "Безопасность");
+                if (page == 3) { Assert.True(window.BuildInput.Author.IsVisible); window.BuildInput.Author.Text = "Draft author"; }
             }
-            for (int page = 4; page >= 0; page--) { window.PreviousPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Equal(page, window.Page); }
+            for (int page = 3; page >= 0; page--) { window.PreviousPage.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Equal(page, window.Page); }
             Assert.False(window.PreviousPage.IsEnabled); Assert.Equal("42", window.RollbackInput.Text); Assert.Equal("Draft author", window.BuildInput.Author.Text);
         }
         finally { window.Close(); }

@@ -92,6 +92,12 @@ internal static class LogicRuntimeLua
             table.sort(value)
         end
         function list_random(name) local value=get(name); if #value==0 then fail('случайный выбор из пустого списка') end; return value[math.random(#value)] end
+        function kne_system_list(name,values)
+            if not list_exists(name) then return create_list(name,values) end
+            local target=get(name); local data=clone(values,{},0); array(data); clear_list(name)
+            for i,v in ipairs(data) do target[i]=v end
+            return target
+        end
         function kne_list_export() for name,_ in pairs(lists) do get(name); clone(lists[name],{},0) end; return lists end
         function kne_list_restore(values) for name,_ in pairs(lists) do if values[name]==nil then delete_list(name) end end; for name,value in pairs(values) do if lists[name] then local target=get(name); local data=clone(value,{},0); array(data); clear_list(name); for i,v in ipairs(data) do target[i]=v end else create_list(name,value) end end end
         local function text(value) if type(value)~='string' then fail('операция требует строку') end; return value end

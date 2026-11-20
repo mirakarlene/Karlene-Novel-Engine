@@ -43,7 +43,10 @@ public partial class GameWindow : Window
         LoadPreferences();
         Title = project.Title; Icon = ProjectIcon.Load(project.Path, project.Configuration.Metadata?.Icon); InitializePerformance();
         ApplyEngineTheme();
-        runtime = new ProcessGameSession(project, QueueOutput, preview: preview);
+        runtime = CreateGameSession();
+        Activated += (_, _) => UpdatePlayClock();
+        Deactivated += (_, _) => UpdatePlayClock();
+        StateChanged += (_, _) => UpdatePlayClock();
         InitializeBlockEffects();
         InitializeShaders();
         InitializeTriggerInput();
@@ -62,10 +65,21 @@ public partial class GameWindow : Window
         catch (Exception error) { ShowStartupError(error, "Загрузка UI плагинов"); return; }
         if (project.Engine.Window.Mode == "maximized") WindowState = WindowState.Maximized;
         if (preferences.Fullscreen ?? project.Engine.Window.Mode == "fullscreen") ToggleFullscreen();
-        try { GameScripts.Load(project, pluginsEnabled: EngineLaunch.PluginsEnabled); }
+        bool useMenu = project.Engine.Game.MainMenu && !preview && project.Engine.Screens.Find("main_menu") != null;
+        try
+        {
+            var scripts = GameScripts.Load(project, pluginsEnabled: EngineLaunch.PluginsEnabled);
+            bool usesFiles = scripts.Files.Any(UsesFiles);
+            if (useMenu) ShowMenu();
+            MenuOverlay.IsEnabled = !usesFiles;
+            systemInitialization = InitializeSystemServicesAsync(usesFiles);
+            await systemInitialization;
+        }
+        catch (OperationCanceledException) when (closed) { return; }
         catch (Exception ex) { ShowStartupError(ex, "Проверка сценариев перед запуском"); return; }
-        if (project.Engine.Game.MainMenu && !preview && project.Engine.Screens.Find("main_menu") != null) ShowMenu();
-        else await StartGameAsync();
+        if (closed) return;
+        MenuOverlay.IsEnabled = true;
+        if (!useMenu) await StartGameAsync();
     }
 
     private void ApplyEngineTheme()
@@ -184,9 +198,17 @@ public partial class GameWindow : Window
     {
         await ExecuteAsync(async () =>
         {
-            var candidate = new ProcessGameSession(project, QueueOutput, preview: preview);
+            await systemInitialization.WaitAsync(execution!.Token);
+            var candidate = CreateGameSession();
+            double previousPlayTime = ReadPlayTime();
+            ResetPlayTime();
             try { await candidate.StartAsync(execution!.Token); }
-            catch { await candidate.DisposeAsync(); throw; }
+            catch
+            {
+                ResetPlayTime(previousPlayTime);
+                await candidate.DisposeAsync();
+                throw;
+            }
             await ReplaceSessionAsync(candidate);
         }, starting: true, operation: "Запуск игры");
     }
@@ -242,6 +264,7 @@ public partial class GameWindow : Window
         }
         ShowLayout(layout.Id);
         MenuOverlay.Visibility = Visibility.Visible;
+        UpdatePlayClock();
         ResumeButton.Visibility = ready ? Visibility.Visible : Visibility.Collapsed;
         DialoguePanel.Visibility = Visibility.Collapsed;
         GameControls.Visibility = Visibility.Collapsed;
@@ -261,6 +284,7 @@ public partial class GameWindow : Window
         clockSuspended = false;
         activeScreen = null; screenHistory.Clear();
         MenuOverlay.Visibility = Visibility.Collapsed;
+        UpdatePlayClock();
         DialoguePanel.Visibility = Visibility.Visible;
         GameControls.Visibility = Visibility.Visible;
         StopMenuMusic();
@@ -432,10 +456,18 @@ public partial class GameWindow : Window
         if (execution != null) return;
         await ExecuteAsync(async () =>
         {
+            await systemInitialization.WaitAsync(execution!.Token);
             var checkpoint = await saves.LoadAsync(slot, execution!.Token);
-            var candidate = new ProcessGameSession(project, QueueOutput, preview: preview);
+            var candidate = CreateGameSession();
+            double previousPlayTime = ReadPlayTime();
+            ResetPlayTime(checkpoint.PlayedSeconds);
             try { await candidate.RestoreAsync(checkpoint, execution.Token); }
-            catch { await candidate.DisposeAsync(); throw; }
+            catch
+            {
+                ResetPlayTime(previousPlayTime);
+                await candidate.DisposeAsync();
+                throw;
+            }
             await ReplaceSessionAsync(candidate);
             sceneSaves.MarkRestored(runtime.Visuals.Scene);
             QueueOutput("Сохранение загружено.");
@@ -466,6 +498,7 @@ public partial class GameWindow : Window
 
     private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (systemFrozen) { scanInput?.Invoke("key"); e.Handled = true; return; }
         if (ProcessPluginInput(new("key", (e.Key == Key.System ? e.SystemKey : e.Key).ToString()))) { e.Handled = true; return; }
         if (startupFailed)
         {
@@ -528,7 +561,7 @@ public partial class GameWindow : Window
 
     private void RenderOutput()
     {
-        if (closed || startupFailed) return;
+        if (closed || startupFailed || systemFrozen) return;
         if ((execution != null || pumpingSceneTime) && !presentDuringOperation) { RenderConsole(); return; }
         try { RenderPluginScreens(); }
         catch (Exception error) { ShowStartupError(error, "Экран плагина"); return; }

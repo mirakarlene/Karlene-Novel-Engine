@@ -6,11 +6,13 @@ using System.Threading.Channels;
 namespace KNE;
 
 internal sealed record WorkerRequest(long Id, string Command, int Option = 0, string? Text = null, GameCheckpoint? Checkpoint = null,
-    EditorPreviewSource? EditorSource = null, double Seconds = 0, bool Cancel = false, string[]? ApplicationPlugins = null);
+    EditorPreviewSource? EditorSource = null, double Seconds = 0, bool Cancel = false, string[]? ApplicationPlugins = null,
+    SystemReply? SystemReply = null, double PlayedSeconds = 0);
 internal sealed record SessionSnapshot(RuntimeWindowSettings Window, StoryFrame Story, SceneVisuals Visuals,
     PreviewLocation? Location = null, JsonElement Variables = default, bool TransitionInProgress = false, double LogicMilliseconds = 0, IReadOnlyList<string>? PluginScreens = null);
 internal sealed record WorkerMessage(string Type, long Id = 0, string? Text = null, SessionSnapshot? Snapshot = null,
-    GameCheckpoint? Checkpoint = null, string? Error = null, string? ErrorType = null, GameErrorReport? Report = null, bool InputHandled = false);
+    GameCheckpoint? Checkpoint = null, string? Error = null, string? ErrorType = null, GameErrorReport? Report = null, bool InputHandled = false,
+    SystemCall? SystemCall = null);
 
 internal static class LuaWorker
 {
@@ -39,6 +41,15 @@ internal static class LuaWorker
             LuaRuntime? runtime = null;
             using var debug = WorkerDebugConnection.Connect(paused => Send(new(paused ? "debug_paused" : "debug_running")));
             var queue = Channel.CreateBounded<WorkerRequest>(1);
+            long activeRequestId = 0;
+            async Task<SystemReply> CallHostAsync(SystemCall call, CancellationToken token)
+            {
+                Send(new("system", activeRequestId, SystemCall: call));
+                var reply = await queue.Reader.ReadAsync(token).ConfigureAwait(false);
+                if (reply.Command != "system_result" || reply.Id != activeRequestId || reply.SystemReply == null)
+                    throw new InvalidDataException("Нарушен порядок системных ответов.");
+                return reply.SystemReply;
+            }
             _ = Task.Run(async () =>
             {
                 try
@@ -63,10 +74,12 @@ internal static class LuaWorker
                 try
                 {
                     if (runtime == null) project.ApplicationPlugins = ApplicationPluginFiles.Normalize(request.ApplicationPlugins);
+                    activeRequestId = request.Id;
                     runtime ??= new LuaRuntime(project, line => Send(new("log", Text: line)),
                         TimeSpan.FromHours(1), interactive: true, preview: preview, editorSource: request.EditorSource,
                         variablesUpdated: value => Send(new("variables", Snapshot: new(runtime!.WindowSettings, runtime.Story, runtime.Visuals,
-                            runtime.Location, value, runtime.TransitionInProgress))), debugger: debug?.Debugger);
+                            runtime.Location, value, runtime.TransitionInProgress))), debugger: debug?.Debugger) { SystemHost = CallHostAsync };
+                    runtime.PlayedSeconds = request.Checkpoint?.PlayedSeconds ?? request.PlayedSeconds;
                     var logicWatch = System.Diagnostics.Stopwatch.StartNew();
                     bool inputHandled = false;
                     switch (request.Command)

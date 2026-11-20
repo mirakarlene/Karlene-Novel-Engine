@@ -83,6 +83,12 @@ public sealed partial class VisualScript
                 case ScriptNodeKind.SendFlow:
                     Line($"return {Quote(node.Target)}");
                     break;
+                case ScriptNodeKind.RestartGame:
+                case ScriptNodeKind.ExitGame:
+                case ScriptNodeKind.MainMenu:
+                    Line(SystemBlocks.Compile(node));
+                    Line("return");
+                    break;
                 case ScriptNodeKind.TriggerKey:
                 case ScriptNodeKind.TriggerButton:
                 case ScriptNodeKind.TriggerHotspot:
@@ -192,6 +198,7 @@ public sealed partial class VisualScript
 
     private static string Command(ScriptNode node) => node.Kind switch
     {
+        _ when SystemBlocks.All.ContainsKey(node.Kind) => SystemBlocks.Compile(node),
         _ when LogicCompiler.IsLogic(node.Kind) && node.Kind != ScriptNodeKind.CompoundCondition => LogicCompiler.Compile(node.Kind, node.Logic ?? new(), node.Variable),
         _ when CalculationCompiler.IsCalculation(node.Kind) => CalculationCompiler.Compile(node.Kind, node.Calculation ?? new CalculationSettings(), node.Variable),
         ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue => DialogueCommand(node),
@@ -296,6 +303,11 @@ public sealed partial class VisualScript
 
     private static void ValidateCommand(ScriptNode node)
     {
+        if (SystemBlocks.All.ContainsKey(node.Kind))
+        {
+            try { _ = SystemBlocks.Compile(node); }
+            catch (ArgumentException error) { Fail(node, error.Message); }
+        }
         if (LogicCompiler.IsLogic(node.Kind))
         {
             try { _ = LogicCompiler.Compile(node.Kind, node.Logic ?? new(), node.Variable); }

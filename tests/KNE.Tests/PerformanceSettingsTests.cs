@@ -22,7 +22,7 @@ public sealed class PerformanceSettingsTests
     [Fact]
     public void Graphics_EveryAdvertisedApiFrameRateAndMsaaCombinationIsAccepted()
     {
-        Assert.Equal(new[] { "auto", "vulkan", "opengl" }, GraphicsSettings.Apis.Select(x => x.Value));
+        Assert.Equal(new[] { "auto", "vulkan", "opengl", "directx" }, GraphicsSettings.Apis.Select(x => x.Value));
         Assert.Equal(new[] { 30, 60, 144, 0 }, GraphicsSettings.FrameRates.Select(x => x.Value));
         Assert.Equal(new[] { 0, 2, 4 }, GraphicsSettings.Antialiasing.Select(x => x.Value));
         foreach (string api in GraphicsSettings.Apis.Select(x => x.Value))
@@ -35,12 +35,25 @@ public sealed class PerformanceSettingsTests
     }
 
     [Theory]
-    [InlineData(null, 60, 0)] [InlineData("", 60, 0)] [InlineData("directx", 60, 0)] [InlineData("Vulkan", 60, 0)]
+    [InlineData(null, 60, 0)] [InlineData("", 60, 0)] [InlineData("direct3d12", 60, 0)] [InlineData("Vulkan", 60, 0)]
     [InlineData("auto", -1, 0)] [InlineData("auto", 29, 0)] [InlineData("auto", 31, 0)] [InlineData("auto", 59, 0)]
     [InlineData("auto", 61, 0)] [InlineData("auto", 143, 0)] [InlineData("auto", 145, 0)]
     [InlineData("auto", 60, -1)] [InlineData("auto", 60, 1)] [InlineData("auto", 60, 3)] [InlineData("auto", 60, 5)]
     public void Graphics_RejectsUnsupportedDiscriminatorsAndAdjacentNumericValues(string? api, int fps, int samples) =>
         Assert.Throws<InvalidDataException>(() => new GraphicsSettings { Api = api!, MaxFps = fps, MsaaSamples = samples }.Validate());
+
+    [Fact]
+    public async Task DirectXPreferenceSurvivesProjectAndEngineSettingsWithoutChangingItsIndependentOptions()
+    {
+        using var fixture = new TempProject();
+        var graphics = new GraphicsSettings { Api = "directx", VSync = false, MaxFps = 144, MsaaSamples = 4, TextureQuality = "half", ResourceCacheLimitMb = 128 };
+        graphics.Validate(); Assert.Equal(graphics, GraphicsSettings.Normalize(graphics));
+        await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, new() { Graphics = graphics });
+        Assert.Equal(graphics, PerformanceSettingsStore.LoadProject(fixture.ProjectPath).Graphics);
+        Assert.Equal(graphics, (await fixture.LoadAsync()).Engine.Performance.Graphics);
+        using var stored = JsonDocument.Parse(File.ReadAllText(Path.Combine(fixture.ProjectPath, "engine", "performance.json")));
+        Assert.Equal("directx", stored.RootElement.GetProperty("graphics").GetProperty("api").GetString());
+    }
 
     [Fact]
     public void ProjectDefaults_SceneDefaultsAndAllCounterCornersAreValid()

@@ -14,6 +14,12 @@ public sealed record GameCheckpoint(int Version, string ProjectPath, string Fing
     public IReadOnlyList<GameCheckpoint>? Rollback { get; init; }
     /// <summary>Independent named lists, including empty lists; absent in legacy checkpoints.</summary>
     public JsonElement? Lists { get; init; }
+    /// <summary>Recorded results of system commands used during deterministic replay.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<SystemReplayEntry>? SystemResults { get; init; }
+    /// <summary>Active play time accumulated in this timeline.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public double PlayedSeconds { get; init; }
 }
 
 public interface IGameSession : IAsyncDisposable
