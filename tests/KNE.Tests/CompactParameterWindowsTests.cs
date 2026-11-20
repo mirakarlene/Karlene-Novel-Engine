@@ -67,7 +67,7 @@ public sealed class CompactParameterWindowsTests
             Show(window, width, height); var root = (FrameworkElement)window.Content;
             var save = Logical(root).OfType<Button>().Single(button => Equals(button.Content, "Сохранить"));
             var cancel = Logical(root).OfType<Button>().Single(button => Equals(button.Content, "Отмена"));
-            var pageLabel = Logical(root).OfType<TextBlock>().Single(text => text.Text == "1 / 5");
+            var pageLabel = Logical(root).OfType<TextBlock>().Single(text => text.Text == "1 / 6");
             var fixedBounds = new FrameworkElement[] { save, cancel, window.PreviousPage, pageLabel, window.NextPage }.ToDictionary(input => input, input => Bounds(input, root));
             Assert.Equal(root.ActualWidth / 2, (fixedBounds[save].Left + fixedBounds[cancel].Right) / 2, 0);
             Assert.Equal(fixedBounds[save].Top, fixedBounds[cancel].Top);
@@ -77,14 +77,15 @@ public sealed class CompactParameterWindowsTests
                 [window.SavesInput, window.PersistentLocationInput, window.RollbackInput, window.AutosaveInput, window.AutosaveActionsInput, window.MenuMusicInput, window.CornerInput, window.DeleteCrashReportsButton, window.DangerZone],
                 [window.BuildInput.TestMode, window.BuildInput.TestPath, window.BuildInput.ReleaseMode, window.BuildInput.ReleasePath, window.BuildInput.Saves, window.FileSystemInput],
                 [window.TitleInput, window.BuildInput.Author, window.BuildInput.Team, window.BuildInput.Version, window.MetadataInput["game_info.description"], window.MetadataInput["metadata.icon"], window.MetadataInput["metadata.default_language"]],
-                [window.MetadataInput["metadata.created_date"], window.MetadataInput["metadata.kne_version"], window.MetadataInput["entry_points.main_scene"], window.MetadataInput["entry_points.init_script"], window.MetadataInput.Additional]
+                [window.MetadataInput["metadata.created_date"], window.MetadataInput["metadata.kne_version"], window.MetadataInput["entry_points.main_scene"], window.MetadataInput["entry_points.init_script"], window.MetadataInput.Additional],
+                window.MetadataInput.Lifecycle.Inputs.Cast<FrameworkElement>().ToArray()
             ];
             for (int page = 0; page < pages.Length; page++) { window.ShowPage(page); Layout(window); Capture(root, $"project-compact-{width}-{page + 1}"); }
             window.ShowPage(0); Layout(window);
             for (int page = 0; page < pages.Length; page++)
             {
                 Assert.Equal(page, window.Page); Layout(window); Capture(root, $"project-compact-{width}-{page + 1}"); Assert.Empty(Logical(root).OfType<ScrollViewer>());
-                Assert.Equal($"{page + 1} / 5", pageLabel.Text);
+                Assert.Equal($"{page + 1} / 6", pageLabel.Text);
                 Assert.Equal(page > 0, window.PreviousPage.IsEnabled); Assert.Equal(page < pages.Length - 1, window.NextPage.IsEnabled);
                 if (page < 2) AssertStackedCardsFit(root, page == 0 ? 3 : 2);
                 if (page == 3) for (int field = 1; field < pages[page].Length; field++)
@@ -107,8 +108,8 @@ public sealed class CompactParameterWindowsTests
             }
             Assert.True(window.MetadataInput.Additional.ActualHeight >= 60); Assert.Equal(ScrollBarVisibility.Auto, window.MetadataInput.Additional.VerticalScrollBarVisibility);
             Assert.Equal("remote_debug", window.BuildInput.Value.TestMode); Assert.Equal("single_file", window.BuildInput.Value.ReleaseMode);
-            window.ShowPage(99); Assert.Equal(4, window.Page); Assert.False(window.NextPage.IsEnabled);
-            for (int page = 3; page >= 0; page--) { Click(window.PreviousPage); Layout(window); Assert.Equal(page, window.Page); Assert.Equal($"{page + 1} / 5", pageLabel.Text); foreach (var item in fixedBounds) Assert.Equal(item.Value, Bounds(item.Key, root)); }
+            window.ShowPage(99); Assert.Equal(5, window.Page); Assert.False(window.NextPage.IsEnabled);
+            for (int page = 4; page >= 0; page--) { Click(window.PreviousPage); Layout(window); Assert.Equal(page, window.Page); Assert.Equal($"{page + 1} / 6", pageLabel.Text); foreach (var item in fixedBounds) Assert.Equal(item.Value, Bounds(item.Key, root)); }
             window.ShowPage(-1); Assert.Equal(0, window.Page); Assert.False(window.PreviousPage.IsEnabled);
             Click(cancel); Assert.False(File.Exists(Path.Combine(project.Path, "engine/build.json")));
         }

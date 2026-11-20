@@ -378,11 +378,10 @@ public partial class MainWindow : Window
 
     private async void FileActionsComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (sender is not ComboBox combo || combo.SelectedItem is not ComboBoxItem item || combo.Tag is not ProjectFile file) return;
-        string action = item.Content?.ToString() ?? "";
+        if (sender is not ComboBox { SelectedItem: ComboBoxItem { Content: string action }, DataContext: ProjectBrowserEntry entry } combo) return;
         // Reset before awaiting or changing ItemsSource: virtualized rows may be recycled.
         combo.SelectedItem = null;
-        await PerformFileActionAsync(file, action);
+        await PerformBrowserActionAsync(entry, action);
     }
 
     private async Task PerformFileActionAsync(ProjectFile file, string action)

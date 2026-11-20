@@ -62,9 +62,10 @@ public sealed class ProjectBuildUiTests
                 window.BuildInput.ReleaseMode.SelectedValue = "portable"; Assert.Equal("local", window.BuildInput.Value.EffectiveSaveLocation); Assert.False(window.BuildInput.Saves.IsEnabled);
                 Assert.DoesNotContain(window.BuildInput.Children.OfType<Button>(), button => Equals(button.Content, "Собрать релиз"));
                 Click(window.NextPage); Assert.Equal(3, window.Page); Assert.False(window.TitleInput.IsReadOnly); window.BuildInput.Author.Text = "Draft author";
-                Click(window.NextPage); Assert.Equal(4, window.Page); Assert.False(window.NextPage.IsEnabled);
+                Click(window.NextPage); Assert.Equal(4, window.Page); Assert.True(window.NextPage.IsEnabled);
+                Click(window.NextPage); Assert.Equal(5, window.Page); Assert.False(window.NextPage.IsEnabled);
                 Assert.Empty(Descendants(window.Content).OfType<ScrollViewer>());
-                for (int page = 3; page >= 0; page--) { Click(window.PreviousPage); Assert.Equal(page, window.Page); }
+                for (int page = 4; page >= 0; page--) { Click(window.PreviousPage); Assert.Equal(page, window.Page); }
                 Assert.Equal("draft/saves", window.SavesInput.Text); Assert.Equal("Draft author", window.BuildInput.Author.Text); Assert.Equal("remote_debug", window.BuildInput.Value.TestMode);
                 Assert.False(File.Exists(Path.Combine(project.Path, "engine", "build.json")));
                 await window.SaveAsync(); var saved = ProjectBuildSettingsStore.Load(project.Path); Assert.Equal("remote_debug", saved.TestMode); Assert.Equal("portable", saved.ReleaseMode); Assert.Equal("Draft author", saved.Author); Assert.Equal("draft/saves", PerformanceSettingsStore.LoadProject(project.Path).SavesPath);

@@ -10,30 +10,29 @@ public sealed class ScriptDocumentTests
     [Theory]
     [InlineData(1500, 950)]
     [InlineData(1100, 700)]
-    public Task ModeSwitch_UsesTheColorSegmentsOnlyInLua(double width, double height) => WorkspaceTabsTests.Sta(async () =>
+    public Task ModeSwitch_UsesColorSegmentsWithSpacingInLuaKrlAndKnegraph(double width, double height) => WorkspaceTabsTests.Sta(async () =>
     {
         using var fixture = new TempProject();
         string lua = fixture.Write("game/scripts/helper.lua", "-- helper");
+        string knegraph = fixture.Write("game/scenes/extra.knegraph", VisualScript.Create().Serialize());
         var editor = new ScriptEditor();
         var code = (RadioButton)editor.FindName("CodeMode");
         var graph = (RadioButton)editor.FindName("GraphMode");
         var track = (Border)editor.FindName("ModeTrack");
 
-        await editor.OpenAsync(fixture.ProjectPath, lua);
-        editor.Measure(new Size(width, height));
-        editor.Arrange(new Rect(0, 0, width, height));
         var style = editor.Resources["LuaModeSegment"];
-        Assert.Same(style, code.Style);
-        Assert.Same(style, graph.Style);
-        var trackBounds = track.TransformToAncestor(editor).TransformBounds(new Rect(track.RenderSize));
-        Assert.True(trackBounds.Left >= 0 && trackBounds.Bottom <= height && trackBounds.Right <= width);
-        Assert.True(code.ActualWidth > 30 && graph.ActualWidth > 60);
-
-        await editor.OpenAsync(fixture.ProjectPath, Path.Combine(fixture.ProjectPath, "game/scenes/main.krl"));
-        Assert.NotSame(style, code.Style);
-        Assert.NotSame(style, graph.Style);
-        Assert.Equal(new Thickness(0), track.Padding);
-        Assert.Equal(new Thickness(8, 0, 8, 0), code.Margin);
+        foreach (string source in new[] { lua, Path.Combine(fixture.ProjectPath, "game/scenes/main.krl"), knegraph })
+        {
+            await editor.OpenAsync(fixture.ProjectPath, source);
+            editor.Measure(new Size(width, height));
+            editor.Arrange(new Rect(0, 0, width, height));
+            Assert.Same(style, code.Style);
+            Assert.Same(style, graph.Style);
+            var trackBounds = track.TransformToAncestor(editor).TransformBounds(new Rect(track.RenderSize));
+            Assert.True(trackBounds.Left >= 8 && trackBounds.Bottom <= height - 6 && trackBounds.Right <= width - 8);
+            Assert.True(code.ActualWidth > 30 && graph.ActualWidth > 60);
+            Assert.Equal(new Thickness(2), track.Padding);
+        }
     });
 
     [Fact]

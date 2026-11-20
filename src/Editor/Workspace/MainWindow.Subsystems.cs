@@ -11,8 +11,16 @@ public partial class MainWindow
         if (currentProject is not { } project || sender is not ScriptEditor editor) return;
         await RunOperationAsync(async () =>
         {
-            var node = editor.Document?.Graph?.Nodes.SingleOrDefault(node => node.Id == nodeId && node.Kind is ScriptNodeKind.Subsystem or ScriptNodeKind.ShaderContainer);
+            var node = editor.Document?.Graph?.Nodes.SingleOrDefault(node => node.Id == nodeId && node.Kind is ScriptNodeKind.Subsystem or ScriptNodeKind.ShaderContainer or ScriptNodeKind.CallVisualLua);
             if (node == null) return;
+            if (node.Kind == ScriptNodeKind.CallVisualLua)
+            {
+                if (string.IsNullOrWhiteSpace(node.Path)) return;
+                string module = PathSafety.ResolveRelative(project.Path, node.Path);
+                if (!ScriptDocument.IsVisualLuaPath(module)) throw new InvalidDataException("Выберите модуль .vlua.");
+                await OpenScriptAsync(module);
+                return;
+            }
             bool shader = node.Kind == ScriptNodeKind.ShaderContainer;
             string path;
             if (string.IsNullOrWhiteSpace(node.Path))

@@ -11,5 +11,6 @@ internal sealed record ProjectBrowserEntry(string Name, string RelativePath, Pro
     public string PathLabel => RelativePath;
     public string Kind => File?.FileType ?? "Папка";
     public ProjectFile? ProjectFile => File;
+    public string OpenAction => IsDirectory ? "Открыть" : "Редактировать";
     public ImageSource? Icon => WindowsFileIcons.Get(Path.GetExtension(Name), IsDirectory);
 }

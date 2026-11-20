@@ -134,6 +134,8 @@ public sealed partial class ScriptDocument
         var entry = json["entry_points"] as JsonObject ?? new();
         bool changed = Update("main_scene", ["game/scenes/main.lua", "main.lua"]) |
             Update("init_script", ["game/scripts/gamelogic.lua", "game/scripts/game_init.lua", "gamelogic.lua"]);
+        foreach (string key in new[] { "pre_menu_scene", "idle_script", "save_script", "exit_script", "menu_script", "error_script" })
+            changed |= Update(key, []);
         if (!changed) return null;
         if (entry.Parent == null) json["entry_points"] = entry;
         return JsonSerializer.SerializeToUtf8Bytes(json, ProjectConfiguration.JsonOptions);

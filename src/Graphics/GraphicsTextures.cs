@@ -9,6 +9,7 @@ internal static class GraphicsTextures
 {
     private static readonly ConditionalWeakTable<BitmapSource, GraphicsTexture> cache = new();
     private static long nextId;
+    internal static void Clear() => cache.Clear();
     internal static GraphicsTexture Get(BitmapSource source) => cache.GetValue(source, image =>
     {
         BitmapSource bitmap = image.Format == PixelFormats.Pbgra32 ? image : new FormatConvertedBitmap(image, PixelFormats.Pbgra32, null, 0);

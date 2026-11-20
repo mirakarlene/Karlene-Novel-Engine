@@ -11,6 +11,7 @@ namespace KNE;
 internal static class WindowsFileIcons
 {
     private static readonly Dictionary<string, ImageSource> cache = new(StringComparer.OrdinalIgnoreCase);
+    internal static void Clear() { lock (cache) cache.Clear(); }
     internal static ImageSource? Get(string extension, bool directory)
     {
         string key = directory ? "<folder>" : extension.ToLowerInvariant();

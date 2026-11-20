@@ -168,7 +168,7 @@ public partial class ScriptEditor
             GraphCanvas.Children.Add(shadow); cardShadows.Add(node.Id, shadow);
             card.PreviewMouseLeftButtonDown += (_, args) =>
             {
-                if (node.Kind is not (ScriptNodeKind.Subsystem or ScriptNodeKind.ShaderContainer) || args.ClickCount != 2) return;
+                if (node.Kind is not (ScriptNodeKind.Subsystem or ScriptNodeKind.ShaderContainer or ScriptNodeKind.CallVisualLua) || args.ClickCount != 2) return;
                 for (DependencyObject? target = args.OriginalSource as DependencyObject; target != null && target != card; target = VisualTreeHelper.GetParent(target))
                     if (target is ButtonBase or Thumb) return;
                 args.Handled = true; OpenSubsystem(node.Id);

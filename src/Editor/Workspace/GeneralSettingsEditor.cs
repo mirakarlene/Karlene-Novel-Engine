@@ -31,6 +31,8 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     internal Dictionary<string, string> Hotkeys { get; private set; } = [];
     internal Func<Task>? BackupRequested { get; set; }
     internal Func<Task>? HistoryRequested { get; set; }
+    internal Func<Task>? ClearCacheRequested { get; set; }
+    internal CheckBox LuaLibraryMotion { get; } = Check("Анимация в каталоге Visual Lua");
     internal Func<Task>? TestNotificationRequested { get; set; }
     internal Action? ResetWorkRequested { get; set; }
     internal Func<string>? ThemeProvider { get; set; }
@@ -57,6 +59,14 @@ public sealed class GeneralSettingsEditor : ScrollViewer
             var window = new HotkeySettingsWindow(Hotkeys) { Owner = Window.GetWindow(this) };
             EditorTheme.Apply(window, ThemeProvider?.Invoke() ?? "kne"); if (window.ShowDialog() == true) Hotkeys = window.Profile; return Task.CompletedTask;
         });
+        var editorTools = new StackPanel();
+        editorTools.Children.Add(new TextBlock { Text = "Редактор", FontWeight = FontWeights.SemiBold, Margin = new(0, 0, 0, 4) });
+        var toolsRow = new WrapPanel();
+        Button(toolsRow, "Удалить весь кэш", () => ClearCacheRequested?.Invoke() ?? Task.CompletedTask);
+        LuaLibraryMotion.Margin = new(12, 6, 0, 0);
+        toolsRow.Children.Add(LuaLibraryMotion);
+        editorTools.Children.Add(toolsRow);
+        keys.Children.Add(editorTools);
         var startup = Section(behaviorLeft, "Поведение при запуске"); Field(startup, "При запуске KNE…", Startup);
         projectRow = PathRow(StartupProject, "Выбрать проект…", () => BrowseFolder(StartupProject)); startup.Children.Add(projectRow);
         startup.Children.Add(Hint("Если выбран проект, но он был удалён или перемещён, KNE откроет главный экран и покажет предупреждение"));
@@ -82,6 +92,7 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         Startup.SelectedValue = value.Startup; StartupProject.Text = value.StartupProject; SoundEnabled.IsChecked = value.NotificationSound; Sound.SelectedValue = value.Sound; SoundFile.Text = value.SoundFile;
         Toasts.IsChecked = value.Toasts; Aggregate.IsChecked = value.AggregateNotifications; Minimized.IsChecked = value.NotifyMinimized; Tips.IsChecked = value.NotifyTips;
         Breaks.IsChecked = value.BreakReminders; BreakInterval.SelectedValue = value.BreakMinutes; BreakType.SelectedValue = value.StrictBreak ? "strict" : "soft"; BreakDuration.SelectedValue = value.BreakDuration; WorkTime.IsChecked = value.ShowWorkTime;
+        LuaLibraryMotion.IsChecked = value.LuaLibraryMotion;
         Hotkeys = new(keys); Status.Text = ""; Refresh();
     }
     internal EditorPreferences Value => new()
@@ -90,7 +101,8 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         AutosaveMinutes = (int?)AutosaveInterval.SelectedValue ?? 5, AutosaveVersions = (int?)HistoryLimit.SelectedValue ?? 25, KeepHistory = KeepHistory.IsChecked == true,
         Startup = (string?)Startup.SelectedValue ?? "home", StartupProject = StartupProject.Text.Trim(), NotificationSound = SoundEnabled.IsChecked == true, Sound = (string?)Sound.SelectedValue ?? "standard", SoundFile = SoundFile.Text,
         Toasts = Toasts.IsChecked == true, AggregateNotifications = Aggregate.IsChecked == true, NotifyMinimized = Minimized.IsChecked == true, NotifyTips = Tips.IsChecked == true,
-        BreakReminders = Breaks.IsChecked == true, BreakMinutes = (int?)BreakInterval.SelectedValue ?? 60, StrictBreak = (string?)BreakType.SelectedValue == "strict", BreakDuration = (int?)BreakDuration.SelectedValue ?? 5, ShowWorkTime = WorkTime.IsChecked == true
+        BreakReminders = Breaks.IsChecked == true, BreakMinutes = (int?)BreakInterval.SelectedValue ?? 60, StrictBreak = (string?)BreakType.SelectedValue == "strict", BreakDuration = (int?)BreakDuration.SelectedValue ?? 5, ShowWorkTime = WorkTime.IsChecked == true,
+        LuaLibraryMotion = LuaLibraryMotion.IsChecked == true
     };
     private void Refresh()
     {

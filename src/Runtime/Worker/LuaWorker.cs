@@ -82,9 +82,15 @@ internal static class LuaWorker
                     runtime.PlayedSeconds = request.Checkpoint?.PlayedSeconds ?? request.PlayedSeconds;
                     var logicWatch = System.Diagnostics.Stopwatch.StartNew();
                     bool inputHandled = false;
+                    string? eventText = null;
                     switch (request.Command)
                     {
                         case "start": await runtime.StartAsync().ConfigureAwait(false); break;
+                        case "pre_menu": await runtime.StartPreMenuAsync().ConfigureAwait(false); break;
+                        case "project_event":
+                            eventText = await runtime.RunProjectEventAsync(JsonSerializer.Deserialize<ProjectLifecycleEvent>(request.Text!)
+                                ?? throw new InvalidDataException("Не указано событие проекта.")).ConfigureAwait(false);
+                            break;
                         case "advance": await runtime.AdvanceAsync().ConfigureAwait(false); break;
                         case "choose": await runtime.ChooseAsync(request.Option).ConfigureAwait(false); break;
                         case "input": await runtime.SubmitInputAsync(request.Text ?? "", request.Cancel).ConfigureAwait(false); break;
@@ -100,12 +106,12 @@ internal static class LuaWorker
                     logicWatch.Stop();
                     debug?.Publish(new(false, runtime.Location, runtime.Variables, "Выполнение · " + runtime.Story.Kind));
                     GameCheckpoint? checkpoint = null;
-                    try { if (request.EditorSource == null) checkpoint = await runtime.CapturePluginCheckpointAsync(request.Command == "checkpoint").ConfigureAwait(false); }
+                    try { if (request.EditorSource == null && request.Command != "pre_menu" && eventText == null) checkpoint = await runtime.CapturePluginCheckpointAsync(request.Command == "checkpoint").ConfigureAwait(false); }
                     catch (Exception ex) when (request.Command is not ("checkpoint" or "capture"))
                     {
                         Send(new("log", Text: "Сохранение недоступно: " + ex.Message));
                     }
-                    Send(new("result", request.Id, Snapshot: new(runtime.WindowSettings, runtime.Story, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress, logicWatch.Elapsed.TotalMilliseconds, runtime.PluginScreens), Checkpoint: checkpoint, InputHandled: inputHandled));
+                    Send(new("result", request.Id, Text: eventText, Snapshot: new(runtime.WindowSettings, runtime.Story, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress, logicWatch.Elapsed.TotalMilliseconds, runtime.PluginScreens), Checkpoint: checkpoint, InputHandled: inputHandled));
                 }
                 catch (Exception ex) { Send(new("error", request.Id,
                     Snapshot: runtime == null ? null : new(runtime.WindowSettings, runtime.Story, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress),

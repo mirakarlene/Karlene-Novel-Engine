@@ -268,7 +268,7 @@ public enum ScriptNodeKind
     MinimizeGame, FullscreenGame, WindowedGame, OpenBrowser, ClipboardWrite, ClipboardRead,
     Screenshot, FileRead, FileWrite, PathExists, FileSize, FileList,
     DirectoryCreate, ProjectPath, FreezeScan, DeviceInfo, ShowFps,
-    Initialization, ReverseDialogue, Watermark, ShowInput, GlobalTimer, BuildInfo, ConnectFont, LuaBlock
+    Initialization, ReverseDialogue, Watermark, ShowInput, GlobalTimer, BuildInfo, ConnectFont, LuaBlock, CallVisualLua
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -465,7 +465,7 @@ public sealed class ScriptNode
         ScriptNodeKind.StopSound => "Остановить звук", ScriptNodeKind.Voice => "Озвучка", ScriptNodeKind.MasterVolume => "Общая громкость",
         ScriptNodeKind.Parallel => "Параллель", ScriptNodeKind.Async => "Асинхронность", ScriptNodeKind.Join => "Join",
         ScriptNodeKind.Timer => "Таймер", ScriptNodeKind.Pause => "Пауза", ScriptNodeKind.WaitCondition => "Ожидание условия",
-        ScriptNodeKind.IncludeLua => "Подключить .lua", ScriptNodeKind.IncludeCs => "Подключить .cs", ScriptNodeKind.Script => "Скрипт",
+        ScriptNodeKind.IncludeLua => "Подключить .lua", ScriptNodeKind.IncludeCs => "Подключить .cs", ScriptNodeKind.Script => "Скрипт", ScriptNodeKind.CallVisualLua => "Вызвать VLua",
         ScriptNodeKind.ConfigureDialogue => "Настроить текстовое окно", ScriptNodeKind.ConfigureButton => "Настроить кнопку",
         ScriptNodeKind.ClearBackgrounds => "Удалить все фоны", ScriptNodeKind.ClearSprites => "Удалить все спрайты",
         ScriptNodeKind.RegisterCharacter => "Персонаж", ScriptNodeKind.UpdateCharacter => "Изменить персонажа",

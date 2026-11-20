@@ -13,17 +13,67 @@ public static class BlockHelpDocument
         static string H(string value) => WebUtility.HtmlEncode(value);
         var html = new StringBuilder("""
             <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Справка по блокам · KNE</title>
-            <style>:root{color-scheme:light dark}body{font:16px/1.65 system-ui;margin:0;background:light-dark(#f7f6fa,#191c24);color:light-dark(#202733,#e5eaf3)}main{max-width:1000px;margin:auto;padding:32px}nav{display:flex;flex-wrap:wrap;gap:8px}a{color:light-dark(#3155a0,#99c5ff)}nav a{padding:6px 12px;border:1px solid #8886;border-radius:8px}article{padding:20px 24px;margin:20px 0;border:1px solid #8886;border-radius:12px;background:light-dark(white,#242935);scroll-margin-top:16px}h1,h2,h3{line-height:1.3}code{background:#8882;padding:2px 5px;border-radius:4px}li{margin:7px 0}.group{border-left:6px solid;padding-left:14px;margin-top:44px}small{opacity:.75}</style></head><body><main>
-            <h1>Блоки Karlene Novel Engine</h1><p>Справочник поставляется вместе с движком и работает без интернета. Здесь перечислены все доступные блоки и их параметры.</p>
-            <nav><a href="#kne-reference">KNE / knegraph</a><a href="#lua-reference">Lua / Visual Lua</a></nav>
+            <style>
+              :root{color-scheme:dark;--page:#11151e;--panel:#191f2c;--line:#31394b;--ink:#e8ecf5;--muted:#aeb9cb;--link:#a9c6ff;}
+              *{box-sizing:border-box}html{scroll-padding-top:2rem}body{margin:0;background:var(--page);color:var(--ink);font:16px/1.65 system-ui,sans-serif}
+              a{color:var(--link);text-decoration:none}a:hover{text-decoration:underline}a:focus-visible,summary:focus-visible{outline:2px solid var(--link);outline-offset:4px}
+              header{border-bottom:1px solid var(--line);padding:15px clamp(1rem,5vw,4rem);font-weight:700;background:var(--panel)}header strong{color:#c8d9ff}
+              .layout{max-width:1320px;margin:auto;display:grid;grid-template-columns:228px minmax(0,1fr);gap:48px;padding:32px clamp(1rem,4vw,3rem)}
+              aside{align-self:start;position:sticky;top:24px;max-height:calc(100vh - 48px);overflow:auto;padding-right:18px;border-right:1px solid var(--line)}
+              aside nav{display:grid;gap:8px}aside details{margin-top:14px}aside details a{display:block;margin:4px 0 4px 12px;color:var(--muted);font-size:.9em}summary{cursor:pointer;font-weight:600}
+              main{min-width:0;max-width:960px}h1,h2,h3,h4{line-height:1.2}h1{font-size:clamp(2rem,4vw,3.25rem);margin:0 0 .7rem}
+              h2{font-size:1.65rem;margin:2.4rem 0 .8rem}h3{font-size:1.22rem}p,ul{margin:.7rem 0}small,.lead{color:var(--muted)}
+              nav.index{display:flex;flex-wrap:wrap;gap:8px;margin:1rem 0}nav.index a{background:var(--panel);padding:4px 10px;border:1px solid var(--line);border-radius:6px}
+              .formats{display:flex;gap:12px;flex-wrap:wrap}.formats span{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);padding:6px 12px;border-radius:8px}
+              .group{border-bottom:1px solid var(--line);border-left:4px solid;padding:0 0 .6rem .75rem;margin-top:3rem}
+              article{border-bottom:1px solid var(--line);padding:1.1rem 0}article h3,article h4{margin:0 0 .45rem}article ul{padding-left:1.35rem;color:var(--muted)}article a{font-size:.86rem}
+              code,pre{font-family:ui-monospace,Consolas,monospace;background:#222b3a;border-radius:5px}code{padding:2px 5px;color:#d2e4ff}
+              pre{overflow:auto;padding:14px 16px;border:1px solid var(--line)}pre code{padding:0}li{margin:.28rem 0}.table{overflow:auto}
+              table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line)}th{background:var(--panel)}td:first-child{width:32%}
+              @media(max-width:800px){.layout{display:block}aside{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line);margin-bottom:22px;padding:0 0 16px}aside details{display:inline-block;margin-right:14px}}
+            </style></head><body id="top">
+            <header><strong>KNE</strong> &nbsp; Справочник редактора и сценариев</header>
+            <div class="layout"><aside><nav aria-label="Содержание">
+              <a href="#quick-start">Первые шаги</a><a href="#project-events">Запуск и события</a>
+              <a href="#kne-reference">KNE / knegraph</a><a href="#lua-reference">Lua / Visual Lua</a>
+            """);
+        AddContents("Блоки KNE", BlockLibrary.Groups);
+        AddContents("Блоки Lua", VisualLuaCatalog.Groups);
+        html.Append("""
+            </nav></aside><main>
+            <h1>Блоки Karlene Novel Engine</h1>
+            <p class="lead">Рабочие примеры для KRL, блок-схем KNE, Lua и Visual Lua. Справочник открывается без интернета.</p>
+            <section id="quick-start"><h2>Первые шаги</h2>
+              <ol><li>Выберите «Создать файл», затем формат, имя и папку назначения.</li>
+              <li>Для игровой сцены используйте <code>.krl</code> или <code>.knegraph</code>. В проекте должен быть один вход <code>main()</code>.</li>
+              <li>Для вспомогательного модуля используйте <code>.lua</code> или <code>.vlua</code>. Вызовите модуль из сценария или блоком «Вызвать VLua».</li></ol>
+              <p>Миникарта кода выделяет видимые строки. Миникарта схемы показывает карточки блоков. Нажмите на нужную область или перетащите рамку, чтобы переместить обзор.</p>
+            </section>
+            <section id="project-events"><h2>Запуск и события</h2>
+              <p>В «Параметрах проекта» откройте страницу «Запуск и события» и выберите файлы внутри проекта. Пустое поле отключает событие.</p>
+              <div class="table"><table><thead><tr><th scope="col">Параметр</th><th scope="col">Когда срабатывает</th></tr></thead><tbody>
+              <tr><td>Сплэш-скрин</td><td>Изображение показывается до открытия окна игры. Время задаётся в секундах.</td></tr>
+              <tr><td>Сцена до меню</td><td>При старте перед первым показом главного меню. Укажите файл с одной сценой.</td></tr>
+              <tr><td>Скрипт для главного меню</td><td>При показе главного меню.</td></tr>
+              <tr><td>Скрипт при AFK</td><td>Один раз после заданного времени без ввода. Следующее действие сбрасывает таймер.</td></tr>
+              <tr><td>Скрипт при сохранении</td><td>После успешной записи слота. Имя слота доступно в <code>project_event.slot</code>.</td></tr>
+              <tr><td>Скрипт при выходе</td><td>При запросе выхода, перед подтверждением.</td></tr>
+              <tr><td>Скрипт при ошибке</td><td>Возвращает строку для окна ошибки. Исходное сообщение доступно в <code>project_event.message</code>.</td></tr>
+              </tbody></table></div>
+              <pre><code>local event = project_event
+            if event.kind == "save" then
+                print("Сохранён слот " .. event.slot)
+            end</code></pre>
+              <pre><code>return "Возникла ошибка. Откройте игру заново."</code></pre>
+            </section>
             <section id="kne-reference"><h2>KNE / knegraph</h2>
             """);
-        html.Append("<p>").Append(ProjectFileFormats.HtmlIcon(ProjectFileFormats.Krl)).Append(" KNE и сценарии .krl &nbsp; ").Append(ProjectFileFormats.HtmlIcon(ProjectFileFormats.Graph)).Append(" Блок-схемы .knegraph</p>");
+        html.Append("""<div class="formats"><span>""").Append(ProjectFileFormats.HtmlIcon(ProjectFileFormats.Krl)).Append(" KRL · .krl</span><span>").Append(ProjectFileFormats.HtmlIcon(ProjectFileFormats.Graph)).Append(" KNE · .knegraph</span></div>");
         html.Append("""
             <p><b>Связи:</b> игра начинается с единственной функции <code>main()</code>, каждая схема содержит одно «Начало». Соедините все выходы. Порты перетаскиваются мышью; ПКМ перемещает обзор, Tab ищет существующий блок. Порядок хранения и положение карточек не задают порядок исполнения.</p>
             <p><b>Переменные:</b> значения проекта хранятся в <code>state</code> и входят в сохранения. Пути к ресурсам задаются от корня проекта. «Перейти» (goto) не возвращается, «Вызвать» (call) сохраняет место возврата. У конца вложенной ветки выбирайте «Завершить ветку / вернуться».</p>
             <p><b>Инлайн-текст:</b> <code>{player_name}</code> подставляет значение <code>state.player_name</code> в репликах, выборе, вводе, титрах и текстах показанного экрана. Неизвестная переменная — серый <code>{missing}</code>, пустая — серый <code>{null}</code>, некорректное значение — красный <code>{error}</code>. <code>{color=red}текст{/color}</code> также принимает <code>#ff0000</code> и <code>rgb(255,0,0)</code>. Вложенные цвета восстанавливают внешний цвет. Для буквальных скобок используйте <code>{{</code> и <code>}}</code>. Только в репликах: <code>{w}</code> ждёт клика, <code>{w=0.5}</code> ждёт полсекунды игрового времени. Паузы входят в сохранения.</p>
-            <p><b>Тестирование:</b> «Предпросмотр фрейма» показывает выбранный момент; «Тестировать сцену» запускает отдельную сцену, не всю игру. Ошибки содержат файл, строку и ID блока.</p><nav>
+            <p><b>Тестирование:</b> «Предпросмотр фрейма» показывает выбранный момент; «Тестировать сцену» запускает отдельную сцену, не всю игру. Ошибки содержат файл, строку и ID блока.</p><nav class="index" aria-label="Категории блоков KNE">
             """);
         foreach (var group in BlockLibrary.Groups) html.Append("<a href=\"#group-").Append(group.Id).Append("\">").Append(H(group.Title)).Append("</a>");
         html.Append("</nav><p><b>Шейдерные схемы:</b> .kneshader содержит граф значений без «Начала» и Lua-функций. Выход значения подключается к входам других блоков, итог — единственный Fragment Output. Корневые файлы применяются к цели Texture; контейнеры переиспользуются внутри родителя.</p>");
@@ -37,11 +87,17 @@ public static class BlockHelpDocument
                 html.Append("</ul><p><small>").Append(entry.Kind == ScriptNodeKind.ShaderContainer ? "В игровой схеме подключите вход и выход выполнения; внутри .kneshader используйте порты значений." : ShaderLibrary.IsShader(entry.Kind) ? "Соединяйте выходы значений с нужными входами. Шейдер запускается контейнером из сценария." : entry.Kind == ScriptNodeKind.Initialization ? "Портов нет. Допускается один блок на файл." : entry.Kind is ScriptNodeKind.Comment ? "Портов нет. Заметка не выполняется." : entry.Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.SendFlow ? "Выхода «Далее» нет: этот блок завершает текущую ветку." : "Подключите выходы к следующему блоку. Изменения свойств применяются кнопкой «Применить свойства» и сохраняются вместе со схемой.").Append("</small></p><a href=\"#\">К началу ↑</a></article>");
             }
         }
-        html.Append("""</section><section id="lua-reference"><h2>Lua / Visual Lua (VLua)</h2><p>""")
-            .Append(ProjectFileFormats.HtmlIcon(ProjectFileFormats.Lua)).Append(" Lua (.lua) &nbsp; ")
-            .Append(ProjectFileFormats.HtmlIcon(ProjectFileFormats.VisualLua)).Append(" Visual Lua (.vlua)</p>")
+        html.Append("""</section><section id="lua-reference"><h2>Lua / Visual Lua (VLua)</h2><div class="formats"><span>""")
+            .Append(ProjectFileFormats.HtmlIcon(ProjectFileFormats.Lua)).Append(" Lua · .lua</span><span>")
+            .Append(ProjectFileFormats.HtmlIcon(ProjectFileFormats.VisualLua)).Append(" Visual Lua · .vlua</span></div>")
             .Append("<p>KNE использует Lua 5.4. Тумблер «Код / Блок-схема» преобразует файл, а позиции блоков восстанавливаются при обратном преобразовании. Блок «Исходный код» хранит фрагменты, которые нельзя представить другими блоками. Комментарии не подключаются к портам и не выполняются.</p>")
-            .Append("<p>«Дебаг» запускает выбранный модуль с его зависимостями во временной копии проекта. Вывод и ошибки появляются в отчёте.</p><nav>");
+            .Append("""
+                <p>«Дебаг» запускает выбранный модуль с зависимостями во временной копии. В отчёте отображаются вывод Lua и ошибки.</p>
+                <h3>Вызов модуля из KNE</h3>
+                <p>Укажите путь от корня проекта в блоке «Вызвать VLua». Двойной щелчок по блоку открывает модуль. В KRL используйте ту же команду:</p>
+                <pre><code>call_vlua("game/scripts/inventory.vlua")</code></pre>
+                <nav class="index" aria-label="Категории Visual Lua">
+                """);
         foreach (var group in VisualLuaCatalog.Groups)
             html.Append("<a href=\"#group-").Append(group.Id).Append("\">").Append(H(group.Title)).Append("</a>");
         html.Append("</nav>");
@@ -51,7 +107,15 @@ public static class BlockHelpDocument
             foreach (var entry in VisualLuaCatalog.Definitions.Where(entry => entry.Group == group.Id))
                 html.Append("<article><h4>").Append(H(entry.Title)).Append("</h4><pre><code>").Append(H(entry.Description)).Append("</code></pre></article>");
         }
-        return html.Append("</section></main></body></html>").ToString();
+        return html.Append("</section></main></div></body></html>").ToString();
+
+        void AddContents(string title, IEnumerable<BlockGroup> groups)
+        {
+            html.Append("<details><summary>").Append(H(title)).Append("</summary>");
+            foreach (var group in groups)
+                html.Append("<a href=\"#group-").Append(group.Id).Append("\">").Append(H(group.Title)).Append("</a>");
+            html.Append("</details>");
+        }
     }
 
     /// <summary>Exports the latest manual atomically to a local HTML file.</summary>
@@ -179,6 +243,7 @@ public static class BlockHelpDocument
             ScriptNodeKind.Timer or ScriptNodeKind.Pause => ["Длительность 0–3600 секунд. Приостанавливает текущую ветку, не блокируя окно и параллельные задачи."],
             ScriptNodeKind.WaitCondition => ["Переменная, оператор, тип и значение для сравнения; таймаут в секундах. Нулевой таймаут — без ограничения. По истечении ненулевого таймаута возникает ошибка."],
             ScriptNodeKind.ConfigureDialogue or ScriptNodeKind.ConfigureButton => ["Для кнопки выберите цель: next/save/load/auto_save/pause/choice. Параметры: X/Y/ширина/высота, позиция на экране, шрифт/семейство/размер/вес, цвет текста и фона, прозрачность, скругление, текстура, отступы и выравнивание. Сброс возвращает вид из engine. Меняет игровой UI, не тему редактора."],
+            ScriptNodeKind.CallVisualLua => ["Путь к модулю .vlua от корня проекта. Блок исполняет код модуля при каждом входе. Двойной щелчок открывает назначенный файл в редакторе."],
             ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script => ["Путь внешнего файла в проекте. Подключить .lua/.cs загружает плагин; Скрипт создаёт/открывает .lua/.krl/.cs в редакторе из настроек и исполняет при входе в блок. Плагины выполняют внешний код; безопасный режим движка отключает сторонние плагины."],
             _ => throw new ArgumentOutOfRangeException(nameof(kind), "Блок не доступен в текущем каталоге.")
         };

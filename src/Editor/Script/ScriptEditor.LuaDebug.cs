@@ -10,7 +10,7 @@ public partial class ScriptEditor
     {
         RunButton.Visibility = TestSceneButton.Visibility = MainSceneButton.Visibility = ExportButton.Visibility =
             visualLua ? Visibility.Collapsed : Visibility.Visible;
-        DebugLuaButton.Visibility = visualLua ? Visibility.Visible : Visibility.Collapsed;
+        DebugLuaButton.Visibility = visualLua && Document?.Graph?.IsVisualLua == true ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async void DebugLua_Click(object sender, RoutedEventArgs e)

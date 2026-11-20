@@ -278,6 +278,7 @@ public partial class GameWindow
                     var info = EngineLaunch.CreateStartInfo("--system-restart");
                     info.WindowStyle = ProcessWindowStyle.Normal;
                     using var process = Process.Start(info) ?? throw new IOException("Не удалось перезапустить игру.");
+                    exitApproved = true;
                     Close();
                     return;
                 }
@@ -286,6 +287,7 @@ public partial class GameWindow
                 var replacement = new GameWindow(loadedProject, preview: preview) { CountSystemLaunch = false };
                 if (Application.Current?.MainWindow == this) Application.Current.MainWindow = replacement;
                 replacement.Show();
+                exitApproved = true;
                 Close();
                 return;
             }

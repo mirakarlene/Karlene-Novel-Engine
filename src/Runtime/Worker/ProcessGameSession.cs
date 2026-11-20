@@ -62,6 +62,9 @@ public sealed class ProcessGameSession : IGameSession
     }
 
     public Task StartAsync(CancellationToken cancellationToken = default) => ExecuteAsync("start", cancellationToken);
+    internal Task StartPreMenuAsync(CancellationToken token) => ExecuteAsync("pre_menu", token);
+    internal async Task<string?> RunProjectEventAsync(ProjectLifecycleEvent invocation, CancellationToken token) =>
+        (await ExecuteAsync("project_event", token, text: JsonSerializer.Serialize(invocation)).ConfigureAwait(false)).Text;
     public IReadOnlyList<string> PluginScreens { get { lock (sync) return snapshot.PluginScreens ?? []; } }
     public async Task<bool> InterceptInputAsync(PluginInput input, CancellationToken cancellationToken = default) =>
         (await ExecuteAsync("plugin_input", cancellationToken, text: JsonSerializer.Serialize(input)).ConfigureAwait(false)).InputHandled;
@@ -152,7 +155,7 @@ public sealed class ProcessGameSession : IGameSession
                 if (command != "checkpoint" && message.Snapshot != null) logicMilliseconds = message.Snapshot.LogicMilliseconds;
                 recovery = message.Checkpoint;
                 canReturnAfterError = false;
-                if (command is "start" or "restore") started = true;
+                if (command is "start" or "pre_menu" or "restore") started = true;
             }
             return message;
         }
@@ -207,10 +210,10 @@ public sealed class ProcessGameSession : IGameSession
             }
             process = worker!;
             safePoint = recovery;
-            if (restart && started && command is not ("start" or "restore") && safePoint == null)
+            if (restart && started && command is not ("start" or "pre_menu" or "restore") && safePoint == null)
                 throw new InvalidOperationException("После остановки требуется перезапустить игру: состояние нельзя восстановить.");
         }
-        if (restart && started && command is not ("start" or "restore"))
+        if (restart && started && command is not ("start" or "pre_menu" or "restore"))
             await SendAsync(process, new(++requestId, "restore", Checkpoint: safePoint, EditorSource: editorSource), token).ConfigureAwait(false);
         return await SendAsync(process, new(++requestId, command, option, text, checkpoint, editorSource, seconds, cancel), token).ConfigureAwait(false);
     }

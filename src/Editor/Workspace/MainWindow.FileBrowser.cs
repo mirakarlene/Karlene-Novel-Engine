@@ -5,6 +5,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using System.Windows.Input;
+using Microsoft.VisualBasic;
 
 namespace KNE;
 
@@ -112,11 +113,62 @@ public partial class MainWindow
     private void FileTiles_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e) =>
         FileTiles.SelectedItem = BrowserItemAtDoubleClick(FileTiles, e.OriginalSource as DependencyObject) as ProjectBrowserEntry;
     private void FileTiles_ContextMenuOpening(object sender, ContextMenuEventArgs e)
-    { if (FileTiles.SelectedItem is not ProjectBrowserEntry { File: not null }) e.Handled = true; }
+    {
+        if (FileTiles.SelectedItem is not ProjectBrowserEntry entry) { e.Handled = true; return; }
+        if (FileTiles.ContextMenu.Items[0] is MenuItem open) open.Header = entry.OpenAction;
+    }
     private async void TileFileAction_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is MenuItem { Header: string action, Parent: ContextMenu { PlacementTarget: ListBox { SelectedItem: ProjectBrowserEntry { File: { } file } } } })
-            await PerformFileActionAsync(file, action);
+        if (sender is MenuItem { Header: string action, Parent: ContextMenu { PlacementTarget: ListBox { SelectedItem: ProjectBrowserEntry entry } } })
+            await PerformBrowserActionAsync(entry, action);
+    }
+
+    private Task PerformBrowserActionAsync(ProjectBrowserEntry entry, string action) =>
+        entry.File is { } file ? PerformFileActionAsync(file, action) : PerformFolderActionAsync(entry, action);
+
+    private async Task PerformFolderActionAsync(ProjectBrowserEntry entry, string action)
+    {
+        if (currentProject is not { } project) return;
+        if (action == "Открыть") { TryNavigateBrowserDirectory(entry.RelativePath); return; }
+        await RunOperationAsync(async () =>
+        {
+            string source = ProjectDirectories.Validate(project, entry.RelativePath);
+            if (action != "Дублировать")
+            {
+                ProjectDirectories.CheckEditable(project, source);
+                if (OpenEditors.Any(editor => editor.Document is { } document && ProjectDirectories.Contains(source, document.FilePath)))
+                    throw new InvalidOperationException("Закройте сценарии из этой папки перед операцией.");
+            }
+            string parent = Path.GetDirectoryName(source)!;
+            string? target = null;
+            switch (action)
+            {
+                case "Переименовать":
+                    string name = Interaction.InputBox("Введите новое имя папки:", "Переименование", entry.Name);
+                    if (name.Length == 0 || name.Equals(entry.Name, StringComparison.OrdinalIgnoreCase)) return;
+                    target = Path.Combine(parent, CompleteFileName(name, ""));
+                    await Task.Run(() => ProjectDirectories.Move(project.Path, source, target), lifetime.Token);
+                    break;
+                case "Переместить":
+                    string? destination = PickDestinationFolder(project.Path, parent);
+                    if (destination == null || destination.Equals(parent, StringComparison.OrdinalIgnoreCase)) return;
+                    target = Path.Combine(destination, entry.Name);
+                    await Task.Run(() => ProjectDirectories.Move(project.Path, source, target), lifetime.Token);
+                    break;
+                case "Дублировать":
+                    target = PickNamedDestination(project.Path, parent, entry.Name + "_copy", "");
+                    if (target == null) return;
+                    await ProjectDirectories.CopyAsync(project.Path, source, target, lifetime.Token);
+                    break;
+                case "Удалить":
+                    if (MessageBox.Show(this, $"Удалить «{entry.Name}» со всем содержимым?", "Удаление папки",
+                        MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+                    await Task.Run(() => ProjectDirectories.Delete(project.Path, source), lifetime.Token);
+                    break;
+            }
+            await OpenProjectAsync(project.Path);
+            if (target != null) RefreshBrowserEntries(Path.GetRelativePath(project.Path, target));
+        }, "Работа с папкой…");
     }
 
     // Resolve the hit row rather than the last selection. A blank/header click must never reopen it.

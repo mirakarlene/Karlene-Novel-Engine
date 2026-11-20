@@ -27,6 +27,7 @@ public partial class MainWindow
         GeneralSettingsPage.ThemeProvider = () => (string?)ThemeInput.SelectedValue ?? settings.Theme;
         GeneralSettingsPage.BackupRequested = ManualBackupAsync;
         GeneralSettingsPage.HistoryRequested = OpenVersionHistoryAsync;
+        GeneralSettingsPage.ClearCacheRequested = ClearEditorCacheAsync;
         GeneralSettingsPage.TestNotificationRequested = async () =>
         {
             var preferences = GeneralSettingsPage.Value;

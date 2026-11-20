@@ -50,9 +50,13 @@
                 <Button x:Name="CloseDocumentButton" Content="Закрыть" Padding="8,5" Margin="0,0,5,4" Click="CloseDocument_Click" IsEnabled="False"/>
             </WrapPanel>
         </StackPanel>
-        <local:KrlCodeEditor x:Name="CodeEditor" Grid.Row="1" Visibility="Collapsed"
-                 FontFamily="Consolas" FontSize="14" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+        <Grid Grid.Row="1" Visibility="{Binding Visibility, ElementName=CodeEditor}">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="84"/></Grid.ColumnDefinitions>
+            <local:KrlCodeEditor x:Name="CodeEditor" Visibility="Collapsed"
+                 FontFamily="Consolas" FontSize="14" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"
                  TextChanged="Code_TextChanged" SelectionChanged="Code_SelectionChanged"/>
+            <local:EditorMinimap x:Name="CodeMinimap" Grid.Column="1" AutomationProperties.Name="Миникарта кода" ToolTip="Нажмите или перетащите область просмотра"/>
+        </Grid>
         <Grid x:Name="GraphPanel" Grid.Row="1" Visibility="Collapsed">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="210"/></Grid.ColumnDefinitions>
             <Grid>
@@ -77,6 +81,8 @@
                         <Canvas x:Name="GraphCanvas" Width="1600" Height="1000" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top">
                             <Canvas.RenderTransform><TransformGroup><ScaleTransform x:Name="CanvasScale"/><TranslateTransform x:Name="CanvasPan"/></TransformGroup></Canvas.RenderTransform>
                         </Canvas>
+                        <local:EditorMinimap x:Name="GraphMinimap" Width="126" Height="88" Margin="8" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                             AutomationProperties.Name="Миникарта схемы" ToolTip="Нажмите или перетащите область просмотра"/>
                     </Grid>
                 </Border>
             </Grid>

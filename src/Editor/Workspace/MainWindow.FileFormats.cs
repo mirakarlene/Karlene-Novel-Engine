@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using Microsoft.Win32;
+using Microsoft.VisualBasic;
 
 namespace KNE;
 
@@ -10,14 +11,25 @@ public partial class MainWindow
 {
     private ProjectFileFormat? PickProjectFormat(bool import)
     {
+        var window = BuildFormatPicker(import);
+        ProjectFileFormat? selected = null;
+        foreach (var row in ((StackPanel)window.Content).Children.OfType<UniformGrid>())
+            foreach (var button in row.Children.OfType<Button>())
+                button.Click += (_, _) => { selected = (ProjectFileFormat)button.Tag; window.DialogResult = true; };
+        window.Owner = this;
+        EditorTheme.Apply(window, settings.Theme);
+        return window.ShowDialog() == true ? selected : null;
+    }
+
+    internal static Window BuildFormatPicker(bool import)
+    {
         var groups = new StackPanel { Margin = new Thickness(16) };
         var window = new Window
         {
-            Owner = this, Title = import ? "Импорт файла" : "Создать файл",
+            Title = import ? "Импорт файла" : "Создать файл",
             SizeToContent = SizeToContent.WidthAndHeight, ResizeMode = ResizeMode.NoResize,
             WindowStartupLocation = WindowStartupLocation.CenterOwner, Content = groups
         };
-        ProjectFileFormat? selected = null;
         foreach (var group in import ? ProjectFileFormats.ImportGroups : ProjectFileFormats.CreateGroups)
         {
             var row = new UniformGrid { Columns = 3, Margin = new Thickness(0, 0, 0, 6) };
@@ -30,40 +42,65 @@ public partial class MainWindow
                 tile.Children.Add(new TextBlock { Text = format.Title, TextAlignment = TextAlignment.Center });
                 if (format.Extension.Length > 0)
                     tile.Children.Add(new TextBlock { Text = format.Extension, TextAlignment = TextAlignment.Center });
-                var button = new Button { Content = tile, Width = 148, Height = 82, Margin = new Thickness(3) };
-                button.Click += (_, _) => { selected = format; window.DialogResult = true; };
+                var button = new Button { Content = tile, Tag = format, Width = 148, Height = 82, Margin = new Thickness(3) };
                 row.Children.Add(button);
             }
             groups.Children.Add(row);
         }
         groups.Children.Add(new Button { Content = "Отмена", IsCancel = true, HorizontalAlignment = HorizontalAlignment.Center, Padding = new Thickness(12, 4, 12, 4) });
-        EditorTheme.Apply(window, settings.Theme);
-        return window.ShowDialog() == true ? selected : null;
+        return window;
     }
 
-    private async void BtnCreateFile_Click(object sender, RoutedEventArgs e)
+    private async void BtnCreateFile_Click(object sender, RoutedEventArgs e) => await RunOperationAsync(async () =>
     {
         if (currentProject is not { } project || PickProjectFormat(import: false) is not { } format) return;
-        string initial = format.Folder == null ? project.Path : Path.Combine(project.Path, format.Folder);
-        var dialog = new SaveFileDialog
+        string initial = format.Folder == null ? Path.Combine(project.Path, browserDirectory) : Path.Combine(project.Path, format.Folder);
+        string? target = PickNamedDestination(project.Path, initial, format.IsDirectory ? "Новая папка" : "new_file", format.Extension);
+        if (target == null) return;
+        await CreateProjectEntryAsync(project, format, target, lifetime.Token);
+        await OpenProjectAsync(project.Path);
+        if (!format.IsDirectory && (ScriptDocument.IsGraphPath(target) || ScriptDocument.IsCodePath(target))) await OpenScriptAsync(target);
+    }, "Создание файла…");
+
+    internal static Task CreateProjectEntryAsync(ProjectInfo project, ProjectFileFormat format, string path, CancellationToken token)
+    {
+        if (!format.IsDirectory && ScriptDocument.IsGraphPath(path)) return ScriptDocument.CreateVisualAsync(project.Path, path, token);
+        return Task.Run(() =>
         {
-            Title = "Создать файл", Filter = format.Filter, DefaultExt = format.Extension,
-            InitialDirectory = Directory.Exists(initial) ? initial : project.Path,
-            FileName = "new_file" + format.Extension, AddExtension = true, OverwritePrompt = false
-        };
-        if (dialog.ShowDialog(this) != true) return;
-        await RunOperationAsync(async () =>
+            if (format.IsDirectory) ProjectDirectories.Create(project.Path, path);
+            else new ProjectFiles(project).Create(path, Path.GetExtension(path).Equals(".json", StringComparison.OrdinalIgnoreCase) ? "{}" : "");
+        }, token);
+    }
+
+    private string? PickNamedDestination(string allowedRoot, string initial, string suggestedName, string extension)
+    {
+        string prompt = extension.Length == 0 ? "Введите имя:" : $"Введите имя. Формат {extension} выбран.";
+        string name = Interaction.InputBox(prompt, "Имя", suggestedName);
+        if (name.Length == 0) return null;
+        name = CompleteFileName(name, extension);
+        string? directory = PickDestinationFolder(allowedRoot, initial);
+        return directory == null ? null : PathSafety.EnsureInside(allowedRoot, Path.Combine(directory, name));
+    }
+
+    internal static string CompleteFileName(string name, string extension)
+    {
+        PathSafety.ValidateFileName(name);
+        if (extension.Length > 0 && !name.EndsWith(extension, StringComparison.OrdinalIgnoreCase)) name += extension;
+        PathSafety.ValidateFileName(name);
+        return name;
+    }
+
+    private string? PickDestinationFolder(string allowedRoot, string initial)
+    {
+        string root = PathSafety.NormalizeDirectory(allowedRoot);
+        var dialog = new OpenFolderDialog { Title = "Выберите папку назначения", InitialDirectory = Directory.Exists(initial) ? initial : root };
+        if (dialog.ShowDialog(this) != true) return null;
+        string selected = PathSafety.NormalizeDirectory(dialog.FolderName);
+        if (selected.Equals(root, StringComparison.OrdinalIgnoreCase))
         {
-            string path = Path.ChangeExtension(dialog.FileName, format.Extension);
-            if (format == ProjectFileFormats.Graph || ScriptDocument.IsShaderPath(path))
-                path = ProjectShaderPaths.NewFile(project.Path, path, ScriptDocument.IsShaderPath(path));
-            if (ScriptDocument.IsGraphPath(path) || ScriptDocument.IsVisualLuaPath(path))
-                await ScriptDocument.CreateVisualAsync(project.Path, path, lifetime.Token);
-            else
-                await Task.Run(() => new ProjectFiles(project).Create(path, format.Extension == ".json" ? "{}" : ""), lifetime.Token);
-            await OpenProjectAsync(project.Path);
-            if (ScriptDocument.IsGraphPath(path) || ScriptDocument.IsLuaPath(path) || Path.GetExtension(path) == ".krl")
-                await OpenScriptAsync(path);
-        }, "Создание файла…");
+            PathSafety.RejectLinks(root);
+            return root;
+        }
+        return PathSafety.EnsureInside(root, selected);
     }
 }

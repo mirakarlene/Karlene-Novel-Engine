@@ -212,7 +212,7 @@ public partial class GameWindow
         if (!ready || execution != null || !CanSaveInScene) return;
         string slot = SaveSlotName.Text.Trim();
         bool saved = false;
-        await ExecuteAsync(async () => { await saves.SaveAsync(slot, await CheckpointAsync(execution!.Token), execution.Token); saved = true; });
+        await ExecuteAsync(async () => { await StoreSaveAsync(slot, execution!.Token); saved = true; });
         if (saved) { SaveSlotsList.ItemsSource = await saves.ListAsync(); Notify("Сохранено: " + slot); }
     }
     private async void LoadSelected_Click(object sender, RoutedEventArgs e)
