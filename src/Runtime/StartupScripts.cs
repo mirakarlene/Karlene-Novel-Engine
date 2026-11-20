@@ -11,7 +11,7 @@ public static class StartupScripts
     public static IReadOnlyList<StartupScript> Plan(ProjectInfo project)
     {
         string primary = project.InitScriptPath;
-        var paths = project.Files.Where(f => ScriptDocument.IsCodePath(f.FilePath)).Select(f => f.FilePath)
+        var paths = project.Files.Where(f => ScriptDocument.IsCodePath(f.FilePath) || ScriptDocument.IsVisualPath(f.FilePath)).Select(f => f.FilePath)
             .Append(primary).Distinct(StringComparer.OrdinalIgnoreCase);
         var scripts = new List<StartupScript>();
         foreach (string candidate in paths)
@@ -19,7 +19,16 @@ public static class StartupScripts
             string path = PathSafety.EnsureInside(project.Path, candidate);
             string source = ScriptProtection.ReadText(path);
             (int? Priority, string Source) declaration;
-            try { declaration = Declaration(source); }
+            try
+            {
+                if (ScriptDocument.IsVisualPath(path))
+                {
+                    var graph = VisualScript.Parse(source);
+                    if (graph.InitPriority is int priority) scripts.Add(new(path, priority, graph.Compile()));
+                    continue;
+                }
+                declaration = Declaration(source);
+            }
             catch (InvalidDataException ex) { throw new InvalidDataException("Инициализация «" + Path.GetRelativePath(project.Path, path) + "»: " + ex.Message, ex); }
             if (declaration.Priority != null || path.Equals(primary, StringComparison.OrdinalIgnoreCase))
                 scripts.Add(new(path, declaration.Priority ?? 0, declaration.Source));

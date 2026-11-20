@@ -18,6 +18,7 @@ public partial class GameWindow
     private Border? performanceOverlay;
     private readonly FramePacer performancePacer = new();
     private long lastPerformanceReport;
+    private bool? lastFpsOverride;
     internal string ProjectPath => project.Path;
     internal async Task CloseForProjectDeletionAsync() { Close(); if (shaders != null) await shaders.DisposeAsync(); await runtime.DisposeAsync(); }
     /// <summary>Applies saved graphics and scene policies to an already open game, without restarting its story.</summary>
@@ -30,6 +31,10 @@ public partial class GameWindow
         active.UnloadPreviousScene = saved.UnloadPreviousScene; active.AudioBuffer = saved.AudioBuffer; active.MaxAsyncTasks = saved.MaxAsyncTasks;
         active.FpsCounter = saved.FpsCounter; active.StatisticsOverlay = saved.StatisticsOverlay;
         active.FpsCorner = saved.FpsCorner; active.LoadingIndicator = saved.LoadingIndicator;
+        bool reopen = IsConsoleOpen && (active.ConsoleMode != saved.ConsoleMode || active.ConsoleHotkey != saved.ConsoleHotkey);
+        if (reopen) SetConsoleVisible(false, focus: false);
+        active.ConsoleMode = saved.ConsoleMode; active.ConsoleHotkey = saved.ConsoleHotkey;
+        if (reopen) SetConsoleVisible(true, focus: false);
         project.Engine.ScenePerformance.Scenes = scenes.Scenes;
         project.Engine.ScenePerformance.Functions = scenes.Functions;
         preloading?.Cancel(); preloading?.Dispose(); preloading = null;
@@ -48,6 +53,7 @@ public partial class GameWindow
     private void PerformanceRendering(object? sender, EventArgs args)
     {
         if (!IsVisible || WindowState == WindowState.Minimized || systemFrozen) return;
+        RenderGlobalTimer();
         if (args is RenderingEventArgs frame && performancePacer.ShouldRender(frame.RenderingTime.TotalSeconds, project.Engine.Performance.Graphics.MaxFps)) GraphicsEnvironment.For(this).Presented();
     }
     private void InitializePerformance()
@@ -57,7 +63,8 @@ public partial class GameWindow
         assets.Configure(settings.Graphics);
         Loaded += (_, _) => { CompositionTarget.Rendering -= PerformanceRendering; CompositionTarget.Rendering += PerformanceRendering; };
         diagnosticConsole = settings.DebugMode && (StandalonePlayer.Current is not { TestBuild: false } || project.Engine.Security.ReleaseDebugConsole);
-        DebugOverlay.Visibility = diagnosticConsole ? Visibility.Visible : Visibility.Collapsed;
+        DebugOverlay.Visibility = diagnosticConsole && settings.ConsoleMode == "embedded" ? Visibility.Visible : Visibility.Collapsed;
+        CommandInput.ToolTip = $"Команда отладки: Enter. {settings.ConsoleHotkey} — закрыть консоль.";
         performanceOverlay = new Border { Child = performanceText, Background = new SolidColorBrush(Color.FromArgb(210, 20, 16, 30)), Padding = new(8), Margin = new(12), IsHitTestVisible = false, Visibility = Visibility.Collapsed };
         Panel.SetZIndex(performanceOverlay, 9);
         ((Grid)Content).Children.Add(performanceOverlay);
@@ -85,18 +92,22 @@ public partial class GameWindow
         if (path != null) SceneMetrics.Record(project.Path, path, runtime.LogicMilliseconds, telemetry.DrawCalls, objects);
         var settings = project.Engine.Performance;
         if (performanceOverlay == null) return;
-        performanceOverlay.Visibility = settings.FpsCounter || settings.StatisticsOverlay ? Visibility.Visible : Visibility.Collapsed;
+        bool? fpsOverride = runtime.Visuals.FpsVisible;
+        bool showFps = fpsOverride ?? (settings.FpsCounter || settings.StatisticsOverlay);
+        if (lastFpsOverride != fpsOverride) { lastFpsOverride = fpsOverride; lastPerformanceReport = 0; }
+        performanceOverlay.Visibility = showFps || settings.StatisticsOverlay ? Visibility.Visible : Visibility.Collapsed;
         if (performanceOverlay.Visibility != Visibility.Visible) return;
         performanceOverlay.HorizontalAlignment = settings.FpsCorner.EndsWith("left", StringComparison.Ordinal) ? HorizontalAlignment.Left : HorizontalAlignment.Right;
         performanceOverlay.VerticalAlignment = settings.FpsCorner.StartsWith("top", StringComparison.Ordinal) ? VerticalAlignment.Top : VerticalAlignment.Bottom;
         long now = Stopwatch.GetTimestamp();
         if (lastPerformanceReport != 0 && Stopwatch.GetElapsedTime(lastPerformanceReport, now).TotalSeconds < 1) return;
         lastPerformanceReport = now;
-        performanceText.Text = $"FPS компоновки: {telemetry.Fps:F1}";
+        performanceText.Text = showFps ? $"FPS компоновки: {telemetry.Fps:F1}" : "";
         if (settings.StatisticsOverlay)
         {
             using var process = Process.GetCurrentProcess();
-            performanceText.Text += $"\nAPI: {(telemetry.Backend.Length == 0 ? "WPF / ожидание кадра" : telemetry.Backend)}\nRAM: {process.WorkingSet64 / 1048576d:F1} МБ\nVRAM: н/д; ресурсы KNE: {telemetry.AllocatedBytes / 1048576d:F1} МБ\nDraw Calls слоя: {telemetry.DrawCalls?.ToString() ?? "н/д"}\nЛогика: {runtime.LogicMilliseconds:F2} мс\nОбъектов сцены: {objects}";
+            if (showFps) performanceText.Text += "\n";
+            performanceText.Text += $"API: {(telemetry.Backend.Length == 0 ? "WPF / ожидание кадра" : telemetry.Backend)}\nRAM: {process.WorkingSet64 / 1048576d:F1} МБ\nVRAM: н/д; ресурсы KNE: {telemetry.AllocatedBytes / 1048576d:F1} МБ\nDraw Calls слоя: {telemetry.DrawCalls?.ToString() ?? "н/д"}\nЛогика: {runtime.LogicMilliseconds:F2} мс\nОбъектов сцены: {objects}";
             if (telemetry.Error != null) performanceText.Text += "\nРезерв WPF: " + telemetry.Error;
         }
     }

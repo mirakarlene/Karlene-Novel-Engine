@@ -13,11 +13,11 @@ namespace KNE.Tests;
 public sealed class NarrativeEditorTests
 {
     [Fact]
-    public void NarrativeCatalog_KeepsLegacyOrdinals_AndExposesSevenOrangeCommandsWithRunnableDefaults()
+    public void NarrativeCatalog_KeepsLegacyOrdinals_AndExposesOrangeCommandsWithRunnableDefaults()
     {
         Assert.Equal(6, (int)ScriptNodeKind.Character);
         Assert.Equal(47, (int)ScriptNodeKind.ClearSprites);
-        ScriptNodeKind[] kinds = [ScriptNodeKind.RegisterCharacter, ScriptNodeKind.TextPause, ScriptNodeKind.ClearText, ScriptNodeKind.AutoDialogue, ScriptNodeKind.ConsoleWrite, ScriptNodeKind.RandomBranch, ScriptNodeKind.EffectDialogue];
+        ScriptNodeKind[] kinds = [ScriptNodeKind.RegisterCharacter, ScriptNodeKind.TextPause, ScriptNodeKind.ClearText, ScriptNodeKind.AutoDialogue, ScriptNodeKind.RandomBranch, ScriptNodeKind.EffectDialogue];
         foreach (var kind in kinds)
         {
             var entry = Assert.Single(BlockLibrary.Definitions, entry => entry.Kind == kind);

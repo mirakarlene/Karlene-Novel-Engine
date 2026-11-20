@@ -12,7 +12,8 @@ public partial class ScriptEditor
 
     /// <summary>Checks the block limit and the unique entry-point rule without modifying the graph.</summary>
     public bool CanAddBlock(ScriptNodeKind kind) => Document?.Graph is { } graph && BlockLibrary.Definitions.Any(entry => entry.Kind == kind) && graph.Nodes.Count < 500 &&
-        ShaderLibrary.CanPlace(kind, graph.IsShader) && (kind != ScriptNodeKind.Start || graph.Nodes.All(node => node.Kind != ScriptNodeKind.Start));
+        ShaderLibrary.CanPlace(kind, graph.IsShader) &&
+        (kind is not (ScriptNodeKind.Start or ScriptNodeKind.Initialization) || graph.Nodes.All(node => node.Kind != kind));
 
     /// <summary>Creates a command at the center of the visible canvas, retaining the viewport and undo history.</summary>
     public void AddBlock(ScriptNodeKind kind, string? category = null)
@@ -23,7 +24,8 @@ public partial class ScriptEditor
     {
         var kind = entry.Kind;
         ApplyProperties();
-        if (!CanAddBlock(kind)) throw new InvalidOperationException(kind == ScriptNodeKind.Start ? "Блок «Начало» уже существует." : "Добавление блока недоступно: предел 500 блоков.");
+        if (!CanAddBlock(kind)) throw new InvalidOperationException(kind is ScriptNodeKind.Start or ScriptNodeKind.Initialization
+            ? "Этот блок можно добавить только один раз." : "Добавление блока недоступно: предел 500 блоков.");
         var node = BlockLibrary.Create(entry);
         node.IsShaderInvocation = kind == ScriptNodeKind.ShaderContainer && Document?.Graph?.IsShader == false;
         double centerX = (GraphScroll.ActualWidth / 2 - CanvasPan.X) / ZoomSlider.Value;
@@ -56,6 +58,13 @@ public partial class ScriptEditor
         AddCalculationFields(node);
         AddLogicFields(node);
         AddSystemFields(node);
+        if (node.Kind == ScriptNodeKind.Initialization)
+            Number("InitPriorityInput", "Приоритет загрузки (−10000…10000)", node.InitPriority, (value, number) =>
+            {
+                if (number is < -10000 or > 10000 || number != Math.Truncate(number))
+                    throw new InvalidDataException("Приоритет инициализации должен быть целым числом от −10000 до 10000.");
+                value.InitPriority = (int)number;
+            });
         AddTextInputFields(node);
         AddChoiceFields(node);
         bool literal = node.Kind is ScriptNodeKind.Condition or ScriptNodeKind.ConditionalGoto or ScriptNodeKind.SetVariable or ScriptNodeKind.While or ScriptNodeKind.WaitCondition;

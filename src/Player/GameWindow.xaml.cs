@@ -61,6 +61,7 @@ public partial class GameWindow : Window
     {
         if (loaded) return;
         loaded = true;
+        if (diagnosticConsole) SetConsoleVisible(true, focus: false);
         try { InitializePlayerPlugins(); ApplyEngineTheme(); }
         catch (Exception error) { ShowStartupError(error, "Загрузка UI плагинов"); return; }
         if (project.Engine.Window.Mode == "maximized") WindowState = WindowState.Maximized;
@@ -140,6 +141,7 @@ public partial class GameWindow : Window
         pluginOverlay.Visibility = Visibility.Collapsed;
         startupFailed = true;
         ready = false;
+        ScriptHud.Visibility = Visibility.Collapsed;
         activeScreen = null;
         screenHistory.Clear();
         screenButtons.Clear();
@@ -147,7 +149,7 @@ public partial class GameWindow : Window
         SceneArea.Visibility = Visibility.Collapsed;
         MenuOverlay.Visibility = Visibility.Collapsed;
         GameControls.Visibility = Visibility.Collapsed;
-        DebugOverlay.Visibility = diagnosticConsole ? Visibility.Visible : Visibility.Collapsed;
+        SetConsoleVisible(diagnosticConsole, focus: false);
         NoticePanel.Visibility = Visibility.Collapsed;
         MenuOverlay.IsEnabled = false;
         GameControls.IsEnabled = false;
@@ -175,6 +177,7 @@ public partial class GameWindow : Window
         currentErrorReport = GameErrorReport.Create(project, error, operation);
         if (project.Engine.Security.CrashReports) _ = PersistCrashReportAsync(currentErrorReport);
         StartupErrorMessage.Text = currentErrorReport.ToDisplayText();
+        terminal?.Write(StartupErrorMessage.Text);
         ErrorActionStatus.Text = "";
         RefreshErrorActions();
         RenderConsole();
@@ -255,6 +258,7 @@ public partial class GameWindow : Window
     private void ShowMenu()
     {
         if (startupFailed) return;
+        ScriptHud.Visibility = Visibility.Collapsed;
         screenHistory.Clear();
         var layout = project.Engine.Screens.Find(ready ? "pause" : "main_menu");
         if (layout == null)
@@ -268,7 +272,7 @@ public partial class GameWindow : Window
         ResumeButton.Visibility = ready ? Visibility.Visible : Visibility.Collapsed;
         DialoguePanel.Visibility = Visibility.Collapsed;
         GameControls.Visibility = Visibility.Collapsed;
-        if (!diagnosticConsole) DebugOverlay.Visibility = Visibility.Collapsed;
+        if (!diagnosticConsole) SetConsoleVisible(false, focus: false);
         PauseAudio();
         StartMenuMusic();
         DialogueEffects.Stop();
@@ -401,7 +405,7 @@ public partial class GameWindow : Window
                 CommandInput.IsEnabled = ready;
                 RenderOutput();
                 StartButton.IsEnabled = true; ResumeButton.IsEnabled = ready; PauseButton.IsEnabled = ready;
-                if (DebugOverlay.Visibility == Visibility.Visible && ready) CommandInput.Focus();
+                if (DebugOverlay.Visibility == Visibility.Visible && ready && (detachedConsole == null || detachedConsole.IsActive)) CommandInput.Focus();
                 else if (ready && MenuOverlay.Visibility != Visibility.Visible)
                 {
                     if (runtime.Story.Kind == "choice") ChoicePanel.Children.OfType<Button>().FirstOrDefault(button => button.IsEnabled)?.Focus();
@@ -419,10 +423,12 @@ public partial class GameWindow : Window
         string command = CommandInput.Text.Trim();
         if (command.Length == 0) return;
         CommandInput.Clear();
-        await ExecuteAsync(() => runtime.ProcessCommandAsync(command, execution!.Token), operation: "Команда отладки");
+        await RunConsoleCommandAsync(command);
     }
 
-    private void StopButton_Click(object sender, RoutedEventArgs e)
+    private void StopButton_Click(object sender, RoutedEventArgs e) => StopExecution();
+
+    private void StopExecution()
     {
         clockSuspended = true; clockTickOperation?.Cancel();
         execution?.Cancel();
@@ -499,25 +505,21 @@ public partial class GameWindow : Window
     private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (systemFrozen) { scanInput?.Invoke("key"); e.Handled = true; return; }
+        if ((!startupFailed || IsConsoleOpen) && TryToggleConsole(e)) return;
         if (ProcessPluginInput(new("key", (e.Key == Key.System ? e.SystemKey : e.Key).ToString()))) { e.Handled = true; return; }
         if (startupFailed)
         {
-            if (e.Key is Key.F3 or Key.Escape or Key.Space or Key.F11) e.Handled = true;
+            if (e.Key is Key.F3 or Key.Escape or Key.Space or Key.F11 ||
+                GameConsoleShortcut.Matches(e.Key == Key.System ? e.SystemKey : e.Key, Keyboard.Modifiers, project.Engine.Performance.ConsoleHotkey))
+                e.Handled = true;
             return;
         }
+        if (!CommandInput.IsKeyboardFocusWithin) RecordScriptInput((e.Key == Key.System ? e.SystemKey : e.Key).ToString());
         var signal = triggerInput.KeyDown(e);
         if (signal != null && runtime.Story.Triggers.Any(trigger => trigger.Matches(signal)) && ready && execution == null)
         { e.Handled = true; await DispatchTriggerAsync(signal); return; }
         if (e.Key == Key.Back && e.OriginalSource is not TextBox && ready && MenuOverlay.Visibility != Visibility.Visible) { await RollbackAsync(); e.Handled = true; return; }
         if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
-        if (e.Key == Key.F3 && (StandalonePlayer.Current is not { TestBuild: false } ? project.Engine.Game.DebugEnabled || diagnosticConsole : project.Engine.Security.ReleaseDebugConsole))
-        {
-            DebugOverlay.Visibility = DebugOverlay.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-            RenderConsole();
-            if (DebugOverlay.Visibility == Visibility.Visible) CommandInput.Focus();
-            else if (runtime.Story.Kind == "input") PlayerInput.FocusAnswer(); else NextButton.Focus();
-            e.Handled = true; return;
-        }
         if (e.Key == Key.Escape && runtime.Story.Kind == "input" && MenuOverlay.Visibility != Visibility.Visible)
         { PlayerInput.Cancel(); e.Handled = true; return; }
         if (e.Key == Key.Escape && ready && execution == null)
@@ -536,6 +538,7 @@ public partial class GameWindow : Window
     {
         DisposePlayerPlugins();
         closed = true; preloading?.Cancel(); preloading?.Dispose(); assets.Clear();
+        SetConsoleVisible(false, focus: false);
         CompositionTarget.Rendering -= PerformanceRendering;
         gameplayUi?.Reset(); gameplayUi = null;
         ScriptScreenCanvas.Children.Clear(); MainScriptScreenCanvas.Children.Clear(); ScreenCanvas.Children.Clear();
@@ -588,6 +591,7 @@ public partial class GameWindow : Window
         RenderVisuals();
         ApplyGameplayUi(runtime.Visuals);
         RenderNarrative();
+        RenderScriptHud();
         HandleSceneEnd(runtime.Story);
         shaders?.SetFrame(runtime.WindowSettings, runtime.Visuals, runtime.Story);
     }
@@ -598,6 +602,7 @@ public partial class GameWindow : Window
         foreach (string line in pendingOutput.Drain(startupFailed ? 1000 : 100))
         {
             string entry = line + Environment.NewLine;
+            terminal?.Write(line);
             lines.Enqueue(entry);
             textLength += entry.Length;
             while (lines.Count > 1000 || textLength > 200_000) textLength -= lines.Dequeue().Length;

@@ -12,7 +12,7 @@ public partial class GameWindow
     {
         try
         {
-            string directory = PathSafety.ResolveRelative(saves.DirectoryPath, "diagnostics"); System.IO.Directory.CreateDirectory(directory);
+            string directory = GameCrashReports.DirectoryPath(saves); System.IO.Directory.CreateDirectory(directory);
             string path = PathSafety.ResolveRelative(directory, "crash-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N") + ".json");
             await System.IO.File.WriteAllTextAsync(path, JsonSerializer.Serialize(report, ProjectConfiguration.JsonOptions));
         }
@@ -39,7 +39,7 @@ public partial class GameWindow
 
     private void RenderVariables()
     {
-        if (DebugOverlay.Visibility != Visibility.Visible) return;
+        if (!IsConsoleOpen) return;
         var variables = runtime is ProcessGameSession session ? session.Variables : default;
         if (formattedVariableBody == null || !variables.Equals(formattedSnapshot))
         {
@@ -55,13 +55,12 @@ public partial class GameWindow
         renderedVariables = text;
     }
 
-    private void CloseConsole_Click(object sender, RoutedEventArgs e) => DebugOverlay.Visibility = Visibility.Collapsed;
+    private void CloseConsole_Click(object sender, RoutedEventArgs e) => SetConsoleVisible(false);
 
     private void ErrorConsole_Click(object sender, RoutedEventArgs e)
     {
         if (!ConsoleAllowed) return;
-        DebugOverlay.Visibility = DebugOverlay.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-        RenderConsole();
+        SetConsoleVisible(!IsConsoleOpen);
     }
 
     private async void ErrorRestart_Click(object sender, RoutedEventArgs e) => await RestartFromErrorAsync();
@@ -71,7 +70,7 @@ public partial class GameWindow
         if (!ConsoleAllowed || !startupFailed || execution != null || closed) return;
         RestoreErrorPresentation();
         diagnosticConsole = true;
-        DebugOverlay.Visibility = Visibility.Visible;
+        SetConsoleVisible(true);
         await ExecuteAsync(async () =>
         {
             var candidate = CreateGameSession();

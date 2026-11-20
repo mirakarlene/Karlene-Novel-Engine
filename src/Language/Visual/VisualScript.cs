@@ -19,6 +19,7 @@ public sealed partial class VisualScript
 
     /// <summary>Blocks in arbitrary storage order. Connections determine execution order.</summary>
     public List<ScriptNode> Nodes { get; set; } = [];
+    [JsonIgnore] public int? InitPriority => Nodes.FirstOrDefault(node => node.Kind == ScriptNodeKind.Initialization)?.InitPriority;
 
     /// <summary>Readable JSON with named enums and rejection of unsupported fields.</summary>
     public static JsonSerializerOptions JsonOptions { get; } = new()
@@ -56,6 +57,8 @@ public sealed partial class VisualScript
             script.SetShaderContext();
             if (!script.IsShader) script.DetachLegacyComments();
             foreach (var node in script.Nodes?.Where(node => node != null && node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene) ?? []) node.Category = "flows";
+            foreach (var node in script.Nodes?.Where(node => node is { Kind: ScriptNodeKind.ConsoleWrite, Category: "narrative" }) ?? [])
+                node.Category = "meta_system";
             // Both legacy categories compared a state value to a literal. Preserve the operation,
             // ports and IDs while moving it to the current narrative branching command.
             foreach (var node in script.Nodes?.Where(node => node != null && node.Kind == ScriptNodeKind.Condition) ?? [])
@@ -83,6 +86,8 @@ public sealed partial class VisualScript
         if (Version != 1) throw new InvalidDataException("Неподдерживаемая версия блок-схемы.");
         if (!LuaSource.IsIdentifier(FunctionName)) throw new InvalidDataException("Имя функции блок-схемы: латинские буквы, цифры и _, без цифры в начале и ключевых слов Lua.");
         if (Nodes == null || Nodes.Count > 500) throw new InvalidDataException("Допускается не более 500 блоков.");
+        if (Nodes.Count(node => node?.Kind == ScriptNodeKind.Initialization) > 1)
+            throw new InvalidDataException("В файле разрешён один блок «Инициализация».");
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var node in Nodes)
         {
@@ -90,6 +95,9 @@ public sealed partial class VisualScript
                 throw new InvalidDataException("У каждого блока должен быть уникальный непустой идентификатор.");
             if (!Enum.IsDefined(node.Kind) || !Enum.IsDefined(node.ValueKind) || !Enum.IsDefined(node.Comparison) || !Enum.IsDefined(node.EndAction))
                 throw new InvalidDataException("Неизвестный тип блока, значения или сравнения.");
+            if (node.Kind == ScriptNodeKind.Initialization && (node.InitPriority is < -10000 or > 10000 ||
+                node.Next != null || node.True != null || node.False != null || node.Options?.Count > 0))
+                Fail(node, "приоритет от −10000 до 10000, блок без соединений");
             if (!double.IsFinite(node.X) || !double.IsFinite(node.Y) || Math.Abs(node.X) > 1_000_000_000 ||
                 Math.Abs(node.Y) > 1_000_000_000)
                 throw new InvalidDataException("Координаты блока должны быть конечными числами от −1000000000 до 1000000000.");
@@ -139,6 +147,9 @@ public sealed partial class VisualScript
                 catch (ArgumentException error) { Fail(node, error.Message); }
             }
         }
+        if (Nodes.FirstOrDefault(node => node.Kind == ScriptNodeKind.Initialization) is { } initialization &&
+            Nodes.SelectMany(node => node.Outputs()).Any(output => output.Target == initialization.Id))
+            Fail(initialization, "блок инициализации не имеет входов");
     }
 
     private void SetShaderContext()
@@ -238,7 +249,8 @@ public enum ScriptNodeKind
     PlayTime, BuildVersion, LaunchCount, RestartGame, ExitGame, MainMenu,
     MinimizeGame, FullscreenGame, WindowedGame, OpenBrowser, ClipboardWrite, ClipboardRead,
     Screenshot, FileRead, FileWrite, PathExists, FileSize, FileList,
-    DirectoryCreate, ProjectPath, FreezeScan
+    DirectoryCreate, ProjectPath, FreezeScan, DeviceInfo, ShowFps,
+    Initialization, ReverseDialogue, Watermark, ShowInput, GlobalTimer, BuildInfo, ConnectFont
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -310,6 +322,10 @@ public sealed class ScriptNode
     public double? Height { get; set; }
 
     /// <summary>Dialogue speaker; an empty string means narration.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public int InitPriority { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool RevealFromStart { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool ReverseWords { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool ReverseLetters { get; set; }
     public string Speaker { get; set; } = "";
 
     /// <summary>Explicit character profile reference; empty uses the manual speaker.</summary>
@@ -437,6 +453,7 @@ public sealed class ScriptNode
         ScriptNodeKind.ClearText => "Очистить текст", ScriptNodeKind.AutoDialogue => "Авто-пропуск",
         ScriptNodeKind.ConsoleWrite => "Запись в консоль", ScriptNodeKind.RandomBranch => "Случайная ветка",
         ScriptNodeKind.EffectDialogue => "Реплика с эффектом", ScriptNodeKind.TextInput => "Ввод текста",
+        ScriptNodeKind.ReverseDialogue => "Обратная реплика", ScriptNodeKind.Initialization => "Инициализация",
         ScriptNodeKind.Arithmetic => "Арифметика", ScriptNodeKind.Modulo => "Остаток от деления", ScriptNodeKind.Increment => "Инкремент", ScriptNodeKind.Decrement => "Декремент",
         ScriptNodeKind.Pow => "Степень", ScriptNodeKind.Sqrt => "Корень", ScriptNodeKind.Trigonometry => "Тригонометрия", ScriptNodeKind.Absolute => "Модуль числа",
         ScriptNodeKind.Clamp => "Ограничитель", ScriptNodeKind.Round => "Округление", ScriptNodeKind.Floor => "Floor", ScriptNodeKind.Ceil => "Ceil", ScriptNodeKind.Lerp => "Линейная интерполяция",
@@ -449,7 +466,7 @@ public sealed class ScriptNode
     {
         if (Kind == ScriptNodeKind.Plugin) { foreach (var port in Options) yield return (port.Text, port.Target); yield break; }
         if (ShaderLibrary.IsData(this)) { foreach (string output in ShaderLibrary.Get(Kind).Outputs) yield return (output, null); yield break; }
-        if (Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.SendFlow or ScriptNodeKind.Comment || SystemBlocks.EndsSession(Kind)) yield break;
+        if (Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.SendFlow or ScriptNodeKind.Comment or ScriptNodeKind.Initialization || SystemBlocks.EndsSession(Kind)) yield break;
         if (Kind == ScriptNodeKind.TextInput)
         {
             yield return (Input?.BranchOnResult == true ? "Успех" : "Далее", Next);

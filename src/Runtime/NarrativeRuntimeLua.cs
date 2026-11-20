@@ -49,11 +49,12 @@ internal static class NarrativeRuntimeLua
                 if thread then speakers[thread] = "" else main_speaker = "" end
                 kne_editor_pause()
             end
-            function kne_say(speaker, text, character, effect, auto_seconds, skippable, narration)
+            function kne_say(speaker, text, character, effect, auto_seconds, skippable, narration, reverse)
                 if character ~= nil and type(character) ~= "string" then error("ID персонажа должен быть строкой", 2) end
                 if effect ~= nil and type(effect) ~= "string" then error("Эффект должен быть JSON-строкой", 2) end
                 if skippable ~= nil and type(skippable) ~= "boolean" then error("Возможность пропуска должна быть логическим значением", 2) end
                 if narration ~= nil and type(narration) ~= "boolean" then error("Рассказчик должен быть логическим значением", 2) end
+                if reverse ~= nil and (math.type(reverse) ~= "integer" or reverse < 0 or reverse > 7) then error("Флаги обратной реплики: целое число от 0 до 7", 2) end
                 if auto_seconds ~= nil then seconds(auto_seconds) end
                 if skippable == false and auto_seconds == nil then error("Непропускаемая реплика требует время автоматического перехода", 2) end
                 speaker = speaker == nil and "" or tostring(speaker)
@@ -74,24 +75,35 @@ internal static class NarrativeRuntimeLua
                 if narration then speaker, character = "", nil end
                 local result = kne_prepare_dialogue(speaker, character, effect)
                 if result[3] ~= "" then error(result[3], 2) end
-                local parts = kne_prepare_inline_dialogue(tostring(text))
+                local parts = kne_prepare_inline_dialogue(tostring(text), reverse or 0)
                 if parts[0] ~= "" then error(parts[0], 2) end
                 local name = kne_inline_text(result[0])
-                local count, presentation = tonumber(parts[1]), nil
+                local count, presentation, revealed = tonumber(parts[1]), nil, 0
+                local total_letters = tonumber(parts[count * 3 + 1])
                 for index = 1, count do
-                    local duration = parts[index * 2 + 1]
+                    local part = index * 3 - 1
+                    local duration, letters = parts[part + 1], tonumber(parts[part + 2])
                     local final = duration == "final"
                     local wait = final and auto_seconds or tonumber(duration)
                     if wait and wait < 0 then wait = nil end
-                    local event = {kind = "dialogue", speaker = name, text = parts[index * 2],
+                    local event = {kind = "dialogue", speaker = name, text = parts[part],
                         character = result[1], effect = result[2], seconds = wait,
                         skippable = final and skippable ~= false or not final and wait == nil, presentation_id = presentation}
+                    if letters < total_letters then event.reveal_visible = letters end
                     if not kne_interactive or not coroutine.isyieldable() then
                         if index == count then
                             last = event
                             print_to_ui(kne_inline_plain(event.speaker == "" and event.text or event.speaker .. ": " .. event.text))
                         end
                     else
+                        if letters > revealed then
+                            local reveal = {kind = "dialogue", speaker = name, text = event.text, character = result[1], effect = result[2],
+                                seconds = math.min((letters - revealed) / 35, 12), skippable = true, presentation_id = presentation,
+                                reveal_from = revealed, reveal_count = letters}
+                            emit(reveal)
+                            event.presentation_id = reveal.presentation_id
+                            revealed = letters
+                        end
                         emit(event)
                         presentation = event.presentation_id
                     end

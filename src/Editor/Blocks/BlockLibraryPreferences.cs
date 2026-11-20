@@ -25,6 +25,7 @@ public sealed class BlockLibraryPreferences
         "narrative/Condition" or "logic/Condition" => "narrative/Branching",
         "narrative/GotoScene" => "flows/GotoScene",
         "narrative/CallScene" => "flows/CallScene",
+        "narrative/ConsoleWrite" => "meta_system/ConsoleWrite",
         _ => key
     };
     /// <summary>Adds a successfully inserted entry to the head of the recent list.</summary>

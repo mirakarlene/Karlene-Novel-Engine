@@ -23,6 +23,8 @@ public sealed record StoryFrame(string Kind, string Speaker, string Text, IReadO
     public double? RemainingSeconds { get; init; }
     public bool IsSkippable { get; init; } = true;
     public double EraseProgress { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? VisibleSuffix { get; init; }
     public bool CanAdvance => Kind == "preview" || (Kind is "dialogue" or "text_pause" && IsSkippable);
     public string? EndAction { get; init; }
     public string? EndScreen { get; init; }

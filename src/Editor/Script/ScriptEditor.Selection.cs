@@ -105,6 +105,8 @@ public partial class ScriptEditor
         var pasted = VisualScript.Parse(json);
         if (pasted.Nodes.Any(node => !ShaderLibrary.CanPlace(node.Kind, graph.IsShader))) throw new InvalidDataException("Шейдерные блоки можно вставлять только в .kneshader, кроме контейнера и плагинов.");
         pasted.Nodes.RemoveAll(node => node.Kind == ScriptNodeKind.Start);
+        if (graph.InitPriority != null && pasted.InitPriority != null)
+            throw new InvalidDataException("В схеме уже есть блок «Инициализация».");
         if (pasted.Nodes.Count == 0) return;
         if (graph.Nodes.Count + pasted.Nodes.Count > 500) throw new InvalidOperationException("Допускается не более 500 блоков.");
         var identities = pasted.Nodes.ToDictionary(node => node.Id, _ => Guid.NewGuid().ToString("N"), StringComparer.Ordinal);

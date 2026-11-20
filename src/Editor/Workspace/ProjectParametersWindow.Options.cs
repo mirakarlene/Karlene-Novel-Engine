@@ -20,7 +20,10 @@ public sealed partial class ProjectParametersWindow
     internal TextBox AutosaveActionsInput { get; } = new();
     internal TextBox MenuMusicInput { get; } = new();
     internal ComboBox PersistentLocationInput { get; } = GraphicsSettingsEditor.Choice(
-        [new GraphicsOption<string>("saves", "Рядом со слотами"), new("appdata", "AppData"), new("local", "Папка игры (saves)")]);
+        [new GraphicsOption<string>("local", "Папка игры (saves)"), new("appdata", "AppData")]);
+    internal ComboBox ConsoleModeInput { get; } = GraphicsSettingsEditor.Choice(
+        [new GraphicsOption<string>("embedded", "Встроенная панель"), new("window", "Отдельное окно KNE"), new("terminal", "Системная консоль Windows")]);
+    internal TextBox ConsoleHotkeyInput { get; } = new() { MaxLength = 60, ToolTip = "F3 или сочетание, например Ctrl+Shift+D" };
     internal ComboBox FileSystemInput { get; } = GraphicsSettingsEditor.Choice([new GraphicsOption<string>("project", "Только папка проекта"), new("full", "Полный доступ")]);
     private readonly Dictionary<string, byte[]?> originalEngine = [];
     private static readonly string[] EditableFiles = ["performance.json", "window.json", "game.json", "theme.json", "screens.json", "security.json"];
@@ -31,7 +34,9 @@ public sealed partial class ProjectParametersWindow
         ResolutionInput.SelectedValue = resolution?.Id ?? "custom"; CustomWidthInput.Text = project.Engine.Window.Width.ToString(); CustomHeightInput.Text = project.Engine.Window.Height.ToString(); PaletteInput.SelectedValue = project.Engine.Theme.Palette;
         PreloadInput.SelectedValue = project.Engine.Performance.PreloadScenes; RollbackInput.Text = project.Engine.Game.RollbackDepth.ToString();
         AutosaveInput.SelectedValue = project.Engine.Game.AutoSaveInterval; AutosaveActionsInput.Text = project.Engine.Game.AutoSaveActions.ToString(); MenuMusicInput.Text = project.Engine.Game.MenuMusic ?? "";
-        PersistentLocationInput.SelectedValue = project.Engine.Performance.PersistentLocation;
+        PersistentLocationInput.SelectedValue = project.Engine.Performance.PersistentLocation == "appdata" ? "appdata" : "local";
+        ConsoleModeInput.SelectedValue = project.Engine.Performance.ConsoleMode;
+        ConsoleHotkeyInput.Text = project.Engine.Performance.ConsoleHotkey;
         AutosaveInput.SelectionChanged += (_, _) => AutosaveActionsInput.IsEnabled = (string?)AutosaveInput.SelectedValue == "actions";
         AutosaveActionsInput.IsEnabled = project.Engine.Game.AutoSaveInterval == "actions";
     }
@@ -54,7 +59,7 @@ public sealed partial class ProjectParametersWindow
     {
         var panel = new StackPanel(); panel.Children.Add(Heading("Безопасность"));
         AddSwitch(panel, "encrypt", "Шифровать сценарии в релизе", value.EncryptScripts);
-        AddSwitch(panel, "release_debug", "Включить консоль отладки в релизе (F3)", value.ReleaseDebugConsole);
+        AddSwitch(panel, "release_debug", "Включить консоль отладки в релизе", value.ReleaseDebugConsole);
         AddSwitch(panel, "reports", "Генерировать отчёты при краше", value.CrashReports);
         AddSwitch(panel, "plugins", "Разрешить плагины (.lua / .cs)", value.AllowPlugins);
         AddSwitch(panel, "network", "Разрешить внешние запросы", value.AllowNetwork);
@@ -68,7 +73,9 @@ public sealed partial class ProjectParametersWindow
     {
         JsonObject draft = MetadataInput.Draft();
         var value = new ProjectPerformanceSettings { Graphics = GraphicsInput.Value, FpsCounter = Flag("fps"), FpsCorner = (string?)CornerInput.SelectedValue ?? "top_right", StatisticsOverlay = Flag("stats"), LoadingIndicator = Flag("loading"), DebugMode = Flag("debug"), Preloading = Flag("preload"), PreloadScenes = (int?)PreloadInput.SelectedValue ?? 3, UnloadPreviousScene = Flag("unload"), MaxAsyncTasks = (int?)AsyncTasksInput.SelectedValue ?? 128, AudioBuffer = (string?)AudioBufferInput.SelectedValue ?? "balanced", SavesPath = SavesInput.Text.Trim() };
-        value.PersistentLocation = (string?)PersistentLocationInput.SelectedValue ?? "saves";
+        value.PersistentLocation = (string?)PersistentLocationInput.SelectedValue ?? "local";
+        value.ConsoleMode = (string?)ConsoleModeInput.SelectedValue ?? "embedded";
+        value.ConsoleHotkey = ConsoleHotkeyInput.Text.Trim();
         value.Validate(project.Path);
         var game = Copy(project.Engine.Game); game.AutoSave = Flag("autosave"); game.AutoSaveInterval = (string?)AutosaveInput.SelectedValue ?? "dialogue";
         if (!int.TryParse(RollbackInput.Text, out int rollback) || !int.TryParse(AutosaveActionsInput.Text, out int actions)) throw new InvalidDataException("Глубина отката и число действий должны быть целыми числами.");
@@ -93,6 +100,9 @@ public sealed partial class ProjectParametersWindow
         ProjectBuildWrite? written = null;
         try
         {
+            var previous = PerformanceSettingsStore.LoadProject(project.Path);
+            var locations = GameSystemServices.PersistentDirectories(project.Path, previous.ResolveSavesPath(project.Path));
+            await PersistentGameStore.CopyIfMissingAsync(locations.For(previous.PersistentLocation), locations.For(value.PersistentLocation));
             written = await ProjectBuildSettingsStore.SaveCheckedAsync(project.Path, build, BuildInput.InitialMetadata, update: current => MetadataInput.Merge(current, draft));
             await ProjectSettingsTransaction.CommitAsync(updates, originalEngine);
         }

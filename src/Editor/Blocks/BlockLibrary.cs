@@ -82,14 +82,16 @@ public static class BlockLibrary
         Add("narrative", ScriptNodeKind.TextPause, "Пауза в тексте", "Ждать между репликами; разрешить или запретить пропуск кликом.");
         Add("narrative", ScriptNodeKind.ClearText, "Очистить текст", "Очистить текстовое окно мгновенно или с анимацией стирания.");
         Add("narrative", ScriptNodeKind.AutoDialogue, "Авто-пропуск", "Реплика с автоматическим переходом через заданное время.");
-        Add("narrative", ScriptNodeKind.ConsoleWrite, "Запись в консоль", "Вывести текст в консоль как команда print().");
         Add("narrative", ScriptNodeKind.RandomBranch, "Случайная ветка", "Выбрать один выход с заданными относительными вероятностями.");
         Add("narrative", ScriptNodeKind.EffectDialogue, "Реплика с эффектом", "Анимация каждой буквы: волна, дрожание, радуга и другие эффекты.");
+        Add("narrative", ScriptNodeKind.ReverseDialogue, "Обратная реплика", "Раскрыть реплику с конца, изменить порядок слов или букв.");
         Add("logic", ScriptNodeKind.CompareVariables, "Условие", "Сравнить две переменные state без реплики или остановки игры.");
         foreach (var kind in Enum.GetValues<ScriptNodeKind>().Where(LogicCompiler.IsLogic))
             Add("logic", kind, LogicCompiler.Label(kind), "Работа со списками, текстом и переменными. Индексы списков начинаются с 0; результат записывается в state.");
         foreach (var (kind, block) in SystemBlocks.All)
-            Add("meta_system", kind, block.Title, block.Function + "(" + string.Join(", ", block.Parameters) + ")");
+            Add("meta_system", kind, block.Title, block.Description);
+        Add("meta_system", ScriptNodeKind.ConsoleWrite, "Запись в консоль", "Вывести сообщение в игровую консоль и продолжить сценарий.");
+        Add("meta_system", ScriptNodeKind.Initialization, "Инициализация", "Загрузить объявления файла при запуске игры. Меньший приоритет загружается раньше.");
         Add("logic", ScriptNodeKind.SetVariable, "Переменная", "Записать значение в state.");
         Add("logic", ScriptNodeKind.Switch, "Switch / Case", "Сравнить переменную с вариантами; предусмотрен выход по умолчанию.");
         Add("logic", ScriptNodeKind.While, "Цикл While", "Повторять тело, пока условие истинно. Конец тела возвращает к проверке.");
@@ -153,7 +155,7 @@ public static class BlockLibrary
         }
         if (node.IsTrigger) node.Trigger = new TriggerSettings { Kind = kind switch { ScriptNodeKind.TriggerButton => "button", ScriptNodeKind.TriggerHotspot => "hotspot", ScriptNodeKind.TriggerTextClosed => "text_closed", _ => "key" }, Keys = kind == ScriptNodeKind.TriggerCombination ? "Ctrl+E" : "E" };
         node.Category = category ?? Definitions.First(entry => entry.Kind == kind).Group;
-        if (kind is ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue) node.Text = "Новая реплика";
+        if (kind is ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue or ScriptNodeKind.ReverseDialogue) node.Text = "Новая реплика";
         if (kind == ScriptNodeKind.TextInput) node.Input = new TextInputSettings { Prompt = "Введите ответ:" };
         if (kind == ScriptNodeKind.RegisterCharacter) node.Character = new CharacterProfile { Id = "character", Name = "Персонаж" };
         if (kind == ScriptNodeKind.UpdateCharacter) node.Character = new CharacterProfile { Id = "character", Name = "Персонаж" };

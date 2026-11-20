@@ -17,6 +17,13 @@ public sealed partial record SceneVisuals(string? Background, string? Character,
     public string? OverlayScreen { get; init; }
     public long ScreenVersion { get; init; }
     public double MasterVolume { get; init; } = 1;
+    /// <summary>Scene override of the project FPS display preference.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public bool? FpsVisible { get; init; }
+    public IReadOnlyDictionary<string, string> Fonts { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
+    public SceneWatermark? Watermark { get; init; }
+    public bool InputVisible { get; init; }
+    public SceneTimer? GlobalTimer { get; init; }
     public AudioChannelState[] AudioChannels { get; init; } = [];
     /// <summary>Explicitly invoked shader paths in application order; checkpoint replay reconstructs this state.</summary>
     public string[] Shaders { get; init; } = [];
@@ -33,6 +40,8 @@ public sealed record SceneRuntimeState(string File, string Function, long Visit,
 }
 
 public sealed record VisualMotion(double X = 0, double Y = 0, double Duration = 0, long Version = 0);
+public sealed record SceneWatermark(string Text, string Position, double Opacity);
+public sealed record SceneTimer(bool Visible, string Format, double StartSeconds);
 public sealed record VisualAnimation(string Kind = "none", double Duration = 0, double Amount = 1, long Version = 0);
 public sealed record SceneCamera(double Zoom = 1, double X = 0, double Y = 0, double Duration = 0, long Version = 0);
 public sealed record SceneShake(double Amount = 0, double Duration = 0, long Version = 0);

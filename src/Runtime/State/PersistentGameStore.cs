@@ -13,6 +13,26 @@ internal sealed class PersistentGameStore
 
     internal PersistentGameStore(string directory) => path = PathSafety.ResolveRelative(directory, "persistent");
 
+    internal static async Task CopyIfMissingAsync(string sourceDirectory, string destinationDirectory)
+    {
+        string source = PathSafety.ResolveRelative(sourceDirectory, "persistent");
+        string destination = PathSafety.ResolveRelative(destinationDirectory, "persistent");
+        if (source.Equals(destination, StringComparison.OrdinalIgnoreCase) || File.Exists(destination) || !File.Exists(source)) return;
+        await using var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+        if (input.Length > MaxBytes) throw new InvalidDataException("Файл persistent больше 1 МБ.");
+        Directory.CreateDirectory(destinationDirectory);
+        string staging = PathSafety.ResolveRelative(destinationDirectory, Guid.NewGuid().ToString("N") + ".tmp");
+        try
+        {
+            await using (var output = new FileStream(staging, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                await input.CopyToAsync(output);
+            PathSafety.RejectLinks(destination);
+            try { File.Move(staging, destination); }
+            catch (IOException) when (File.Exists(destination)) { }
+        }
+        finally { File.Delete(staging); }
+    }
+
     internal JsonElement Get(string key)
     {
         ValidateKey(key);

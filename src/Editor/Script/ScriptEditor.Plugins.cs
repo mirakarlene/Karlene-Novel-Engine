@@ -25,9 +25,20 @@ public partial class ScriptEditor
     }
     internal void ApplyPluginTexture()
     {
-        if (PluginCatalog.Current?.WorkspaceImage is { } image)
-            GraphCanvas.Background = new ImageBrush(image) { Stretch = Stretch.UniformToFill, Opacity = .4 };
-        else GraphCanvas.SetResourceReference(Panel.BackgroundProperty, "Editor.Canvas");
+        var image = PluginCatalog.Current?.WorkspaceImage;
+        var texture = image == null ? null : new ImageBrush(image) { Stretch = Stretch.UniformToFill, Opacity = .4 };
+        if (ShowGraphGrid)
+        {
+            GraphCanvas.Background = Brushes.Transparent;
+            if (texture != null) GraphTexture.Background = texture;
+            else GraphTexture.SetResourceReference(Border.BackgroundProperty, "Editor.Canvas");
+        }
+        else
+        {
+            GraphTexture.Background = null;
+            if (texture != null) GraphCanvas.Background = texture;
+            else GraphCanvas.SetResourceReference(Panel.BackgroundProperty, "Editor.Canvas");
+        }
     }
     private void AddPluginFields(ScriptNode node)
     {

@@ -29,7 +29,7 @@ public static class BlockHelpDocument
             {
                 html.Append("<article id=\"").Append(entry.Kind).Append("\"><h3>").Append(H(entry.Title)).Append("</h3><p>").Append(H(entry.Description)).Append("</p><ul>");
                 foreach (var parameter in Parameters(entry.Kind)) html.Append("<li>").Append(H(parameter)).Append("</li>");
-                html.Append("</ul><p><small>").Append(entry.Kind == ScriptNodeKind.ShaderContainer ? "В игровой схеме подключите вход и выход выполнения; внутри .kneshader используйте порты значений." : ShaderLibrary.IsShader(entry.Kind) ? "Соединяйте выходы значений с нужными входами. Шейдер запускается контейнером из сценария." : entry.Kind is ScriptNodeKind.Comment ? "Портов нет. Заметка не выполняется." : entry.Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.SendFlow ? "Выхода «Далее» нет: этот блок завершает текущую ветку." : "Подключите выходы к следующему блоку. Изменения свойств применяются кнопкой «Применить свойства» и сохраняются вместе со схемой.").Append("</small></p><a href=\"#\">К началу ↑</a></article>");
+                html.Append("</ul><p><small>").Append(entry.Kind == ScriptNodeKind.ShaderContainer ? "В игровой схеме подключите вход и выход выполнения; внутри .kneshader используйте порты значений." : ShaderLibrary.IsShader(entry.Kind) ? "Соединяйте выходы значений с нужными входами. Шейдер запускается контейнером из сценария." : entry.Kind == ScriptNodeKind.Initialization ? "Портов нет. Допускается один блок на файл." : entry.Kind is ScriptNodeKind.Comment ? "Портов нет. Заметка не выполняется." : entry.Kind is ScriptNodeKind.End or ScriptNodeKind.GotoScene or ScriptNodeKind.SendFlow ? "Выхода «Далее» нет: этот блок завершает текущую ветку." : "Подключите выходы к следующему блоку. Изменения свойств применяются кнопкой «Применить свойства» и сохраняются вместе со схемой.").Append("</small></p><a href=\"#\">К началу ↑</a></article>");
             }
         }
         return html.Append("</main></body></html>").ToString();
@@ -59,6 +59,9 @@ public static class BlockHelpDocument
             if (kind is ScriptNodeKind.OpenBrowser or ScriptNodeKind.ClipboardRead or ScriptNodeKind.ClipboardWrite or ScriptNodeKind.Screenshot)
                 details.Add("Игроку предлагается отдельно разрешить внешние функции. Ссылки ограничены HTTP и HTTPS, снимки сохраняются в PNG внутри проекта.");
             if (kind == ScriptNodeKind.FreezeScan) details.Add("Разморозка: left (ЛКМ), right (ПКМ), key (клавиша) или timer (от 0,1 до 3600 секунд).");
+            if (kind == ScriptNodeKind.Watermark) details.Add("Положение: один из углов, центров краёв или центр окна. Непрозрачность от 0 до 100.");
+            if (kind == ScriptNodeKind.GlobalTimer) details.Add("Действия show, hide и reset. Форматы HH:mm:ss и mm:ss:fff. Счётчик идёт в активной игровой сессии.");
+            if (kind == ScriptNodeKind.ConnectFont) details.Add("Укажите путь к .ttf/.otf относительно проекта и имя вида dialogue_font. Затем используйте {font=dialogue_font}текст{/font}.");
             return details;
         }
         if (LogicCompiler.IsLogic(kind)) return ["Типизированные операнды: string/number/boolean — литерал, variable — имя в state, list — независимый именованный массив. Результат записывается в указанную переменную state.", "Списки создаются create_list(name, {values}); индексы list_* начинаются с 0. Копирование глубокое, merge дописывает второй массив. Списки сохраняются и откатываются вместе с игрой.", "Строковые операции учитывают Unicode, поиск/замена буквальные. Bool: true/false либо 1/0. Сброс переменной берёт начальное значение сцены, затем проекта, иначе удаляет ключ.", "Составные условия: compare и вложенные AND/OR/NOT; количество строк не фиксировано. Проверяются слева направо с коротким замыканием."];
@@ -129,6 +132,8 @@ public static class BlockHelpDocument
             ScriptNodeKind.Random => ["Переменная результата, минимум A и максимум B включительно (A ≤ B). Целые границы дают целое число; дробные — дробное."],
             ScriptNodeKind.RandomBranch => ["2–20 ветвей с названиями и относительными неотрицательными весами; хотя бы один положительный. Каждая ветвь имеет собственный выход. Общего Далее нет."],
             ScriptNodeKind.Comment => ["Текст заметки автора. Можно расположить отдельно, не влияет на запуск."],
+            ScriptNodeKind.Initialization => ["Целый приоритет от −10000 до 10000. Меньшие числа загружаются раньше, равные — в порядке путей файлов. Эквивалент начального init(приоритет) в KRL. Сцена выполняется по обычному вызову или переходу."],
+            ScriptNodeKind.ReverseDialogue => [.. DialogueParameters(kind), "Раскрытие с конца сохраняет порядок исходной реплики. Инверсию слов и букв можно включать одновременно. Разметка {b}…{/b}, {i}…{/i}, {size=24}…{/size} и {font=имя}…{/font} сохраняется при перестановке."],
             ScriptNodeKind.ConsoleWrite => ["Текст для игровой консоли. Работает как print(), не ставит сцену на паузу."],
             ScriptNodeKind.Title => ["Текст поверх игрового поля вне диалогового окна. Пустой текст скрывает титр; добавьте паузу/реплику, чтобы его успели прочитать."],
             ScriptNodeKind.TextPause => ["Длительность в секундах и возможность пропуска кликом. Временно приостанавливает переход между репликами."],

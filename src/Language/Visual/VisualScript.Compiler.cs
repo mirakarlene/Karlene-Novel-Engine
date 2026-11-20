@@ -23,7 +23,7 @@ public sealed partial class VisualScript
                 if (string.IsNullOrEmpty(target) || !map.ContainsKey(target))
                     Fail(node, "соедините все выходы с существующими блоками");
                 if (map[target!].Kind == ScriptNodeKind.Start) Fail(node, "нельзя соединять выход с блоком «Начало»");
-                if (map[target!].Kind == ScriptNodeKind.Comment) Fail(node, "комментарии не имеют портов и не подключаются к схеме");
+                if (map[target!].Kind is ScriptNodeKind.Comment or ScriptNodeKind.Initialization) Fail(node, "целевой блок не имеет портов");
                 if (node.TargetInput(outputIndex) >= (map[target!].Plugin?.Inputs.Length ?? 1)) Fail(node, "целевой входной порт отсутствует");
             }
         }
@@ -53,7 +53,7 @@ public sealed partial class VisualScript
                 if (!visited.Contains(send.Target)) { Visit(map[send.Target]); added = true; }
             }
         } while (added);
-        if (Nodes.Any(n => !visited.Contains(n.Id) && n.Kind != ScriptNodeKind.Comment))
+        if (Nodes.Any(n => !visited.Contains(n.Id) && n.Kind is not (ScriptNodeKind.Comment or ScriptNodeKind.Initialization)))
             throw new InvalidDataException("Есть блоки, недостижимые из «Начала». Соедините или удалите их.");
         if (anchorTransfers) ValidateAnchorScopes(map, starts[0].Id, connectedTriggers);
 
@@ -61,7 +61,7 @@ public sealed partial class VisualScript
         code.Append(anchorTransfers ? "    local __kne_run, __kne_flow\n    __kne_run = function(__kne_node, __kne_stop)\n" : "    local __kne_run\n    __kne_run = function(__kne_node, __kne_stop)\n")
             .Append("        while __kne_node and __kne_node ~= __kne_stop do\n");
         bool first = true;
-        foreach (var node in Nodes.OrderBy(n => n.Id, StringComparer.Ordinal))
+        foreach (var node in Nodes.Where(n => n.Kind != ScriptNodeKind.Initialization).OrderBy(n => n.Id, StringComparer.Ordinal))
         {
             code.Append(first ? "            if " : "            elseif ").Append("__kne_node == ").Append(Quote(node.Id)).Append(" then\n");
             first = false;
@@ -201,7 +201,7 @@ public sealed partial class VisualScript
         _ when SystemBlocks.All.ContainsKey(node.Kind) => SystemBlocks.Compile(node),
         _ when LogicCompiler.IsLogic(node.Kind) && node.Kind != ScriptNodeKind.CompoundCondition => LogicCompiler.Compile(node.Kind, node.Logic ?? new(), node.Variable),
         _ when CalculationCompiler.IsCalculation(node.Kind) => CalculationCompiler.Compile(node.Kind, node.Calculation ?? new CalculationSettings(), node.Variable),
-        ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue => DialogueCommand(node),
+        ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue or ScriptNodeKind.ReverseDialogue => DialogueCommand(node),
         ScriptNodeKind.RegisterCharacter => $"register_character({Quote(System.Text.Json.JsonSerializer.Serialize(node.Character ?? new CharacterProfile(), EngineSettings.JsonOptions))})",
         ScriptNodeKind.UpdateCharacter => $"update_character({Quote(System.Text.Json.JsonSerializer.Serialize(node.Character ?? new CharacterProfile(), EngineSettings.JsonOptions))})",
         ScriptNodeKind.SetSpeaker => $"set_speaker({Quote(node.SpeakerId)})",
@@ -259,7 +259,13 @@ public sealed partial class VisualScript
         string profile = node.SpeakerId.Length == 0 ? "nil" : Quote(node.SpeakerId);
         string effect = node.Kind == ScriptNodeKind.EffectDialogue
             ? Quote(System.Text.Json.JsonSerializer.Serialize(node.TextEffect ?? new TextEffectSettings(), EngineSettings.JsonOptions)) : "nil";
-        return $"kne_say({speaker}, {Quote(node.Text)}, {profile}, {effect}, {(node.Kind == ScriptNodeKind.AutoDialogue ? Number(node.Duration) : "nil")}, {(node.Skippable ? "true" : "false")}{(node.Narration ? ", true" : "")})";
+        string options = node.Narration ? ", true" : "";
+        if (node.Kind == ScriptNodeKind.ReverseDialogue)
+        {
+            int flags = (node.RevealFromStart ? 0 : 1) | (node.ReverseWords ? 2 : 0) | (node.ReverseLetters ? 4 : 0);
+            options = $", {(node.Narration ? "true" : "false")}, {flags}";
+        }
+        return $"kne_say({speaker}, {Quote(node.Text)}, {profile}, {effect}, {(node.Kind == ScriptNodeKind.AutoDialogue ? Number(node.Duration) : "nil")}, {(node.Skippable ? "true" : "false")}{options})";
     }
 
     private static string Comparison(ScriptNode node)

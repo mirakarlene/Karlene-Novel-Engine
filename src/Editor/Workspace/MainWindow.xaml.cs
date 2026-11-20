@@ -80,6 +80,8 @@ public partial class MainWindow : Window
         settings = await settingsStore.LoadAsync();
         LoadGeneralSettings(); ApplyEditorPreferences();
         ProjectBrowserViewInput.SelectedValue = settings.ProjectBrowserView;
+        GraphGridInput.IsChecked = settings.ShowGraphGrid;
+        SceneEditor.ShowGraphGrid = settings.ShowGraphGrid;
         ApplyBrowserView();
         ReloadApplicationPlugins();
         ResetApplicationPluginDraft();
@@ -234,6 +236,7 @@ public partial class MainWindow : Window
     {
         LoadGeneralSettings();
         ProjectBrowserViewInput.SelectedValue = settings.ProjectBrowserView;
+        GraphGridInput.IsChecked = settings.ShowGraphGrid;
         SetSettingsPage(0);
         ResetApplicationPluginDraft();
         AppGraphicsInput.Value = settings.Graphics; GraphicsEnvironment.SetSettings(this, settings.Graphics);
@@ -264,10 +267,12 @@ public partial class MainWindow : Window
         var editor = GeneralSettingsPage.Value; editor.Validate(); ValidateBackupStorage(editor, storage);
         var next = new UserSettings { ProjectBrowserView = ProjectBrowserViewInput.SelectedValue as string == "table" ? "table" : "tiles", ApplicationPlugins = applicationPluginDraft.ToList(), Graphics = AppGraphicsInput.Value, EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = EditorTheme.Normalize((string?)ThemeInput.SelectedValue), UserName = userName, AccessibilityMode = BlockAccessibility.GetMode(this), WelcomeObjects = WelcomeBubbles.Normalize((string?)WelcomeObjectInput.SelectedValue) };
         next.Editor = editor; next.Hotkeys = EditorHotkeys.Validate(GeneralSettingsPage.Hotkeys);
+        next.ShowGraphGrid = GraphGridInput.IsChecked == true;
         await settingsStore.SaveAsync(next);
         settings = next; GraphicsEnvironment.SetSettings(this, settings.Graphics);
         ApplyEditorPreferences();
         ApplyBrowserView();
+        foreach (var scriptEditor in EditorWorkspace.Children.OfType<ScriptEditor>()) scriptEditor.ShowGraphGrid = settings.ShowGraphGrid;
         if (pluginsChanged) ReloadApplicationPlugins();
         UpdateWelcomeGreeting();
         await RefreshStoredProjectsAsync();

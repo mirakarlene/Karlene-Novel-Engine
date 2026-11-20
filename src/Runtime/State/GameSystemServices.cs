@@ -26,24 +26,23 @@ internal sealed class GameSystemServices
     {
         this.project = project;
         this.saves = saves ?? StandalonePlayer.RuntimeSaves(project);
+        var locations = PersistentDirectories(project.Path, this.saves.DirectoryPath);
+        persistent = new(locations.For(project.Engine.Performance.PersistentLocation));
+        ConsentDirectory = locations.Portable ? locations.Local : locations.Profile;
+    }
+
+    internal static (string Slots, string Local, string Profile, bool Portable, bool Msix) PersistentDirectories(string root, string slots)
+    {
         var manifest = StandalonePlayer.RuntimeManifest;
-        string identity = StandalonePlayer.SaveIdentity(project.Path);
+        string identity = StandalonePlayer.SaveIdentity(root);
         string key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity.ToUpperInvariant())))[..24];
         string profile = manifest != null
             ? (manifest with { SaveLocation = "appdata" }).SavesDirectory(AppContext.BaseDirectory)
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KNE", "persistent", key);
         string local = manifest != null
             ? (manifest with { SaveLocation = "local" }).SavesDirectory(AppContext.BaseDirectory)
-            : PathSafety.ResolveRelative(project.Path, "saves");
-        string storage = manifest?.ReleaseMode == "portable" ? local : project.Engine.Performance.PersistentLocation switch
-        {
-            "appdata" => profile,
-            "local" when manifest?.ReleaseMode == "msix" => profile,
-            "local" => local,
-            _ => this.saves.DirectoryPath
-        };
-        persistent = new(storage);
-        ConsentDirectory = manifest?.ReleaseMode == "portable" ? local : profile;
+            : PathSafety.ResolveRelative(root, "saves");
+        return (slots, local, profile, manifest?.ReleaseMode == "portable", manifest?.ReleaseMode == "msix");
     }
 
     internal void RecordLaunch() => persistent.RecordLaunch();
@@ -99,6 +98,14 @@ internal sealed class GameSystemServices
             }
             case "play_time": return SystemReply.From(PlayedSeconds / 60d);
             case "build_version": return SystemReply.From(project.Configuration.Metadata?.Version ?? "");
+            case "build_info":
+                var metadata = project.Configuration.Metadata;
+                return SystemReply.From(new
+                {
+                    name = project.Title, version = metadata?.Version ?? "", author = metadata?.Author ?? "",
+                    team = metadata?.Team ?? "", format = StandalonePlayer.RuntimeManifest?.ReleaseMode ?? "vm"
+                });
+            case "device_info": return SystemReply.From(OperatingSystem.IsWindows() ? "Windows" : System.Runtime.InteropServices.RuntimeInformation.OSDescription);
             case "launch_count": return SystemReply.From(persistent.LaunchCount);
             case "project_path": return SystemReply.From(project.Path);
             default: return SystemReply.Failure("Для этой операции требуется окно игры.");
@@ -218,4 +225,15 @@ internal sealed class GameSystemServices
         var value = Arg(call, index);
         return value.ValueKind == JsonValueKind.String ? value.GetString()! : throw new ArgumentException("Аргумент должен быть строкой.");
     }
+}
+
+internal static class PersistentDirectorySelection
+{
+    internal static string For(this (string Slots, string Local, string Profile, bool Portable, bool Msix) locations, string location) =>
+        locations.Portable ? locations.Local : location switch
+        {
+            "appdata" => locations.Profile,
+            "local" => locations.Msix ? locations.Profile : locations.Local,
+            _ => locations.Slots
+        };
 }

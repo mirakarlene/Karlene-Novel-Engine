@@ -36,24 +36,39 @@ public sealed partial class LuaRuntime
     }
 
     /// <summary>Freezes values once per authored line, returning cumulative fragments and logical pauses.</summary>
-    public string[] PrepareInlineDialogueForLua(string source)
+    public string[] PrepareInlineDialogueForLua(string source, int flags = 0)
     {
         try
         {
-            var document = ResolveInline(source);
+            var document = InlineText.Reverse(ResolveInline(source), (flags & 2) != 0, (flags & 4) != 0);
+            bool fromEnd = (flags & 1) != 0;
+            int[] elements = fromEnd ? [.. StringInfo.ParseCombiningCharacters(document.Text), document.Text.Length] : [];
+            string? fullMarkup = fromEnd ? InlineText.ToMarkup(document) : null;
             var result = new List<string> { "" };
             var pauses = document.Pauses.Where(pause => pause.Seconds != 0).ToArray();
             foreach (var pause in pauses)
             {
-                result.Add(InlineText.ToMarkup(document, pause.Offset));
-                result.Add((pause.Seconds ?? -1).ToString("R", CultureInfo.InvariantCulture));
+                Fragment(pause.Offset, (pause.Seconds ?? -1).ToString("R", CultureInfo.InvariantCulture));
             }
             if (pauses.Length == 0 || pauses[^1].Offset != document.Text.Length)
             {
-                result.Add(InlineText.ToMarkup(document)); result.Add("final");
+                Fragment(document.Text.Length, "final");
             }
-            result.Insert(1, ((result.Count - 1) / 2).ToString(CultureInfo.InvariantCulture));
+            result.Insert(1, ((result.Count - 1) / 3).ToString(CultureInfo.InvariantCulture));
             return result.ToArray();
+
+            void Fragment(int offset, string duration)
+            {
+                int count = 0;
+                if (fromEnd)
+                {
+                    int index = Array.BinarySearch(elements, offset);
+                    count = index < 0 ? ~index : index;
+                }
+                result.Add(fullMarkup ?? InlineText.ToMarkup(document, offset));
+                result.Add(duration);
+                result.Add(count.ToString(CultureInfo.InvariantCulture));
+            }
         }
         catch (InvalidDataException error) { return ["Инлайн-текст: " + error.Message]; }
     }
@@ -83,7 +98,7 @@ public sealed partial class LuaRuntime
                     catch (Exception error) when (error is InvalidDataException or ArgumentException) { return new("{error}", "#FF0000"); }
             }
             return new("{error}", "#FF0000");
-        });
+        }, alias => visuals.Fonts.ContainsKey(alias));
     }
 
     private static object ReadInlineState(LuaTable table, int depth, ref int budget)
