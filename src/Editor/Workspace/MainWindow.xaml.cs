@@ -14,6 +14,7 @@ public partial class MainWindow : Window
     private readonly UserSettingsStore settingsStore = new();
     private readonly CancellationTokenSource lifetime = new();
     private UserSettings settings = new();
+    private Task<UserSettings>? openingSettings;
     private ProjectInfo? currentProject;
     private bool busy;
     private bool closed;
@@ -76,15 +77,40 @@ public partial class MainWindow : Window
         finally { checkingClose = false; }
     }
 
-    private async void Window_Loaded(object sender, RoutedEventArgs e) => await RunOperationAsync(async () =>
+    internal async Task PrepareStartupAsync()
     {
-        settings = await settingsStore.LoadAsync();
+        openingSettings = settingsStore.LoadAsync();
+        try { settings = await openingSettings; }
+        catch (Exception)
+        {
+            // Window_Loaded reports the failure through the existing profile-loading UI.
+        }
+        if (openingSettings.IsCompletedSuccessfully) ReloadApplicationPlugins();
+        StartupLoading.Visibility = Visibility.Visible;
+    }
+
+    private async void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        bool prepared = StartupLoading.Visibility == Visibility.Visible;
+        if (prepared)
+        {
+            StartupLoading.Focus();
+            // Allow the themed loading surface to render before the workspace is initialized.
+            await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ContextIdle);
+        }
+        try { await RunOperationAsync(() => InitializeWorkspaceAsync(prepared), "Загрузка настроек…"); }
+        finally { StartupLoading.Visibility = Visibility.Collapsed; }
+    }
+
+    private async Task InitializeWorkspaceAsync(bool prepared)
+    {
+        settings = await (openingSettings ?? settingsStore.LoadAsync());
         LoadGeneralSettings(); ApplyEditorPreferences();
         ProjectBrowserViewInput.SelectedValue = settings.ProjectBrowserView;
         GraphGridInput.IsChecked = settings.ShowGraphGrid;
         SceneEditor.ShowGraphGrid = settings.ShowGraphGrid;
         ApplyBrowserView();
-        ReloadApplicationPlugins();
+        if (!prepared) ReloadApplicationPlugins();
         ResetApplicationPluginDraft();
         AppGraphicsInput.Value = settings.Graphics; GraphicsEnvironment.SetSettings(this, settings.Graphics);
         TxtEditorPath.Text = settings.EditorPath;
@@ -98,7 +124,7 @@ public partial class MainWindow : Window
         storageTimer.Start();
         lastClockTick = sessionTime.Elapsed; automationTimer.Start();
         await ApplyStartupBehaviorAsync();
-    }, "Загрузка настроек…");
+    }
 
     private void Window_Closed(object? sender, EventArgs e)
     {

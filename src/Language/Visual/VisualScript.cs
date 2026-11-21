@@ -268,7 +268,8 @@ public enum ScriptNodeKind
     MinimizeGame, FullscreenGame, WindowedGame, OpenBrowser, ClipboardWrite, ClipboardRead,
     Screenshot, FileRead, FileWrite, PathExists, FileSize, FileList,
     DirectoryCreate, ProjectPath, FreezeScan, DeviceInfo, ShowFps,
-    Initialization, ReverseDialogue, Watermark, ShowInput, GlobalTimer, BuildInfo, ConnectFont, LuaBlock, CallVisualLua
+    Initialization, ReverseDialogue, Watermark, ShowInput, GlobalTimer, BuildInfo, ConnectFont, LuaBlock, CallVisualLua,
+    ShowVideo, EnableConsole, DisableConsole, GlobalPause
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>

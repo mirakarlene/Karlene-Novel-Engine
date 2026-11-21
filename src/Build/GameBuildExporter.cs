@@ -26,7 +26,7 @@ public sealed class GameBuildExporter
         outputRoot = ValidateOutput(project.Path, outputRoot);
         // Compilation and project enumeration do not execute scripts/plugins.
         _ = GameScripts.Load(project);
-        string leaf = (test ? "test-" : "release-") + settings.ReleaseMode;
+        var (leaf, executable) = OutputNames(project.Title, settings, test);
         string destination = PathSafety.ResolveRelative(outputRoot, leaf);
         if (Directory.Exists(destination) && !OwnedBy(destination, settings.GameId)) throw new IOException("Папка билда содержит посторонние файлы: " + destination);
         Directory.CreateDirectory(outputRoot);
@@ -66,12 +66,25 @@ public sealed class GameBuildExporter
             properties.Save(Path.Combine(source, "KnePlayer.props"));
             log?.Invoke("Публикация Windows x64 · " + settings.ReleaseMode);
             await RunToolAsync("dotnet", PublishArguments(source, publish, settings), source, log, token).ConfigureAwait(false);
-            if (!File.Exists(Path.Combine(publish, "Game.exe"))) throw new IOException("Публикация не создала Game.exe.");
+            string appHost = Path.Combine(publish, "Game.exe");
+            if (!File.Exists(appHost)) throw new IOException("Публикация не создала Game.exe.");
+            // The apphost locates Game.dll by its embedded name. Keep the managed identity for WPF resources.
+            if (executable != "Game.exe")
+            {
+                string targetExe = Path.Combine(publish, executable);
+                if (executable.Equals("Game.exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    string temporaryExe = Path.Combine(stage, "apphost.exe");
+                    File.Move(appHost, temporaryExe);
+                    appHost = temporaryExe;
+                }
+                File.Move(appHost, targetExe);
+            }
             string? packageName = null;
             if (!test && settings.ReleaseMode == "msix")
             {
                 packageName = "Game.msix";
-                await MsixPackage.CreateAsync(publish, Path.Combine(result, packageName), manifest, settings.FourPartVersion, log, token).ConfigureAwait(false);
+                await MsixPackage.CreateAsync(publish, Path.Combine(result, packageName), manifest, settings.FourPartVersion, log, token, executable).ConfigureAwait(false);
             }
             else
             {
@@ -87,9 +100,22 @@ public sealed class GameBuildExporter
             try { Directory.Move(result, destination); }
             catch { if (previous) Directory.Move(backup, destination); throw; }
             if (previous) DeleteStage(outputRoot, backup);
-            return new(destination, Path.Combine(destination, "game", "Game.exe"), packageName == null ? null : Path.Combine(destination, packageName));
+            return new(destination, Path.Combine(destination, "game", executable), packageName == null ? null : Path.Combine(destination, packageName));
         }
         finally { DeleteStage(outputRoot, stage); }
+    }
+
+    internal static (string Directory, string Executable) OutputNames(string title, ProjectBuildSettings settings, bool test)
+    {
+        if (!settings.UseProjectNameForBuild)
+            return ((test ? "test-" : "release-") + settings.ReleaseMode, "Game.exe");
+        var invalid = Path.GetInvalidFileNameChars();
+        string name = string.Concat(title.Select(character => invalid.Contains(character) ? '_' : character)).Trim().TrimEnd('.', ' ');
+        if (name.Length == 0) name = "Game";
+        if (name.Length > 180) name = name[..(char.IsHighSurrogate(name[179]) ? 179 : 180)].TrimEnd('.', ' ');
+        try { PathSafety.ValidateFileName(name); }
+        catch (ArgumentException) { name = "_" + name; }
+        return ((test ? "test-" : "") + name, name + ".exe");
     }
 
     internal static string ValidateOutput(string projectPath, string outputRoot)

@@ -11,7 +11,7 @@ public partial class MainWindow
         BlockLibraryOverlay.Visibility = Visibility.Visible; ProjectPanel.IsEnabled = false;
         LibraryView.AnimateVisualLua = settings.Editor.LuaLibraryMotion;
         LibraryView.Open(kind => ShaderLibrary.IsShader(kind) && ActiveEditor.Document?.Graph is { IsShader: false, IsVisualLua: false } || ActiveEditor.CanAddBlock(kind),
-            ActiveEditor.Document.Graph.IsVisualLua);
+            ActiveEditor.Document.Graph.IsVisualLua, ActiveEditor.GetBlockUnavailableReason);
     }
     private void CloseBlockLibrary()
     {

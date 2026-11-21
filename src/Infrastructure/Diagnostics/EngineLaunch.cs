@@ -9,16 +9,24 @@ internal static class EngineLaunch
     internal static bool PluginsEnabled => Environment.GetEnvironmentVariable(PluginsEnvironment) != "1";
     internal static bool IsPluginPath(string path) => ("/" + path.Replace('\\', '/')).Contains("/plugins/", StringComparison.OrdinalIgnoreCase);
 
-    internal static ProcessStartInfo CreateStartInfo(params string[] arguments) => CreateStartInfo(typeof(App).Assembly.Location, arguments);
+    internal static ProcessStartInfo CreateStartInfo(params string[] arguments)
+    {
+#if KNE_PLAYER
+        // The exported EXE may be named after the project, while the managed assembly is still Game.dll.
+        if (Environment.ProcessPath is { } current)
+        {
+            bool muxer = Path.GetFileNameWithoutExtension(current).Equals("dotnet", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(Path.GetDirectoryName(current), Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory), StringComparison.OrdinalIgnoreCase);
+            if (!muxer) return CreatePlayerHostStartInfo(current, arguments);
+        }
+#endif
+        return CreateStartInfo(typeof(App).Assembly.Location, arguments);
+    }
 
     internal static ProcessStartInfo CreateStartInfo(string assembly, IReadOnlyList<string> arguments)
     {
         if (string.IsNullOrEmpty(assembly) || Path.GetFileNameWithoutExtension(Environment.ProcessPath) == Path.GetFileNameWithoutExtension(assembly) && !File.Exists(Path.ChangeExtension(assembly, ".exe")))
-        {
-            var bundled = new ProcessStartInfo(Environment.ProcessPath ?? throw new IOException("Не найден исполняемый файл игры.")) { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden };
-            foreach (string argument in arguments) bundled.ArgumentList.Add(argument);
-            return bundled;
-        }
+            return CreatePlayerHostStartInfo(Environment.ProcessPath ?? throw new IOException("Не найден исполняемый файл игры."), arguments);
         string executable = Path.ChangeExtension(assembly, ".exe");
         bool appHost = File.Exists(executable);
         var info = new ProcessStartInfo(appHost ? executable : "dotnet")
@@ -27,6 +35,13 @@ internal static class EngineLaunch
             CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden
         };
         if (!appHost) info.ArgumentList.Add(assembly);
+        foreach (string argument in arguments) info.ArgumentList.Add(argument);
+        return info;
+    }
+
+    private static ProcessStartInfo CreatePlayerHostStartInfo(string executable, IReadOnlyList<string> arguments)
+    {
+        var info = new ProcessStartInfo(executable) { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden };
         foreach (string argument in arguments) info.ArgumentList.Add(argument);
         return info;
     }

@@ -32,7 +32,7 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     internal Func<Task>? BackupRequested { get; set; }
     internal Func<Task>? HistoryRequested { get; set; }
     internal Func<Task>? ClearCacheRequested { get; set; }
-    internal CheckBox LuaLibraryMotion { get; } = Check("Анимация в каталоге Visual Lua");
+    internal CheckBox LuaLibraryMotion { get; } = Check("Не отображать плавающие символы lua и vlua");
     internal Func<Task>? TestNotificationRequested { get; set; }
     internal Action? ResetWorkRequested { get; set; }
     internal Func<string>? ThemeProvider { get; set; }
@@ -92,7 +92,7 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         Startup.SelectedValue = value.Startup; StartupProject.Text = value.StartupProject; SoundEnabled.IsChecked = value.NotificationSound; Sound.SelectedValue = value.Sound; SoundFile.Text = value.SoundFile;
         Toasts.IsChecked = value.Toasts; Aggregate.IsChecked = value.AggregateNotifications; Minimized.IsChecked = value.NotifyMinimized; Tips.IsChecked = value.NotifyTips;
         Breaks.IsChecked = value.BreakReminders; BreakInterval.SelectedValue = value.BreakMinutes; BreakType.SelectedValue = value.StrictBreak ? "strict" : "soft"; BreakDuration.SelectedValue = value.BreakDuration; WorkTime.IsChecked = value.ShowWorkTime;
-        LuaLibraryMotion.IsChecked = value.LuaLibraryMotion;
+        LuaLibraryMotion.IsChecked = !value.LuaLibraryMotion;
         Hotkeys = new(keys); Status.Text = ""; Refresh();
     }
     internal EditorPreferences Value => new()
@@ -102,7 +102,7 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         Startup = (string?)Startup.SelectedValue ?? "home", StartupProject = StartupProject.Text.Trim(), NotificationSound = SoundEnabled.IsChecked == true, Sound = (string?)Sound.SelectedValue ?? "standard", SoundFile = SoundFile.Text,
         Toasts = Toasts.IsChecked == true, AggregateNotifications = Aggregate.IsChecked == true, NotifyMinimized = Minimized.IsChecked == true, NotifyTips = Tips.IsChecked == true,
         BreakReminders = Breaks.IsChecked == true, BreakMinutes = (int?)BreakInterval.SelectedValue ?? 60, StrictBreak = (string?)BreakType.SelectedValue == "strict", BreakDuration = (int?)BreakDuration.SelectedValue ?? 5, ShowWorkTime = WorkTime.IsChecked == true,
-        LuaLibraryMotion = LuaLibraryMotion.IsChecked == true
+        LuaLibraryMotion = LuaLibraryMotion.IsChecked != true
     };
     private void Refresh()
     {

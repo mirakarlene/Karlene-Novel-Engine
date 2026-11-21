@@ -57,6 +57,8 @@ internal static class ProjectSystemScan
                             CheckAsset(block.Path, audio: true);
                         if (block.Kind == ScriptNodeKind.ShaderContainer)
                             CheckAsset(block.Path);
+                        if (block.Kind == ScriptNodeKind.ShowVideo && SystemBlocks.LiteralVideoPath(block) is { } video)
+                            CheckAsset(video);
                     }
                 }
                 else if (ScriptDocument.IsCodePath(path) || ScriptDocument.IsVisualLuaPath(path))
@@ -98,7 +100,7 @@ internal static class ProjectSystemScan
         for (int i = 0; i + 3 < tokens.Length; i++)
         {
             string name = source[tokens[i].Start..tokens[i].End];
-            if (name is not ("background" or "show_character" or "play_music" or "play_sound" or "play_voice") ||
+            if (name is not ("background" or "show_character" or "play_music" or "play_sound" or "play_voice" or "show_video") ||
                 source[tokens[i + 1].Start..tokens[i + 1].End] != "(") continue;
             if (i > 0 && source[tokens[i - 1].Start..tokens[i - 1].End] is "." or ":" or "function") continue;
             var literal = tokens[i + 2];

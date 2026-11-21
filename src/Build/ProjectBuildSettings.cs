@@ -11,6 +11,7 @@ public sealed record ProjectBuildSettings
     public string TestPath { get; set; } = "";
     public string ReleaseMode { get; set; } = "self_contained";
     public string ReleasePath { get; set; } = "";
+    public bool UseProjectNameForBuild { get; set; }
     public string Author { get; set; } = "";
     public string Team { get; set; } = "";
     public string Version { get; set; } = "1.0.0";
