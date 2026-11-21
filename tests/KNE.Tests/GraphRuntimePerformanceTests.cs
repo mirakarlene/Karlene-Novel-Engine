@@ -121,6 +121,35 @@ public sealed class GraphRuntimePerformanceTests
     }
 
     [Fact]
+    public Task DefaultAnimationsCanBeDisabledInMenuAndGameplayAndRestoredOnReload() => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        var settings = new ProjectPerformanceSettings { DisableDefaultAnimations = true };
+        await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, settings);
+        var project = await fixture.LoadAsync();
+        project.Engine.Theme.Pattern = true;
+        project.Engine.Theme.PatternStyle = "waves";
+        project.Engine.Theme.AnimationEnabled = true;
+        var window = new GameWindow(project);
+        try
+        {
+            var backdrop = Find<AnimatedBackground>(window, "AnimatedBackdrop");
+            Assert.Equal(Visibility.Collapsed, backdrop.Visibility);
+            backdrop.Step(.05);
+            Assert.Equal(0, backdrop.Phase);
+            await InvokeTask(window, "StartGameAsync");
+            Assert.Equal(Visibility.Collapsed, backdrop.Visibility);
+            settings.DisableDefaultAnimations = false;
+            await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, settings);
+            window.ReloadPerformanceSettings();
+            Assert.Equal(Visibility.Visible, backdrop.Visibility);
+            backdrop.Step(.05);
+            Assert.True(backdrop.Phase > 0);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
     public async Task NormalMode_KeepsStatisticsHiddenAndAllowsTheOptionalConsoleToBeToggledAndClosed()
     {
         using var fixture = new TempProject(); var project = await fixture.LoadAsync(); project.Engine.Game.DebugEnabled = true;

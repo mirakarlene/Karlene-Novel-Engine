@@ -27,7 +27,6 @@ public partial class MainWindow
         GeneralSettingsPage.ThemeProvider = () => (string?)ThemeInput.SelectedValue ?? settings.Theme;
         GeneralSettingsPage.BackupRequested = ManualBackupAsync;
         GeneralSettingsPage.HistoryRequested = OpenVersionHistoryAsync;
-        GeneralSettingsPage.ClearCacheRequested = ClearEditorCacheAsync;
         GeneralSettingsPage.TestNotificationRequested = async () =>
         {
             var preferences = GeneralSettingsPage.Value;
@@ -36,7 +35,11 @@ public partial class MainWindow
         GeneralSettingsPage.ResetWorkRequested = () => { SessionClock.Reset(); lastClockTick = sessionTime.Elapsed; UpdateBreakUi(); GeneralSettingsPage.Status.Text = "Статистика текущего сеанса сброшена."; };
         automationTimer.Tick += async (_, _) => await AutomationTickAsync();
     }
-    private void LoadGeneralSettings() => GeneralSettingsPage.Load(settings.Editor, settings.Hotkeys, EditorPreferences.DefaultBackupPath(settings.ProjectsStoragePath, settingsStore.SettingsPath));
+    private void LoadGeneralSettings()
+    {
+        GeneralSettingsPage.Load(settings.Editor, settings.Hotkeys, EditorPreferences.DefaultBackupPath(settings.ProjectsStoragePath, settingsStore.SettingsPath));
+        DisableLuaLibraryMotionInput.IsChecked = !settings.Editor.LuaLibraryMotion;
+    }
     private void ApplyEditorPreferences()
     {
         EditorHotkeys.SetProfile(this, settings.Hotkeys);

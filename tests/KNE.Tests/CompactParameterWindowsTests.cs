@@ -65,6 +65,8 @@ public sealed class CompactParameterWindowsTests
             window.BuildInput.TestMode.SelectedValue = "remote_debug"; window.BuildInput.ReleaseMode.SelectedValue = "single_file";
             window.MetadataInput.Additional.Text += new string('\n', 100);
             Show(window, width, height); var root = (FrameworkElement)window.Content;
+            FitsPage(Logical(root).OfType<CheckBox>().Single(check =>
+                check.Content is TextBlock { Text: "Удалить все стандартные анимации" }), root);
             var save = Logical(root).OfType<Button>().Single(button => Equals(button.Content, "Сохранить"));
             var cancel = Logical(root).OfType<Button>().Single(button => Equals(button.Content, "Отмена"));
             var pageLabel = Logical(root).OfType<TextBlock>().Single(text => text.Text == "1 / 4");

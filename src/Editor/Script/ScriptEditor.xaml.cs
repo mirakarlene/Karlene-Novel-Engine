@@ -182,7 +182,7 @@ public partial class ScriptEditor : UserControl
         CodeEditor.Text = document.IsVisual ? "" : document.Code;
         CodeEditor.IsReadOnly = document.IsVisual;
         bool luaFile = ScriptDocument.IsLuaPath(document.FilePath);
-        ApplyLuaModeAppearance(!ScriptDocument.IsShaderPath(document.FilePath));
+        ApplyLuaModeAppearance(true);
         CodeMode.IsEnabled = true;
         GraphMode.IsEnabled = document.IsVisual || luaFile;
         GraphMode.ToolTip = luaFile && !document.IsVisual ? "Преобразовать файл в .vlua" : document.IsVisual

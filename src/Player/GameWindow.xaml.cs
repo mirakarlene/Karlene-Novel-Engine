@@ -125,9 +125,9 @@ public partial class GameWindow : Window
         Resources["GameButtonBrush"] = Brush(theme.ButtonColor);
         Background = Brush(theme.BackgroundColor);
         DefaultBackground.Background = EnginePresentation.CreateBackground(theme);
-        AnimatedBackdrop.Configure(theme, preferences.Animate);
+        ConfigureDefaultBackdrop();
         DefaultBackgroundImage.Source = theme.BackgroundImage == null ? null : LoadImage(ResourcePaths.Resolve(project.Path, theme.BackgroundImage));
-        AnimatedBackdrop.Visibility = theme.BackgroundImage == null ? Visibility.Visible : Visibility.Collapsed;
+        UpdateDefaultBackdropVisibility(true);
         DialoguePanel.Height = dialogue.Height;
         DialoguePanel.Margin = new Thickness(dialogue.Margin);
         DialoguePanel.Padding = new Thickness(dialogue.Padding);
@@ -615,7 +615,7 @@ public partial class GameWindow : Window
             bool defaultBackground = settings.Background == project.Engine.Theme.BackgroundColor;
             DefaultBackground.Background = defaultBackground ? EnginePresentation.CreateBackground(project.Engine.Theme) : Background;
             DefaultBackgroundImage.Visibility = defaultBackground ? Visibility.Visible : Visibility.Collapsed;
-            AnimatedBackdrop.Visibility = defaultBackground && project.Engine.Theme.BackgroundImage == null ? Visibility.Visible : Visibility.Collapsed;
+            UpdateDefaultBackdropVisibility(defaultBackground);
             renderedSettings = settings;
         }
         UpdatePerformance();
@@ -713,7 +713,7 @@ public partial class GameWindow : Window
         scenePolicyChanged = false;
         bool showDefaultBackground = !scene.BackgroundsCleared && runtime.WindowSettings.Background == project.Engine.Theme.BackgroundColor;
         DefaultBackground.Visibility = DefaultBackgroundImage.Visibility = showDefaultBackground ? Visibility.Visible : Visibility.Collapsed;
-        AnimatedBackdrop.Visibility = showDefaultBackground && project.Engine.Theme.BackgroundImage == null ? Visibility.Visible : Visibility.Collapsed;
+        UpdateDefaultBackdropVisibility(showDefaultBackground);
         renderedVisuals = scene;
     }
 

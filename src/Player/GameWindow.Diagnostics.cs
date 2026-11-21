@@ -118,7 +118,7 @@ public partial class GameWindow
         SaveSelectedButton.IsEnabled = true;
         LoadSelectedButton.IsEnabled = SaveSlotsList.SelectedItem is GameSaveEntry { Damaged: false };
         DeleteSelectedButton.IsEnabled = SaveSlotsList.SelectedItem is GameSaveEntry;
-        AnimatedBackdrop.Configure(project.Engine.Theme, preferences.Animate);
+        ConfigureDefaultBackdrop();
         renderTimer.Start();
     }
 

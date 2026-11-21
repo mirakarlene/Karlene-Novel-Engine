@@ -32,6 +32,13 @@ public partial class GameWindow
         active.UnloadPreviousScene = saved.UnloadPreviousScene; active.AudioBuffer = saved.AudioBuffer; active.MaxAsyncTasks = saved.MaxAsyncTasks;
         active.FpsCounter = saved.FpsCounter; active.StatisticsOverlay = saved.StatisticsOverlay;
         active.FpsCorner = saved.FpsCorner; active.LoadingIndicator = saved.LoadingIndicator;
+        if (active.DisableDefaultAnimations != saved.DisableDefaultAnimations)
+        {
+            active.DisableDefaultAnimations = saved.DisableDefaultAnimations;
+            ConfigureDefaultBackdrop();
+            UpdateDefaultBackdropVisibility(renderedVisuals?.BackgroundsCleared != true &&
+                renderedSettings?.Background == project.Engine.Theme.BackgroundColor);
+        }
         bool reopen = IsConsoleOpen && (active.ConsoleMode != saved.ConsoleMode || active.ConsoleHotkey != saved.ConsoleHotkey);
         if (reopen) SetConsoleVisible(false, focus: false);
         active.ConsoleMode = saved.ConsoleMode; active.ConsoleHotkey = saved.ConsoleHotkey;
@@ -51,6 +58,13 @@ public partial class GameWindow
         performanceScene = null; lastPerformanceReport = 0; performancePacer.Reset();
         UpdatePerformance();
     }
+    private void ConfigureDefaultBackdrop() => AnimatedBackdrop.Configure(project.Engine.Theme,
+        preferences.Animate && !project.Engine.Performance.DisableDefaultAnimations);
+
+    private void UpdateDefaultBackdropVisibility(bool showDefaultBackground) =>
+        AnimatedBackdrop.Visibility = showDefaultBackground && project.Engine.Theme.BackgroundImage == null &&
+            !project.Engine.Performance.DisableDefaultAnimations ? Visibility.Visible : Visibility.Collapsed;
+
     private void PerformanceRendering(object? sender, EventArgs args)
     {
         if (!IsVisible || WindowState == WindowState.Minimized || systemFrozen) return;

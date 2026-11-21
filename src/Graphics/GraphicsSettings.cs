@@ -48,6 +48,7 @@ public sealed record GraphicsSettings
 public sealed class ProjectPerformanceSettings
 {
     public GraphicsSettings Graphics { get; set; } = new();
+    public bool DisableDefaultAnimations { get; set; }
     public bool FpsCounter { get; set; }
     public string FpsCorner { get; set; } = "top_right";
     public bool StatisticsOverlay { get; set; }

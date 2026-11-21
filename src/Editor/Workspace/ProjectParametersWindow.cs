@@ -74,6 +74,7 @@ public sealed partial class ProjectParametersWindow : Window
         AddField(graphics, "Графический API", GraphicsInput.ApiInput); graphics.Children.Add(GraphicsInput.VSyncInput);
         AddField(graphics, "Ограничение FPS", GraphicsInput.FpsInput); AddField(graphics, "Сглаживание", GraphicsInput.MsaaInput); AddField(graphics, "Качество текстур", TextureInput);
         AddField(graphics, "Разрешение окна", ResolutionFields()); AddField(graphics, "Палитра игры", PaletteInput);
+        AddSwitch(graphics, "default_animations_off", "Удалить все стандартные анимации", value.DisableDefaultAnimations);
         var performance = new StackPanel(); performance.Children.Add(Heading("Производительность"));
         var cache = new DockPanel { LastChildFill = true }; GraphicsInput.CacheLimitInput.MinWidth = 80; GraphicsInput.CacheLimitInput.Width = 90; DockPanel.SetDock(GraphicsInput.CacheLimitInput, Dock.Right);
         cache.Children.Add(GraphicsInput.CacheLimitInput); cache.Children.Add(GraphicsInput.LimitCacheInput); performance.Children.Add(cache);

@@ -7,6 +7,7 @@ namespace KNE;
 internal sealed record ProjectFileFormat(string Extension, string Title, string Symbol, string Color, string? Folder = null)
 {
     internal bool IsDirectory { get; init; }
+    internal bool IsPlaceholder { get; init; }
     internal IReadOnlyList<string>? Extensions { get; init; }
     internal string Filter
     {
@@ -30,6 +31,7 @@ internal static class ProjectFileFormats
     internal static readonly ProjectFileFormat VisualLua = new(".vlua", "VLua-модуль", "", "#228350", "game/scripts");
     private static readonly ProjectFileFormat Text = new(".txt", "Текст", "≡", "#53647B");
     private static readonly ProjectFileFormat Json = new(".json", "JSON", "{}", "#916219");
+    private static readonly ProjectFileFormat Csv = new(".csv", "Таблица CSV", "", "#A2544E");
     private static readonly ProjectFileFormat Shader = new(".kneshader", "Шейдерная схема", "◈", "#AD3361", "game/shaders");
     private static readonly ProjectFileFormat RenPy = new(".rpy", "Сценарий Ren’Py", "RP", "#A83868");
     private static readonly ProjectFileFormat Word = new(".docx", "Документ Word", "W", "#2856AD");
@@ -43,9 +45,10 @@ internal static class ProjectFileFormats
     private static readonly ProjectFileFormat Video = new("", "Видео", "▶", "#337C9E")
     { Extensions = [".mp4", ".m4v", ".webm", ".mov", ".mkv", ".avi", ".wmv", ".mpeg", ".mpg"] };
     private static readonly ProjectFileFormat Markdown = new(".md", "Markdown", "M↓", "#7166B5");
+    private static readonly ProjectFileFormat Placeholder = new("", "…", "", "#53647B") { IsPlaceholder = true };
 
-    internal static IReadOnlyList<ProjectFileFormat[]> CreateGroups { get; } = [[Text, Json], [Krl, Lua, CSharp], [Graph, Shader, VisualLua], [Directory, Other]];
-    internal static IReadOnlyList<ProjectFileFormat[]> ImportGroups { get; } = [[Text, Json], [Krl, Lua], [Graph, Shader, VisualLua], [RenPy, Word, Other], [Image, Audio, Video], [Directory, Markdown]];
+    internal static IReadOnlyList<ProjectFileFormat[]> CreateGroups { get; } = [[Text, Json, Csv], [Krl, Lua, CSharp], [Graph, Shader, VisualLua], [Directory, Other, Placeholder]];
+    internal static IReadOnlyList<ProjectFileFormat[]> ImportGroups { get; } = [[Text, Json, Krl, Lua], [Graph, Shader, VisualLua, RenPy], [Word, Other, Image, Audio], [Video, Directory, Markdown, Placeholder]];
 
     private const string Page = "M5,1 H19 L27,9 V31 H5 Z M19,1 V9 H27";
     private const string FolderShape = "M2,7 H13 L16,11 H30 V27 H2 Z";
@@ -56,7 +59,15 @@ internal static class ProjectFileFormats
         var color = new SolidColorBrush((Color)ColorConverter.ConvertFromString(format.Color));
         var canvas = new System.Windows.Controls.Canvas { Width = 32, Height = 32 };
         canvas.Children.Add(new Path { Data = Geometry.Parse(format.IsDirectory ? FolderShape : Page), Stroke = color, StrokeThickness = 1.5 });
-        if (format.Extension is ".lua" or ".vlua")
+        if (format == Csv)
+        {
+            canvas.Children.Add(new Path
+            {
+                Data = Geometry.Parse("M9,14 H23 V25 H9 Z M9,18 H23 M9,21.5 H23 M16,14 V25"),
+                Stroke = color, StrokeThickness = 1
+            });
+        }
+        else if (format.Extension is ".lua" or ".vlua")
         {
             var mark = new Path { Data = Geometry.Parse(LuaMark), Fill = color };
             if (format == VisualLua) mark.RenderTransform = new RotateTransform(180, 16, 19);

@@ -196,7 +196,19 @@
                                 <TextBlock Text="Проекты создаются и обнаруживаются непосредственно в этой папке." TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>
-                        <Border x:Name="RenderSettingsGroup" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18" Margin="0,12,0,0"><StackPanel><TextBlock Text="Рендер" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,12"/><local:GraphicsSettingsEditor x:Name="AppGraphicsInput"/></StackPanel></Border></StackPanel>
+                        <Border x:Name="RenderSettingsGroup" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18" Margin="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Text="Рендер" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                                <local:GraphicsSettingsEditor x:Name="AppGraphicsInput"/>
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Button x:Name="ClearEditorCacheButton" Content="Удалить весь кэш" Padding="10,4" VerticalAlignment="Center" Click="ClearEditorCache_Click"/>
+                                    <CheckBox x:Name="DisableLuaLibraryMotionInput" Grid.Column="1" VerticalAlignment="Center" Margin="10,0,0,0">
+                                        <TextBlock Text="Не отображать плавающие символы Lua и VLua" TextWrapping="Wrap"/>
+                                    </CheckBox>
+                                </Grid>
+                            </StackPanel>
+                        </Border></StackPanel>
                         <Border x:Name="DesignSettingsGroup" Grid.Column="2" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}" BorderThickness="1" CornerRadius="10" Padding="18">
                             <StackPanel>
                                 <TextBlock Text="Дизайн KNE" FontSize="21" FontWeight="SemiBold" Margin="0,0,0,18"/>
@@ -204,8 +216,17 @@
                                     <StackPanel><TextBlock Text="Имя пользователя" Margin="0,0,0,7"/><TextBox x:Name="TxtUserName" MaxLength="80" Padding="6" MinHeight="30"/><TextBlock Text="Необязательно. Для приветствия KNE." Foreground="{DynamicResource Editor.Muted}" TextWrapping="Wrap" Margin="0,6,0,12"/></StackPanel>
                                     <StackPanel Grid.Column="2"><TextBlock Text="Тема оформления" Margin="0,0,0,7"/><ComboBox x:Name="ThemeInput" DisplayMemberPath="Label" SelectedValuePath="Id" SelectionChanged="ThemeInput_SelectionChanged"/></StackPanel>
                                 </Grid>
-                                <TextBlock Text="Летающие объекты главного экрана" Margin="0,0,0,7"/>
-                                <ComboBox x:Name="WelcomeObjectInput" DisplayMemberPath="Label" SelectedValuePath="Id" SelectionChanged="WelcomeObject_Changed" Margin="0,0,0,20"/>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="Летающие объекты главного экрана" Margin="0,0,0,7"/>
+                                        <ComboBox x:Name="WelcomeObjectInput" DisplayMemberPath="Label" SelectedValuePath="Id" SelectionChanged="WelcomeObject_Changed"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Отображение файлов проекта" Margin="0,0,0,7"/>
+                                        <ComboBox x:Name="ProjectBrowserViewInput" SelectedIndex="0" SelectedValuePath="Tag"><ComboBoxItem Content="Плитки" Tag="tiles"/><ComboBoxItem Content="Таблица" Tag="table"/></ComboBox>
+                                    </StackPanel>
+                                </Grid>
                                 <TextBlock Text="Доступность блоков" FontSize="17" FontWeight="SemiBold" Margin="0,0,0,7"/>
                                 <TextBlock Text="Миниатюры показывают различия восприятия. Режим меняет палитру категорий и добавляет значки; оформление игры остаётся прежним." TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,0,0,10"/>
                                 <ItemsControl x:Name="AccessibilityCards">
@@ -218,10 +239,8 @@
                                         </RadioButton>
                                     </DataTemplate></ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock Text="Отображение файлов проекта" Margin="0,12,0,7"/>
-                                <ComboBox x:Name="ProjectBrowserViewInput" SelectedIndex="0" SelectedValuePath="Tag"><ComboBoxItem Content="Плитки" Tag="tiles"/><ComboBoxItem Content="Таблица" Tag="table"/></ComboBox>
-                                <CheckBox x:Name="GraphGridInput" Content="Показывать сетку в редакторе блок-схем" Margin="0,8,0,0"/>
-                                <Grid Margin="0,9,0,0">
+                                <CheckBox x:Name="GraphGridInput" Content="Показывать сетку в редакторе блок-схем" Margin="0,4,0,0"/>
+                                <Grid Margin="0,5,0,0">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.25*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <CheckBox x:Name="GraphMinimapColorsInput" VerticalAlignment="Bottom" Margin="0,0,12,3">
                                         <TextBlock Text="Цветная миникарта" TextWrapping="Wrap"/>
