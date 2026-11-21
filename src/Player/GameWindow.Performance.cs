@@ -9,6 +9,7 @@ namespace KNE;
 public partial class GameWindow
 {
     private readonly SceneAssetCache assets = new();
+    internal void ClearResourceCache() => assets.Clear();
     private ScenePerformanceSettings activeScenePerformance = new();
     private string? performanceScene;
     private string? performanceFunction;
@@ -20,7 +21,7 @@ public partial class GameWindow
     private long lastPerformanceReport;
     private bool? lastFpsOverride;
     internal string ProjectPath => project.Path;
-    internal async Task CloseForProjectDeletionAsync() { Close(); if (shaders != null) await shaders.DisposeAsync(); await runtime.DisposeAsync(); }
+    internal async Task CloseForProjectDeletionAsync() { exitApproved = true; Close(); if (shaders != null) await shaders.DisposeAsync(); await runtime.DisposeAsync(); }
     /// <summary>Applies saved graphics and scene policies to an already open game, without restarting its story.</summary>
     internal void ReloadPerformanceSettings()
     {

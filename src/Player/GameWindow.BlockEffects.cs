@@ -95,6 +95,7 @@ public partial class GameWindow
     }
     private void HandleSceneEnd(StoryFrame frame)
     {
+        if (HandlePreMenuEnd(frame)) return;
         if (frame.EndAction == null || ReferenceEquals(handledEnd, frame)) return;
         handledEnd = frame;
         CloseAudio();

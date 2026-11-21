@@ -80,9 +80,9 @@ public sealed partial class LuaRuntime : IGameSession
     public JsonElement Variables { get { lock (stateLock) return variables; } }
     public bool TransitionInProgress { get { lock (stateLock) return transitionPending; } }
 
-    public Task StartAsync(CancellationToken cancellationToken = default) => RunAsync(StartCore, cancellationToken, "Запуск игры");
+    public Task StartAsync(CancellationToken cancellationToken = default) => RunAsync(() => StartCore(), cancellationToken, "Запуск игры");
 
-    private void StartCore()
+    private void StartCore(bool bootstrapOnly = false, bool preMenu = false)
     {
         if (initialized) throw new InvalidOperationException("Игра уже запущена.");
         transitionPending = false;
@@ -173,6 +173,7 @@ public sealed partial class LuaRuntime : IGameSession
             """, "KNE API");
         lua.DoString(RuntimeDiagnosticsLua.Source, "KNE diagnostics");
         InitializeProjectDiagnostics();
+        InitializeProjectLifecycle();
         lua.DoString(SceneRuntimeLua.Source, "KNE scene scheduler");
         lua.DoString(CalculationRuntimeLua.Source, "KNE calculations");
         InitializeLogic();
@@ -224,13 +225,18 @@ public sealed partial class LuaRuntime : IGameSession
         using (var declare = (LuaFunction)lua["kne_declare_function"])
             foreach (var function in scripts.Functions) declare.Call(function.Name, function.Path);
         string? debugFile = editorSource?.LuaDebug == true ? editorSource.RelativePath(project.Path) : null;
+        string? preMenuFile = preMenu
+            ? Path.GetRelativePath(project.Path, ProjectLifecycle.Resolve(project, project.Configuration.EntryPoints?.PreMenuScene)
+                ?? throw new InvalidDataException("Сцена до главного меню не задана.")).Replace('\\', '/')
+            : null;
         using (var load = (LuaFunction)lua["kne_load_script"])
         {
             foreach (var script in scripts.Initialization)
                 if (!script.Path.Equals(debugFile, StringComparison.OrdinalIgnoreCase)) load.Call(script.Path);
-            if (debugFile == null)
-                load.Call(preview ? Path.GetRelativePath(project.Path, scenePath).Replace('\\', '/') : scripts.Main.Path);
+            if (!bootstrapOnly && debugFile == null)
+                load.Call(preMenuFile ?? (preview ? Path.GetRelativePath(project.Path, scenePath).Replace('\\', '/') : scripts.Main.Path));
         }
+        if (bootstrapOnly) { initialized = true; return; }
         if (debugFile != null)
         {
             lua["kne_debug_module"] = scripts.FindFile(debugFile).Path;
@@ -243,7 +249,8 @@ public sealed partial class LuaRuntime : IGameSession
             initialized = true;
             return;
         }
-        string entryName = editorSource?.EntryFunction ?? (preview ? scripts.PreviewFunction(Path.GetRelativePath(project.Path, scenePath)) : "main");
+        string entryName = preMenuFile != null ? scripts.PreviewFunction(preMenuFile) :
+            editorSource?.EntryFunction ?? (preview ? scripts.PreviewFunction(Path.GetRelativePath(project.Path, scenePath)) : "main");
         if (editorSource?.EntryFunction != null && !scripts.Functions.Any(f => f.Name == entryName &&
             f.Path.Equals(editorSource.RelativePath(project.Path), StringComparison.OrdinalIgnoreCase)))
             throw new InvalidDataException("Функция предпросмотра не объявлена в выбранном файле: " + entryName);
@@ -445,6 +452,9 @@ public sealed partial class LuaRuntime : IGameSession
                         PublishPluginInputEvent(JsonSerializer.Deserialize<PluginInput>(action.Command) ?? throw new InvalidDataException("Пустое событие плагина.")); break;
                     case "advance" when Story.CanAdvance: ResumeStory(null); break;
                     case "system_continue" when Story.Kind == "system_save": ResumeStory(null); break;
+                    case "project_event" when action.Command != null:
+                        InvokeProjectEvent(JsonSerializer.Deserialize<ProjectLifecycleEvent>(action.Command)
+                            ?? throw new InvalidDataException("Не указано событие проекта.")); break;
                     case "choose" when Story.Kind == "choice" && action.Option >= 1 && action.Option <= Story.Options.Count && IsChoiceEnabled(Story, action.Option): ResumeStory(action.Option); break;
                     case "input" when Story.Kind == "input" && action.Command != null: SubmitInputCore(action.Command, action.Cancel); break;
                     case "command" when !string.IsNullOrWhiteSpace(action.Command):

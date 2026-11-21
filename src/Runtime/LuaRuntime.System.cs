@@ -147,6 +147,8 @@ public sealed partial class LuaRuntime
                 var arguments = JsonSerializer.SerializeToElement(new object[] { Story.Text, checkpoint });
                 var result = CallSystem(new("save_checkpoint", arguments));
                 if (result.Error != null) throw new InvalidOperationException(result.Error);
+                if (!string.IsNullOrWhiteSpace(project.Configuration.EntryPoints?.SaveScript))
+                    RecordProjectEvent(new("save", Story.Text));
             }
             string before = FrameSignature(Story);
             ResumeStory(null);

@@ -99,6 +99,19 @@ public partial class ScriptEditor : UserControl
     public ScriptEditor()
     {
         InitializeComponent();
+        CodeMinimap.Bind(CodeEditor);
+        GraphMinimap.Bind(
+            () => (Document?.Graph?.Nodes.Select(node => new Rect(node.X, node.Y, NodeWidth(node), NodeHeight(node))) ?? [],
+                new Rect(-CanvasPan.X / ZoomSlider.Value, -CanvasPan.Y / ZoomSlider.Value,
+                    GraphScroll.ActualWidth / ZoomSlider.Value, GraphScroll.ActualHeight / ZoomSlider.Value)),
+            center =>
+            {
+                CanvasPan.X = GraphScroll.ActualWidth / 2 - center.X * ZoomSlider.Value;
+                CanvasPan.Y = GraphScroll.ActualHeight / 2 - center.Y * ZoomSlider.Value;
+            });
+        CanvasPan.Changed += (_, _) => GraphMinimap.InvalidateVisual();
+        CanvasScale.Changed += (_, _) => GraphMinimap.InvalidateVisual();
+        GraphScroll.SizeChanged += (_, _) => GraphMinimap.InvalidateVisual();
         InitializeGraphSelection();
         ValueTypeInput.ItemsSource = new[]
         {
@@ -166,14 +179,14 @@ public partial class ScriptEditor : UserControl
         CodeEditor.Text = document.IsVisual ? "" : document.Code;
         CodeEditor.IsReadOnly = document.IsVisual;
         bool luaFile = ScriptDocument.IsLuaPath(document.FilePath);
-        ApplyLuaModeAppearance(luaFile);
+        ApplyLuaModeAppearance(!ScriptDocument.IsShaderPath(document.FilePath));
         CodeMode.IsEnabled = true;
         GraphMode.IsEnabled = document.IsVisual || luaFile;
         GraphMode.ToolTip = luaFile && !document.IsVisual ? "Преобразовать файл в .vlua" : document.IsVisual
             ? null
             : "Произвольный Lua/KRL не преобразуется в блоки. Создайте визуальную сцену.";
         ExportButton.IsEnabled = document.IsVisual && !luaFile;
-        SetVisualLuaActions(document.Graph?.IsVisualLua == true);
+        SetVisualLuaActions(luaFile);
         SaveButton.IsEnabled = RunButton.IsEnabled = TestSceneButton.IsEnabled = MainSceneButton.IsEnabled = CloseDocumentButton.IsEnabled = true;
         bool shader = document.Graph?.IsShader == true;
         FunctionNameInput.IsEnabled = !shader; RunButton.Content = shader ? "Предпросмотр шейдера" : "Предпросмотр фрейма";
@@ -459,9 +472,11 @@ public partial class ScriptEditor : UserControl
             OptionsLabel.Text = node.Kind == ScriptNodeKind.RandomBranch ? "Названия случайных веток — по одному на строку" : node.Kind == ScriptNodeKind.Switch ? "Значения case — по одному на строку" : node.Kind is ScriptNodeKind.Parallel or ScriptNodeKind.Async ? "Названия веток — по одному на строку" : "Ответы — по одному на строку";
             Visible(PathField,
                 node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music
-                    or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ConditionalGoto or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script);
+                    or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ConditionalGoto or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script or ScriptNodeKind.CallVisualLua);
             bool sceneTarget = node.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ConditionalGoto;
-            PathLabel.Text = sceneTarget ? "Имя функции" : node.Kind == ScriptNodeKind.ForEach ? "Имя коллекции в state" : node.Kind == ScriptNodeKind.ShowScreen ? "Название экрана (пусто — скрыть)" : "Путь от корня проекта";
+            PathLabel.Text = sceneTarget ? "Имя функции" : node.Kind == ScriptNodeKind.ForEach ? "Имя коллекции в state" :
+                node.Kind == ScriptNodeKind.ShowScreen ? "Название экрана (пусто — скрыть)" :
+                node.Kind == ScriptNodeKind.CallVisualLua ? "Путь к модулю .vlua от корня проекта" : "Путь от корня проекта";
             BrowsePathButton.Content = sceneTarget ? "Выбрать сцену…" : "Выбрать ресурс…";
             Visible(BrowsePathButton, !sceneTarget && node.Kind is not (ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen));
             Visible(PositionField, node.Kind == ScriptNodeKind.Character);
@@ -509,7 +524,7 @@ public partial class ScriptEditor : UserControl
         ApplyExtendedProperties(changed);
         if (CalculationCompiler.IsCalculation(changed.Kind)) _ = CalculationCompiler.Compile(changed.Kind, changed.Calculation ?? new CalculationSettings(), changed.Variable);
         if (node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music
-            or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ConditionalGoto or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script) changed.Path = PathInput.Text.Trim();
+            or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ConditionalGoto or ScriptNodeKind.ForEach or ScriptNodeKind.ShowScreen or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script or ScriptNodeKind.CallVisualLua) changed.Path = PathInput.Text.Trim();
         if (node.Kind == ScriptNodeKind.Character)
             changed.Position = (PositionInput.SelectedItem as ComboBoxItem)?.Content.ToString() ?? "center";
         if (node.Kind is ScriptNodeKind.Music or ScriptNodeKind.AudioChannel) changed.Loop = LoopInput.IsChecked == true;
@@ -601,7 +616,7 @@ public partial class ScriptEditor : UserControl
         ScriptNodeKind.Shake => "Сила " + node.Amount + " · " + node.Duration + " с",
         ScriptNodeKind.Flash => node.Value + " · " + node.Duration + " с",
         ScriptNodeKind.ShowScreen => node.Path.Length == 0 ? "Скрыть дополнительный экран" : node.Path,
-        ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script => node.Path.Length == 0 ? "Файл не выбран" : node.Path,
+        ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script or ScriptNodeKind.CallVisualLua => node.Path.Length == 0 ? "Файл не выбран" : node.Path,
         ScriptNodeKind.ConfigureDialogue => "Оформление диалога",
         ScriptNodeKind.ConfigureButton => "Оформление: " + node.UiTarget,
         ScriptNodeKind.ClearBackgrounds => "Убрать стандартный и загруженные фоны",
@@ -649,7 +664,7 @@ public partial class ScriptEditor : UserControl
         EditorStatus.Text = "Блоки соединены.";
     }
 
-    private void RenderLinks() => RenderCanvasLinks();
+    private void RenderLinks() { RenderCanvasLinks(); GraphMinimap?.InvalidateVisual(); }
 
     private void Zoom_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -666,10 +681,12 @@ public partial class ScriptEditor : UserControl
     private void BrowseResource_Click(object sender, RoutedEventArgs e) => Guard(() =>
     {
         bool scene = Selected?.Kind is ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene or ScriptNodeKind.ConditionalGoto;
+        bool visualLua = Selected?.Kind == ScriptNodeKind.CallVisualLua;
         var dialog = new OpenFileDialog
         {
-            InitialDirectory = projectRoot, Title = scene ? "Выберите игровую сцену" : "Выберите ресурс внутри проекта",
-            Filter = scene ? "Сцены KNE (*.lua;*.krl;*.knegraph)|*.lua;*.krl;*.knegraph" : "Все файлы|*.*"
+            InitialDirectory = projectRoot,
+            Title = visualLua ? "Выберите модуль Visual Lua" : scene ? "Выберите игровую сцену" : "Выберите ресурс внутри проекта",
+            Filter = visualLua ? "Visual Lua (*.vlua)|*.vlua" : scene ? "Сцены KNE (*.lua;*.krl;*.knegraph)|*.lua;*.krl;*.knegraph" : "Все файлы|*.*"
         };
         if (dialog.ShowDialog(Window.GetWindow(this)) == true)
             PathInput.Text = System.IO.Path

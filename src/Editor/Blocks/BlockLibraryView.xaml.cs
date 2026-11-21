@@ -43,11 +43,14 @@ public partial class BlockLibraryView : UserControl
         preferenceStore = store;
     }
 
+    internal bool AnimateVisualLua { get; set; } = true;
+
     /// <summary>Resets search and page while loading preferences without blocking the UI thread.</summary>
     public void Open(Func<ScriptNodeKind, bool> availability, bool visualLua = false)
     {
         ArgumentNullException.ThrowIfNull(availability);
         luaMode = visualLua;
+        SetLuaMotion(visualLua && AnimateVisualLua && SystemParameters.ClientAreaAnimation);
         LuaVersionNote.Visibility = visualLua ? Visibility.Visible : Visibility.Collapsed;
         canAdd = availability; BlockSearch.Clear(); page = 0;
         ScrollViewer.SetVerticalScrollBarVisibility(BlockGroups, PluginCatalog.Current?.Groups.Count > 0 ? ScrollBarVisibility.Hidden : ScrollBarVisibility.Disabled);

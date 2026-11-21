@@ -9,11 +9,13 @@ public partial class MainWindow
     {
         if (busy || closed || ActiveEditor.Document?.Graph == null) return;
         BlockLibraryOverlay.Visibility = Visibility.Visible; ProjectPanel.IsEnabled = false;
+        LibraryView.AnimateVisualLua = settings.Editor.LuaLibraryMotion;
         LibraryView.Open(kind => ShaderLibrary.IsShader(kind) && ActiveEditor.Document?.Graph is { IsShader: false, IsVisualLua: false } || ActiveEditor.CanAddBlock(kind),
             ActiveEditor.Document.Graph.IsVisualLua);
     }
     private void CloseBlockLibrary()
     {
+        LibraryView.SetLuaMotion(false);
         BlockLibraryOverlay.Visibility = Visibility.Collapsed;
         if (!closed) { ProjectPanel.IsEnabled = !busy; ActiveEditor.FocusAddBlock(); }
     }

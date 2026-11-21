@@ -25,6 +25,7 @@ public sealed record EditorPreferences
     public bool StrictBreak { get; set; }
     public int BreakDuration { get; set; } = 5;
     public bool ShowWorkTime { get; set; }
+    public bool LuaLibraryMotion { get; set; } = true;
 
     public static int[] BackupIntervals => [-1, 120, 60, 30, 10, 0];
     public static int[] BackupLimits => [3, 5, 10, 25];

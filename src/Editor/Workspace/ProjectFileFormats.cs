@@ -6,6 +6,7 @@ namespace KNE;
 
 internal sealed record ProjectFileFormat(string Extension, string Title, string Symbol, string Color, string? Folder = null)
 {
+    internal bool IsDirectory { get; init; }
     internal string Filter => Extension.Length == 0 ? "Все файлы (*.*)|*.*" : $"{Title} (*{Extension})|*{Extension}";
 }
 
@@ -21,25 +22,27 @@ internal static class ProjectFileFormats
     private static readonly ProjectFileFormat RenPy = new(".rpy", "Сценарий Ren’Py", "RP", "#A83868");
     private static readonly ProjectFileFormat Word = new(".docx", "Документ Word", "W", "#2856AD");
     private static readonly ProjectFileFormat Other = new("", "Другое", "?", "#53647B");
+    private static readonly ProjectFileFormat Directory = new("", "Папка", "", "#AE7924") { IsDirectory = true };
 
-    internal static IReadOnlyList<ProjectFileFormat[]> CreateGroups { get; } = [[Text, Json], [Krl, Lua], [Graph, Shader, VisualLua]];
-    internal static IReadOnlyList<ProjectFileFormat[]> ImportGroups { get; } = [[Text, Json], [Krl, Lua], [Graph, Shader, VisualLua], [RenPy, Word, Other]];
+    internal static IReadOnlyList<ProjectFileFormat[]> CreateGroups { get; } = [[Text, Json], [Krl, Lua], [Graph, Shader, VisualLua], [Directory, Other]];
+    internal static IReadOnlyList<ProjectFileFormat[]> ImportGroups { get; } = [[Text, Json], [Krl, Lua], [Graph, Shader, VisualLua], [RenPy, Word, Other], [Directory]];
 
     private const string Page = "M5,1 H19 L27,9 V31 H5 Z M19,1 V9 H27";
-    private const string LuaMark = "M11,20 A5,5 0 1 0 21,20 A5,5 0 1 0 11,20 M21,14 A2,2 0 1 0 25,14 A2,2 0 1 0 21,14";
+    private const string FolderShape = "M2,7 H13 L16,11 H30 V27 H2 Z";
+    internal const string LuaMark = "M11,20 A5,5 0 1 0 21,20 A5,5 0 1 0 11,20 M21,14 A2,2 0 1 0 25,14 A2,2 0 1 0 21,14";
 
     internal static FrameworkElement Icon(ProjectFileFormat format)
     {
         var color = new SolidColorBrush((Color)ColorConverter.ConvertFromString(format.Color));
         var canvas = new System.Windows.Controls.Canvas { Width = 32, Height = 32 };
-        canvas.Children.Add(new Path { Data = Geometry.Parse(Page), Stroke = color, StrokeThickness = 1.5 });
+        canvas.Children.Add(new Path { Data = Geometry.Parse(format.IsDirectory ? FolderShape : Page), Stroke = color, StrokeThickness = 1.5 });
         if (format.Extension is ".lua" or ".vlua")
         {
             var mark = new Path { Data = Geometry.Parse(LuaMark), Fill = color };
             if (format == VisualLua) mark.RenderTransform = new RotateTransform(180, 16, 19);
             canvas.Children.Add(mark);
         }
-        else
+        else if (!format.IsDirectory)
         {
             var symbol = new System.Windows.Controls.TextBlock { Text = format.Symbol, Foreground = color, FontWeight = FontWeights.Bold, Width = 32, TextAlignment = TextAlignment.Center };
             System.Windows.Controls.Canvas.SetTop(symbol, 12);

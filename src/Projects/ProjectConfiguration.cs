@@ -52,5 +52,14 @@ public sealed class EntryPoints
 {
     [JsonPropertyName("main_scene")] public string? MainScene { get; set; }
     [JsonPropertyName("init_script")] public string? InitScript { get; set; }
+    [JsonPropertyName("pre_menu_scene")] public string? PreMenuScene { get; set; }
+    [JsonPropertyName("splash_image")] public string? SplashImage { get; set; }
+    [JsonPropertyName("splash_seconds")] public double? SplashSeconds { get; set; }
+    [JsonPropertyName("idle_script")] public string? IdleScript { get; set; }
+    [JsonPropertyName("idle_seconds")] public double? IdleSeconds { get; set; }
+    [JsonPropertyName("save_script")] public string? SaveScript { get; set; }
+    [JsonPropertyName("exit_script")] public string? ExitScript { get; set; }
+    [JsonPropertyName("menu_script")] public string? MenuScript { get; set; }
+    [JsonPropertyName("error_script")] public string? ErrorScript { get; set; }
     [JsonExtensionData] public Dictionary<string, JsonElement>? AdditionalData { get; set; }
 }

@@ -109,6 +109,12 @@ public sealed class FileBrowserDesignTests
                     {
                         Assert.All(Descendants(row).OfType<DataGridCell>(), cell => Assert.InRange(cell.ActualWidth, 50, table.ActualWidth));
                         string fileName = Assert.IsType<ProjectBrowserEntry>(row.Item).Name;
+                        if (row.Item is ProjectBrowserEntry { IsDirectory: true })
+                        {
+                            var folderActions = Assert.Single(Descendants(row).OfType<ComboBox>());
+                            Assert.Equal(new[] { "Открыть", "Переименовать", "Дублировать", "Переместить", "Удалить" },
+                                folderActions.Items.Cast<ComboBoxItem>().Select(item => (string)item.Content));
+                        }
                         Assert.Contains(Descendants(row).OfType<TextBlock>(), text => text.Text == fileName && text.ActualWidth > 0 && text.ActualHeight > 0);
                     }
                     Assert.DoesNotContain(Descendants(table).OfType<DataGridRowHeader>(), header => header.ActualWidth > 0 && header.Visibility == Visibility.Visible);

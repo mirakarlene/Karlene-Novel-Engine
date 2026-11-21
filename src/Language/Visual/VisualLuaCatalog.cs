@@ -20,13 +20,13 @@ internal static class VisualLuaCatalog
     [
         new("lua_flow", "Поток выполнения", "#FFFFFF"),
         new("lua_raw", "Исходный код", "#000000"),
-        new("lua_variables", "Переменные и область видимости", "#2563A6"),
+        new("lua_variables", "Переменные", "#2563A6"),
         new("lua_tables", "Таблицы", "#228052"),
         new("lua_functions", "Функции и корутины", "#E3B52D"),
         new("lua_operators", "Операторы", "#C65C16"),
         new("lua_types", "Типы данных", "#8246B3"),
-        new("lua_libraries", "Встроенные функции Lua", "#BA3846"),
-        new("lua_meta", "Метапрограммирование", "#8B5A35"),
+        new("lua_libraries", "Встроенные функции", "#BA3846"),
+        new("lua_meta", "Метаметоды", "#8B5A35"),
     ];
 
     internal static readonly IReadOnlyDictionary<string, LuaBlockSpec> Blocks = Build();

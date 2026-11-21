@@ -50,6 +50,7 @@ public partial class GameWindow : Window
         InitializeBlockEffects();
         InitializeShaders();
         InitializeTriggerInput();
+        InitializeProjectEvents();
         music.MediaEnded += (_, _) => { if (runtime.Visuals.AudioChannels.All(c => c.Channel != "music") && (runtime.Visuals.LoopMusic || menuMusicPlaying)) { music.Position = TimeSpan.Zero; music.Play(); } };
         music.MediaFailed += (_, e) => QueueOutput("Ошибка музыки: " + e.ErrorException.Message);
         sound.MediaFailed += (_, e) => QueueOutput("Ошибка звука: " + e.ErrorException.Message);
@@ -61,17 +62,19 @@ public partial class GameWindow : Window
     {
         if (loaded) return;
         loaded = true;
+        RecordProjectActivity();
         if (diagnosticConsole) SetConsoleVisible(true, focus: false);
         try { InitializePlayerPlugins(); ApplyEngineTheme(); }
         catch (Exception error) { ShowStartupError(error, "Загрузка UI плагинов"); return; }
         if (project.Engine.Window.Mode == "maximized") WindowState = WindowState.Maximized;
         if (preferences.Fullscreen ?? project.Engine.Window.Mode == "fullscreen") ToggleFullscreen();
         bool useMenu = project.Engine.Game.MainMenu && !preview && project.Engine.Screens.Find("main_menu") != null;
+        bool hasPrelude = useMenu && !string.IsNullOrWhiteSpace(project.Configuration.EntryPoints?.PreMenuScene);
         try
         {
             var scripts = GameScripts.Load(project, pluginsEnabled: EngineLaunch.PluginsEnabled);
             bool usesFiles = scripts.Files.Any(UsesFiles);
-            if (useMenu) ShowMenu();
+            if (useMenu && !hasPrelude && !HasProjectEvent("menu")) ShowMenu();
             MenuOverlay.IsEnabled = !usesFiles;
             systemInitialization = InitializeSystemServicesAsync(usesFiles);
             await systemInitialization;
@@ -80,6 +83,8 @@ public partial class GameWindow : Window
         catch (Exception ex) { ShowStartupError(ex, "Проверка сценариев перед запуском"); return; }
         if (closed) return;
         MenuOverlay.IsEnabled = true;
+        if (hasPrelude) await StartPreMenuAsync();
+        else if (useMenu && HasProjectEvent("menu")) ShowMenu();
         if (!useMenu)
         {
             await StartGameAsync();
@@ -137,7 +142,8 @@ public partial class GameWindow : Window
         StartButton.Content = settings.Game.StartLabel;
         ContinueButton.Content = settings.Game.ContinueLabel;
         ExitButton.Content = settings.Game.ExitLabel;
-        MenuOverlay.Visibility = settings.Game.MainMenu && !preview ? Visibility.Visible : Visibility.Collapsed;
+        MenuOverlay.Visibility = settings.Game.MainMenu && !preview &&
+            string.IsNullOrWhiteSpace(project.Configuration.EntryPoints?.PreMenuScene) ? Visibility.Visible : Visibility.Collapsed;
         renderedSettings = settings.RuntimeDefaults(project.Title);
     }
 
@@ -188,8 +194,8 @@ public partial class GameWindow : Window
         ErrorActionStatus.Text = "";
         RefreshErrorActions();
         RenderConsole();
-        StartupErrorOverlay.Visibility = Visibility.Visible;
-        StartupErrorExitButton.Focus();
+        if (HasProjectEvent("error")) _ = PresentProjectErrorAsync(currentErrorReport);
+        else ShowProjectErrorOverlay();
     }
 
     private void SceneArea_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -258,7 +264,7 @@ public partial class GameWindow : Window
         await LoadGameAsync(saves.Exists("auto") ? "auto" : "quick");
     }
 
-    private async void PauseButton_Click(object sender, RoutedEventArgs e) { if (await TryButtonTriggerAsync(sender)) return; if (execution == null && ready) ShowMenu(); }
+    private async void PauseButton_Click(object sender, RoutedEventArgs e) { if (await TryButtonTriggerAsync(sender)) return; if (execution == null && ready && !preMenuActive) ShowMenu(); }
     private void ResumeButton_Click(object sender, RoutedEventArgs e) { if (execution == null && ready) ShowGameplay(); }
     private void ExitButton_Click(object sender, RoutedEventArgs e) => Close();
 
@@ -286,6 +292,7 @@ public partial class GameWindow : Window
         choicePresentation?.Stop();
         ContinueButton.IsEnabled = saves.Exists("auto") || saves.Exists("quick");
         if (ready) ResumeButton.Focus(); else StartButton.Focus();
+        RunMainMenuEvent();
     }
 
     private void ShowGameplay()
@@ -364,10 +371,10 @@ public partial class GameWindow : Window
             if (before != null) rollback.Push(before);
             if (closed) return;
             if (starting) ready = true;
-            if (ready && SaveStorageWritable && SceneSavePolicy.AllowAuto(runtime.Visuals.Scene) &&
+            if (ready && !preMenuActive && SaveStorageWritable && SceneSavePolicy.AllowAuto(runtime.Visuals.Scene) &&
                 (starting && project.Engine.Game.AutoSave && !saves.Exists("auto") || playerAction && autosave.Completed(project.Engine.Game, previousKind)))
             {
-                try { await saves.SaveAsync("auto", await CheckpointAsync(execution.Token), execution.Token); }
+                try { await StoreSaveAsync("auto", execution.Token); }
                 catch (Exception ex) when (GameErrorReport.TryGet(ex) == null)
                 { operationNotice = "Автосохранение не выполнено: " + ex.Message; QueueOutput(operationNotice); }
             }
@@ -451,7 +458,7 @@ public partial class GameWindow : Window
         bool saved = false;
         await ExecuteAsync(async () =>
         {
-            await saves.SaveAsync("quick", await CheckpointAsync(execution!.Token), execution.Token);
+            await StoreSaveAsync("quick", execution!.Token);
             QueueOutput("Игра сохранена.");
             saved = true;
         }, operation: "Сохранение игры");
@@ -467,7 +474,7 @@ public partial class GameWindow : Window
 
     private async Task LoadGameAsync(string slot)
     {
-        if (execution != null) return;
+        if (execution != null || preMenuActive) return;
         await ExecuteAsync(async () =>
         {
             await systemInitialization.WaitAsync(execution!.Token);
@@ -530,7 +537,7 @@ public partial class GameWindow : Window
         if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
         if (e.Key == Key.Escape && runtime.Story.Kind == "input" && MenuOverlay.Visibility != Visibility.Visible)
         { PlayerInput.Cancel(); e.Handled = true; return; }
-        if (e.Key == Key.Escape && ready && execution == null)
+        if (e.Key == Key.Escape && ready && execution == null && !preMenuActive)
         {
             if (MenuOverlay.Visibility == Visibility.Visible) ShowGameplay(); else ShowMenu();
             e.Handled = true; return;

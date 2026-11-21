@@ -142,6 +142,7 @@ public sealed partial class ProjectParametersWindow : Window
         foreach (var card in buildCards) { ParameterLayout.SpreadFields((Panel)card.Child); }
         pages.Add(ParameterLayout.Cards(left, right, Card(console))); pages.Add(ParameterLayout.Cards(storageCard, diagnosticCard));
         pages.Add(ParameterLayout.Cards(BuildInput, securityCard)); pages.Add(ParameterLayout.Cards(Card(MetadataInput))); pages.Add(MetadataInput.AdditionalPage);
+        pages.Add(ParameterLayout.Cards(Card(MetadataInput.Lifecycle)));
         var pager = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new(0, 10, 0, 0) };
         pager.Children.Add(PreviousPage); pager.Children.Add(pageLabel); pager.Children.Add(NextPage);
         PreviousPage.Click += (_, _) => ShowPage(Page - 1); NextPage.Click += (_, _) => ShowPage(Page + 1);
@@ -155,10 +156,10 @@ public sealed partial class ProjectParametersWindow : Window
     }
     internal void ShowPage(int page)
     {
-        Page = Math.Clamp(page, 0, 4); ResetDeletion(); DangerZone.IsExpanded = false;
+        Page = Math.Clamp(page, 0, pages.Count - 1); ResetDeletion(); DangerZone.IsExpanded = false;
         pageContent.Content = pages[Page]; BuildInput.Visibility = Visibility.Visible;
-        PreviousPage.IsEnabled = Page > 0; NextPage.IsEnabled = Page < 4;
-        pageLabel.Text = (Page + 1) + " / 5";
+        PreviousPage.IsEnabled = Page > 0; NextPage.IsEnabled = Page + 1 < pages.Count;
+        pageLabel.Text = (Page + 1) + " / " + pages.Count;
     }
     private void ResetDeletion() { DeletionConfirmation.Cancel(); DeleteCounter.Visibility = Visibility.Collapsed; DeleteCounter.Text = ""; }
     private CheckBox Switch(string key, string label, bool value) { var input = new CheckBox { Content = label, IsChecked = value, FontWeight = FontWeights.Normal, Margin = new(0, 6, 8, 6), VerticalAlignment = VerticalAlignment.Center }; switches[key] = input; return input; }

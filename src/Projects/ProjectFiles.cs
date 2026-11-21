@@ -73,7 +73,8 @@ public sealed class ProjectFiles(ProjectInfo project)
     {
         if (source.Equals(Path.Combine(project.Path, "project.json"), StringComparison.OrdinalIgnoreCase) ||
             source.Equals(ResolveProtectedEntry(() => project.MainScenePath, project.Configuration.EntryPoints?.MainScene), StringComparison.OrdinalIgnoreCase) ||
-            source.Equals(ResolveProtectedEntry(() => project.InitScriptPath, project.Configuration.EntryPoints?.InitScript), StringComparison.OrdinalIgnoreCase))
+            source.Equals(ResolveProtectedEntry(() => project.InitScriptPath, project.Configuration.EntryPoints?.InitScript), StringComparison.OrdinalIgnoreCase) ||
+            ProjectLifecycle.Paths(project.Configuration.EntryPoints).Any(path => source.Equals(PathSafety.ResolveRelative(project.Path, path), StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException("Нельзя удалить, переименовать или переместить конфигурацию и точки входа проекта. Для смены сценария сначала измените entry_points в project.json.");
     }
 

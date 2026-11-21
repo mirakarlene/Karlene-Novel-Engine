@@ -17,10 +17,13 @@ internal sealed class ProjectMetadataEditor : StackPanel
     private static readonly string[] Paths = ["metadata.name", "metadata.author", "metadata.team", "metadata.version", "game_info.description", "metadata.icon", "metadata.default_language", "metadata.created_date", "metadata.kne_version", "entry_points.main_scene", "entry_points.init_script"];
     internal TextBox this[string path] => fields[path];
     internal Grid AdditionalPage { get; } = new();
+    internal ProjectLifecycleEditor Lifecycle { get; }
     internal ProjectMetadataEditor(ProjectInfo project, ProjectBuildSettingsEditor build, TextBox title)
     {
         root = project.Path; original = ProjectBuildMetadata.Read(root).Configuration;
         var remaining = (JsonObject)original.DeepClone();
+        Lifecycle = new(root, original["entry_points"] as JsonObject ?? new JsonObject());
+        ProjectLifecycleEditor.Mask(remaining["entry_points"] as JsonObject);
         var labels = new[] { "Название проекта", "Автор / никнейм", "Команда разработчиков", "Версия", "Описание", "Иконка проекта (.ico / .png)", "Язык по умолчанию", "Дата создания", "Версия KNE", "Начальная сцена", "Скрипт инициализации" };
         for (int i = 0; i < Paths.Length; i++)
         {
@@ -68,6 +71,7 @@ internal sealed class ProjectMetadataEditor : StackPanel
             ((JsonObject)draft[parts[0]]!)[parts[1]] = fields[path].Text.Trim();
         }
         draft["metadata"]!["name"] = ProjectMaintenance.ValidateName(fields["metadata.name"].Text);
+        Lifecycle.Write((JsonObject)draft["entry_points"]!);
         if (draft["game_info"] is not JsonObject) draft["game_info"] = new JsonObject();
         draft["game_info"]!["title"] = fields["metadata.name"].Text.Trim();
         if (draft["name"] != null) draft["name"] = fields["metadata.name"].Text.Trim();

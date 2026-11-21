@@ -110,7 +110,11 @@ namespace KNE
                 ShutdownMode = ShutdownMode.OnMainWindowClose;
 #endif
                 if (!EngineLaunch.PluginsEnabled) MainWindow.Title += " · Без плагинов";
+#if KNE_PLAYER
+                await GameStartupSplash.ShowThenAsync(standaloneProject, MainWindow.Show);
+#else
                 MainWindow.Show();
+#endif
                 diagnostics.Record("Интерфейс готов");
             }
             catch (Exception error) { PresentFailure(error, "Ошибка запуска движка"); }

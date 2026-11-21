@@ -3,11 +3,11 @@ namespace KNE;
 public partial class GameWindow
 {
     private readonly SceneSavePolicy sceneSaves = new();
-    private bool CanSaveInScene => SaveStorageWritable && SceneSavePolicy.AllowManual(runtime.Visuals.Scene);
+    private bool CanSaveInScene => !preMenuActive && SaveStorageWritable && SceneSavePolicy.AllowManual(runtime.Visuals.Scene);
     private async Task SaveSceneEntryAsync(CancellationToken token)
     {
-        if (!SaveStorageWritable || !sceneSaves.ShouldCreateEntry(runtime.Visuals.Scene, runtime.Story)) return;
-        await saves.SaveAsync(SceneSavePolicy.SlotName(runtime.Visuals.Scene!), await CheckpointAsync(token), token);
+        if (preMenuActive || !SaveStorageWritable || !sceneSaves.ShouldCreateEntry(runtime.Visuals.Scene, runtime.Story)) return;
+        await StoreSaveAsync(SceneSavePolicy.SlotName(runtime.Visuals.Scene!), token);
     }
     private bool presentDuringOperation;
     private bool SceneChanged(SceneRuntimeState? previous, bool starting = false) => runtime.Visuals.Scene is { } current &&

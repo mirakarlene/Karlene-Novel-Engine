@@ -132,6 +132,7 @@ public static class BlockLibrary
         Add("configurations", ScriptNodeKind.ConfigureButton, "Кнопка", "Внешний вид и положение игровых кнопок и вариантов выбора.");
         Add("plugins", ScriptNodeKind.IncludeLua, "Подключить .lua", "Подключить внешний Lua-файл один раз за игровую сессию.");
         Add("plugins", ScriptNodeKind.IncludeCs, "Подключить .cs", "Скомпилировать и подключить C#-плагин проекта.");
+        Add("plugins", ScriptNodeKind.CallVisualLua, "Вызвать VLua", "Выполнить указанный модуль Visual Lua при входе в блок.");
         Add("plugins", ScriptNodeKind.Script, "Скрипт", "Создать или открыть скрипт в настроенном внешнем редакторе; выполнять при входе в блок.");
         return entries.AsReadOnly();
     }

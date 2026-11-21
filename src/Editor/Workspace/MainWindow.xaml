@@ -88,10 +88,10 @@
                         <DataGridTemplateColumn Header="Действия" Width="180">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Grid><Grid.Style><Style TargetType="Grid"><Style.Triggers><DataTrigger Binding="{Binding ProjectFile}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Grid.Style>
+                                    <Grid>
                                     <ComboBox x:Name="FileActionInput" HorizontalAlignment="Stretch" SelectionChanged="FileActionsComboBox_SelectionChanged" Tag="{Binding ProjectFile}"
-                                              ToolTip="Действия с файлом" AutomationProperties.Name="Действия с файлом">
-                                        <ComboBoxItem Content="Редактировать"/>
+                                              ToolTip="Действия" AutomationProperties.Name="Действия">
+                                        <ComboBoxItem Content="{Binding OpenAction}"/>
                                         <ComboBoxItem Content="Переименовать"/>
                                         <ComboBoxItem Content="Дублировать"/>
                                         <ComboBoxItem Content="Переместить"/>

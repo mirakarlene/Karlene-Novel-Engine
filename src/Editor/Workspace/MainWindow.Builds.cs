@@ -32,7 +32,11 @@ public partial class MainWindow
     private async Task RunConfiguredProjectAsync(ProjectInfo project)
     {
         var options = ProjectBuildSettingsStore.Load(project.Path);
-        if (options.TestMode == "vm") { new GameWindow(project).ShowVmTest(this); return; }
+        if (options.TestMode == "vm")
+        {
+            await GameStartupSplash.ShowThenAsync(project, () => new GameWindow(project).ShowVmTest(this), lifetime.Token);
+            return;
+        }
         RemoteDebugView? debug = null;
         if (options.TestMode == "remote_debug") debug = OpenRemoteDebug(project);
         try

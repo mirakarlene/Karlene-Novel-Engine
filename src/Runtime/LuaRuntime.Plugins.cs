@@ -64,6 +64,7 @@ public sealed partial class LuaRuntime
                 function include_lua(path) execute(path, "lua", true); kne_editor_pause() end
                 function include_cs(path) execute(path, "cs", true); kne_editor_pause() end
                 function run_script(path) execute(path, "script", false); kne_editor_pause() end
+                function call_vlua(path) execute(path, "vlua", false); kne_editor_pause() end
             end
             """, "KNE plugins");
     }
@@ -88,9 +89,10 @@ public sealed partial class LuaRuntime
             if (!pluginsEnabled) return ["", "", "Сторонние плагины отключены в этом запуске движка."];
             PluginPrivileges.EnsureUserProcess();
             EngineDiagnostics.Trace("Чтение плагина", relative);
-            string full = PathSafety.EnsureInside(project.Path, VisualLua.ResolveTwin(PathSafety.ResolveRelative(project.Path, relative)));
+            string requested = PathSafety.ResolveRelative(project.Path, relative);
+            string full = kind == "vlua" ? requested : PathSafety.EnsureInside(project.Path, VisualLua.ResolveTwin(requested));
             string extension = Path.GetExtension(full).ToLowerInvariant();
-            bool allowed = kind switch { "lua" => ScriptDocument.IsLuaPath(full), "cs" => extension == ".cs", "script" => ScriptDocument.IsLuaPath(full) || extension is ".krl" or ".cs", _ => false };
+            bool allowed = kind switch { "vlua" => extension == ".vlua", "lua" => ScriptDocument.IsLuaPath(full), "cs" => extension == ".cs", "script" => ScriptDocument.IsLuaPath(full) || extension is ".krl" or ".cs", _ => false };
             if (!allowed) throw new ArgumentException("Поддерживаются .lua, .vlua, .krl и .cs. Расширение должно соответствовать блоку.");
             string source = VisualLua.ReadProjectSource(full);
             return [extension == ".krl" ? LuaSource.Prepare(source) : source, Path.GetRelativePath(project.Path, full).Replace('\\', '/'), ""];
