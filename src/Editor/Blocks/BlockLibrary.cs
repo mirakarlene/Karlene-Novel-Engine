@@ -91,7 +91,7 @@ public static class BlockLibrary
         foreach (var kind in Enum.GetValues<ScriptNodeKind>().Where(LogicCompiler.IsLogic))
             Add("logic", kind, LogicCompiler.Label(kind), "Работа со списками, текстом и переменными. Индексы списков начинаются с 0; результат записывается в state.");
         foreach (var (kind, block) in SystemBlocks.All)
-            Add("meta_system", kind, block.Title, block.Description);
+            Add(kind == ScriptNodeKind.ShowVideo ? "visual" : "meta_system", kind, block.Title, block.Description);
         Add("meta_system", ScriptNodeKind.ConsoleWrite, "Запись в консоль", "Вывести сообщение в игровую консоль и продолжить сценарий.");
         Add("meta_system", ScriptNodeKind.Initialization, "Инициализация", "Загрузить объявления файла при запуске игры. Меньший приоритет загружается раньше.");
         Add("logic", ScriptNodeKind.SetVariable, "Переменная", "Записать значение в state.");

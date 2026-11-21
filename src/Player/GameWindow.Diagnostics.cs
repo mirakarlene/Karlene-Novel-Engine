@@ -7,7 +7,8 @@ namespace KNE;
 
 public partial class GameWindow
 {
-    private bool ConsoleAllowed => StandalonePlayer.Current is not { TestBuild: false } || project.Engine.Security.ReleaseDebugConsole;
+    private bool ConsoleAllowed => scriptConsoleEnabled ??
+        (StandalonePlayer.Current is not { TestBuild: false } || project.Engine.Security.ReleaseDebugConsole);
     private async Task PersistCrashReportAsync(GameErrorReport report)
     {
         try

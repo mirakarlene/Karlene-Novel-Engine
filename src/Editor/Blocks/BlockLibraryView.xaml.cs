@@ -15,6 +15,7 @@ public partial class BlockLibraryView : UserControl
     private Task saving = Task.CompletedTask;
     private readonly List<Task> preferenceEdits = [];
     private Func<ScriptNodeKind, bool> canAdd = _ => true;
+    private Func<ScriptNodeKind, string?>? unavailableReason;
     private bool luaMode;
     private IEnumerable<BlockDefinition> Definitions => luaMode ? VisualLuaCatalog.Definitions : BlockLibrary.Definitions;
     private int page;
@@ -46,13 +47,15 @@ public partial class BlockLibraryView : UserControl
     internal bool AnimateVisualLua { get; set; } = true;
 
     /// <summary>Resets search and page while loading preferences without blocking the UI thread.</summary>
-    public void Open(Func<ScriptNodeKind, bool> availability, bool visualLua = false)
+    public void Open(Func<ScriptNodeKind, bool> availability, bool visualLua = false) => Open(availability, visualLua, null);
+
+    internal void Open(Func<ScriptNodeKind, bool> availability, bool visualLua, Func<ScriptNodeKind, string?>? reason)
     {
         ArgumentNullException.ThrowIfNull(availability);
         luaMode = visualLua;
         SetLuaMotion(visualLua && AnimateVisualLua && SystemParameters.ClientAreaAnimation);
         LuaVersionNote.Visibility = visualLua ? Visibility.Visible : Visibility.Collapsed;
-        canAdd = availability; BlockSearch.Clear(); page = 0;
+        canAdd = availability; unavailableReason = reason; BlockSearch.Clear(); page = 0;
         ScrollViewer.SetVerticalScrollBarVisibility(BlockGroups, PluginCatalog.Current?.Groups.Count > 0 ? ScrollBarVisibility.Hidden : ScrollBarVisibility.Disabled);
         BlockGroups.ItemsSource = new[] { new BlockGroup("favorites", "Избранное", "#B58B20"), new BlockGroup("recent", "Недавнее", "#697384") }
             .Concat(luaMode ? VisualLuaCatalog.Groups : BlockLibrary.Groups).ToArray();
@@ -177,7 +180,11 @@ public partial class BlockLibraryView : UserControl
         bool available = canAdd(entry.Kind);
         CategoryHover.SetAvailable(button, available);
         button.Focusable = available;
-        if (!available) { text.Opacity = .5; button.ToolTip = entry.Kind == ScriptNodeKind.Start ? "В схеме уже есть начало." : "Достигнут предел в 500 блоков."; }
+        if (!available)
+        {
+            text.Opacity = .5;
+            button.ToolTip = unavailableReason?.Invoke(entry.Kind) ?? "Блок недоступен в этой схеме.";
+        }
         button.Click += (_, e) => { if (ReferenceEquals(e.Source, button) && canAdd(entry.Kind)) BlockSelected?.Invoke(this, entry); };
         return button;
     }

@@ -133,7 +133,9 @@ public static class BlockHelpDocument
     {
         if (SystemBlocks.All.TryGetValue(kind, out var system))
         {
-            var details = new List<string> { "Lua / KRL: " + system.Function + "(" + string.Join(", ", system.Parameters) + ")." };
+            var details = new List<string> { kind == ScriptNodeKind.ShowVideo
+                ? "Lua / KRL: show_video(path [, skip]) или show_video(path, x, y, width, height [, skip])."
+                : "Lua / KRL: " + system.Function + "(" + string.Join(", ", system.Parameters) + ")." };
             if (system.Result == "state") details.Add("Результат записывается в переменную state.");
             if (system.Result == "list") details.Add("Имена записываются в отдельный именованный список.");
             if (SystemBlocks.UsesFileSystem(system.Function)) details.Add("Требует разрешения игрока. Пути ограничиваются политикой проекта.");
@@ -145,6 +147,9 @@ public static class BlockHelpDocument
             if (kind == ScriptNodeKind.Watermark) details.Add("Положение: один из углов, центров краёв или центр окна. Непрозрачность от 0 до 100.");
             if (kind == ScriptNodeKind.GlobalTimer) details.Add("Действия show, hide и reset. Форматы HH:mm:ss и mm:ss:fff. Счётчик идёт в активной игровой сессии.");
             if (kind == ScriptNodeKind.ConnectFont) details.Add("Укажите путь к .ttf/.otf относительно проекта и имя вида dialogue_font. Затем используйте {font=dialogue_font}текст{/font}.");
+            if (SystemBlocks.Note(kind) is { } note) details.Add(note);
+            if (kind == ScriptNodeKind.ShowVideo) details.Add("Сценарий ждёт окончания видео. Для пропуска по умолчанию нажмите Esc. Передайте false, чтобы выключить пропуск, или строку, например \"Space\" или \"Ctrl+S\", чтобы изменить клавишу.");
+            if (kind == ScriptNodeKind.GlobalPause) details.Add("global_pause(секунды, true) разрешает досрочное продолжение по Ctrl+Shift+Esc в активном окне тестового билда. Без второго аргумента пауза длится заданное время, а значение −1 удерживает её до закрытия игры.");
             return details;
         }
         if (LogicCompiler.IsLogic(kind)) return ["Типизированные операнды: string/number/boolean — литерал, variable — имя в state, list — независимый именованный массив. Результат записывается в указанную переменную state.", "Списки создаются create_list(name, {values}); индексы list_* начинаются с 0. Копирование глубокое, merge дописывает второй массив. Списки сохраняются и откатываются вместе с игрой.", "Строковые операции учитывают Unicode, поиск/замена буквальные. Bool: true/false либо 1/0. Сброс переменной берёт начальное значение сцены, затем проекта, иначе удаляет ключ.", "Составные условия: compare и вложенные AND/OR/NOT; количество строк не фиксировано. Проверяются слева направо с коротким замыканием."];

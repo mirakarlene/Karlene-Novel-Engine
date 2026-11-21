@@ -284,5 +284,13 @@
                 </Border>
             </ScrollViewer>
         </Border>
+        <Border x:Name="StartupLoading" Panel.ZIndex="110" Visibility="Collapsed"
+                Background="{DynamicResource Editor.Background}" Focusable="True" KeyboardNavigation.TabNavigation="None">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="🤔" FontFamily="Segoe UI Emoji" FontSize="36" TextAlignment="Center"/>
+                <TextBlock Text="Подождите, идёт загрузка" FontSize="22" TextAlignment="Center" Margin="0,12,0,0"
+                           Foreground="{DynamicResource Editor.Text}"/>
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -13,10 +14,10 @@ internal sealed class ProjectMetadataEditor : StackPanel
     private JsonObject original;
     private readonly string root;
     private readonly Dictionary<string, TextBox> fields = [];
-    internal TextBox Additional { get; } = new() { AcceptsReturn = true, AcceptsTab = true, MinHeight = 160, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+    internal TextBox Additional { get; } = new() { AcceptsReturn = true, AcceptsTab = true, Height = 42, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     private static readonly string[] Paths = ["metadata.name", "metadata.author", "metadata.team", "metadata.version", "game_info.description", "metadata.icon", "metadata.default_language", "metadata.created_date", "metadata.kne_version", "entry_points.main_scene", "entry_points.init_script"];
     internal TextBox this[string path] => fields[path];
-    internal Grid AdditionalPage { get; } = new();
+    internal Button OpenExternalEditor { get; } = new() { Content = "Открыть во внешнем редакторе", Padding = new(6, 2, 6, 2) };
     internal ProjectLifecycleEditor Lifecycle { get; }
     internal ProjectMetadataEditor(ProjectInfo project, ProjectBuildSettingsEditor build, TextBox title)
     {
@@ -29,7 +30,7 @@ internal sealed class ProjectMetadataEditor : StackPanel
         {
             string path = Paths[i]; var parts = path.Split('.');
             TextBox input = path switch { "metadata.name" => title, "metadata.author" => build.Author, "metadata.team" => build.Team, "metadata.version" => build.Version, _ => new TextBox() };
-            input.IsReadOnly = false; input.Width = double.NaN; input.FontSize = 12; input.FontWeight = FontWeights.Normal; input.Padding = new(6); input.Margin = new(0, 3, 0, 10);
+            StyleField(input);
             if (path is not ("metadata.author" or "metadata.team" or "metadata.version")) input.Text = original[parts[0]]?[parts[1]]?.GetValue<string>() ?? (path == "metadata.name" ? project.Title : path == "metadata.default_language" ? "ru" : "");
             if (path == "game_info.description") { input.AcceptsReturn = true; input.MinHeight = 65; input.TextWrapping = TextWrapping.Wrap; }
             fields.Add(path, input); Children.Add(new TextBlock { Text = labels[i] });
@@ -41,9 +42,7 @@ internal sealed class ProjectMetadataEditor : StackPanel
             else Children.Add(input);
             (remaining[parts[0]] as JsonObject)?.Remove(parts[1]);
         }
-        Children.Add(new TextBlock { Text = "Остальные параметры project.json (JSON)", FontWeight = FontWeights.SemiBold, Margin = new(0, 8, 0, 5) });
-        Children.Add(new TextBlock { Text = "Вложенные секции и дополнительные поля сохраняются. Пути задаются относительно проекта; иконку и музыку поместите в папку проекта.", TextWrapping = TextWrapping.Wrap, Opacity = .65, Margin = new(0, 0, 0, 8) });
-        Additional.Text = remaining.ToJsonString(ProjectConfiguration.JsonOptions); Children.Add(Additional);
+        Additional.Text = remaining.ToJsonString(ProjectConfiguration.JsonOptions);
         var items = Children.Cast<UIElement>().ToArray(); Children.Clear();
         var metadata = new StackPanel(); var technicalLeft = new StackPanel(); var technicalRight = new StackPanel();
         for (int i = 0; i < Paths.Length; i++)
@@ -51,14 +50,69 @@ internal sealed class ProjectMetadataEditor : StackPanel
             var column = i < 7 ? metadata : i < 9 ? technicalLeft : technicalRight;
             column.Children.Add(items[i * 2]); column.Children.Add(items[i * 2 + 1]);
         }
-        foreach (var column in new[] { metadata, technicalLeft, technicalRight }) ParameterLayout.Compact(column);
+        ParameterLayout.Compact(metadata);
         var description = fields["game_info.description"];
         description.Height = 115;
         description.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
         Children.Add(metadata);
-        var header = new StackPanel(); header.Children.Add(ParameterLayout.Columns(technicalLeft, technicalRight));
-        header.Children.Add(items[^3]); header.Children.Add(items[^2]); Additional.MinHeight = 0; Additional.Margin = new(0);
-        AdditionalPage.RowDefinitions.Add(new() { Height = GridLength.Auto }); AdditionalPage.RowDefinitions.Add(new()); AdditionalPage.Children.Add(header); AdditionalPage.Children.Add(Additional); Grid.SetRow(Additional, 1);
+        Children.Add(build.UseProjectNameForBuild);
+        AddStartupFields(technicalLeft, technicalRight, Lifecycle.StartupFields, Lifecycle.EventFields);
+        var header = new DockPanel { Margin = new(0, 5, 0, 3) };
+        DockPanel.SetDock(OpenExternalEditor, Dock.Right);
+        header.Children.Add(OpenExternalEditor);
+        header.Children.Add(new TextBlock { Text = "Остальные параметры project.json", FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        Children.Add(header);
+        StyleField(Additional);
+        Additional.Padding = new(4, 2, 4, 2);
+        Additional.Margin = new(0);
+        Additional.ToolTip = "Вложенные секции и дополнительные поля project.json. Пути задаются относительно проекта.";
+        Children.Add(Additional);
+    }
+
+    private void AddStartupFields(params StackPanel[] groups)
+    {
+        var fields = new System.Windows.Controls.Primitives.UniformGrid { Columns = 4, Margin = new(0, 6, -6, 0) };
+        foreach (var group in groups)
+        {
+            var controls = group.Children.Cast<FrameworkElement>().ToArray();
+            group.Children.Clear();
+            for (int index = 0; index < controls.Length; index += 2)
+            {
+                fields.Children.Add(CompactEntry((TextBlock)controls[index], controls[index + 1]));
+            }
+        }
+        var timing = Lifecycle.TimingFields.Children.Cast<FrameworkElement>().ToArray();
+        Lifecycle.TimingFields.Children.Clear();
+        fields.Children.Add(new System.Windows.Controls.Primitives.UniformGrid
+        {
+            Columns = 2,
+            Children = { CompactEntry((TextBlock)timing[0], timing[1]), CompactEntry((TextBlock)timing[2], timing[3]) }
+        });
+        Children.Add(fields);
+    }
+
+    private static StackPanel CompactEntry(TextBlock label, FrameworkElement input)
+    {
+        label.FontSize = 11;
+        label.TextTrimming = TextTrimming.CharacterEllipsis;
+        label.ToolTip ??= label.Text;
+        input.Margin = new(0);
+        var text = input is DockPanel row ? row.Children.OfType<TextBox>().Single() : (TextBox)input;
+        text.Margin = new(0);
+        text.Padding = new(4, 2, 4, 2);
+        return new StackPanel { Margin = new(0, 0, 6, 3), Children = { label, input } };
+    }
+
+    internal ProcessStartInfo ExternalEditorStartInfo(string? editorPath) =>
+        EditorLauncher.CreateStartInfo(editorPath, PathSafety.ResolveRelative(root, "project.json"));
+    internal static void StyleField(TextBox input)
+    {
+        input.IsReadOnly = false;
+        input.Width = double.NaN;
+        input.FontSize = 12;
+        input.FontWeight = FontWeights.Normal;
+        input.Padding = new(6);
+        input.Margin = new(0, 3, 0, 10);
     }
     internal JsonObject Draft()
     {

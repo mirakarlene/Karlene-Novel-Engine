@@ -131,6 +131,15 @@ public partial class GameWindow
                 QueueOutput("Именованный слот пропущен. " + saveStorage!.Message);
                 return SystemReply.From(false);
             case "play_time": return SystemReply.From(ReadPlayTime() / 60d);
+            case "enable_console":
+            case "disable_console":
+                return await OnGameThreadAsync(() =>
+                {
+                    scriptConsoleEnabled = call.Operation == "enable_console";
+                    RenderConsole();
+                    SetConsoleVisible(scriptConsoleEnabled.Value, focus: false);
+                    return SystemReply.From(true);
+                }, token);
             case "persistent_clear":
                 bool confirmed = await OnGameThreadAsync(() => MessageBox.Show(this,
                     "Очистить все глобальные переменные и счётчик запусков этой игры?", "Сброс persistent",
@@ -153,6 +162,12 @@ public partial class GameWindow
                 return await InvokeExternalAsync(call, token);
             case "freeze_and_scan":
                 return SystemReply.From(await (await OnGameThreadAsync(() => ScanProjectAsync(call, token), token)));
+            case "global_pause":
+                await (await OnGameThreadAsync(() => PauseProjectAsync(call, token), token));
+                return SystemReply.From(true);
+            case "show_video":
+                await (await OnGameThreadAsync(() => PlayVideoAsync(call, token), token));
+                return SystemReply.From(true);
         }
         if (SystemBlocks.FileFunctions.Contains(call.Operation))
             return await Task.Run(() => systemServices.InvokeFile(call, token), token);

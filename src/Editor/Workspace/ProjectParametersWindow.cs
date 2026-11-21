@@ -31,6 +31,7 @@ public sealed partial class ProjectParametersWindow : Window
     private readonly Dictionary<string, CheckBox> switches = [];
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, Margin = new(0, 6, 0, 0), FontSize = 11 };
     internal ProjectBuildSettingsEditor BuildInput { get; }
+    internal string? ExternalEditorPath { get; init; }
     internal int Page { get; private set; }
     internal Button PreviousPage { get; } = new() { Content = "‹", Padding = new(12, 3, 12, 3), IsEnabled = false };
     internal Button NextPage { get; } = new() { Content = "›", Padding = new(12, 3, 12, 3) };
@@ -83,7 +84,7 @@ public sealed partial class ProjectParametersWindow : Window
         var left = Card(graphics); var right = Card(performance); columns.Children.Add(left); columns.Children.Add(right); Grid.SetColumn(right, 2); body.Children.Add(columns);
         var console = new StackPanel(); console.Children.Add(Heading("Консоль"));
         AddField(console, "Режим отображения", ConsoleModeInput);
-        AddField(console, "Клавиша или сочетание", ConsoleHotkeyInput);
+        AddField(console, "Клавиша или сочетание", ConsoleShortcutField());
         var diagnostics = new StackPanel(); diagnostics.Children.Add(Heading("Отладка и Диагностика"));
         var diagnosticGrid = new Grid(); diagnosticGrid.ColumnDefinitions.Add(new()); diagnosticGrid.ColumnDefinitions.Add(new());
         for (int i = 0; i < 3; i++) diagnosticGrid.RowDefinitions.Add(new() { Height = GridLength.Auto });
@@ -141,8 +142,12 @@ public sealed partial class ProjectParametersWindow : Window
         var buildCards = BuildInput.Children.OfType<Border>().ToArray();
         foreach (var card in buildCards) { ParameterLayout.SpreadFields((Panel)card.Child); }
         pages.Add(ParameterLayout.Cards(left, right, Card(console))); pages.Add(ParameterLayout.Cards(storageCard, diagnosticCard));
-        pages.Add(ParameterLayout.Cards(BuildInput, securityCard)); pages.Add(ParameterLayout.Cards(Card(MetadataInput))); pages.Add(MetadataInput.AdditionalPage);
-        pages.Add(ParameterLayout.Cards(Card(MetadataInput.Lifecycle)));
+        pages.Add(ParameterLayout.Cards(BuildInput, securityCard)); pages.Add(ParameterLayout.Cards(Card(MetadataInput)));
+        MetadataInput.OpenExternalEditor.Click += (_, _) =>
+        {
+            try { using var process = System.Diagnostics.Process.Start(MetadataInput.ExternalEditorStartInfo(ExternalEditorPath)); }
+            catch (Exception error) { status.Text = "Не удалось открыть project.json: " + error.Message; }
+        };
         var pager = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new(0, 10, 0, 0) };
         pager.Children.Add(PreviousPage); pager.Children.Add(pageLabel); pager.Children.Add(NextPage);
         PreviousPage.Click += (_, _) => ShowPage(Page - 1); NextPage.Click += (_, _) => ShowPage(Page + 1);

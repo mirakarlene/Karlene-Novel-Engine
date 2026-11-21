@@ -74,9 +74,9 @@ public partial class GameWindow : Window
         {
             var scripts = GameScripts.Load(project, pluginsEnabled: EngineLaunch.PluginsEnabled);
             bool usesFiles = scripts.Files.Any(UsesFiles);
-            if (useMenu && !hasPrelude && !HasProjectEvent("menu")) ShowMenu();
-            MenuOverlay.IsEnabled = !usesFiles;
-            systemInitialization = InitializeSystemServicesAsync(usesFiles);
+            MenuOverlay.IsEnabled = !usesFiles && !useMenu;
+            if (useMenu) ContinueButton.IsEnabled = false;
+            systemInitialization = InitializeOpeningAsync(usesFiles, useMenu ? scripts : null);
             await systemInitialization;
         }
         catch (OperationCanceledException) when (closed) { return; }
@@ -84,12 +84,21 @@ public partial class GameWindow : Window
         if (closed) return;
         MenuOverlay.IsEnabled = true;
         if (hasPrelude) await StartPreMenuAsync();
-        else if (useMenu && HasProjectEvent("menu")) ShowMenu();
+        else if (useMenu && execution == null && !ready) ShowMenu();
         if (!useMenu)
         {
             await StartGameAsync();
             if (!closed && startupStorageNotice is { } storageNotice) Notify(storageNotice);
         }
+    }
+
+    private async Task InitializeOpeningAsync(bool usesFiles, GameScripts? startupDiagnostics)
+    {
+        await InitializeSystemServicesAsync(usesFiles);
+        if (closed || startupDiagnostics == null) return;
+        await Task.Run(() => LuaRuntime.ReportStockProjectOpening(project, startupDiagnostics, QueueOutput, blockFlowLifetime.Token),
+            blockFlowLifetime.Token);
+        if (!closed) RenderConsole();
     }
 
     private void ApplyEngineTheme()
@@ -519,7 +528,8 @@ public partial class GameWindow : Window
 
     private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (systemFrozen) { scanInput?.Invoke("key"); e.Handled = true; return; }
+        if (systemFrozen) { HandleFrozenInput(e); return; }
+        if (HandleVideoInput(e)) return;
         if ((!startupFailed || IsConsoleOpen) && TryToggleConsole(e)) return;
         if (ProcessPluginInput(new("key", (e.Key == Key.System ? e.SystemKey : e.Key).ToString()))) { e.Handled = true; return; }
         if (startupFailed)

@@ -91,6 +91,14 @@ internal static class ProjectDiagnosticsTemplate
         return relative;
     }
 
+    internal static bool IsStockReport(string source)
+    {
+        string normalized = source.TrimStart('\uFEFF').ReplaceLineEndings("\n").Trim();
+        string current = Source.ReplaceLineEndings("\n");
+        return normalized == current || normalized == Previous.ReplaceLineEndings("\n") ||
+            normalized == "player_name = \"Игрок\"\nstate.score = state.score or 0\n\n" + current;
+    }
+
     internal static async Task<bool> UpdateStockAsync(ProjectInfo project, CancellationToken token)
     {
         string path = PathSafety.ResolveRelative(project.Path, CodePath);

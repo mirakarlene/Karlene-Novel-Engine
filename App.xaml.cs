@@ -106,8 +106,10 @@ namespace KNE
                 MainWindow = new GameWindow(standaloneProject, StandalonePlayer.Saves(standaloneProject))
                 { CountSystemLaunch = !e.Args.Contains("--system-restart", StringComparer.Ordinal) };
 #else
-                MainWindow = new MainWindow();
+                var editor = new MainWindow();
+                MainWindow = editor;
                 ShutdownMode = ShutdownMode.OnMainWindowClose;
+                await editor.PrepareStartupAsync();
 #endif
                 if (!EngineLaunch.PluginsEnabled) MainWindow.Title += " · Без плагинов";
 #if KNE_PLAYER

@@ -42,7 +42,8 @@ public sealed class WorkspaceLayoutRefinementsTests
             foreach (var control in new FrameworkElement[] { general.BackupPath, general.BackupFrequency, general.BackupCopies, general.AutosaveInterval, general.HistoryLimit, general.KeepHistory }) { Assert.Contains(control, first); Assert.DoesNotContain(control, second); Fits(control); }
             Assert.Contains(first.OfType<Button>(), button => Equals(button.Content, "Настроить горячие клавиши"));
             Fits(first.OfType<Button>().Single(button => Equals(button.Content, "Удалить весь кэш")));
-            Fits(general.LuaLibraryMotion); general.LuaLibraryMotion.IsChecked = false;
+            Fits(general.LuaLibraryMotion); general.LuaLibraryMotion.IsChecked = true;
+            Assert.False(general.Value.LuaLibraryMotion);
             foreach (var control in new FrameworkElement[] { general.Startup, general.StartupProject, general.Toasts, general.Breaks, general.WorkTime }) { Assert.DoesNotContain(control, first); Assert.Contains(control, second); }
             Fits(Find<TextBlock>(window, "SettingsPageLabel")); Capture(root, "saving-" + width);
             Next(); Assert.Equal("2 / 4 · Поведение и уведомления", Find<TextBlock>(window, "SettingsPageLabel").Text);

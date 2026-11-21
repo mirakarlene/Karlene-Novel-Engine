@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Xml.Linq;
 using Xunit;
 
 namespace KNE.Tests;
@@ -108,7 +109,7 @@ public sealed class ProjectBuildTests
         });
         fixture.Write("game/plugins/smoke.cs", "using KNE; public sealed class ExportPlugin : IKnePlugin { public void Execute(IPluginContext context) { context.Set(\"exported\", \"exported game\"); } }");
         fixture.Write("saves/private.json", "developer-progress"); fixture.Write(".kne/private.txt", "private"); fixture.Write(".git/config", "private"); fixture.Write(".kne/plugin-assets/resource.txt", "asset");
-        var settings = new ProjectBuildSettings { GameId = Guid.NewGuid().ToString("N"), ReleaseMode = mode, Author = "Автор $(UNDEFINED); 100%", Team = "Команда", Version = "2.3.4", ReleasePath = Path.Combine(fixture.Root, "output") };
+        var settings = new ProjectBuildSettings { GameId = Guid.NewGuid().ToString("N"), ReleaseMode = mode, Author = "Автор $(UNDEFINED); 100%", Team = "Команда", Version = "2.3.4", ReleasePath = Path.Combine(fixture.Root, "output"), UseProjectNameForBuild = true };
         await ProjectBuildSettingsStore.SaveAsync(fixture.ProjectPath, settings);
         var project = await fixture.LoadAsync();
         const string jsonAuthor = "Из project.json $(UNDEFINED); 100%", jsonTeam = "JSON team", jsonVersion = "3.4.5";
@@ -122,6 +123,9 @@ public sealed class ProjectBuildTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         try { built = await new GameBuildExporter().BuildAsync(project, settings, settings.ReleasePath, log: line => { lock (logs) logs.Add(line); }, token: timeout.Token); }
         catch (Exception error) { throw new Exception(error + "\n" + string.Join("\n", logs)); }
+        Assert.Equal("Новелла с пробелами", Path.GetFileName(built.Directory));
+        Assert.Equal("Новелла с пробелами.exe", Path.GetFileName(built.Executable));
+        Assert.True(ProjectBuildSettingsStore.Load(fixture.ProjectPath).UseProjectNameForBuild);
         var metadata = FileVersionInfo.GetVersionInfo(built.Executable);
         Assert.Equal("3.4.5.0", metadata.FileVersion); Assert.Equal(jsonAuthor, metadata.LegalCopyright); Assert.Equal(jsonTeam, metadata.CompanyName); Assert.Equal("Новелла с пробелами", metadata.ProductName);
         Assert.Equal("A protected game $(UNDEFINED); 100%", metadata.FileDescription);
@@ -130,7 +134,21 @@ public sealed class ProjectBuildTests
         Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(built.Executable)!, "project", "saves", "private.json")));
         Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(built.Executable)!, "project", "engine", "build.json")));
         if (mode == "single_file") Assert.Single(Directory.GetFiles(Path.GetDirectoryName(built.Executable)!));
-        else { Assert.NotNull(built.Package); using var zip = ZipFile.OpenRead(built.Package!); Assert.Contains(zip.Entries, entry => entry.FullName == "Game.exe"); Assert.DoesNotContain(zip.Entries, entry => entry.FullName.Contains("private", StringComparison.Ordinal)); }
+        else
+        {
+            Assert.NotNull(built.Package);
+            using var zip = ZipFile.OpenRead(built.Package!);
+            string executable = Path.GetFileName(built.Executable);
+            if (mode == "msix")
+            {
+                using var manifest = zip.GetEntry("AppxManifest.xml")!.Open();
+                XNamespace appx = "http://schemas.microsoft.com/appx/manifest/foundation/windows10";
+                Assert.Equal(executable, (string?)XDocument.Load(manifest).Descendants(appx + "Application").Single().Attribute("Executable"));
+                Assert.Contains(executable, zip.Entries.Where(entry => entry.FullName.EndsWith(".exe")).Select(entry => Uri.UnescapeDataString(entry.FullName)));
+            }
+            else Assert.Contains(zip.Entries, entry => entry.FullName == executable);
+            Assert.DoesNotContain(zip.Entries, entry => entry.FullName.Contains("private", StringComparison.Ordinal));
+        }
         Assert.Equal(mode != "framework_dependent" && mode != "single_file", File.Exists(Path.Combine(Path.GetDirectoryName(built.Executable)!, "coreclr.dll")));
         var info = new ProcessStartInfo(built.Executable) { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden, RedirectStandardOutput = true, RedirectStandardError = true }; info.ArgumentList.Add("--verify-player"); info.Environment.Remove(RemoteDebugConnection.EnvironmentName);
         using var process = Process.Start(info)!; var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();

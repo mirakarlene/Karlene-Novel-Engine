@@ -7,29 +7,31 @@ using Microsoft.Win32;
 
 namespace KNE;
 
-internal sealed class ProjectLifecycleEditor : StackPanel
+internal sealed class ProjectLifecycleEditor
 {
     private readonly string root;
     private readonly Dictionary<string, TextBox> fields = [];
     private readonly TextBox splashSeconds = new(), idleSeconds = new();
+    internal StackPanel StartupFields { get; } = new();
+    internal StackPanel EventFields { get; } = new();
+    internal StackPanel TimingFields { get; } = new();
     private static readonly string[] Keys = ["pre_menu_scene", "splash_image", "idle_script", "save_script", "exit_script", "menu_script", "error_script", "splash_seconds", "idle_seconds"];
     internal IEnumerable<TextBox> Inputs => fields.Values.Append(splashSeconds).Append(idleSeconds);
 
     internal ProjectLifecycleEditor(string projectRoot, JsonObject entries)
     {
         root = projectRoot;
-        var startup = Heading("Запуск и события");
+        var startup = StartupFields;
         AddPath(startup, entries, "pre_menu_scene", "Сцена до главного меню", "Сцены (*.knegraph;*.krl;*.lua;*.vlua)|*.knegraph;*.krl;*.lua;*.vlua");
         AddPath(startup, entries, "splash_image", "Сплэш-скрин", "Изображения|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.ico;*.tif;*.tiff");
-        AddDuration(startup, splashSeconds, entries, "splash_seconds", "Время показа, с", ProjectLifecycle.DefaultSplashSeconds);
+        AddDuration(TimingFields, splashSeconds, entries, "splash_seconds", "Показ, с", "Время показа заставки в секундах", ProjectLifecycle.DefaultSplashSeconds);
         AddScript(startup, entries, "menu_script", "Скрипт для главного меню");
-        var runtime = Heading("Во время игры");
+        var runtime = EventFields;
         AddScript(runtime, entries, "idle_script", "Скрипт при AFK");
-        AddDuration(runtime, idleSeconds, entries, "idle_seconds", "Время без ввода, с", ProjectLifecycle.DefaultIdleSeconds);
+        AddDuration(TimingFields, idleSeconds, entries, "idle_seconds", "AFK, с", "Время без ввода в секундах", ProjectLifecycle.DefaultIdleSeconds);
         AddScript(runtime, entries, "save_script", "Скрипт при сохранении");
         AddScript(runtime, entries, "exit_script", "Скрипт при выходе");
         AddScript(runtime, entries, "error_script", "Скрипт при ошибке");
-        Children.Add(ParameterLayout.Columns(startup, runtime));
     }
 
     internal static void Mask(JsonObject? entries)
@@ -72,30 +74,27 @@ internal sealed class ProjectLifecycleEditor : StackPanel
 
     private void AddPath(Panel panel, JsonObject entries, string key, string title, string filter)
     {
-        var input = new TextBox { Text = entries[key]?.GetValue<string>() ?? "", Padding = new(5), Margin = new(0, 4, 0, 8) };
+        var input = new TextBox { Text = entries[key]?.GetValue<string>() ?? "" };
+        ProjectMetadataEditor.StyleField(input);
         fields.Add(key, input);
-        var browse = new Button { Content = "…", Width = 30, Margin = new(5, 4, 0, 8), ToolTip = title };
+        var browse = new Button { Content = "…", Width = 24, Margin = new(4, 0, 0, 0), Padding = new(0), ToolTip = title };
         var row = new DockPanel();
         DockPanel.SetDock(browse, Dock.Right); row.Children.Add(browse); row.Children.Add(input);
         panel.Children.Add(new TextBlock { Text = title }); panel.Children.Add(row);
         browse.Click += (_, _) =>
         {
             var dialog = new OpenFileDialog { Filter = filter, InitialDirectory = root, Title = title };
-            if (dialog.ShowDialog(Window.GetWindow(this)) == true) input.Text = Path.GetRelativePath(root, dialog.FileName).Replace('\\', '/');
+            if (dialog.ShowDialog(Window.GetWindow(input)) == true) input.Text = Path.GetRelativePath(root, dialog.FileName).Replace('\\', '/');
         };
     }
 
-    private static void AddDuration(Panel panel, TextBox input, JsonObject entries, string key, string title, double fallback)
+    private static void AddDuration(Panel panel, TextBox input, JsonObject entries, string key, string title, string description, double fallback)
     {
         input.Text = (entries[key]?.GetValue<double>() ?? fallback).ToString(CultureInfo.InvariantCulture);
-        input.Padding = new(5); input.Width = 100; input.HorizontalAlignment = HorizontalAlignment.Left; input.Margin = new(0, 4, 0, 8);
-        panel.Children.Add(new TextBlock { Text = title }); panel.Children.Add(input);
+        ProjectMetadataEditor.StyleField(input);
+        input.ToolTip = description;
+        System.Windows.Automation.AutomationProperties.SetName(input, description);
+        panel.Children.Add(new TextBlock { Text = title, ToolTip = description }); panel.Children.Add(input);
     }
 
-    private static StackPanel Heading(string title)
-    {
-        var panel = new StackPanel();
-        panel.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, FontSize = 15, Margin = new(0, 0, 0, 9) });
-        return panel;
-    }
 }

@@ -13,11 +13,16 @@ internal sealed class ProjectBuildSettingsEditor : StackPanel
     internal TextBox Author { get; } = new() { MaxLength = 128 };
     internal TextBox Team { get; } = new() { MaxLength = 128 };
     internal TextBox Version { get; } = new() { MaxLength = 24 };
+    internal CheckBox UseProjectNameForBuild { get; } = new()
+    {
+        Content = new TextBlock { Text = "Использовать название проекта для имени папки и exe файла сборки", TextWrapping = TextWrapping.Wrap },
+        Margin = new(0, 4, 0, 0)
+    };
     internal ComboBox Saves { get; } = GraphicsSettingsEditor.Choice([new GraphicsOption<string>("appdata", "AppData (для текущего пользователя)"), new("local", "Папка игры (saves)")]);
     private readonly TextBlock testHint = Hint(""), releaseHint = Hint("");
     private string gameId = "";
     internal ProjectExeMetadata InitialMetadata { get; private set; }
-    internal ProjectBuildSettings Value => new() { GameId = gameId, TestMode = (string?)TestMode.SelectedValue ?? "vm", TestPath = TestPath.Text.Trim(), ReleaseMode = (string?)ReleaseMode.SelectedValue ?? "self_contained", ReleasePath = ReleasePath.Text.Trim(), Author = Author.Text.Trim(), Team = Team.Text.Trim(), Version = Version.Text.Trim(), SaveLocation = (string?)Saves.SelectedValue ?? "appdata" };
+    internal ProjectBuildSettings Value => new() { GameId = gameId, TestMode = (string?)TestMode.SelectedValue ?? "vm", TestPath = TestPath.Text.Trim(), ReleaseMode = (string?)ReleaseMode.SelectedValue ?? "self_contained", ReleasePath = ReleasePath.Text.Trim(), UseProjectNameForBuild = UseProjectNameForBuild.IsChecked == true, Author = Author.Text.Trim(), Team = Team.Text.Trim(), Version = Version.Text.Trim(), SaveLocation = (string?)Saves.SelectedValue ?? "appdata" };
 
     internal ProjectBuildSettingsEditor(ProjectInfo project, string? storagePath)
     {
@@ -27,6 +32,7 @@ internal sealed class ProjectBuildSettingsEditor : StackPanel
         TestPath.Text = value.TestPath == "" ? System.IO.Path.Combine(defaultPath, "test") : value.TestPath;
         ReleasePath.Text = value.ReleasePath == "" ? defaultPath : value.ReleasePath;
         Author.Text = value.Author; Team.Text = value.Team; Version.Text = value.Version; Saves.SelectedValue = value.SaveLocation;
+        UseProjectNameForBuild.IsChecked = value.UseProjectNameForBuild;
         var test = Section("Тестовый билд"); Field(test, "Режим запуска", TestMode); test.Children.Add(testHint); Field(test, "Папка тестового билда", PathRow(TestPath)); Children.Add(Card(test));
         var release = Section("Релизный билд · Windows x64"); Field(release, "Формат", ReleaseMode); release.Children.Add(releaseHint); Field(release, "Папка выходных файлов", PathRow(ReleasePath)); Field(release, "Сохранения и настройки игрока", Saves); Children.Add(Card(release));
         Children.Add(Hint("Для сборки нужен .NET 10 SDK и доступ к пакетам NuGet. Тестовый EXE использует выбранный релизный профиль; MSIX тестируется как EXE до упаковки. Сценарии и ресурсы входят в билд, сохранения разработчика — нет."));

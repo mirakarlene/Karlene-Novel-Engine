@@ -68,7 +68,8 @@ public sealed partial class LuaRuntime
                 if (!SystemBlocks.FunctionNames.Contains(operation) || operation == "save_named" || SystemBlocks.IsPresentation(operation))
                     throw new InvalidOperationException("Неизвестная системная команда.");
                 int count = Convert.ToInt32(arguments["n"]);
-                if (count is < 0 or > 3) throw new ArgumentException("Слишком много аргументов системной команды.");
+                if (count < 0 || count > (operation == "show_video" ? 6 : 3))
+                    throw new ArgumentException("Слишком много аргументов системной команды.");
                 var values = new object?[count];
                 for (int i = 0; i < count; i++)
                 {

@@ -35,6 +35,8 @@ public sealed class EngineWindowTests
                 Assert.Equal(Visibility.Collapsed, Find<Border>(window, "DebugOverlay").Visibility);
                 Assert.False(saves.Exists("auto"));
                 Assert.Equal(project.Title, Find<TextBlock>(window, "MenuTitle").Text);
+                await WaitForMainMenuAsync(window);
+                Assert.Contains("Диагностика KNE — " + project.Title, Find<TextBlock>(window, "ConsoleOutput").Text);
                 Capture(window, "main-menu.png");
                 await ActAsync(window, () => Click(window, "StartButton"));
                 Assert.Equal(Visibility.Collapsed, Find<Border>(window, "MenuOverlay").Visibility);
@@ -149,6 +151,7 @@ public sealed class EngineWindowTests
             try
             {
                 window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+                await WaitForMainMenuAsync(window);
                 Assert.True(Find<Button>(window, "ContinueButton").IsEnabled);
                 await ActAsync(window, () => Click(window, "ContinueButton"));
                 Assert.Equal("saved progress", Find<TextBlock>(window, "DialogueText").Text);
@@ -198,6 +201,7 @@ public sealed class EngineWindowTests
             try
             {
                 window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+                await WaitForMainMenuAsync(window);
                 var enabled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 var start = Find<Button>(window, "StartButton");
                 start.IsEnabledChanged += (_, e) => { if ((bool)e.NewValue) enabled.TrySetResult(); };
@@ -334,6 +338,12 @@ public sealed class EngineWindowTests
     private static T Find<T>(GameWindow window, string name) => (T)window.FindName(name);
     private static void Click(GameWindow window, string name) => Find<Button>(window, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     private static void Invoke(GameWindow window, string name) => typeof(GameWindow).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
+    private static async Task WaitForMainMenuAsync(GameWindow window)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        while (!Find<Border>(window, "MenuOverlay").IsEnabled) await Task.Delay(15, timeout.Token);
+    }
+
     private static async Task ActAsync(GameWindow window, Action action)
     {
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

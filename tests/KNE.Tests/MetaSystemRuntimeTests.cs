@@ -225,11 +225,11 @@ public sealed class MetaSystemRuntimeTests
     public void MetaCatalogueDescribesItsCommandsAndKeepsTheYellowGroupBetweenConfigurationsAndShaders()
     {
         string[] expected = ["persistent_set", "persistent_get", "persistent_has", "persistent_clear", "persistent_delete", "save_named", "save_exists", "save_read", "save_delete", "save_list", "real_time", "real_date", "play_time", "build_version", "launch_count", "restart_game", "exit_game", "return_to_menu", "minimize_game", "fullscreen_game", "windowed_game", "open_browser", "clipboard_write", "clipboard_read", "take_screenshot", "read_text_file", "write_text_file", "path_exists", "file_size", "list_files", "create_folder", "project_path", "freeze_and_scan"];
-        Assert.Equal(expected.Concat(["device_info", "show_fps", "show_input", "watermark", "global_timer", "build_info", "connect_font"]).Order(),
+        Assert.Equal(expected.Concat(["device_info", "show_fps", "show_input", "watermark", "global_timer", "build_info", "connect_font", "enable_console", "disable_console", "global_pause", "show_video"]).Order(),
             SystemBlocks.All.Values.Select(block => block.Function).Order());
         var groups = BlockLibrary.BuiltInGroups.ToArray(); int index = Array.FindIndex(groups, group => group.Id == "meta_system");
         Assert.True(index > 0 && index < groups.Length - 1); Assert.Equal("configurations", groups[index - 1].Id); Assert.Equal("shaders", groups[index + 1].Id); Assert.Equal("#E3B52D", groups[index].Color);
-        Assert.Equal(SystemBlocks.All.Count + 2, BlockLibrary.Definitions.Count(block => block.Group == "meta_system"));
+        Assert.Equal(SystemBlocks.All.Count + 1, BlockLibrary.Definitions.Count(block => block.Group == "meta_system"));
         var console = Assert.Single(BlockLibrary.Definitions, block => block.Kind == ScriptNodeKind.ConsoleWrite);
         Assert.Equal("meta_system", console.Group);
         var preferences = new BlockLibraryPreferences { Favorites = ["narrative/ConsoleWrite"], Recent = ["narrative/ConsoleWrite"] };
@@ -238,7 +238,10 @@ public sealed class MetaSystemRuntimeTests
         Assert.Equal("meta_system/ConsoleWrite", Assert.Single(preferences.Recent));
         foreach (var (kind, command) in SystemBlocks.All)
         {
-            var definition = Assert.Single(BlockLibrary.Definitions, block => block.Kind == kind); Assert.Equal("meta_system", definition.Group); Assert.Equal(groups[index].Color, definition.Color);
+            var definition = Assert.Single(BlockLibrary.Definitions, block => block.Kind == kind);
+            string expectedGroup = kind == ScriptNodeKind.ShowVideo ? "visual" : "meta_system";
+            Assert.Equal(expectedGroup, definition.Group);
+            Assert.Equal(groups.Single(group => group.Id == expectedGroup).Color, definition.Color);
             Assert.EndsWith(".", definition.Description);
             Assert.DoesNotContain(command.Function + "(", definition.Description);
             var node = BlockLibrary.Create(kind); node.Id = "system"; node.Variable = "result";

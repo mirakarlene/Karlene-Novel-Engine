@@ -10,9 +10,11 @@ public partial class GameWindow
 {
     private Window? detachedConsole;
     private GameTerminal? terminal;
+    private bool? scriptConsoleEnabled;
     private bool IsConsoleOpen => DebugOverlay.Visibility == Visibility.Visible || terminal != null;
     private bool ConsoleShortcutEnabled => ConsoleAllowed &&
-        (StandalonePlayer.Current is { TestBuild: false } || project.Engine.Game.DebugEnabled || diagnosticConsole || IsConsoleOpen);
+        (scriptConsoleEnabled == true || StandalonePlayer.Current is { TestBuild: false } ||
+            project.Engine.Game.DebugEnabled || diagnosticConsole || IsConsoleOpen);
 
     private void SetConsoleVisible(bool visible, bool focus = true)
     {

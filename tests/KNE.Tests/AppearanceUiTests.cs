@@ -71,12 +71,13 @@ public sealed class AppearanceUiTests
         settings.Elements.Add(new() { Id = "inert-toggle", Type = "toggle", Action = "none" });
         settings.Elements.Add(new() { Id = "inert-slider", Type = "slider", Action = "none" });
         await document.SaveAsync(); project = await fixture.LoadAsync();
-        await Sta(() =>
+        await Sta(async () =>
         {
             var store = new GameSaveStore(project.Path); var window = new GameWindow(project, store);
             try
             {
                 window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+                await WaitForMainMenuAsync(window);
                 for (int pass = 0; pass < 2; pass++)
                 {
                     foreach (var (id, title) in new[] { ("first-link", "Первый экран"), ("second-link", "Второй экран") })
@@ -103,7 +104,6 @@ public sealed class AppearanceUiTests
                 }
             }
             finally { window.Close(); }
-            return Task.CompletedTask;
         });
     }
 
@@ -225,6 +225,7 @@ public sealed class AppearanceUiTests
             try
             {
                 window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+                await WaitForMainMenuAsync(window);
                 Assert.Equal(300, Canvas.GetLeft(ScreenButton(window, "settings")));
                 ScreenButton(window, "navigate").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.Contains(ScreenCanvas(window).Children.OfType<TextBlock>(), t => t.Text == "Галерея");
@@ -256,6 +257,7 @@ public sealed class AppearanceUiTests
             try
             {
                 reopened.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+                await WaitForMainMenuAsync(reopened);
                 var backdrop = Find<AnimatedBackground>(reopened, "AnimatedBackdrop"); double phase = backdrop.Phase; backdrop.Step(.05); Assert.Equal(phase, backdrop.Phase);
                 ScreenButton(reopened, "settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var volume = ScreenCanvas(reopened).Children.OfType<StackPanel>().Single(p => ((ScreenElement)p.Tag).Action == "music_volume").Children.OfType<Slider>().Single();
@@ -351,6 +353,12 @@ public sealed class AppearanceUiTests
     }
 
     private static Canvas ScreenCanvas(GameWindow window) => Find<Canvas>(window, "ScreenCanvas");
+    private static async Task WaitForMainMenuAsync(GameWindow window)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        while (!Find<Border>(window, "MenuOverlay").IsEnabled) await Task.Delay(15, timeout.Token);
+    }
+
     private static Button ScreenButton(GameWindow window, string action) => ScreenCanvas(window).Children.OfType<Button>().Single(b => b.Tag is ScreenElement e && e.Action == action);
     private static T Find<T>(FrameworkElement view, string name) => (T)view.FindName(name);
     private static void Click(FrameworkElement view, string name) => Find<Button>(view, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

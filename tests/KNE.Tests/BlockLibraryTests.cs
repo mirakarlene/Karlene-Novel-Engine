@@ -95,6 +95,30 @@ public sealed class BlockLibraryTests
     }
 
     [Fact]
+    public async Task Picker_ShaderStartsAndNarrativeBlocksExplainIncompatibility()
+    {
+        using var fixture = new TempProject();
+        string path = Path.Combine(fixture.ProjectPath, "effect.kneshader");
+        await ScriptDocument.CreateVisualAsync(fixture.ProjectPath, path);
+        await Sta(async () =>
+        {
+            var editor = new ScriptEditor();
+            await editor.OpenAsync(fixture.ProjectPath, path);
+            try
+            {
+                var view = new BlockLibraryView();
+                view.Open(editor.CanAddBlock, false, editor.GetBlockUnavailableReason);
+                SelectGroup(view, "terminals");
+                Assert.Contains(".kneshader", Assert.IsType<string>(Card(view, ScriptNodeKind.Start).ToolTip));
+                SelectGroup(view, "narrative");
+                Assert.Contains(".kneshader", Assert.IsType<string>(Card(view, ScriptNodeKind.Dialogue).ToolTip));
+                Assert.Null(editor.GetBlockUnavailableReason(ScriptNodeKind.ShaderFloat));
+            }
+            finally { editor.Clear(); }
+        });
+    }
+
+    [Fact]
     public async Task Editor_NewPropertiesApplyAtomically_KeepPortsAndSurviveSaveReopen()
     {
         using var fixture = new TempProject(); string path = fixture.Write("game/scenes/map.knegraph", VisualScript.Create().Serialize());

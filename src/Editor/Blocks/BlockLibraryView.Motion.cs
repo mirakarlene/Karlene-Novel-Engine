@@ -1,39 +1,64 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
-using System.Windows.Shapes;
+using System.Windows.Threading;
 
 namespace KNE;
 
 public partial class BlockLibraryView
 {
+    private DispatcherTimer? luaMotionTimer;
+
     internal void SetLuaMotion(bool enabled)
     {
+        luaMotionTimer?.Stop();
+        luaMotionTimer = null;
         LuaMotionCanvas.Children.Clear();
         LuaMotionCanvas.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
         if (!enabled) return;
+
         var geometry = Geometry.Parse(ProjectFileFormats.LuaMark);
         geometry.Freeze();
-        for (int i = 0; i < 6; i++)
+        var lua = MotionMark(geometry, Color.FromRgb(64, 113, 208));
+        var visualLua = MotionMark(geometry, Color.FromRgb(46, 166, 102));
+        var marks = new (TranslateTransform Position, double Phase, double Height, double Speed)[4];
+        for (int index = 0; index < marks.Length; index++)
         {
-            bool visualLua = i % 2 == 1;
-            var mark = new Path
+            bool inverted = index % 2 == 1;
+            var position = new TranslateTransform();
+            var image = new Image
             {
-                Data = geometry, Stretch = Stretch.Uniform, Width = 32 + i * 5, Height = 40 + i * 5,
-                Fill = new SolidColorBrush(visualLua ? Color.FromRgb(46, 166, 102) : Color.FromRgb(64, 113, 208)),
-                Opacity = .07, RenderTransform = new RotateTransform(visualLua ? 180 : 0), RenderTransformOrigin = new(.5, .5)
+                Source = inverted ? visualLua : lua, Width = 32 + Random.Shared.Next(20), Height = 50,
+                Opacity = .055, RenderTransformOrigin = new(.5, .5),
+                RenderTransform = new TransformGroup { Children = { new RotateTransform(inverted ? 180 : 0), position } }
             };
-            var translation = new TranslateTransform();
-            var host = new Border { Child = mark, RenderTransform = translation };
-            Canvas.SetTop(host, 44 + i * 92);
-            LuaMotionCanvas.Children.Add(host);
-            translation.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(-90, Width + 90, TimeSpan.FromSeconds(39 + i * 4))
-            {
-                RepeatBehavior = RepeatBehavior.Forever, BeginTime = TimeSpan.Zero
-            });
-            translation.ApplyAnimationClock(TranslateTransform.YProperty, new DoubleAnimation(-6, 6, TimeSpan.FromSeconds(12))
-                { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever }.CreateClock());
+            LuaMotionCanvas.Children.Add(image);
+            marks[index] = (position, Random.Shared.NextDouble(), (index + .3 + Random.Shared.NextDouble() * .4) / marks.Length,
+                (index < 2 ? 1 : -1) / (65 + Random.Shared.NextDouble() * 35));
         }
+
+        var elapsed = Stopwatch.StartNew();
+        luaMotionTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(50) };
+        luaMotionTimer.Tick += (_, _) =>
+        {
+            double seconds = elapsed.Elapsed.TotalSeconds;
+            foreach (var (position, phase, height, speed) in marks)
+            {
+                double progress = phase + seconds * speed;
+                position.X = -55 + (progress - Math.Floor(progress)) * (LuaMotionCanvas.ActualWidth + 110);
+                position.Y = LuaMotionCanvas.ActualHeight * height + 18 * Math.Sin(seconds * .17 + phase * 12);
+            }
+        };
+        luaMotionTimer.Start();
     }
+
+    private static DrawingImage MotionMark(Geometry geometry, Color color)
+    {
+        var image = new DrawingImage(new GeometryDrawing(new SolidColorBrush(color), null, geometry));
+        image.Freeze();
+        return image;
+    }
+
+    private void LuaMotionCanvas_Unloaded(object sender, RoutedEventArgs e) => SetLuaMotion(false);
 }

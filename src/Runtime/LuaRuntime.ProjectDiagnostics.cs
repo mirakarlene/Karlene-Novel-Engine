@@ -22,7 +22,26 @@ public sealed partial class LuaRuntime
     }
 
     /// <summary>Returns startup checks for the current project as a Lua table literal.</summary>
-    public string ReadProjectDiagnosticsForLua()
+    public string ReadProjectDiagnosticsForLua() => BuildProjectDiagnostics(project, scripts, executionToken);
+
+    internal static void ReportStockProjectOpening(ProjectInfo project, GameScripts scripts, Action<string> output, CancellationToken token)
+    {
+        string initialization = Path.GetRelativePath(project.Path, project.InitScriptPath).Replace('\\', '/');
+        var script = scripts.Initialization.FirstOrDefault(file => file.Path.Equals(initialization, StringComparison.OrdinalIgnoreCase));
+        if (script == null || !ProjectDiagnosticsTemplate.IsStockReport(script.Source)) return;
+
+        string report = BuildProjectDiagnostics(project, scripts, token);
+        token.ThrowIfCancellationRequested();
+        using var lua = new Lua();
+        lua.State.Encoding = Encoding.UTF8;
+        var lines = lua.DoString("local lines = {}\nlocal function print(line) lines[#lines+1] = line end\n" +
+            "local function project_diagnostics() return " + report + " end\n" +
+            ProjectDiagnosticsTemplate.Source + "\nreturn table.concat(lines, '\\n')", "KNE startup diagnostics");
+        if (lines.SingleOrDefault() is string text)
+            foreach (string line in text.Split('\n')) output(line);
+    }
+
+    private static string BuildProjectDiagnostics(ProjectInfo project, GameScripts? scripts, CancellationToken token)
     {
         string savesDirectory = StandalonePlayer.RuntimeManifest?.SavesDirectory(AppContext.BaseDirectory) ??
             project.Engine.Performance.ResolveSavesPath(project.Path);
@@ -45,7 +64,7 @@ public sealed partial class LuaRuntime
             os_architecture = RuntimeInformation.OSArchitecture.ToString(),
             architecture_translation_possible = RuntimeInformation.ProcessArchitecture != RuntimeInformation.OSArchitecture,
             installation_directory = Path.TrimEndingDirectorySeparator(installationDirectory),
-            integrity = CheckProjectIntegrity(),
+            integrity = CheckProjectIntegrity(project, scripts, token),
             saves = Storage(saves),
             requested_saves = Storage(selection.Requested),
             persistent = Storage(persistent)
@@ -58,7 +77,7 @@ public sealed partial class LuaRuntime
         };
     }
 
-    private object CheckProjectIntegrity()
+    private static object CheckProjectIntegrity(ProjectInfo project, GameScripts? scripts, CancellationToken token)
     {
         var issues = new HashSet<string>(StringComparer.Ordinal);
         var assets = new HashSet<(string Path, bool Audio)>();
@@ -69,7 +88,7 @@ public sealed partial class LuaRuntime
         compiler.State.Encoding = Encoding.UTF8;
         foreach (var script in scripts?.Files ?? [])
         {
-            executionToken.ThrowIfCancellationRequested();
+            token.ThrowIfCancellationRequested();
             context = script.Path;
             try
             {
@@ -85,6 +104,8 @@ public sealed partial class LuaRuntime
                             CheckAsset(block.Path, false);
                         else if (block.Kind is ScriptNodeKind.Music or ScriptNodeKind.Sound or ScriptNodeKind.Voice)
                             CheckAsset(block.Path, true);
+                        else if (block.Kind == ScriptNodeKind.ShowVideo && SystemBlocks.LiteralVideoPath(block) is { } path)
+                            CheckAsset(path, false);
                     }
             }
             catch (Exception error) when (ProjectSystemScan.Reportable(error) || error is NLua.Exceptions.LuaException)

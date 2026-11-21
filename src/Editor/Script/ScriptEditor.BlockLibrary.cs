@@ -11,10 +11,19 @@ public partial class ScriptEditor
     internal void FocusAddBlock() => AddBlockButton.Focus();
 
     /// <summary>Checks the block limit and the unique entry-point rule without modifying the graph.</summary>
-    public bool CanAddBlock(ScriptNodeKind kind) => Document?.Graph is { } graph && graph.Nodes.Count < 500 &&
-        (graph.IsVisualLua ? kind is ScriptNodeKind.LuaBlock or ScriptNodeKind.Start or ScriptNodeKind.Comment :
-            BlockLibrary.Definitions.Any(entry => entry.Kind == kind) && ShaderLibrary.CanPlace(kind, graph.IsShader)) &&
-        (kind is not (ScriptNodeKind.Start or ScriptNodeKind.Initialization) || graph.Nodes.All(node => node.Kind != kind));
+    public bool CanAddBlock(ScriptNodeKind kind) => GetBlockUnavailableReason(kind) == null;
+
+    internal string? GetBlockUnavailableReason(ScriptNodeKind kind)
+    {
+        if (Document?.Graph is not { } graph) return "Откройте блок-схему.";
+        if (graph.IsShader && !ShaderLibrary.CanPlace(kind, true)) return "Блок несовместим с шейдерной схемой (.kneshader).";
+        if (graph.IsVisualLua ? kind is not (ScriptNodeKind.LuaBlock or ScriptNodeKind.Start or ScriptNodeKind.Comment) :
+            !ShaderLibrary.CanPlace(kind, graph.IsShader) || !BlockLibrary.Definitions.Any(entry => entry.Kind == kind))
+            return "Блок несовместим с этой схемой.";
+        if (kind is ScriptNodeKind.Start or ScriptNodeKind.Initialization && graph.Nodes.Any(node => node.Kind == kind))
+            return kind == ScriptNodeKind.Start ? "В схеме уже есть начало." : "В схеме уже есть блок инициализации.";
+        return graph.Nodes.Count >= 500 ? "Достигнут предел в 500 блоков." : null;
+    }
 
     /// <summary>Creates a command at the center of the visible canvas, retaining the viewport and undo history.</summary>
     public void AddBlock(ScriptNodeKind kind, string? category = null)
@@ -26,8 +35,7 @@ public partial class ScriptEditor
     {
         var kind = entry.Kind;
         ApplyProperties();
-        if (!CanAddBlock(kind)) throw new InvalidOperationException(kind is ScriptNodeKind.Start or ScriptNodeKind.Initialization
-            ? "Этот блок можно добавить только один раз." : "Добавление блока недоступно: предел 500 блоков.");
+        if (GetBlockUnavailableReason(kind) is { } reason) throw new InvalidOperationException(reason);
         var node = entry.Kind == ScriptNodeKind.Comment && entry.Group == "lua_raw"
             ? new ScriptNode { Kind = ScriptNodeKind.Comment, Category = entry.Group, Text = "Комментарий" }
             : BlockLibrary.Create(entry);
