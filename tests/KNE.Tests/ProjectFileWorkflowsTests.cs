@@ -10,6 +10,32 @@ namespace KNE.Tests;
 
 public sealed class ProjectFileWorkflowsTests
 {
+    [Theory]
+    [InlineData(".lua", "scripts")]
+    [InlineData(".vlua", "scripts")]
+    [InlineData(".krl", "scenes")]
+    [InlineData(".knegraph", "scenes")]
+    [InlineData(".kneshader", "shaders")]
+    public void DestinationDialogUsesNativeFolderPathsForScriptFormats(string extension, string subfolder)
+    {
+        using var fixture = new TempProject();
+        var format = Assert.Single(ProjectFileFormats.CreateGroups.SelectMany(group => group), format => format.Extension == extension);
+        string initial = Path.Combine(fixture.ProjectPath, format.Folder!);
+
+        var dialog = MainWindow.CreateDestinationFolderDialog(initial: initial, root: fixture.ProjectPath);
+
+        Assert.Equal(Path.Combine(fixture.ProjectPath, "game", subfolder), dialog.InitialDirectory);
+    }
+
+    [Fact]
+    public void DestinationDialogFallsBackToProjectRootWhenSuggestedFolderIsAbsent()
+    {
+        using var fixture = new TempProject();
+        string initial = Path.Combine(fixture.ProjectPath, "game/missing");
+        var dialog = MainWindow.CreateDestinationFolderDialog(initial: initial, root: fixture.ProjectPath);
+        Assert.Equal(fixture.ProjectPath, dialog.InitialDirectory);
+    }
+
     [Fact]
     public Task GraphFormatsRenderAndCreateDocumentsAtTheSelectedDestination() => WorkspaceTabsTests.Sta(async () =>
     {
