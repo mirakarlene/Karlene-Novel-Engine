@@ -93,7 +93,7 @@ public partial class MainWindow
     private string? PickDestinationFolder(string allowedRoot, string initial)
     {
         string root = PathSafety.NormalizeDirectory(allowedRoot);
-        var dialog = new OpenFolderDialog { Title = "Выберите папку назначения", InitialDirectory = Directory.Exists(initial) ? initial : root };
+        var dialog = CreateDestinationFolderDialog(initial, root);
         if (dialog.ShowDialog(this) != true) return null;
         string selected = PathSafety.NormalizeDirectory(dialog.FolderName);
         if (selected.Equals(root, StringComparison.OrdinalIgnoreCase))
@@ -102,5 +102,16 @@ public partial class MainWindow
             return root;
         }
         return PathSafety.EnsureInside(root, selected);
+    }
+
+    internal static OpenFolderDialog CreateDestinationFolderDialog(string initial, string root)
+    {
+        // The Windows shell rejects mixed separators even when Directory.Exists accepts the path.
+        initial = PathSafety.NormalizeDirectory(initial);
+        return new OpenFolderDialog
+        {
+            Title = "Выберите папку назначения",
+            InitialDirectory = Directory.Exists(initial) ? initial : root
+        };
     }
 }
