@@ -11,6 +11,17 @@ public sealed class ConnectedTriggerTests
     [InlineData(ScriptNodeKind.TriggerHotspot)]
     [InlineData(ScriptNodeKind.TriggerTextClosed)]
     [InlineData(ScriptNodeKind.TriggerCombination)]
+    [InlineData(ScriptNodeKind.TriggerSequence)]
+    [InlineData(ScriptNodeKind.TriggerPointerMove)]
+    [InlineData(ScriptNodeKind.TriggerPointerEnterZone)]
+    [InlineData(ScriptNodeKind.TriggerPointerLeave)]
+    [InlineData(ScriptNodeKind.TriggerDoubleClick)]
+    [InlineData(ScriptNodeKind.TriggerLongPress)]
+    [InlineData(ScriptNodeKind.TriggerWheel)]
+    [InlineData(ScriptNodeKind.TriggerFocus)]
+    [InlineData(ScriptNodeKind.TriggerResize)]
+    [InlineData(ScriptNodeKind.TriggerClipboard)]
+    [InlineData(ScriptNodeKind.TriggerGesture)]
     public async Task ConnectedTrigger_WaitsForMatchingEventThenContinuesExactlyOnce_AndCheckpointReplays(ScriptNodeKind kind)
     {
         using var fixture = new Fixture();
@@ -46,6 +57,17 @@ public sealed class ConnectedTriggerTests
             ScriptNodeKind.TriggerHotspot => new("hotspot", X: 50, Y: 50),
             ScriptNodeKind.TriggerTextClosed => new("text_closed"),
             ScriptNodeKind.TriggerCombination => new("key", "Ctrl+E"),
+            ScriptNodeKind.TriggerSequence => new("sequence", "↑,↑,↓,↓,←,→,←,→,B,A"),
+            ScriptNodeKind.TriggerPointerMove => new("pointer_move", X: 20, Y: 30),
+            ScriptNodeKind.TriggerPointerEnterZone => new("pointer_enter_zone", X: 50, Y: 50, PreviousX: -1, PreviousY: 50),
+            ScriptNodeKind.TriggerPointerLeave => new("pointer_leave"),
+            ScriptNodeKind.TriggerDoubleClick => new("double_click", Button: "left", Elapsed: 300),
+            ScriptNodeKind.TriggerLongPress => new("long_press", Keys: "E", Elapsed: 5),
+            ScriptNodeKind.TriggerWheel => new("wheel", Button: "down"),
+            ScriptNodeKind.TriggerFocus => new("focus", Button: "lost"),
+            ScriptNodeKind.TriggerResize => new("resize", Button: "finished", X: 900, Y: 600),
+            ScriptNodeKind.TriggerClipboard => new("clipboard", Button: "copy"),
+            ScriptNodeKind.TriggerGesture => new("gesture", Keys: "circle", Button: "left"),
             _ => new("key", "E")
         };
         await runtime.TriggerAsync(signal);
@@ -64,6 +86,34 @@ public sealed class ConnectedTriggerTests
         Assert.True(restored.Story.Completed);
     }
 
+    [Fact]
+    public void TriggersRejectNearMissesSeparateFromValidInput()
+    {
+        var zone = new TriggerSettings { Kind = "pointer_enter_zone", X = 100, Y = 100 };
+        Assert.False(zone.Matches(new("pointer_enter_zone", X: 120, Y: 120, PreviousX: 101, PreviousY: 101)));
+        Assert.True(zone.Matches(new("pointer_enter_zone", X: 120, Y: 120, PreviousX: 99, PreviousY: 101)));
+        Assert.False(zone.Matches(new("pointer_enter_zone", X: 200, Y: 100)));
+        var clicks = new TriggerSettings { Kind = "double_click", MouseButton = "right" };
+        Assert.False(clicks.Matches(new("double_click", Button: "right", Elapsed: 301)));
+        Assert.False(clicks.Matches(new("double_click", Button: "left", Elapsed: 150)));
+        Assert.True(clicks.Matches(new("double_click", Button: "right", Elapsed: 150)));
+        var hold = new TriggerSettings { Kind = "long_press", Keys = "Esc", HoldSeconds = 2 };
+        Assert.True(hold.Matches(new("long_press", Keys: "Escape", Elapsed: 2)));
+        Assert.False(hold.Matches(new("long_press", Keys: "Escape", Elapsed: 5)));
+        Assert.Throws<ArgumentException>(() => new TriggerSettings { Kind = "sequence", Keys = "A,Ctrl+B" }.Validate());
+    }
+
+    [Fact]
+    public void MouseGestureRecognizesClosedCircleAndDirectionalLineButRejectsJitter()
+    {
+        var circle = Enumerable.Range(0, 33).Select(index => new System.Windows.Point(
+            60 + Math.Cos(index * Math.Tau / 32) * 36, 70 + Math.Sin(index * Math.Tau / 32) * 37)).ToArray();
+        Assert.Equal("circle", MouseGesture.Identify(circle));
+        Assert.Equal("circle", MouseGesture.Identify(circle.Reverse().ToArray()));
+        Assert.Null(MouseGesture.Identify(circle[..18]));
+        Assert.Equal("right", MouseGesture.Identify([new(5, 12), new(20, 14), new(36, 11), new(70, 12)]));
+        Assert.Null(MouseGesture.Identify([new(5, 5), new(7, 8), new(3, 7), new(9, 3)]));
+    }
     [Fact]
     public async Task ConnectedTrigger_IsNotArmedUntilBranchReachesIt_AndWaitDoesNotFreezeParallelBranch()
     {

@@ -16,7 +16,7 @@ public partial class GameWindow
             ResetPlayTime(previous.PlayedSeconds);
             sceneSaves.Reset(); sceneSaves.MarkRestored(runtime.Visuals.Scene);
             renderedStory = null; renderedSettings = null; renderedVisuals = null;
-            triggerInput.Reset(); pendingTriggerSignals.Clear(); gameplayUi?.Reset(); DialogueEffects.Reset(); choicePresentation?.Reset();
+            ResetTriggerInput(); gameplayUi?.Reset(); DialogueEffects.Reset(); choicePresentation?.Reset();
             CloseAudio(); sceneEffects?.Stop(); ShowGameplay(); autosave.Reset();
         }, operation: "Откат игры");
     }

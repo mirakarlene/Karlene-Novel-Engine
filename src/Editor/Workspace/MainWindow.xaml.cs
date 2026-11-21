@@ -41,6 +41,8 @@ public partial class MainWindow : Window
         ThemeInput.ItemsSource = EditorTheme.Themes;
         WelcomeObjectInput.ItemsSource = WelcomeBubbles.Objects;
         AccessibilityCards.ItemsSource = BlockAccessibility.Modes;
+        GraphMinimapSizeInput.ItemsSource = GraphMinimapSettings.Sizes;
+        GraphMinimapCornerInput.ItemsSource = GraphMinimapSettings.Corners;
         UpdateWelcomeGreeting();
         UpdateDesignPreferences();
         SceneEditor.ProjectScriptRequested += SceneEditor_ProjectScriptRequested;
@@ -109,6 +111,8 @@ public partial class MainWindow : Window
         ProjectBrowserViewInput.SelectedValue = settings.ProjectBrowserView;
         GraphGridInput.IsChecked = settings.ShowGraphGrid;
         SceneEditor.ShowGraphGrid = settings.ShowGraphGrid;
+        LoadGraphMinimapInputs();
+        SceneEditor.ApplyGraphMinimap(settings.GraphMinimap);
         ApplyBrowserView();
         if (!prepared) ReloadApplicationPlugins();
         ResetApplicationPluginDraft();
@@ -258,6 +262,7 @@ public partial class MainWindow : Window
         LoadGeneralSettings();
         ProjectBrowserViewInput.SelectedValue = settings.ProjectBrowserView;
         GraphGridInput.IsChecked = settings.ShowGraphGrid;
+        LoadGraphMinimapInputs();
         SetSettingsPage(0);
         ResetApplicationPluginDraft();
         AppGraphicsInput.Value = settings.Graphics; GraphicsEnvironment.SetSettings(this, settings.Graphics);
@@ -289,15 +294,31 @@ public partial class MainWindow : Window
         var next = new UserSettings { ProjectBrowserView = ProjectBrowserViewInput.SelectedValue as string == "table" ? "table" : "tiles", ApplicationPlugins = applicationPluginDraft.ToList(), Graphics = AppGraphicsInput.Value, EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = EditorTheme.Normalize((string?)ThemeInput.SelectedValue), UserName = userName, AccessibilityMode = BlockAccessibility.GetMode(this), WelcomeObjects = WelcomeBubbles.Normalize((string?)WelcomeObjectInput.SelectedValue) };
         next.Editor = editor; next.Hotkeys = EditorHotkeys.Validate(GeneralSettingsPage.Hotkeys);
         next.ShowGraphGrid = GraphGridInput.IsChecked == true;
+        next.GraphMinimap = new(GraphMinimapColorsInput.IsChecked == true,
+            GraphMinimapSizeInput.SelectedValue is double width ? width : 126,
+            (string?)GraphMinimapCornerInput.SelectedValue ?? "bottom_right");
         await settingsStore.SaveAsync(next);
         settings = next; GraphicsEnvironment.SetSettings(this, settings.Graphics);
         ApplyEditorPreferences();
         ApplyBrowserView();
-        foreach (var scriptEditor in EditorWorkspace.Children.OfType<ScriptEditor>()) scriptEditor.ShowGraphGrid = settings.ShowGraphGrid;
+        SceneEditor.ApplyGraphMinimap(settings.GraphMinimap);
+        foreach (var scriptEditor in EditorWorkspace.Children.OfType<ScriptEditor>())
+        {
+            scriptEditor.ShowGraphGrid = settings.ShowGraphGrid;
+            scriptEditor.ApplyGraphMinimap(settings.GraphMinimap);
+        }
         if (pluginsChanged) ReloadApplicationPlugins();
         UpdateWelcomeGreeting();
         await RefreshStoredProjectsAsync();
         OperationStatus.Text = applicationPluginLoadError == null ? "Настройки сохранены." : "Настройки сохранены. Не удалось загрузить плагины: " + applicationPluginLoadError;
+    }
+
+    private void LoadGraphMinimapInputs()
+    {
+        var minimap = GraphMinimapSettings.Normalize(settings.GraphMinimap);
+        GraphMinimapColorsInput.IsChecked = minimap.ColorCategories;
+        GraphMinimapSizeInput.SelectedValue = minimap.Width;
+        GraphMinimapCornerInput.SelectedValue = minimap.Corner;
     }
 
     private async void BtnSaveSettings_Click(object sender, RoutedEventArgs e) =>

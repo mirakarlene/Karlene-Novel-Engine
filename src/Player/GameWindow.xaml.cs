@@ -246,7 +246,7 @@ public partial class GameWindow : Window
         runtime = candidate;
         sceneSaves.Reset();
         rollback.Clear(); autosave.Reset();
-        triggerInput.Reset(); pendingTriggerSignals.Clear();
+        ResetTriggerInput();
         gameplayUi?.Reset();
         DialogueEffects.Reset();
         choicePresentation?.Reset();
@@ -279,6 +279,7 @@ public partial class GameWindow : Window
 
     private void ShowMenu()
     {
+        advancedTriggers.Reset();
         if (startupFailed) return;
         ScriptHud.Visibility = Visibility.Collapsed;
         screenHistory.Clear();
@@ -422,7 +423,7 @@ public partial class GameWindow : Window
             transitionCover?.Dispose();
             execution.Dispose();
             execution = null;
-            _ = Dispatcher.BeginInvoke(new Action(async () => await DrainTriggerSignalsAsync()));
+            ScheduleTriggerDrain();
             if (!closed && !startupFailed)
             {
                 StopButton.IsEnabled = false;
@@ -540,6 +541,7 @@ public partial class GameWindow : Window
             return;
         }
         if (!CommandInput.IsKeyboardFocusWithin) RecordScriptInput((e.Key == Key.System ? e.SystemKey : e.Key).ToString());
+        if (!CommandInput.IsKeyboardFocusWithin && advancedTriggers.KeyDown(e)) { e.Handled = true; return; }
         var signal = triggerInput.KeyDown(e);
         if (signal != null && runtime.Story.Triggers.Any(trigger => trigger.Matches(signal)) && ready && execution == null)
         { e.Handled = true; await DispatchTriggerAsync(signal); return; }

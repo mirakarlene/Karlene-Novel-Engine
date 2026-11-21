@@ -53,6 +53,7 @@ public partial class MainWindow
     private ScriptEditor CreateTabEditor()
     {
         var editor = new ScriptEditor { ShowGraphGrid = settings.ShowGraphGrid };
+        editor.ApplyGraphMinimap(settings.GraphMinimap);
         editor.Saved += EditorSaved;
         editor.BlockLibraryRequested += SceneEditor_BlockLibraryRequested;
         editor.TestSceneRequested += SceneEditor_TestSceneRequested;

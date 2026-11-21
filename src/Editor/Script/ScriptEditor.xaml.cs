@@ -95,13 +95,16 @@ public partial class ScriptEditor : UserControl
     private readonly Dictionary<string, Border> cards = new(StringComparer.Ordinal);
     private readonly List<UIElement> links = [];
 
+    internal void ApplyGraphMinimap(GraphMinimapSettings settings) => GraphMinimap.Apply(settings);
+
     /// <summary>Creates the editing controls and command palette.</summary>
     public ScriptEditor()
     {
         InitializeComponent();
         CodeMinimap.Bind(CodeEditor);
         GraphMinimap.Bind(
-            () => (Document?.Graph?.Nodes.Select(node => new Rect(node.X, node.Y, NodeWidth(node), NodeHeight(node))) ?? [],
+            () => (Document?.Graph?.Nodes.Select(node => new MinimapNode(new Rect(node.X, node.Y, NodeWidth(node), NodeHeight(node)),
+                    cards.TryGetValue(node.Id, out var card) ? BlockAccessibility.DecoratedGroup(card) : node.Category)) ?? [],
                 new Rect(-CanvasPan.X / ZoomSlider.Value, -CanvasPan.Y / ZoomSlider.Value,
                     GraphScroll.ActualWidth / ZoomSlider.Value, GraphScroll.ActualHeight / ZoomSlider.Value)),
             center =>
@@ -594,9 +597,9 @@ public partial class ScriptEditor : UserControl
         ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound =>
             node.Path.Length == 0 ? "Ресурс не выбран" : node.Path,
         ScriptNodeKind.Subsystem => "Подсистема: " + node.Path + (node.WaitForSubsystem ? " · ждать завершения" : " · в фоне"),
-        ScriptNodeKind.TriggerKey or ScriptNodeKind.TriggerCombination => node.Trigger?.Keys ?? "Выберите клавиши",
+        ScriptNodeKind.TriggerKey or ScriptNodeKind.TriggerCombination or ScriptNodeKind.TriggerSequence => node.Trigger?.Keys ?? "Выберите клавиши",
         ScriptNodeKind.TriggerButton => node.Trigger?.Button ?? "Выберите кнопку",
-        ScriptNodeKind.TriggerHotspot => $"Зона {node.Trigger?.X}, {node.Trigger?.Y} · {node.Trigger?.Width} × {node.Trigger?.Height}",
+        ScriptNodeKind.TriggerHotspot or ScriptNodeKind.TriggerPointerEnterZone => $"Зона {node.Trigger?.X}, {node.Trigger?.Y} · {node.Trigger?.Width} × {node.Trigger?.Height}",
         ScriptNodeKind.ConditionalGoto => "state." + node.Variable + " / " + node.Value + " → " + node.Path,
         ScriptNodeKind.GotoScene or ScriptNodeKind.CallScene => node.Path.Length == 0 ? "Функция не выбрана" : node.Path,
         ScriptNodeKind.Anchor => node.Text,

@@ -89,11 +89,7 @@ public sealed partial class VisualScript
                     Line(SystemBlocks.Compile(node));
                     Line("return");
                     break;
-                case ScriptNodeKind.TriggerKey:
-                case ScriptNodeKind.TriggerButton:
-                case ScriptNodeKind.TriggerHotspot:
-                case ScriptNodeKind.TriggerTextClosed:
-                case ScriptNodeKind.TriggerCombination:
+                case var kind when TriggerBlocks.All.ContainsKey(kind):
                     Line($"kne_await_event({Quote(System.Text.Json.JsonSerializer.Serialize(node.Trigger, EngineSettings.JsonOptions))})");
                     Line($"__kne_node = {Quote(node.Next!)}");
                     break;
@@ -329,7 +325,7 @@ public sealed partial class VisualScript
         if (node.IsTrigger)
         {
             if (node.Trigger == null) Fail(node, "настройте событие триггера");
-            string expected = node.Kind switch { ScriptNodeKind.TriggerButton => "button", ScriptNodeKind.TriggerHotspot => "hotspot", ScriptNodeKind.TriggerTextClosed => "text_closed", _ => "key" };
+            string expected = TriggerBlocks.All[node.Kind].Event;
             if (node.Trigger!.Kind != expected) Fail(node, "тип события не соответствует блоку триггера");
             if (node.Kind == ScriptNodeKind.TriggerKey && TriggerSettings.NormalizeKeys(node.Trigger.Keys).Contains('+')) Fail(node, "для сочетания используйте «При комбинации нажатий»");
         }

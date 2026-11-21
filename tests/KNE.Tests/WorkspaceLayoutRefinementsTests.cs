@@ -55,10 +55,30 @@ public sealed class WorkspaceLayoutRefinementsTests
             general.BehaviorPage.ScrollToEnd(); Layout(); Fits(general.WorkTime); Capture(root, "behavior-bottom-" + width);
             var expected = general.Value;
             Next(); Assert.Equal("3 / 4 · Проекты и Рендер", Find<TextBlock>(window, "SettingsPageLabel").Text); Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "ProjectsRenderSettingsPage").Visibility);
+            var minimapColors = Find<CheckBox>(window, "GraphMinimapColorsInput");
+            var minimapSize = Find<ComboBox>(window, "GraphMinimapSizeInput");
+            var minimapCorner = Find<ComboBox>(window, "GraphMinimapCornerInput");
+            foreach (var control in new FrameworkElement[] { minimapColors, minimapSize, minimapCorner }) Fits(control);
+            Assert.False(minimapColors.IsChecked);
+            Assert.Equal(126d, minimapSize.SelectedValue);
+            Assert.Equal("bottom_right", minimapCorner.SelectedValue);
+            Assert.Equal(3, minimapSize.Items.Count);
+            Assert.Equal(4, minimapCorner.Items.Count);
+            minimapColors.IsChecked = true;
+            minimapSize.SelectedValue = 168d;
+            minimapCorner.SelectedValue = "top_left";
             Next(); Assert.Equal("4 / 4 · Плагины", Find<TextBlock>(window, "SettingsPageLabel").Text); Assert.False(Find<Button>(window, "NextSettingsPageButton").IsEnabled);
             for (int i = 0; i < 3; i++) Find<Button>(window, "PreviousSettingsPageButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout();
             Assert.Equal(expected, general.Value); Assert.False(Find<Button>(window, "PreviousSettingsPageButton").IsEnabled);
-            await WorkspaceTabsTests.Invoke(window, "SaveSettingsAsync"); Assert.Equal(expected, (await store.LoadAsync()).Editor);
+            await WorkspaceTabsTests.Invoke(window, "SaveSettingsAsync");
+            var saved = await store.LoadAsync();
+            Assert.Equal(expected, saved.Editor);
+            Assert.Equal(new GraphMinimapSettings(true, 168, "top_left"), saved.GraphMinimap);
+            var canvasMinimap = Find<EditorMinimap>(Find<ScriptEditor>(window, "SceneEditor"), "GraphMinimap");
+            Assert.True(canvasMinimap.ColorCategories);
+            Assert.Equal(168d, canvasMinimap.Width);
+            Assert.Equal(HorizontalAlignment.Left, canvasMinimap.HorizontalAlignment);
+            Assert.Equal(VerticalAlignment.Top, canvasMinimap.VerticalAlignment);
         }
         finally { window.Close(); }
     });

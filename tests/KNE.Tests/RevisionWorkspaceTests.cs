@@ -26,14 +26,14 @@ public sealed class RevisionWorkspaceTests
         {
             var article = Regex.Match(decoded, "<article id=\"" + definition.Kind + "\">(?<body>.*?)</article>", RegexOptions.Singleline);
             Assert.True(article.Success, definition.Kind.ToString());
-            Assert.Contains("<h3>" + definition.Title + "</h3>", article.Value);
+            Assert.Contains("<h4>" + definition.Title + "</h4>", article.Value);
             Assert.Contains(definition.Description, article.Value);
             Assert.Contains("<li>", article.Value);
         }
         Assert.Contains("Портов нет. Заметка не выполняется.", decoded);
         string triggers = string.Join("\n", BlockHelpDocument.Parameters(ScriptNodeKind.TriggerKey));
-        Assert.Contains("Вход подключён: ветка останавливается", triggers);
-        Assert.Contains("Без входящей связи: независимый обработчик", triggers);
+        Assert.Contains("ветка ждала событие", triggers);
+        Assert.Contains("пока открыта сцена", triggers);
         Assert.Contains("Автоповтор", triggers);
         string input = string.Join("\n", BlockHelpDocument.Parameters(ScriptNodeKind.TextInput));
         Assert.Contains("1–256 (по умолчанию 32)", input);

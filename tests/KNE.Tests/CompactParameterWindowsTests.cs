@@ -110,7 +110,10 @@ public sealed class CompactParameterWindowsTests
                 Assert.Equal(1, root.LayoutTransform.Value.M11); Assert.Equal(1, root.LayoutTransform.Value.M22);
                 if (page < pages.Length - 1) Click(window.NextPage);
             }
-            Assert.True(window.MetadataInput.Additional.ActualHeight >= 40); Assert.Equal(ScrollBarVisibility.Auto, window.MetadataInput.Additional.VerticalScrollBarVisibility);
+            Assert.True(window.MetadataInput.Additional.ActualHeight >= 36); Assert.Equal(ScrollBarVisibility.Auto, window.MetadataInput.Additional.VerticalScrollBarVisibility);
+            var jsonBounds = Bounds(window.MetadataInput.Additional, PageViewport(root));
+            Assert.InRange(PageViewport(root).ActualHeight - jsonBounds.Bottom, 19, 23);
+            if (height == 840) Assert.True(window.MetadataInput.Additional.ActualHeight >= 180);
             Assert.Equal("remote_debug", window.BuildInput.Value.TestMode); Assert.Equal("single_file", window.BuildInput.Value.ReleaseMode);
             window.ShowPage(99); Assert.Equal(3, window.Page); Assert.False(window.NextPage.IsEnabled);
             for (int page = 2; page >= 0; page--) { Click(window.PreviousPage); Layout(window); Assert.Equal(page, window.Page); Assert.Equal($"{page + 1} / 4", pageLabel.Text); foreach (var item in fixedBounds) Assert.Equal(item.Value, Bounds(item.Key, root)); }

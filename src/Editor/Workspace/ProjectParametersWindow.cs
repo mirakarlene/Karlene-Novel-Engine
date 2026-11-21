@@ -142,7 +142,10 @@ public sealed partial class ProjectParametersWindow : Window
         var buildCards = BuildInput.Children.OfType<Border>().ToArray();
         foreach (var card in buildCards) { ParameterLayout.SpreadFields((Panel)card.Child); }
         pages.Add(ParameterLayout.Cards(left, right, Card(console))); pages.Add(ParameterLayout.Cards(storageCard, diagnosticCard));
-        pages.Add(ParameterLayout.Cards(BuildInput, securityCard)); pages.Add(ParameterLayout.Cards(Card(MetadataInput)));
+        pages.Add(ParameterLayout.Cards(BuildInput, securityCard));
+        var metadataCard = Card(MetadataInput);
+        metadataCard.Margin = new(12, 0, 12, 8);
+        pages.Add(metadataCard);
         MetadataInput.OpenExternalEditor.Click += (_, _) =>
         {
             try { using var process = System.Diagnostics.Process.Start(MetadataInput.ExternalEditorStartInfo(ExternalEditorPath)); }

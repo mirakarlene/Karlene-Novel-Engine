@@ -9,12 +9,12 @@ using Microsoft.Win32;
 namespace KNE;
 
 /// <summary>Known project fields plus lossless editing of additional project.json sections.</summary>
-internal sealed class ProjectMetadataEditor : StackPanel
+internal sealed class ProjectMetadataEditor : DockPanel
 {
     private JsonObject original;
     private readonly string root;
     private readonly Dictionary<string, TextBox> fields = [];
-    internal TextBox Additional { get; } = new() { AcceptsReturn = true, AcceptsTab = true, Height = 42, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+    internal TextBox Additional { get; } = new() { AcceptsReturn = true, AcceptsTab = true, MinHeight = 36, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     private static readonly string[] Paths = ["metadata.name", "metadata.author", "metadata.team", "metadata.version", "game_info.description", "metadata.icon", "metadata.default_language", "metadata.created_date", "metadata.kne_version", "entry_points.main_scene", "entry_points.init_script"];
     internal TextBox this[string path] => fields[path];
     internal Button OpenExternalEditor { get; } = new() { Content = "Открыть во внешнем редакторе", Padding = new(6, 2, 6, 2) };
@@ -66,6 +66,7 @@ internal sealed class ProjectMetadataEditor : StackPanel
         Additional.Padding = new(4, 2, 4, 2);
         Additional.Margin = new(0);
         Additional.ToolTip = "Вложенные секции и дополнительные поля project.json. Пути задаются относительно проекта.";
+        foreach (UIElement item in Children) SetDock(item, Dock.Top);
         Children.Add(Additional);
     }
 

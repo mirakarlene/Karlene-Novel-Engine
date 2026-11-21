@@ -7,7 +7,19 @@ namespace KNE;
 internal sealed record ProjectFileFormat(string Extension, string Title, string Symbol, string Color, string? Folder = null)
 {
     internal bool IsDirectory { get; init; }
-    internal string Filter => Extension.Length == 0 ? "Все файлы (*.*)|*.*" : $"{Title} (*{Extension})|*{Extension}";
+    internal IReadOnlyList<string>? Extensions { get; init; }
+    internal string Filter
+    {
+        get
+        {
+            if (Extensions is { } extensions) return $"{Title}|{string.Join(';', extensions.Select(extension => "*" + extension))}";
+            return Extension.Length == 0 ? "Все файлы (*.*)|*.*" : $"{Title} (*{Extension})|*{Extension}";
+        }
+    }
+
+    internal bool Accepts(string extension) => Extensions is { } extensions
+        ? extensions.Contains(extension, StringComparer.OrdinalIgnoreCase)
+        : Extension.Length == 0 || Extension.Equals(extension, StringComparison.OrdinalIgnoreCase);
 }
 
 internal static class ProjectFileFormats
@@ -23,9 +35,17 @@ internal static class ProjectFileFormats
     private static readonly ProjectFileFormat Word = new(".docx", "Документ Word", "W", "#2856AD");
     private static readonly ProjectFileFormat Other = new("", "Другое", "?", "#53647B");
     private static readonly ProjectFileFormat Directory = new("", "Папка", "", "#AE7924") { IsDirectory = true };
+    private static readonly ProjectFileFormat CSharp = new(".cs", "Скрипт C#", "C#", Krl.Color, "game/scripts");
+    private static readonly ProjectFileFormat Image = new("", "Изображения", "▧", "#C15B18")
+    { Extensions = [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".ico", ".tif", ".tiff", ".svg", ".avif"] };
+    private static readonly ProjectFileFormat Audio = new("", "Аудио", "♪", "#168775")
+    { Extensions = [".wav", ".mp3", ".ogg", ".flac", ".aac", ".m4a", ".wma", ".opus", ".aiff"] };
+    private static readonly ProjectFileFormat Video = new("", "Видео", "▶", "#337C9E")
+    { Extensions = [".mp4", ".m4v", ".webm", ".mov", ".mkv", ".avi", ".wmv", ".mpeg", ".mpg"] };
+    private static readonly ProjectFileFormat Markdown = new(".md", "Markdown", "M↓", "#7166B5");
 
-    internal static IReadOnlyList<ProjectFileFormat[]> CreateGroups { get; } = [[Text, Json], [Krl, Lua], [Graph, Shader, VisualLua], [Directory, Other]];
-    internal static IReadOnlyList<ProjectFileFormat[]> ImportGroups { get; } = [[Text, Json], [Krl, Lua], [Graph, Shader, VisualLua], [RenPy, Word, Other], [Directory]];
+    internal static IReadOnlyList<ProjectFileFormat[]> CreateGroups { get; } = [[Text, Json], [Krl, Lua, CSharp], [Graph, Shader, VisualLua], [Directory, Other]];
+    internal static IReadOnlyList<ProjectFileFormat[]> ImportGroups { get; } = [[Text, Json], [Krl, Lua], [Graph, Shader, VisualLua], [RenPy, Word, Other], [Image, Audio, Video], [Directory, Markdown]];
 
     private const string Page = "M5,1 H19 L27,9 V31 H5 Z M19,1 V9 H27";
     private const string FolderShape = "M2,7 H13 L16,11 H30 V27 H2 Z";

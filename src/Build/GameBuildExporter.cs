@@ -26,7 +26,7 @@ public sealed class GameBuildExporter
         outputRoot = ValidateOutput(project.Path, outputRoot);
         // Compilation and project enumeration do not execute scripts/plugins.
         _ = GameScripts.Load(project);
-        var (leaf, executable) = OutputNames(project.Title, settings, test);
+        var (leaf, executable) = OutputNames(project.CreationName, settings, test);
         string destination = PathSafety.ResolveRelative(outputRoot, leaf);
         if (Directory.Exists(destination) && !OwnedBy(destination, settings.GameId)) throw new IOException("Папка билда содержит посторонние файлы: " + destination);
         Directory.CreateDirectory(outputRoot);
@@ -83,13 +83,13 @@ public sealed class GameBuildExporter
             string? packageName = null;
             if (!test && settings.ReleaseMode == "msix")
             {
-                packageName = "Game.msix";
+                packageName = Path.ChangeExtension(executable, ".msix");
                 await MsixPackage.CreateAsync(publish, Path.Combine(result, packageName), manifest, settings.FourPartVersion, log, token, executable).ConfigureAwait(false);
             }
             else
             {
                 if (!test && settings.ReleaseMode is "framework_dependent" or "self_contained" or "portable")
-                { packageName = "Game.zip"; ZipFile.CreateFromDirectory(publish, Path.Combine(result, packageName), CompressionLevel.Optimal, false); }
+                { packageName = Path.ChangeExtension(executable, ".zip"); ZipFile.CreateFromDirectory(publish, Path.Combine(result, packageName), CompressionLevel.Optimal, false); }
             }
             Directory.Move(publish, Path.Combine(result, "game"));
             await File.WriteAllTextAsync(Path.Combine(result, ".kne-build.json"), JsonSerializer.Serialize(new { manifest.GameId }), token).ConfigureAwait(false);
@@ -107,15 +107,14 @@ public sealed class GameBuildExporter
 
     internal static (string Directory, string Executable) OutputNames(string title, ProjectBuildSettings settings, bool test)
     {
-        if (!settings.UseProjectNameForBuild)
-            return ((test ? "test-" : "release-") + settings.ReleaseMode, "Game.exe");
         var invalid = Path.GetInvalidFileNameChars();
         string name = string.Concat(title.Select(character => invalid.Contains(character) ? '_' : character)).Trim().TrimEnd('.', ' ');
-        if (name.Length == 0) name = "Game";
+        if (name.Length == 0) name = "Проект";
         if (name.Length > 180) name = name[..(char.IsHighSurrogate(name[179]) ? 179 : 180)].TrimEnd('.', ' ');
         try { PathSafety.ValidateFileName(name); }
         catch (ArgumentException) { name = "_" + name; }
-        return ((test ? "test-" : "") + name, name + ".exe");
+        string directory = settings.UseProjectNameForBuild ? (test ? "test-" : "") + name : (test ? "test-" : "release-") + settings.ReleaseMode;
+        return (directory, name + ".exe");
     }
 
     internal static string ValidateOutput(string projectPath, string outputRoot)

@@ -11,6 +11,14 @@ namespace KNE.Tests;
 public sealed class ProjectBuildTests
 {
     [Fact]
+    public void OriginalProjectNameIsUsedForExeEvenWithoutNamedOutputFolder()
+    {
+        var settings = new ProjectBuildSettings { ReleaseMode = "portable" };
+        Assert.Equal(("release-portable", "Ответ Совы.exe"), GameBuildExporter.OutputNames("Ответ Совы", settings, false));
+        Assert.Equal(("test-portable", "Ответ Совы.exe"), GameBuildExporter.OutputNames("Ответ Совы", settings, true));
+        Assert.Equal(("Ответ Совы", "Ответ Совы.exe"), GameBuildExporter.OutputNames("Ответ Совы", settings with { UseProjectNameForBuild = true }, false));
+    }
+    [Fact]
     public async Task Settings_LegacyDefaultsAndAtomicValidationKeepVmAndStableGameIdentity()
     {
         using var fixture = new TempProject(); string path = Path.Combine(fixture.ProjectPath, "engine", "build.json");
@@ -109,13 +117,17 @@ public sealed class ProjectBuildTests
         });
         fixture.Write("game/plugins/smoke.cs", "using KNE; public sealed class ExportPlugin : IKnePlugin { public void Execute(IPluginContext context) { context.Set(\"exported\", \"exported game\"); } }");
         fixture.Write("saves/private.json", "developer-progress"); fixture.Write(".kne/private.txt", "private"); fixture.Write(".git/config", "private"); fixture.Write(".kne/plugin-assets/resource.txt", "asset");
-        var settings = new ProjectBuildSettings { GameId = Guid.NewGuid().ToString("N"), ReleaseMode = mode, Author = "Автор $(UNDEFINED); 100%", Team = "Команда", Version = "2.3.4", ReleasePath = Path.Combine(fixture.Root, "output"), UseProjectNameForBuild = true };
+        var settings = new ProjectBuildSettings { GameId = Guid.NewGuid().ToString("N"), ReleaseMode = mode, Author = "Автор $(UNDEFINED); 100%", Team = "Команда", Version = "2.3.4", ReleasePath = Path.Combine(fixture.Root, "output"), UseProjectNameForBuild = mode != "portable" };
         await ProjectBuildSettingsStore.SaveAsync(fixture.ProjectPath, settings);
         var project = await fixture.LoadAsync();
         const string jsonAuthor = "Из project.json $(UNDEFINED); 100%", jsonTeam = "JSON team", jsonVersion = "3.4.5";
+        const string displayTitle = "Название после переименования";
         string projectFile = Path.Combine(fixture.ProjectPath, "project.json"); var projectJson = JsonNode.Parse(File.ReadAllText(projectFile))!;
         projectJson["metadata"]!["author"] = jsonAuthor; projectJson["metadata"]!["team"] = jsonTeam; projectJson["metadata"]!["version"] = jsonVersion;
         projectJson["metadata"]!["icon"] = "icon.png"; projectJson["metadata"]!["default_language"] = "en";
+        projectJson["metadata"]!["name"] = displayTitle;
+        projectJson["game_info"]!["title"] = displayTitle;
+        if (mode == "portable") projectJson["metadata"]!.AsObject().Remove("creation_name");
         projectJson["game_info"]!["description"] = "A protected game $(UNDEFINED); 100%";
         File.WriteAllText(projectFile, projectJson.ToJsonString(ProjectConfiguration.JsonOptions));
         var logs = new List<string>();
@@ -123,11 +135,13 @@ public sealed class ProjectBuildTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         try { built = await new GameBuildExporter().BuildAsync(project, settings, settings.ReleasePath, log: line => { lock (logs) logs.Add(line); }, token: timeout.Token); }
         catch (Exception error) { throw new Exception(error + "\n" + string.Join("\n", logs)); }
-        Assert.Equal("Новелла с пробелами", Path.GetFileName(built.Directory));
+        Assert.Equal(settings.UseProjectNameForBuild ? "Новелла с пробелами" : "release-portable", Path.GetFileName(built.Directory));
         Assert.Equal("Новелла с пробелами.exe", Path.GetFileName(built.Executable));
-        Assert.True(ProjectBuildSettingsStore.Load(fixture.ProjectPath).UseProjectNameForBuild);
+        if (built.Package != null)
+            Assert.Equal(mode == "msix" ? "Новелла с пробелами.msix" : "Новелла с пробелами.zip", Path.GetFileName(built.Package));
+        Assert.Equal(settings.UseProjectNameForBuild, ProjectBuildSettingsStore.Load(fixture.ProjectPath).UseProjectNameForBuild);
         var metadata = FileVersionInfo.GetVersionInfo(built.Executable);
-        Assert.Equal("3.4.5.0", metadata.FileVersion); Assert.Equal(jsonAuthor, metadata.LegalCopyright); Assert.Equal(jsonTeam, metadata.CompanyName); Assert.Equal("Новелла с пробелами", metadata.ProductName);
+        Assert.Equal("3.4.5.0", metadata.FileVersion); Assert.Equal(jsonAuthor, metadata.LegalCopyright); Assert.Equal(jsonTeam, metadata.CompanyName); Assert.Equal(displayTitle, metadata.ProductName);
         Assert.Equal("A protected game $(UNDEFINED); 100%", metadata.FileDescription);
         if (mode != "single_file") Assert.True(File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(built.Executable)!, "project", "game", "scenes", "main.krl")).AsSpan().StartsWith("KNESRC01"u8));
         Assert.Contains("include_cs", File.ReadAllText(Path.Combine(fixture.ProjectPath, "game/scenes/main.krl")));
@@ -155,7 +169,7 @@ public sealed class ProjectBuildTests
         try { await process.WaitForExitAsync(timeout.Token); } catch { process.Kill(true); throw; }
         Assert.True(process.ExitCode == 0, await stderr); using var result = JsonDocument.Parse(await stdout);
         Assert.Equal("exported game:7:shield:2:3.4.5:false", result.RootElement.GetProperty("Story").GetProperty("Text").GetString());
-        Assert.Equal("Новелла с пробелами", result.RootElement.GetProperty("Title").GetString());
+        Assert.Equal(displayTitle, result.RootElement.GetProperty("Title").GetString());
         Assert.Equal("kne-game:" + settings.GameId, result.RootElement.GetProperty("SaveIdentity").GetString());
         string saves = result.RootElement.GetProperty("Saves").GetString()!;
         if (mode == "portable") Assert.Equal(Path.Combine(Path.GetDirectoryName(built.Executable)!, "saves"), saves);

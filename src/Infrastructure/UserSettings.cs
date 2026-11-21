@@ -13,6 +13,7 @@ public sealed class UserSettings
     /// <summary>Embedded project explorer display mode: tiles (default) or table.</summary>
     public string ProjectBrowserView { get; set; } = "tiles";
     public bool ShowGraphGrid { get; set; }
+    public GraphMinimapSettings GraphMinimap { get; set; } = new();
     public List<string> RecentProjects { get; set; } = [];
     public Dictionary<string, DateTimeOffset> ProjectLastOpened { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> HiddenProjects { get; set; } = [];
@@ -70,6 +71,7 @@ public sealed class UserSettingsStore
                 settings.EditorPath ??= "";
                 settings.ProjectsStoragePath ??= "";
                 settings.ProjectBrowserView = settings.ProjectBrowserView == "table" ? "table" : "tiles";
+                settings.GraphMinimap = GraphMinimapSettings.Normalize(settings.GraphMinimap);
                 settings.ApplicationPlugins = ApplicationPluginFiles.Normalize(settings.ApplicationPlugins).ToList();
                 settings.Theme = settings.ApplicationPlugins.Count > 0 && !string.IsNullOrWhiteSpace(settings.Theme) && settings.Theme.Length <= 160 ? settings.Theme : EditorTheme.Normalize(settings.Theme);
                 settings.UserName = (settings.UserName ?? "").Trim();
