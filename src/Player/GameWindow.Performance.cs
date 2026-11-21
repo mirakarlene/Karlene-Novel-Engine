@@ -20,6 +20,7 @@ public partial class GameWindow
     private readonly FramePacer performancePacer = new();
     private long lastPerformanceReport;
     private bool? lastFpsOverride;
+    private readonly HashSet<string> rendererWarnings = [];
     internal string ProjectPath => project.Path;
     internal async Task CloseForProjectDeletionAsync() { exitApproved = true; Close(); if (shaders != null) await shaders.DisposeAsync(); await runtime.DisposeAsync(); }
     /// <summary>Applies saved graphics and scene policies to an already open game, without restarting its story.</summary>
@@ -29,6 +30,9 @@ public partial class GameWindow
         var scenes = PerformanceSettingsStore.LoadScenes(project.Path);
         var active = project.Engine.Performance;
         active.Graphics = saved.Graphics; active.Preloading = saved.Preloading; active.PreloadScenes = saved.PreloadScenes;
+        active.RenderProxy = saved.RenderProxy; active.SkiaBackend = saved.SkiaBackend; active.AudioBackend = saved.AudioBackend;
+        rendererWarnings.Clear();
+        UpdateAudioBackend(active.AudioBackend);
         active.UnloadPreviousScene = saved.UnloadPreviousScene; active.AudioBuffer = saved.AudioBuffer; active.MaxAsyncTasks = saved.MaxAsyncTasks;
         active.FpsCounter = saved.FpsCounter; active.StatisticsOverlay = saved.StatisticsOverlay;
         active.FpsCorner = saved.FpsCorner; active.LoadingIndicator = saved.LoadingIndicator;
@@ -47,7 +51,7 @@ public partial class GameWindow
         project.Engine.ScenePerformance.Functions = scenes.Functions;
         preloading?.Cancel(); preloading?.Dispose(); preloading = null;
         bool textureChanged = GraphicsEnvironment.GetSettings(this).TextureQuality != saved.Graphics.TextureQuality;
-        assets.Configure(saved.Graphics); GraphicsEnvironment.SetSettings(this, saved.Graphics);
+        assets.Configure(saved.Graphics); GraphicsEnvironment.SetSettings(this, saved.LayerGraphics);
         if (textureChanged)
         {
             BackgroundImage.Source = LoadImage(runtime.Visuals.Background); CharacterImage.Source = LoadImage(runtime.Visuals.Character); gameplayUi?.Reset();
@@ -74,7 +78,8 @@ public partial class GameWindow
     private void InitializePerformance()
     {
         var settings = project.Engine.Performance;
-        GraphicsEnvironment.SetSettings(this, settings.Graphics);
+        GraphicsEnvironment.SetSettings(this, settings.LayerGraphics);
+        UpdateAudioBackend(settings.AudioBackend);
         assets.Configure(settings.Graphics);
         Loaded += (_, _) => { CompositionTarget.Rendering -= PerformanceRendering; CompositionTarget.Rendering += PerformanceRendering; };
         diagnosticConsole = settings.DebugMode && (StandalonePlayer.Current is not { TestBuild: false } || project.Engine.Security.ReleaseDebugConsole);
@@ -83,6 +88,20 @@ public partial class GameWindow
         performanceOverlay = new Border { Child = performanceText, Background = new SolidColorBrush(Color.FromArgb(210, 20, 16, 30)), Padding = new(8), Margin = new(12), IsHitTestVisible = false, Visibility = Visibility.Collapsed };
         Panel.SetZIndex(performanceOverlay, 9);
         ((Grid)Content).Children.Add(performanceOverlay);
+    }
+
+    private void UpdateAudioBackend(string backend)
+    {
+        music.Backend = sound.Backend = backend;
+        foreach (var player in audioPlayers.Values) player.Backend = backend;
+    }
+
+    internal void ReportRendererFallback(string warning)
+    {
+        if (!rendererWarnings.Add(warning)) return;
+        EngineDiagnostics.Trace("Графика игры", warning);
+        QueueOutput(warning);
+        Notify(warning);
     }
     private void UpdatePerformance()
     {
@@ -123,6 +142,7 @@ public partial class GameWindow
             using var process = Process.GetCurrentProcess();
             if (showFps) performanceText.Text += "\n";
             performanceText.Text += $"API: {(telemetry.Backend.Length == 0 ? "WPF / ожидание кадра" : telemetry.Backend)}\nRAM: {process.WorkingSet64 / 1048576d:F1} МБ\nVRAM: н/д; ресурсы KNE: {telemetry.AllocatedBytes / 1048576d:F1} МБ\nDraw Calls слоя: {telemetry.DrawCalls?.ToString() ?? "н/д"}\nЛогика: {runtime.LogicMilliseconds:F2} мс\nОбъектов сцены: {objects}";
+            if (settings.RenderProxy != "veldrid") performanceText.Text += "\nПользовательские шейдеры: Veldrid";
             if (telemetry.Error != null) performanceText.Text += "\nРезерв WPF: " + telemetry.Error;
         }
     }

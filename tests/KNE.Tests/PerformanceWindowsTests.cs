@@ -26,6 +26,11 @@ public sealed class PerformanceWindowsTests
                 Assert.False(window.TitleInput.IsReadOnly); window.TitleInput.Text = "  Новое название  ";
                 window.ShowPage(0);
                 window.AsyncTasksInput.SelectedValue = 32; window.AudioBufferInput.SelectedValue = "low_latency";
+                Assert.Equal("veldrid", window.RenderProxyInput.SelectedValue);
+                Assert.Equal("naudio", window.AudioBackendInput.SelectedValue);
+                window.RenderProxyInput.SelectedValue = "skia";
+                window.SkiaBackendInput.SelectedValue = "opengl";
+                window.AudioBackendInput.SelectedValue = "sdl_mixer";
                 window.CornerInput.SelectedValue = "top_left"; window.SavesInput.Text = "  progress/slots  ";
                 string Label(CheckBox input) => input.Content is TextBlock text ? text.Text : (string)input.Content;
                 string[] labels = ["Счётчик FPS", "Оверлей статистики (RAM, GPU, Draw Calls)", "Уведомление загрузки в углу", "Режим отладки (консоль при запуске)", "Предзагрузка сцен", "Выгружать ресурсы прошлой сцены", "Автосохранение"];
@@ -39,6 +44,7 @@ public sealed class PerformanceWindowsTests
                 Capture(window, "project-parameters.png");
                 await window.SaveAsync();
                 var saved = PerformanceSettingsStore.LoadProject(project.Path);
+                Assert.Equal(("skia", "opengl", "sdl_mixer"), (saved.RenderProxy, saved.SkiaBackend, saved.AudioBackend));
                 Assert.Equal(new GraphicsSettings { Api = "vulkan", MaxFps = 144, MsaaSamples = 4, TextureQuality = "quarter", VSync = false, LimitResourceCache = false, ResourceCacheLimitMb = 128 }, saved.Graphics);
                 Assert.Equal("Новое название", project.Title); Assert.Equal("Новое название", (await fixture.LoadAsync()).Title);
                 Assert.Equal(fixture.ProjectPath, project.Path); Assert.True(saved.UnloadPreviousScene); Assert.Equal(32, saved.MaxAsyncTasks); Assert.Equal("low_latency", saved.AudioBuffer);

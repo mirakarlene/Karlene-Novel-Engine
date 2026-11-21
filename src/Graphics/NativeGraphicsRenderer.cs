@@ -29,6 +29,7 @@ internal sealed class GraphicsPixels(int width, int height, byte[] pixels, strin
     internal long TrackedGpuBytes { get; } = bytes;
     internal double Milliseconds { get; } = milliseconds;
     internal int MsaaSamples { get; } = samples;
+    internal string? Warning { get; set; }
     public void Dispose()
     {
         byte[] buffer = Interlocked.Exchange(ref data, Array.Empty<byte>());
@@ -104,7 +105,8 @@ internal sealed class NativeGraphicsRenderer : IDisposable
             if (backend == GraphicsBackend.Direct3D11) device = GraphicsDevice.CreateD3D11(options);
             else if (backend == GraphicsBackend.Vulkan) device = GraphicsDevice.CreateVulkan(options);
             else lock (glCreation)
-                VeldridStartup.CreateWindowAndGraphicsDevice(new WindowCreateInfo(0, 0, 1, 1, Veldrid.WindowState.Hidden, "KNE · OpenGL context"), options, GraphicsBackend.OpenGL, out window, out device);
+                lock (SilkLayerContext.CreationLock)
+                    VeldridStartup.CreateWindowAndGraphicsDevice(new WindowCreateInfo(0, 0, 1, 1, Veldrid.WindowState.Hidden, "KNE · OpenGL context"), options, GraphicsBackend.OpenGL, out window, out device);
             if (device.BackendType != backend) throw new InvalidOperationException("Драйвер создал другой API вместо выбранного: " + api);
             return new(device, window);
         }
@@ -329,7 +331,7 @@ internal sealed class NativeGraphicsRenderer : IDisposable
             Vertex(width, 0, 1, top, Vector4.One), Vertex(width, height, 1, bottom, Vector4.One), Vertex(0, height, 0, bottom, Vector4.One)];
         device.UpdateBuffer(passVertices, 0, vertices);
     }
-    private static void Validate(GraphicsFrame frame, int samples)
+    internal static void Validate(GraphicsFrame frame, int samples)
     {
         ArgumentNullException.ThrowIfNull(frame);
         if (frame.Width < 1 || frame.Height < 1 || frame.Width > 8192 || frame.Height > 8192 || (long)frame.Width * frame.Height > 16 * 1024 * 1024 || samples is not (0 or 2 or 4)) throw new ArgumentOutOfRangeException(nameof(frame));

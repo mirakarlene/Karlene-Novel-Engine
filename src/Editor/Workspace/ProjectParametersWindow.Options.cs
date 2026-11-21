@@ -81,6 +81,9 @@ public sealed partial class ProjectParametersWindow
         value.ConsoleMode = (string?)ConsoleModeInput.SelectedValue ?? "embedded";
         value.ConsoleHotkey = ConsoleHotkeyInput.Text.Trim();
         value.DisableDefaultAnimations = Flag("default_animations_off");
+        value.RenderProxy = (string?)RenderProxyInput.SelectedValue ?? "veldrid";
+        value.SkiaBackend = (string?)SkiaBackendInput.SelectedValue ?? "cpu";
+        value.AudioBackend = (string?)AudioBackendInput.SelectedValue ?? "naudio";
         value.Validate(project.Path);
         var game = Copy(project.Engine.Game); game.AutoSave = Flag("autosave"); game.AutoSaveInterval = (string?)AutosaveInput.SelectedValue ?? "dialogue";
         if (!int.TryParse(RollbackInput.Text, out int rollback) || !int.TryParse(AutosaveActionsInput.Text, out int actions)) throw new InvalidDataException("Глубина отката и число действий должны быть целыми числами.");

@@ -165,9 +165,18 @@ public sealed class ProjectBuildTests
         }
         Assert.Equal(mode != "framework_dependent" && mode != "single_file", File.Exists(Path.Combine(Path.GetDirectoryName(built.Executable)!, "coreclr.dll")));
         var info = new ProcessStartInfo(built.Executable) { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden, RedirectStandardOutput = true, RedirectStandardError = true }; info.ArgumentList.Add("--verify-player"); info.Environment.Remove(RemoteDebugConnection.EnvironmentName);
+        string binaries = Path.GetDirectoryName(built.Executable)!;
+        if (mode == "single_file")
+        {
+            binaries = Path.Combine(fixture.Root, "bundle");
+            info.Environment["DOTNET_BUNDLE_EXTRACT_BASE_DIR"] = binaries;
+        }
         using var process = Process.Start(info)!; var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
         try { await process.WaitForExitAsync(timeout.Token); } catch { process.Kill(true); throw; }
         Assert.True(process.ExitCode == 0, await stderr); using var result = JsonDocument.Parse(await stdout);
+        foreach (string library in new[] { "cimgui.dll", "libSkiaSharp.dll", "SDL3.dll", "SDL3_mixer.dll", "soft_oal.dll" })
+            Assert.Single(Directory.EnumerateFiles(binaries, library, SearchOption.AllDirectories));
+        Assert.Empty(Directory.EnumerateFiles(binaries, "libSkiaSharp.pdb", SearchOption.AllDirectories));
         Assert.Equal("exported game:7:shield:2:3.4.5:false", result.RootElement.GetProperty("Story").GetProperty("Text").GetString());
         Assert.Equal(displayTitle, result.RootElement.GetProperty("Title").GetString());
         Assert.Equal("kne-game:" + settings.GameId, result.RootElement.GetProperty("SaveIdentity").GetString());

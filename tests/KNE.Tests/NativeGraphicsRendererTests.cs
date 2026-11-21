@@ -7,6 +7,65 @@ namespace KNE.Tests;
 /// <summary>These tests require real GPU drivers. Opt in with KNE_GPU_TEST=1; disabled runs report skips.</summary>
 public sealed class NativeGraphicsRendererTests
 {
+    [Fact]
+    public void SkiaCpu_CompositesPremultipliedSpritesAndGeometry() =>
+        AssertLayer(new SkiaLayerRenderer(false), "SkiaSharp · CPU", 0);
+
+    [GpuTheory]
+    [InlineData(false, 0)] [InlineData(false, 4)] [InlineData(true, 0)] [InlineData(true, 4)]
+    public void AlternativeOpenGlLayers_ComposeWithoutFlippingOrLosingAlpha(bool imgui, int samples) =>
+        AssertLayer(imgui ? new ImGuiLayerRenderer() : new SkiaLayerRenderer(true),
+            imgui ? "Silk.NET + ImGui.NET · OpenGL" : "Silk.NET + SkiaSharp · OpenGL", samples);
+
+    [GpuTheory]
+    [InlineData("directx")]
+    public async Task GameWorker_UsesSelectedLayerProxyAndWarnsWhenItFallsBack(string api)
+    {
+        var worker = SharedGraphicsWorker.CreateStandalone();
+        var settings = new GraphicsSettings { Api = api, RenderProxy = "skia" };
+        try
+        {
+            using var cpu = await Prepare(settings);
+            Assert.Equal("SkiaSharp · CPU", cpu.Backend);
+            Assert.Null(cpu.Warning);
+            using var fallback = await Prepare(settings with { MsaaSamples = 2 });
+            Assert.Equal(api, fallback.Backend);
+            Assert.Contains("Veldrid", fallback.Warning);
+            using var gpu = await Prepare(settings with { SkiaBackend = "opengl" });
+            Assert.Equal("Silk.NET + SkiaSharp · OpenGL", gpu.Backend);
+            Assert.Null(gpu.Warning);
+        }
+        finally { await worker.ReleaseAsync(); }
+
+        async Task<GraphicsPixels> Prepare(GraphicsSettings selection)
+        {
+            var completion = new TaskCompletionSource<GraphicsPixels>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Assert.True(worker.Enqueue(new(8, 8, [new(Solid(1, 255, 0, 0, 255), new Rect(0, 0, 8, 8))]), selection,
+                (pixels, error) => { if (error != null) completion.SetException(error); else completion.SetResult(pixels!); }));
+            return await completion.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    private static void AssertLayer(IGameLayerRenderer renderer, string backend, int samples)
+    {
+        using (renderer)
+        {
+            var upper = Solid(1, 0, 0, 128, 128);
+            var lower = Solid(2, 255, 0, 0, 255);
+            var halfGreen = new Vector4(0, .5f, 0, .5f);
+            GraphicsVertex V(float x, float y) => new(new Vector2(x, y), Vector2.Zero, halfGreen);
+            using var result = renderer.Render(new(20, 20,
+                [new(upper, new Rect(0, 0, 10, 5)), new(lower, new Rect(0, 10, 10, 5))],
+                [V(10, 10), V(20, 10), V(10, 20)]), samples, 10_000);
+            Assert.Equal(backend, result.Backend);
+            Assert.Equal(samples, result.MsaaSamples);
+            Pixel(result, 2, 2, 0, 0, 128, 128);
+            Pixel(result, 2, 12, 255, 0, 0, 255);
+            Pixel(result, 12, 12, 0, 128, 0, 128);
+            Pixel(result, 18, 18, 0, 0, 0, 0);
+        }
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
