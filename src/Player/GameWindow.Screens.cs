@@ -100,7 +100,7 @@ public partial class GameWindow
                 toggle.Click += (_, _) =>
                 {
                     if (element.Action == "fullscreen") { ToggleFullscreen(); toggle.IsChecked = fullscreen; }
-                    else { preferences.Animate = toggle.IsChecked == true; preferencesDirty = true; AnimatedBackdrop.Configure(project.Engine.Theme, preferences.Animate); ShowLayout(id); }
+                    else { preferences.Animate = toggle.IsChecked == true; preferencesDirty = true; ConfigureDefaultBackdrop(); ShowLayout(id); }
                 };
             }
             if (view is StackPanel stack && element.Type == "slider" && element.Action is "music_volume" or "sound_volume")
@@ -147,7 +147,7 @@ public partial class GameWindow
             case "save_slot": SaveSelected_Click(SaveSelectedButton, new()); break;
             case "load_slot": LoadSelected_Click(LoadSelectedButton, new()); break;
             case "delete_slot": DeleteSelected_Click(DeleteSelectedButton, new()); break;
-            case "animation": preferences.Animate = !preferences.Animate; preferencesDirty = true; AnimatedBackdrop.Configure(project.Engine.Theme, preferences.Animate); if (activeScreen != null) ShowLayout(activeScreen); break;
+            case "animation": preferences.Animate = !preferences.Animate; preferencesDirty = true; ConfigureDefaultBackdrop(); if (activeScreen != null) ShowLayout(activeScreen); break;
         }
     }
     private void Navigate(string? target)

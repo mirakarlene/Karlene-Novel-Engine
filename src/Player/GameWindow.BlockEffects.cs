@@ -18,7 +18,7 @@ public partial class GameWindow
         audioPlayers["music"] = music; audioPlayers["sfx"] = sound;
         foreach (string channel in new[] { "voice", "ambient" })
         {
-            var player = new GameAudioPlayer(); audioPlayers[channel] = player;
+            var player = new GameAudioPlayer { Backend = project.Engine.Performance.AudioBackend }; audioPlayers[channel] = player;
             player.MediaFailed += (_, error) => QueueOutput("Ошибка аудио «" + channel + "»: " + error.ErrorException.Message);
         }
         foreach (var pair in audioPlayers)

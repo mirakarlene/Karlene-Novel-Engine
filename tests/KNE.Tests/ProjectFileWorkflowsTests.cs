@@ -67,8 +67,18 @@ public sealed class ProjectFileWorkflowsTests
         {
             var panel = Assert.IsType<StackPanel>(dialog.Content);
             panel.Measure(new Size(540, 510)); panel.Arrange(new Rect(0, 0, 540, 510));
-            var formats = panel.Children.OfType<UniformGrid>().SelectMany(row => row.Children.OfType<Button>())
+            var rows = panel.Children.OfType<UniformGrid>().ToArray();
+            Assert.Equal(4, rows.Length);
+            Assert.All(rows, row => { Assert.Equal(3, row.Columns); Assert.Equal(3, row.Children.Count); });
+            var formats = rows.SelectMany(row => row.Children.OfType<Button>())
                 .Select(button => Assert.IsType<ProjectFileFormat>(button.Tag)).ToArray();
+            var csv = formats[2];
+            Assert.Equal(".csv", csv.Extension);
+            Assert.Single(formats, format => format.Color == csv.Color);
+            Assert.True(formats[^1].IsPlaceholder);
+            string csvPath = Path.Combine(fixture.ProjectPath, "game", MainWindow.CompleteFileName("Таблица", csv.Extension));
+            await MainWindow.CreateProjectEntryAsync(project, csv, csvPath, CancellationToken.None);
+            Assert.Equal("", await File.ReadAllTextAsync(csvPath));
             Assert.Contains(formats, format => format.IsDirectory);
             Assert.Contains(formats, format => format.Title == "Другое");
             Assert.Contains(ProjectFileFormats.ImportGroups.SelectMany(row => row), format => format.IsDirectory);
@@ -95,6 +105,25 @@ public sealed class ProjectFileWorkflowsTests
     });
 
     [Fact]
+    public Task ImportPickerFillsFourRowsWithItsFormatsAndAPlaceholder() => WorkspaceTabsTests.Sta(() =>
+    {
+        var dialog = MainWindow.BuildFormatPicker(import: true);
+        try
+        {
+            var rows = ((StackPanel)dialog.Content).Children.OfType<UniformGrid>().ToArray();
+            Assert.Equal(4, rows.Length);
+            Assert.All(rows, row => { Assert.Equal(4, row.Columns); Assert.Equal(4, row.Children.Count); });
+            var formats = rows.SelectMany(row => row.Children.OfType<Button>()).Select(button => (ProjectFileFormat)button.Tag).ToArray();
+            Assert.Single(formats, format => format.IsPlaceholder);
+            Assert.True(formats[^1].IsPlaceholder);
+            Assert.Contains(formats, format => format.IsDirectory);
+            Assert.Contains(formats, format => format.Title == "Другое");
+        }
+        finally { dialog.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task MinimapSurfacesRenderAtBothEditorSizesAndLuaOmitsSceneActions() => WorkspaceTabsTests.Sta(async () =>
     {
         using var fixture = new TempProject();
@@ -107,6 +136,13 @@ public sealed class ProjectFileWorkflowsTests
         string graph = fixture.Write("game/scenes/map.knegraph", VisualScript.Create().Serialize());
         await editor.OpenAsync(fixture.ProjectPath, graph);
         Assert.NotNull(((RadioButton)editor.FindName("GraphMode")).Style);
+        Render("GraphMinimap");
+        var graphToggleStyle = ((RadioButton)editor.FindName("GraphMode")).Style;
+        string shader = Path.Combine(fixture.ProjectPath, "game/shaders/test.kneshader");
+        await ScriptDocument.CreateVisualAsync(fixture.ProjectPath, shader, CancellationToken.None);
+        await editor.OpenAsync(fixture.ProjectPath, shader);
+        Assert.Same(graphToggleStyle, ((RadioButton)editor.FindName("GraphMode")).Style);
+        Assert.Same(graphToggleStyle, ((RadioButton)editor.FindName("CodeMode")).Style);
         Render("GraphMinimap");
         editor.Clear();
 

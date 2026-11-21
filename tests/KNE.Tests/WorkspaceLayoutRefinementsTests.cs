@@ -41,9 +41,7 @@ public sealed class WorkspaceLayoutRefinementsTests
             Assert.InRange(Bounds(manualBackup).Top - Bounds(general.BackupCopies).Bottom, 0, 90);
             foreach (var control in new FrameworkElement[] { general.BackupPath, general.BackupFrequency, general.BackupCopies, general.AutosaveInterval, general.HistoryLimit, general.KeepHistory }) { Assert.Contains(control, first); Assert.DoesNotContain(control, second); Fits(control); }
             Assert.Contains(first.OfType<Button>(), button => Equals(button.Content, "Настроить горячие клавиши"));
-            Fits(first.OfType<Button>().Single(button => Equals(button.Content, "Удалить весь кэш")));
-            Fits(general.LuaLibraryMotion); general.LuaLibraryMotion.IsChecked = true;
-            Assert.False(general.Value.LuaLibraryMotion);
+            Assert.DoesNotContain(first.OfType<Button>(), button => Equals(button.Content, "Удалить весь кэш"));
             foreach (var control in new FrameworkElement[] { general.Startup, general.StartupProject, general.Toasts, general.Breaks, general.WorkTime }) { Assert.DoesNotContain(control, first); Assert.Contains(control, second); }
             Fits(Find<TextBlock>(window, "SettingsPageLabel")); Capture(root, "saving-" + width);
             Next(); Assert.Equal("2 / 4 · Поведение и уведомления", Find<TextBlock>(window, "SettingsPageLabel").Text);
@@ -55,6 +53,22 @@ public sealed class WorkspaceLayoutRefinementsTests
             general.BehaviorPage.ScrollToEnd(); Layout(); Fits(general.WorkTime); Capture(root, "behavior-bottom-" + width);
             var expected = general.Value;
             Next(); Assert.Equal("3 / 4 · Проекты и Рендер", Find<TextBlock>(window, "SettingsPageLabel").Text); Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "ProjectsRenderSettingsPage").Visibility);
+            var projectSettings = Find<Viewbox>(window, "ProjectsRenderSettingsPage");
+            var settingsGrid = (Grid)projectSettings.Child;
+            // Compare the rendered scale with the page before the minimap controls were added.
+            Assert.True(Bounds(settingsGrid).Width >= (width == 1500 ? 1265 : 830), "Settings text and cards were scaled down.");
+            var render = Find<Border>(window, "RenderSettingsGroup");
+            var cache = Find<Button>(window, "ClearEditorCacheButton");
+            var motion = Find<CheckBox>(window, "DisableLuaLibraryMotionInput");
+            var renderControls = LogicalChildren(render).ToArray();
+            Assert.Contains(cache, renderControls); Assert.Contains(motion, renderControls);
+            Fits(cache); Fits(motion); motion.IsChecked = true;
+            var objects = Find<ComboBox>(window, "WelcomeObjectInput");
+            var files = Find<ComboBox>(window, "ProjectBrowserViewInput");
+            Fits(objects); Fits(files);
+            Assert.Equal(Bounds(objects).Top, Bounds(files).Top, 2);
+            Assert.Equal(Bounds(objects).Width, Bounds(files).Width, 2);
+            Assert.True(Bounds(objects).Right < Bounds(files).Left);
             var minimapColors = Find<CheckBox>(window, "GraphMinimapColorsInput");
             var minimapSize = Find<ComboBox>(window, "GraphMinimapSizeInput");
             var minimapCorner = Find<ComboBox>(window, "GraphMinimapCornerInput");
@@ -64,6 +78,7 @@ public sealed class WorkspaceLayoutRefinementsTests
             Assert.Equal("bottom_right", minimapCorner.SelectedValue);
             Assert.Equal(3, minimapSize.Items.Count);
             Assert.Equal(4, minimapCorner.Items.Count);
+            Capture(root, "projects-render-" + width);
             minimapColors.IsChecked = true;
             minimapSize.SelectedValue = 168d;
             minimapCorner.SelectedValue = "top_left";
@@ -72,7 +87,7 @@ public sealed class WorkspaceLayoutRefinementsTests
             Assert.Equal(expected, general.Value); Assert.False(Find<Button>(window, "PreviousSettingsPageButton").IsEnabled);
             await WorkspaceTabsTests.Invoke(window, "SaveSettingsAsync");
             var saved = await store.LoadAsync();
-            Assert.Equal(expected, saved.Editor);
+            Assert.Equal(expected with { LuaLibraryMotion = false }, saved.Editor);
             Assert.Equal(new GraphMinimapSettings(true, 168, "top_left"), saved.GraphMinimap);
             var canvasMinimap = Find<EditorMinimap>(Find<ScriptEditor>(window, "SceneEditor"), "GraphMinimap");
             Assert.True(canvasMinimap.ColorCategories);

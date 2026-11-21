@@ -9,6 +9,8 @@ public sealed record GraphicsOption<T>(T Value, string Label);
 /// <summary>Settings for KNE's owned graphics layers; WPF continues composing controls with its system renderer.</summary>
 public sealed record GraphicsSettings
 {
+    internal string RenderProxy { get; init; } = "veldrid";
+    internal string SkiaBackend { get; init; } = "cpu";
     public string Api { get; set; } = "auto";
     public bool VSync { get; set; } = true;
     public int MaxFps { get; set; } = 60;
@@ -48,6 +50,16 @@ public sealed record GraphicsSettings
 public sealed class ProjectPerformanceSettings
 {
     public GraphicsSettings Graphics { get; set; } = new();
+    public bool DisableDefaultAnimations { get; set; }
+    public string RenderProxy { get; set; } = "veldrid";
+    public string SkiaBackend { get; set; } = "cpu";
+    public string AudioBackend { get; set; } = "naudio";
+    public static IReadOnlyList<GraphicsOption<string>> RenderProxies { get; } =
+        [new("veldrid", "Veldrid"), new("imgui", "Silk.NET + ImGui.NET"), new("skia", "Silk.NET + SkiaSharp")];
+    public static IReadOnlyList<GraphicsOption<string>> SkiaBackends { get; } = [new("cpu", "CPU"), new("opengl", "OpenGL")];
+    public static IReadOnlyList<GraphicsOption<string>> AudioBackends { get; } =
+        [new("naudio", "NAudio"), new("sdl_mixer", "SDL3_mixer"), new("openal", "OpenAL Soft")];
+    internal GraphicsSettings LayerGraphics => Graphics with { RenderProxy = RenderProxy, SkiaBackend = SkiaBackend };
     public bool FpsCounter { get; set; }
     public string FpsCorner { get; set; } = "top_right";
     public bool StatisticsOverlay { get; set; }
@@ -74,6 +86,10 @@ public sealed class ProjectPerformanceSettings
     {
         if (Graphics == null) throw new InvalidDataException("Секция graphics не должна быть null.");
         Graphics.Validate();
+        if (!RenderProxies.Any(option => option.Value == RenderProxy) ||
+            !SkiaBackends.Any(option => option.Value == SkiaBackend) ||
+            !AudioBackends.Any(option => option.Value == AudioBackend))
+            throw new InvalidDataException("Неизвестный прокси рендеринга, бэкенд SkiaSharp или аудио.");
         if (PersistentLocation is not ("saves" or "appdata" or "local"))
             throw new InvalidDataException("Хранилище persistent: saves, appdata или local.");
         if (UnavailableSaves is not ("read_only" or "appdata"))

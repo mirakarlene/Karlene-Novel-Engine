@@ -251,8 +251,10 @@ public partial class ScenePreview : UserControl
         DefaultBackgroundImage.Visibility = DefaultBackground.Visibility;
         if (renderedBackgroundPath != visuals.Background) { BackgroundImage.Source = LoadImage(visuals.Background); renderedBackgroundPath = visuals.Background; }
         if (renderedCharacterPath != visuals.Character) { CharacterImage.Source = LoadImage(visuals.Character); renderedCharacterPath = visuals.Character; }
-        AnimatedBackdrop.Visibility = visuals.Background == null && theme.BackgroundImage == null && DefaultBackground.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
-        if (renderedBackdropAnimate != animate) { AnimatedBackdrop.Configure(theme, animate); renderedBackdropAnimate = animate; }
+        bool defaultAnimations = !project.Engine.Performance.DisableDefaultAnimations;
+        AnimatedBackdrop.Visibility = defaultAnimations && visuals.Background == null && theme.BackgroundImage == null && DefaultBackground.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
+        bool animateBackdrop = animate && defaultAnimations;
+        if (renderedBackdropAnimate != animateBackdrop) { AnimatedBackdrop.Configure(theme, animateBackdrop); renderedBackdropAnimate = animateBackdrop; }
         CharacterImage.HorizontalAlignment = visuals.Position switch { "left" => HorizontalAlignment.Left, "right" => HorizontalAlignment.Right, _ => HorizontalAlignment.Center };
         sceneEffects!.Apply(visuals, animate, performance.PostProcessing);
         if (renderedOverlay != visuals.OverlayScreen || renderedOverlayVersion != visuals.ScreenVersion)

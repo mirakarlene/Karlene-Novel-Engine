@@ -7,6 +7,34 @@ namespace KNE.Tests;
 
 public sealed class GameAudioPlayerTests
 {
+    [AudioTheory]
+    [InlineData("sdl_mixer")] [InlineData("openal")]
+    public Task AlternativeAudio_UsesExpectedDecoderAndReleasesFileAfterPlayback(string backend) => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        string path = WaveFile(fixture, 44100);
+        int sharedDecoderCalls = 0;
+        using var player = new GameAudioPlayer(_ => throw new InvalidOperationException("WaveOut must not start"),
+            filename => { sharedDecoderCalls++; return new WaveFileReader(filename); }) { Backend = backend, Volume = 0 };
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        player.MediaEnded += (_, _) => done.TrySetResult();
+        player.MediaFailed += (_, args) => done.TrySetException(args.ErrorException);
+        player.Open(new Uri(path));
+        if (done.Task.IsFaulted) await done.Task;
+        Assert.NotNull(player.Source);
+        Assert.Equal(backend == "openal" ? 1 : 0, sharedDecoderCalls);
+        player.Position = TimeSpan.FromMilliseconds(100);
+        Assert.InRange(player.Position.TotalMilliseconds, 99, 101);
+        player.Play();
+        player.Pause();
+        player.Volume = .1;
+        player.Play();
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        player.Close();
+        using var exclusive = File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        Assert.True(exclusive.Length > 44);
+    });
+
     [Theory]
     [InlineData("low_latency", 25)] [InlineData("balanced", 75)] [InlineData("stable", 150)]
     public Task BufferProfile_ConfiguresTheActualOutputBeforeInitializationAndPreservesTransportAndVolume(string profile, int milliseconds) => WorkspaceTabsTests.Sta(async () =>

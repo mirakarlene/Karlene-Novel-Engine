@@ -290,7 +290,8 @@ public partial class MainWindow : Window
         string userName = TxtUserName.Text.Trim();
         if (userName.Length > 80 || userName.Any(char.IsControl)) throw new ArgumentException("Имя пользователя: до 80 символов, без переносов строк и управляющих символов.");
         bool pluginsChanged = !applicationPluginDraft.SequenceEqual(settings.ApplicationPlugins, StringComparer.OrdinalIgnoreCase);
-        var editor = GeneralSettingsPage.Value; editor.Validate(); ValidateBackupStorage(editor, storage);
+        var editor = GeneralSettingsPage.Value with { LuaLibraryMotion = DisableLuaLibraryMotionInput.IsChecked != true };
+        editor.Validate(); ValidateBackupStorage(editor, storage);
         var next = new UserSettings { ProjectBrowserView = ProjectBrowserViewInput.SelectedValue as string == "table" ? "table" : "tiles", ApplicationPlugins = applicationPluginDraft.ToList(), Graphics = AppGraphicsInput.Value, EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = EditorTheme.Normalize((string?)ThemeInput.SelectedValue), UserName = userName, AccessibilityMode = BlockAccessibility.GetMode(this), WelcomeObjects = WelcomeBubbles.Normalize((string?)WelcomeObjectInput.SelectedValue) };
         next.Editor = editor; next.Hotkeys = EditorHotkeys.Validate(GeneralSettingsPage.Hotkeys);
         next.ShowGraphGrid = GraphGridInput.IsChecked == true;

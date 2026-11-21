@@ -19,6 +19,9 @@ public sealed partial class ProjectParametersWindow : Window
     internal ComboBox TextureInput => GraphicsInput.TextureInput;
     internal ComboBox AsyncTasksInput { get; } = GraphicsSettingsEditor.Choice(ProjectPerformanceSettings.AsyncTaskLimits);
     internal ComboBox AudioBufferInput { get; } = GraphicsSettingsEditor.Choice(ProjectPerformanceSettings.AudioBuffers);
+    internal ComboBox RenderProxyInput { get; } = GraphicsSettingsEditor.Choice(ProjectPerformanceSettings.RenderProxies);
+    internal ComboBox SkiaBackendInput { get; } = GraphicsSettingsEditor.Choice(ProjectPerformanceSettings.SkiaBackends);
+    internal ComboBox AudioBackendInput { get; } = GraphicsSettingsEditor.Choice(ProjectPerformanceSettings.AudioBackends);
     internal Expander DangerZone { get; } = new() { Header = "Danger Zone", IsExpanded = false, Foreground = Brushes.IndianRed, FontWeight = FontWeights.SemiBold, Margin = new(0, 8, 0, 0) };
     internal Button DeleteProjectButton { get; } = DangerButton("Удалить проект");
     internal TextBlock DeleteCounter { get; } = new() { Visibility = Visibility.Collapsed, Foreground = Brushes.IndianRed, Margin = new(0, 5, 0, 0) };
@@ -63,7 +66,16 @@ public sealed partial class ProjectParametersWindow : Window
         GraphicsInput.ApiInput.SelectedValue = value.Graphics.Api; GraphicsInput.CacheLimitInput.SelectedValue = value.Graphics.ResourceCacheLimitMb;
         CornerInput.ItemsSource = ProjectPerformanceSettings.Corners.Where(option => option.Value != "bottom_left" || value.FpsCorner == "bottom_left").OrderBy(option => option.Value == "top_right" ? 0 : option.Value == "top_left" ? 1 : 2).ToArray();
         CornerInput.SelectedValue = value.FpsCorner; AsyncTasksInput.SelectedValue = value.MaxAsyncTasks; AudioBufferInput.SelectedValue = value.AudioBuffer;
-        AudioBufferInput.ToolTip = "Два аудиобуфера по 25 / 75 / 150 мс. Меньший буфер снижает задержку, больший лучше переносит задержки обработки. Применяется при следующем открытии аудиофайла.";
+        RenderProxyInput.SelectedValue = value.RenderProxy;
+        SkiaBackendInput.SelectedValue = value.SkiaBackend;
+        SkiaBackendInput.IsEnabled = value.RenderProxy == "skia";
+        RenderProxyInput.SelectionChanged += (_, _) => SkiaBackendInput.IsEnabled = (string?)RenderProxyInput.SelectedValue == "skia";
+        AudioBackendInput.SelectedValue = value.AudioBackend;
+        AudioBackendInput.ToolTip = "SDL3_mixer декодирует файлы самостоятельно. NAudio и OpenAL Soft используют декодер Windows.";
+        AudioBufferInput.ToolTip = "25 / 75 / 150 мс на буфер для NAudio и OpenAL Soft. SDL3_mixer использует буфер аудиоустройства.";
+        RenderProxyInput.ToolTip = "Подготавливает игровые слои. Пользовательские шейдеры исполняет Veldrid.";
+        SkiaBackendInput.ToolTip = "Для SkiaSharp на CPU выберите сглаживание «Нет». Если выбранная конфигурация недоступна, игра перейдёт на Veldrid и покажет предупреждение.";
+        GraphicsInput.ApiInput.ToolTip = "API Veldrid для пользовательских шейдеров и слоёв при использовании Veldrid.";
         AsyncTasksInput.ToolTip = "Максимум одновременно активных веток, включая основную. Применяется при следующем запуске сценария.";
         var body = new StackPanel();
         TitleInput.Text = project.Title;
@@ -74,12 +86,17 @@ public sealed partial class ProjectParametersWindow : Window
         AddField(graphics, "Графический API", GraphicsInput.ApiInput); graphics.Children.Add(GraphicsInput.VSyncInput);
         AddField(graphics, "Ограничение FPS", GraphicsInput.FpsInput); AddField(graphics, "Сглаживание", GraphicsInput.MsaaInput); AddField(graphics, "Качество текстур", TextureInput);
         AddField(graphics, "Разрешение окна", ResolutionFields()); AddField(graphics, "Палитра игры", PaletteInput);
+        AddSwitch(graphics, "default_animations_off", "Удалить все стандартные анимации", value.DisableDefaultAnimations);
+        var renderer = new StackPanel();
+        AddField(renderer, "Прокси рендеринга", RenderProxyInput);
+        AddField(renderer, "Бэкенд SkiaSharp", SkiaBackendInput);
         var performance = new StackPanel(); performance.Children.Add(Heading("Производительность"));
         var cache = new DockPanel { LastChildFill = true }; GraphicsInput.CacheLimitInput.MinWidth = 80; GraphicsInput.CacheLimitInput.Width = 90; DockPanel.SetDock(GraphicsInput.CacheLimitInput, Dock.Right);
         cache.Children.Add(GraphicsInput.CacheLimitInput); cache.Children.Add(GraphicsInput.LimitCacheInput); performance.Children.Add(cache);
         performance.Children.Add(Hint("Кэш хранит подготовленные ресурсы. Лимит не включает активные изображения и память драйвера. API готовит графику один раз; движение выполняет композитор WPF."));
         AddSwitch(performance, "unload", "Выгружать ресурсы прошлой сцены", value.UnloadPreviousScene);
         AddField(performance, "Лимит асинхронных задач", AsyncTasksInput); AddField(performance, "Аудио буфер", AudioBufferInput);
+        AddField(performance, "Аудиобэкенд", AudioBackendInput);
         AddSwitch(performance, "preload", "Предзагрузка сцен", value.Preloading); AddField(performance, "Количество сцен", PreloadInput);
         var left = Card(graphics); var right = Card(performance); columns.Children.Add(left); columns.Children.Add(right); Grid.SetColumn(right, 2); body.Children.Add(columns);
         var console = new StackPanel(); console.Children.Add(Heading("Консоль"));
@@ -139,6 +156,7 @@ public sealed partial class ProjectParametersWindow : Window
         foreach (FrameworkElement card in new FrameworkElement[] { storageCard, diagnosticCard, securityCard }) card.Margin = new(0);
         ParameterLayout.Compact(console);
         foreach (var panel in new[] { graphics, performance, console, storage, diagnostics, (Panel)securityCard.Child }) ParameterLayout.SpreadFields(panel);
+        ParameterLayout.Compact(renderer); ParameterLayout.SpreadFields(renderer); graphics.Children.Add(renderer);
         var buildCards = BuildInput.Children.OfType<Border>().ToArray();
         foreach (var card in buildCards) { ParameterLayout.SpreadFields((Panel)card.Child); }
         pages.Add(ParameterLayout.Cards(left, right, Card(console))); pages.Add(ParameterLayout.Cards(storageCard, diagnosticCard));

@@ -5,7 +5,7 @@ namespace KNE;
 
 public partial class MainWindow
 {
-    private Task ClearEditorCacheAsync() => RunOperationAsync(async () =>
+    private async void ClearEditorCache_Click(object sender, RoutedEventArgs e) => await RunOperationAsync(async () =>
     {
         if (MessageBox.Show(this, "Удалить временные файлы редактора и очистить кэш ресурсов?", "Очистка кэша",
             MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
@@ -16,7 +16,7 @@ public partial class MainWindow
         GraphicsTextures.Clear();
         if (Application.Current is { } app)
             foreach (var game in app.Windows.OfType<GameWindow>()) game.ClearResourceCache();
-        GeneralSettingsPage.Status.Text = "Кэш редактора очищен.";
+        OperationStatus.Text = "Кэш редактора очищен.";
     }, "Очистка кэша…");
 
     internal static void ClearEditorCacheFiles(string profile, string help)

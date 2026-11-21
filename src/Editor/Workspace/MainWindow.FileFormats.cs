@@ -15,7 +15,17 @@ public partial class MainWindow
         ProjectFileFormat? selected = null;
         foreach (var row in ((StackPanel)window.Content).Children.OfType<UniformGrid>())
             foreach (var button in row.Children.OfType<Button>())
-                button.Click += (_, _) => { selected = (ProjectFileFormat)button.Tag; window.DialogResult = true; };
+                button.Click += (_, _) =>
+                {
+                    var format = (ProjectFileFormat)button.Tag;
+                    if (format.IsPlaceholder)
+                    {
+                        MessageBox.Show(window, "KNE ещё на стадии разработки.", "KNE", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+                    selected = format;
+                    window.DialogResult = true;
+                };
         window.Owner = this;
         EditorTheme.Apply(window, settings.Theme);
         return window.ShowDialog() == true ? selected : null;
@@ -32,14 +42,19 @@ public partial class MainWindow
         };
         foreach (var group in import ? ProjectFileFormats.ImportGroups : ProjectFileFormats.CreateGroups)
         {
-            var row = new UniformGrid { Columns = 3, Margin = new Thickness(0, 0, 0, 6) };
+            var row = new UniformGrid { Columns = import ? 4 : 3, Margin = new Thickness(0, 0, 0, 6) };
             foreach (var format in group)
             {
                 var tile = new StackPanel();
-                var icon = ProjectFileFormats.Icon(format);
-                icon.HorizontalAlignment = HorizontalAlignment.Center;
-                tile.Children.Add(icon);
-                tile.Children.Add(new TextBlock { Text = format.Title, TextAlignment = TextAlignment.Center });
+                if (!format.IsPlaceholder)
+                {
+                    var icon = ProjectFileFormats.Icon(format);
+                    icon.HorizontalAlignment = HorizontalAlignment.Center;
+                    tile.Children.Add(icon);
+                }
+                var label = new TextBlock { Text = format.Title, TextAlignment = TextAlignment.Center };
+                if (format.IsPlaceholder) label.FontSize = 26;
+                tile.Children.Add(label);
                 if (format.Extension.Length > 0)
                     tile.Children.Add(new TextBlock { Text = format.Extension, TextAlignment = TextAlignment.Center });
                 var button = new Button { Content = tile, Tag = format, Width = 148, Height = 82, Margin = new Thickness(3) };

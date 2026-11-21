@@ -62,9 +62,14 @@ public sealed class CompactParameterWindowsTests
         {
             Assert.Equal((780d, 840d, 740d, 680d), (window.Width, window.Height, window.MinWidth, window.MinHeight));
             window.ResolutionInput.SelectedValue = "custom"; window.AutosaveInput.SelectedValue = "actions";
+            window.RenderProxyInput.SelectedValue = "skia"; window.SkiaBackendInput.SelectedValue = "opengl";
+            window.AudioBackendInput.SelectedValue = "openal";
+            Assert.True(window.SkiaBackendInput.IsEnabled);
             window.BuildInput.TestMode.SelectedValue = "remote_debug"; window.BuildInput.ReleaseMode.SelectedValue = "single_file";
             window.MetadataInput.Additional.Text += new string('\n', 100);
             Show(window, width, height); var root = (FrameworkElement)window.Content;
+            FitsPage(Logical(root).OfType<CheckBox>().Single(check =>
+                check.Content is TextBlock { Text: "Удалить все стандартные анимации" }), root);
             var save = Logical(root).OfType<Button>().Single(button => Equals(button.Content, "Сохранить"));
             var cancel = Logical(root).OfType<Button>().Single(button => Equals(button.Content, "Отмена"));
             var pageLabel = Logical(root).OfType<TextBlock>().Single(text => text.Text == "1 / 4");
@@ -75,7 +80,7 @@ public sealed class CompactParameterWindowsTests
             Assert.Equal(fixedBounds[save].Top, fixedBounds[cancel].Top);
             FrameworkElement[][] pages =
             [
-                [window.GraphicsInput.ApiInput, window.GraphicsInput.VSyncInput, window.GraphicsInput.FpsInput, window.GraphicsInput.MsaaInput, window.TextureInput, window.ResolutionInput, window.CustomWidthInput, window.CustomHeightInput, window.PaletteInput, window.GraphicsInput.LimitCacheInput, window.GraphicsInput.CacheLimitInput, window.AsyncTasksInput, window.AudioBufferInput, window.PreloadInput, window.ConsoleModeInput, window.ConsoleHotkeyInput],
+                [window.GraphicsInput.ApiInput, window.GraphicsInput.VSyncInput, window.GraphicsInput.FpsInput, window.GraphicsInput.MsaaInput, window.TextureInput, window.ResolutionInput, window.CustomWidthInput, window.CustomHeightInput, window.PaletteInput, window.RenderProxyInput, window.SkiaBackendInput, window.GraphicsInput.LimitCacheInput, window.GraphicsInput.CacheLimitInput, window.AsyncTasksInput, window.AudioBufferInput, window.AudioBackendInput, window.PreloadInput, window.ConsoleModeInput, window.ConsoleHotkeyInput],
                 [window.SavesInput, window.PersistentLocationInput, window.RollbackInput, window.AutosaveInput, window.AutosaveActionsInput, window.MenuMusicInput, window.CornerInput, window.DeleteCrashReportsButton, window.DangerZone],
                 [window.BuildInput.TestMode, window.BuildInput.TestPath, window.BuildInput.ReleaseMode, window.BuildInput.ReleasePath, window.BuildInput.Saves, window.FileSystemInput],
                 [window.TitleInput, window.BuildInput.Author, window.BuildInput.Team, window.BuildInput.Version,
