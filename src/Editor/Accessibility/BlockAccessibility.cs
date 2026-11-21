@@ -52,6 +52,8 @@ public static class BlockAccessibility
     private static readonly DependencyProperty DecorationProperty = DependencyProperty.RegisterAttached("Decoration", typeof(Decoration), typeof(BlockAccessibility));
     internal static void Decorate(FrameworkElement view, string group, Action<CategoryPresentation> update)
     { view.SetValue(DecorationProperty, new Decoration(group, update)); update(Presentation(group, GetMode(view))); }
+    internal static string DecoratedGroup(DependencyObject view) =>
+        view.GetValue(DecorationProperty) is Decoration decoration ? decoration.Group : GetCategory(view);
     private static void Changed(DependencyObject view, DependencyPropertyChangedEventArgs args)
     {
         if (view.GetValue(DecorationProperty) is Decoration decoration) decoration.Update(Presentation(decoration.Group, GetMode(view)));

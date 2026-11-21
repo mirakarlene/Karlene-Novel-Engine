@@ -313,7 +313,7 @@ public partial class GameWindow
             rollback.Clear();
             autosave.Reset();
             sceneSaves.Reset();
-            triggerInput.Reset();
+            ResetTriggerInput();
             pendingTriggerSignals.Clear();
             gameplayUi?.Reset();
             DialogueEffects.Reset();

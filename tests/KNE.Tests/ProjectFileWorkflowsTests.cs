@@ -16,6 +16,7 @@ public sealed class ProjectFileWorkflowsTests
     [InlineData(".krl", "scenes")]
     [InlineData(".knegraph", "scenes")]
     [InlineData(".kneshader", "shaders")]
+    [InlineData(".cs", "scripts")]
     public void DestinationDialogUsesNativeFolderPathsForScriptFormats(string extension, string subfolder)
     {
         using var fixture = new TempProject();
@@ -25,6 +26,26 @@ public sealed class ProjectFileWorkflowsTests
         var dialog = MainWindow.CreateDestinationFolderDialog(initial: initial, root: fixture.ProjectPath);
 
         Assert.Equal(Path.Combine(fixture.ProjectPath, "game", subfolder), dialog.InitialDirectory);
+    }
+
+    [Fact]
+    public void MediaAndMarkdownImportTilesRestrictExtensionsAndHaveDistinctColors()
+    {
+        var allFormats = ProjectFileFormats.ImportGroups.SelectMany(group => group).ToArray();
+        foreach (var (title, accepted, rejected) in new[]
+        {
+            ("Изображения", ".PNG", ".wav"),
+            ("Аудио", ".MP3", ".mp4"),
+            ("Видео", ".MP4", ".md"),
+            ("Markdown", ".MD", ".txt")
+        })
+        {
+            var tile = Assert.Single(allFormats, format => format.Title == title);
+            Assert.True(tile.Accepts(accepted));
+            Assert.False(tile.Accepts(rejected));
+            Assert.Contains("*" + accepted, tile.Filter, StringComparison.OrdinalIgnoreCase);
+            Assert.Single(allFormats, format => format.Color == tile.Color);
+        }
     }
 
     [Fact]
@@ -51,6 +72,11 @@ public sealed class ProjectFileWorkflowsTests
             Assert.Contains(formats, format => format.IsDirectory);
             Assert.Contains(formats, format => format.Title == "Другое");
             Assert.Contains(ProjectFileFormats.ImportGroups.SelectMany(row => row), format => format.IsDirectory);
+            var csharp = Assert.Single(formats, format => format.Extension == ".cs");
+            Assert.Contains(formats, format => format != csharp && format.Color == csharp.Color);
+            string script = Path.Combine(fixture.ProjectPath, "game", MainWindow.CompleteFileName("Rules", csharp.Extension));
+            await MainWindow.CreateProjectEntryAsync(project, csharp, script, CancellationToken.None);
+            Assert.True(File.Exists(script));
             foreach (var format in formats.Where(format => ScriptDocument.IsGraphPath("scene" + format.Extension)))
             {
                 string target = Path.Combine(fixture.ProjectPath, "game", MainWindow.CompleteFileName("Глава 1", format.Extension));
@@ -94,6 +120,40 @@ public sealed class ProjectFileWorkflowsTests
                 var bitmap = new RenderTargetBitmap((int)size.Width, (int)size.Height, 96, 96, PixelFormats.Pbgra32);
                 bitmap.Render(editor);
             }
+        }
+    });
+
+    [Fact]
+    public Task GraphMinimapUsesInheritedAccessibilityColorsAndAppliesWindowPlacement() => WorkspaceTabsTests.Sta(() =>
+    {
+        var map = new EditorMinimap();
+        map.Bind(() => (new[] { new MinimapNode(new Rect(0, 0, 150, 150), "narrative") }, new Rect(240, 240, 20, 20)), _ => { });
+        var grid = new Grid { Children = { map } };
+        map.Apply(new GraphMinimapSettings(ColorCategories: true, Width: 168, Corner: "top_left"));
+        grid.Measure(new Size(320, 240));
+        grid.Arrange(new Rect(0, 0, 320, 240));
+        grid.UpdateLayout();
+        Assert.Equal(new Size(168, 117), map.RenderSize);
+        Assert.Equal(new Point(0, 0), map.TranslatePoint(new Point(0, 0), grid));
+        int normal = Pixel();
+        BlockAccessibility.SetMode(grid, "achromatopsia");
+        grid.UpdateLayout();
+        int accessible = Pixel();
+        Assert.NotEqual(normal, accessible);
+        Assert.Equal("achromatopsia", BlockAccessibility.GetMode(map));
+        map.Apply(new GraphMinimapSettings());
+        grid.UpdateLayout();
+        Assert.Equal(new Size(126, 88), map.RenderSize);
+        Assert.Equal(new Point(194, 152), map.TranslatePoint(new Point(0, 0), grid));
+        return Task.CompletedTask;
+
+        int Pixel()
+        {
+            var bitmap = new RenderTargetBitmap(168, 117, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(map);
+            byte[] bytes = new byte[4];
+            bitmap.CopyPixels(new Int32Rect(65, 37, 1, 1), bytes, bytes.Length, 0);
+            return BitConverter.ToInt32(bytes);
         }
     });
 

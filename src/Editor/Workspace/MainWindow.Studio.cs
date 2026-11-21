@@ -52,8 +52,8 @@ public partial class MainWindow
         var source = new OpenFileDialog { Title = "Выберите файл для импорта", Filter = format.Filter };
         if (source.ShowDialog(this) != true) return;
         string extension = Path.GetExtension(source.FileName);
-        if (format.Extension.Length > 0 && !extension.Equals(format.Extension, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("Выберите исходный файл формата " + format.Extension + ".");
+        if (!format.Accepts(extension))
+            throw new InvalidDataException("Выберите файл для импорта через плитку «" + format.Title + "».");
         string? destination = PickNamedDestination(gameRoot, gameRoot, Path.GetFileNameWithoutExtension(source.FileName), extension);
         if (destination == null) return;
         await ProjectImport.CopyFileAsync(project.Path, source.FileName, destination, lifetime.Token);

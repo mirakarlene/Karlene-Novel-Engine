@@ -11,6 +11,9 @@ public sealed class ProjectInfo
     public required ProjectConfiguration Configuration { get; init; }
     public string Name => Configuration.DisplayName(System.IO.Path.GetFileName(Path));
     public string Title => string.IsNullOrWhiteSpace(Configuration.GameInfo?.Title) ? Name : Configuration.GameInfo.Title;
+    internal string CreationName => !string.IsNullOrWhiteSpace(Configuration.Metadata?.CreationName)
+        ? Configuration.Metadata.CreationName
+        : System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(Path));
     public ObservableCollection<ProjectFile> Files { get; } = [];
     /// <summary>Project directories, including empty ones, excluding ignored paths and symbolic links.</summary>
     public IReadOnlyList<string> Directories { get; internal set; } = [];

@@ -221,6 +221,22 @@
                                 <TextBlock Text="Отображение файлов проекта" Margin="0,12,0,7"/>
                                 <ComboBox x:Name="ProjectBrowserViewInput" SelectedIndex="0" SelectedValuePath="Tag"><ComboBoxItem Content="Плитки" Tag="tiles"/><ComboBoxItem Content="Таблица" Tag="table"/></ComboBox>
                                 <CheckBox x:Name="GraphGridInput" Content="Показывать сетку в редакторе блок-схем" Margin="0,8,0,0"/>
+                                <Grid Margin="0,9,0,0">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="1.25*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <CheckBox x:Name="GraphMinimapColorsInput" VerticalAlignment="Bottom" Margin="0,0,12,3">
+                                        <TextBlock Text="Цветная миникарта" TextWrapping="Wrap"/>
+                                    </CheckBox>
+                                    <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                        <TextBlock Text="Размер миникарты" Margin="0,0,0,3"/>
+                                        <ComboBox x:Name="GraphMinimapSizeInput" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  AutomationProperties.Name="Размер миникарты"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Угол миникарты" Margin="0,0,0,3"/>
+                                        <ComboBox x:Name="GraphMinimapCornerInput" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                                  AutomationProperties.Name="Угол миникарты"/>
+                                    </StackPanel>
+                                </Grid>
                             </StackPanel>
                         </Border>
                     </Grid>

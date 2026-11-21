@@ -72,11 +72,7 @@ public static class BlockLibrary
                 ScriptNodeKind.Constant => "π, τ, e, φ, π/2 или √2.", _ => "Именованный набор шагов вычислений: сохранить и вставить в другой блок формулы." };
             Add("calculations", kind, new ScriptNode { Kind = kind }.Title, description);
         }
-        Add("triggers", ScriptNodeKind.TriggerKey, "При клике на клавишу", "Независимая ветка по нажатию выбранной клавиши.");
-        Add("triggers", ScriptNodeKind.TriggerButton, "При клике на кнопку", "Ветка по ID игровой кнопки или элемента дополнительного экрана.");
-        Add("triggers", ScriptNodeKind.TriggerHotspot, "При клике на зону на экране", "Область в логических координатах игровой сцены.");
-        Add("triggers", ScriptNodeKind.TriggerTextClosed, "При закрытии текстового окна", "Реакция на скрытие текстового окна или очистку текста.");
-        Add("triggers", ScriptNodeKind.TriggerCombination, "При комбинации нажатий", "Ветка по сочетанию клавиш, например Ctrl+Shift+E.");
+        foreach (var (kind, trigger) in TriggerBlocks.All) Add("triggers", kind, trigger.Title, trigger.Description);
         Add("narrative", ScriptNodeKind.RegisterCharacter, "Персонаж", "Зарегистрировать имя, цвет и типографику персонажа без отображения спрайта.");
         Add("narrative", ScriptNodeKind.UpdateCharacter, "Изменить персонажа", "Изменить имя и типографику уже зарегистрированного персонажа по его ID.");
         Add("narrative", ScriptNodeKind.SetSpeaker, "Установить спикера", "Назначить профиль следующим репликам с пустым говорящим в текущей ветке.");
@@ -156,7 +152,12 @@ public static class BlockLibrary
             if (kind == ScriptNodeKind.Clamp) node.Calculation = node.Calculation with { B = "0", C = "100" };
             if (kind == ScriptNodeKind.Remap) node.Calculation = node.Calculation with { B = "0", C = "1", D = "0", T = "100" };
         }
-        if (node.IsTrigger) node.Trigger = new TriggerSettings { Kind = kind switch { ScriptNodeKind.TriggerButton => "button", ScriptNodeKind.TriggerHotspot => "hotspot", ScriptNodeKind.TriggerTextClosed => "text_closed", _ => "key" }, Keys = kind == ScriptNodeKind.TriggerCombination ? "Ctrl+E" : "E" };
+        if (TriggerBlocks.All.TryGetValue(kind, out var trigger))
+            node.Trigger = new TriggerSettings
+            {
+                Kind = trigger.Event,
+                Keys = kind switch { ScriptNodeKind.TriggerCombination => "Ctrl+E", ScriptNodeKind.TriggerSequence => "Up, Up, Down, Down, Left, Right, Left, Right, B, A", _ => "E" }
+            };
         node.Category = category ?? Definitions.First(entry => entry.Kind == kind).Group;
         if (kind is ScriptNodeKind.Dialogue or ScriptNodeKind.AutoDialogue or ScriptNodeKind.EffectDialogue or ScriptNodeKind.ReverseDialogue) node.Text = "Новая реплика";
         if (kind == ScriptNodeKind.TextInput) node.Input = new TextInputSettings { Prompt = "Введите ответ:" };

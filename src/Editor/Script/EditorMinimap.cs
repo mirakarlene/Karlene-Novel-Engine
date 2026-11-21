@@ -4,6 +4,8 @@ using System.Windows.Media;
 
 namespace KNE;
 
+internal readonly record struct MinimapNode(Rect Bounds, string Category);
+
 /// <summary>Compact overview of an editor surface with a draggable viewport.</summary>
 public sealed class EditorMinimap : FrameworkElement
 {
@@ -12,7 +14,9 @@ public sealed class EditorMinimap : FrameworkElement
     private static readonly Brush View = Paint(70, 132, 173, 238);
     private static readonly Pen Outline = ViewportOutline();
     private KrlCodeEditor? editor;
-    private Func<(IEnumerable<Rect> Nodes, Rect Viewport)>? graph;
+    private Func<(IEnumerable<MinimapNode> Nodes, Rect Viewport)>? graph;
+    private readonly Dictionary<string, Brush> categoryBrushes = [];
+    private bool colorCategories;
     private Action<Point>? centerGraph;
     private Rect world;
     private Rect map;
@@ -26,8 +30,32 @@ public sealed class EditorMinimap : FrameworkElement
         editor.TextArea.TextView.ScrollOffsetChanged += (_, _) => InvalidateVisual();
     }
 
-    internal void Bind(Func<(IEnumerable<Rect> Nodes, Rect Viewport)> snapshot, Action<Point> center)
+    internal void Bind(Func<(IEnumerable<MinimapNode> Nodes, Rect Viewport)> snapshot, Action<Point> center)
     { graph = snapshot; centerGraph = center; }
+
+    internal bool ColorCategories
+    {
+        get => colorCategories;
+        set { if (colorCategories != value) { colorCategories = value; InvalidateVisual(); } }
+    }
+
+    internal void Apply(GraphMinimapSettings settings)
+    {
+        var value = GraphMinimapSettings.Normalize(settings);
+        Width = value.Width;
+        Height = Math.Round(value.Width * (88d / 126d));
+        HorizontalAlignment = value.Corner.EndsWith("_left", StringComparison.Ordinal) ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+        VerticalAlignment = value.Corner.StartsWith("top_", StringComparison.Ordinal) ? VerticalAlignment.Top : VerticalAlignment.Bottom;
+        ColorCategories = value.ColorCategories;
+    }
+
+    protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.Property != BlockAccessibility.ModeProperty) return;
+        categoryBrushes.Clear();
+        if (colorCategories) InvalidateVisual();
+    }
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -58,17 +86,25 @@ public sealed class EditorMinimap : FrameworkElement
             if (!IsMouseCaptured || world.IsEmpty || world.Width == 0)
             {
                 world = snapshot.Viewport;
-                foreach (var node in nodes) world.Union(node);
+                foreach (var node in nodes) world.Union(node.Bounds);
                 world.Inflate(45, 45);
                 double scale = Math.Min((ActualWidth - 8) / world.Width, (ActualHeight - 8) / world.Height);
                 map = new Rect((ActualWidth - world.Width * scale) / 2, (ActualHeight - world.Height * scale) / 2,
                     world.Width * scale, world.Height * scale);
             }
-            foreach (var node in nodes) dc.DrawRectangle(Content, null, Project(node));
+            foreach (var node in nodes) dc.DrawRectangle(NodeBrush(node.Category), null, Project(node.Bounds));
             viewport = Project(snapshot.Viewport);
         }
         if (!viewport.IsEmpty) dc.DrawRectangle(View, Outline, viewport);
         dc.Pop();
+    }
+
+    private Brush NodeBrush(string category)
+    {
+        if (!colorCategories || string.IsNullOrEmpty(category)) return Content;
+        if (categoryBrushes.TryGetValue(category, out var brush)) return brush;
+        Color color = BlockAccessibility.Presentation(category, BlockAccessibility.GetMode(this)).Color;
+        return categoryBrushes[category] = Paint(225, color.R, color.G, color.B);
     }
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)

@@ -269,7 +269,9 @@ public enum ScriptNodeKind
     Screenshot, FileRead, FileWrite, PathExists, FileSize, FileList,
     DirectoryCreate, ProjectPath, FreezeScan, DeviceInfo, ShowFps,
     Initialization, ReverseDialogue, Watermark, ShowInput, GlobalTimer, BuildInfo, ConnectFont, LuaBlock, CallVisualLua,
-    ShowVideo, EnableConsole, DisableConsole, GlobalPause
+    ShowVideo, EnableConsole, DisableConsole, GlobalPause,
+    TriggerSequence, TriggerPointerMove, TriggerPointerEnterZone, TriggerPointerLeave, TriggerDoubleClick, TriggerLongPress,
+    TriggerWheel, TriggerFocus, TriggerResize, TriggerClipboard, TriggerGesture
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -314,7 +316,7 @@ public sealed class ScriptNode
     /// <summary>Typed arguments of a Meta and System block.</summary>
     public Dictionary<string, LogicOperand>? SystemArguments { get; set; }
     /// <summary>Event block: connected blocks await the event; disconnected roots register an independent handler.</summary>
-    [JsonIgnore] public bool IsTrigger => Kind is ScriptNodeKind.TriggerKey or ScriptNodeKind.TriggerButton or ScriptNodeKind.TriggerHotspot or ScriptNodeKind.TriggerTextClosed or ScriptNodeKind.TriggerCombination;
+    [JsonIgnore] public bool IsTrigger => TriggerBlocks.All.ContainsKey(Kind);
     /// <summary>Wait for a subsystem; false spawns it as a background task.</summary>
     public bool WaitForSubsystem { get; set; } = true;
     /// <summary>Event subscription parameters for trigger roots.</summary>
@@ -449,8 +451,7 @@ public sealed class ScriptNode
         _ when SystemBlocks.All.TryGetValue(Kind, out var system) => system.Title,
         ScriptNodeKind.Condition => "Условие (значение, прежний формат)", ScriptNodeKind.Branching => "Ветвление", ScriptNodeKind.CompareVariables => "Условие", ScriptNodeKind.SetVariable => "Переменная",
         ScriptNodeKind.Subsystem => Path.Length == 0 ? "Подсистема" : System.IO.Path.GetFileName(Path),
-        ScriptNodeKind.TriggerKey => "При клике на клавишу", ScriptNodeKind.TriggerButton => "При клике на кнопку",
-        ScriptNodeKind.TriggerHotspot => "При клике на зону на экране", ScriptNodeKind.TriggerTextClosed => "При закрытии текстового окна", ScriptNodeKind.TriggerCombination => "При комбинации нажатий",
+        _ when TriggerBlocks.All.TryGetValue(Kind, out var trigger) => trigger.Title,
         ScriptNodeKind.Background => "Фон",
         ScriptNodeKind.Character => "Спрайт", ScriptNodeKind.HideCharacter => "Скрыть спрайт",
         ScriptNodeKind.Music => "Музыка",

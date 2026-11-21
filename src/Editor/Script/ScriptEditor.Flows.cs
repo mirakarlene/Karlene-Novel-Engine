@@ -72,7 +72,7 @@ public partial class ScriptEditor
             picker.SelectionChanged += (_, _) => { if (picker.SelectedItem is string id) ExtendedProperties.Children.OfType<TextBox>().Single(input => input.Name == "TriggerButtonInput").Text = id; };
             ExtendedProperties.Children.Add(picker);
         }
-        if (node.Kind == ScriptNodeKind.TriggerHotspot)
+        if (node.Kind is ScriptNodeKind.TriggerHotspot or ScriptNodeKind.TriggerPointerEnterZone)
         {
             Number("TriggerXInput", "X зоны", settings.X, (value, number) => value.Trigger = (value.Trigger ?? settings) with { X = number });
             Number("TriggerYInput", "Y зоны", settings.Y, (value, number) => value.Trigger = (value.Trigger ?? settings) with { Y = number });
@@ -80,6 +80,42 @@ public partial class ScriptEditor
             Number("TriggerHeightInput", "Высота зоны", settings.Height, (value, number) => value.Trigger = (value.Trigger ?? settings) with { Height = number });
             Hint("Координаты задаются в игровой области, а не во внешнем окне. Правая и нижняя границы не входят в зону.");
         }
+        if (node.Kind == ScriptNodeKind.TriggerSequence)
+        {
+            Text("TriggerSequenceInput", "Клавиши по порядку, через запятую", settings.Keys,
+                (value, text) => value.Trigger = (value.Trigger ?? settings) with { Keys = TriggerSettings.NormalizeSequence(text) });
+            Hint("Например ↑, ↑, ↓, ↓, ←, →, ←, →, B, A. Удержание клавиши не добавляет повторных нажатий.");
+        }
+        if (node.Kind is ScriptNodeKind.TriggerDoubleClick or ScriptNodeKind.TriggerGesture)
+            Choice("TriggerMouseButton", "Кнопка мыши", settings.EffectiveMouseButton,
+                [new("left", "Левая"), new("right", "Правая"), new("middle", "Средняя")],
+                (value, selected) => value.Trigger = (value.Trigger ?? settings) with { MouseButton = selected });
+        if (node.Kind == ScriptNodeKind.TriggerDoubleClick)
+            Number("TriggerClickInterval", "Интервал между кликами, мс", settings.EffectiveDoubleClickMilliseconds,
+                (value, number) => value.Trigger = (value.Trigger ?? settings) with { DoubleClickMilliseconds = number });
+        if (node.Kind == ScriptNodeKind.TriggerLongPress)
+        {
+            Choice("TriggerHoldInput", "Удерживать", settings.MouseButton ?? "key",
+                [new("key", "Клавишу"), new("left", "Левую кнопку мыши"), new("right", "Правую кнопку мыши")],
+                (value, selected) => value.Trigger = (value.Trigger ?? settings) with { MouseButton = selected == "key" ? null : selected });
+            Text("TriggerHoldKey", "Клавиша, если выбрана клавиатура", settings.Keys,
+                (value, text) => value.Trigger = (value.Trigger ?? settings) with
+                { Keys = (value.Trigger ?? settings).MouseButton == null ? TriggerSettings.NormalizeSingleKey(text) : text.Trim() });
+            Number("TriggerHoldDuration", "Время удержания, с", settings.EffectiveHoldSeconds,
+                (value, number) => value.Trigger = (value.Trigger ?? settings) with { HoldSeconds = number });
+        }
+        GraphicsOption<string>[] modes = node.Kind switch
+        {
+            ScriptNodeKind.TriggerWheel => [new("up", "Вверх"), new("down", "Вниз"), new("both", "В обоих направлениях")],
+            ScriptNodeKind.TriggerFocus => [new("gained", "Получение фокуса"), new("lost", "Потеря фокуса"), new("both", "Оба события")],
+            ScriptNodeKind.TriggerResize => [new("changing", "Каждый кадр изменения"), new("finished", "Только после завершения изменения")],
+            ScriptNodeKind.TriggerClipboard => [new("copy", "Копирование (Ctrl+C)"), new("paste", "Вставка (Ctrl+V)"), new("cut", "Вырезание (Ctrl+X)")],
+            ScriptNodeKind.TriggerGesture => [new("circle", "Круг"), new("up", "Линия вверх"), new("down", "Линия вниз"), new("left", "Линия влево"), new("right", "Линия вправо")],
+            _ => []
+        };
+        if (modes.Length > 0)
+            Choice("TriggerEventMode", "Когда срабатывает", settings.EffectiveMode, modes,
+                (value, selected) => value.Trigger = (value.Trigger ?? settings) with { Mode = selected });
         Check("TriggerOnceInput", "Сработать только один раз", settings.Once, (value, flag) => value.Trigger = (value.Trigger ?? settings) with { Once = flag });
         Hint("Вход подключён: ветка ждёт событие, затем выполняет блоки после выхода. Без входящей связи: независимый обработчик регистрируется при входе в сцену и действует до выхода из неё. Занятый обработчик повторно не запускается.");
 
@@ -99,6 +135,17 @@ public partial class ScriptEditor
             var input = new CheckBox { Name = name, Content = label, IsChecked = current, Margin = new Thickness(0, 4, 0, 8) };
             input.Checked += (_, _) => TrackProperties(); input.Unchecked += (_, _) => TrackProperties();
             ExtendedProperties.Children.Add(input); extendedEdits.Add(value => assign(value, input.IsChecked == true));
+        }
+        void Choice(string name, string label, string current, GraphicsOption<string>[] options, Action<ScriptNode, string> assign)
+        {
+            var input = GraphicsSettingsEditor.Choice(options);
+            input.Name = name;
+            input.SelectedValue = current;
+            input.Margin = new(0, 3, 0, 8);
+            input.SelectionChanged += (_, _) => TrackProperties();
+            ExtendedProperties.Children.Add(new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap });
+            ExtendedProperties.Children.Add(input);
+            extendedEdits.Add(value => assign(value, (string?)input.SelectedValue ?? current));
         }
         void Hint(string text) => ExtendedProperties.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 10) });
     }

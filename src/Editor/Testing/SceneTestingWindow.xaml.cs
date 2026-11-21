@@ -88,7 +88,7 @@ public partial class SceneTestingWindow : Window
         {
             if (!closed) { SceneSurface.ResetPresentation(); TestingErrorText.Text = GameErrorReport.Create(project, error, "Тестирование сценария").ToDisplayText(); TestingErrorOverlay.Visibility = Visibility.Visible; }
         }
-        finally { busy = false; if (!closed) { SceneSurface.IsHitTestVisible = true; RestartSceneButton.IsEnabled = true; } }
+        finally { busy = false; if (!closed) { SceneSurface.IsHitTestVisible = true; RestartSceneButton.IsEnabled = true; ScheduleTestingTriggers(); } }
     }
     private void Render()
     {
@@ -138,11 +138,11 @@ public partial class SceneTestingWindow : Window
     }
     private async void Back_Click(object sender, RoutedEventArgs e) => await ExecuteAsync(async () =>
     {
-        SceneSurface.ResetPresentation(); await scene!.BackAsync(lifetime.Token); lastSceneTick = System.Diagnostics.Stopwatch.GetTimestamp();
+        ResetTestingTriggers(); SceneSurface.ResetPresentation(); await scene!.BackAsync(lifetime.Token); lastSceneTick = System.Diagnostics.Stopwatch.GetTimestamp();
     });
     private async void Restart_Click(object sender, RoutedEventArgs e) => await ExecuteAsync(async () =>
     {
-        SceneSurface.ResetPresentation(); await scene!.RestartAsync(lifetime.Token); lastSceneTick = System.Diagnostics.Stopwatch.GetTimestamp();
+        ResetTestingTriggers(); SceneSurface.ResetPresentation(); await scene!.RestartAsync(lifetime.Token); lastSceneTick = System.Diagnostics.Stopwatch.GetTimestamp();
     });
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 }

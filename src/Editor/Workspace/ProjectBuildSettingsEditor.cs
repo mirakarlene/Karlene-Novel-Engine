@@ -15,7 +15,8 @@ internal sealed class ProjectBuildSettingsEditor : StackPanel
     internal TextBox Version { get; } = new() { MaxLength = 24 };
     internal CheckBox UseProjectNameForBuild { get; } = new()
     {
-        Content = new TextBlock { Text = "Использовать название проекта для имени папки и exe файла сборки", TextWrapping = TextWrapping.Wrap },
+        Content = new TextBlock { Text = "Использовать исходное название проекта для имени папки сборки", TextWrapping = TextWrapping.Wrap },
+        ToolTip = "Файлы EXE, ZIP и MSIX всегда получают название, указанное при создании проекта.",
         Margin = new(0, 4, 0, 0)
     };
     internal ComboBox Saves { get; } = GraphicsSettingsEditor.Choice([new GraphicsOption<string>("appdata", "AppData (для текущего пользователя)"), new("local", "Папка игры (saves)")]);
