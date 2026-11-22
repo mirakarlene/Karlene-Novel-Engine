@@ -4,6 +4,8 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.VisualBasic;
 using Microsoft.Win32;
 
@@ -33,6 +35,7 @@ public partial class MainWindow : Window
         Func<Window, string, string?>? selectProjectScript, Action<ProcessStartInfo>? openProjectScript)
     {
         InitializeComponent();
+        ProjectFilesTree.AddHandler(TreeViewItem.CollapsedEvent, new RoutedEventHandler(ProjectFilesTree_Collapsed));
         BehaviorSettingsPage.Content = GeneralSettingsPage.BehaviorPage;
         InitializeAutomation();
         SceneEditor.Saved += EditorSaved;
@@ -236,8 +239,7 @@ public partial class MainWindow : Window
 
     private async void BtnCreateProject_Click(object sender, RoutedEventArgs e)
     {
-        string name = Interaction.InputBox("Введите имя нового проекта:", "Создание проекта", "");
-        if (string.IsNullOrWhiteSpace(name)) return;
+        if (PromptName("Создание проекта", "Введите имя нового проекта:", "") is not { } name) return;
         var method = new ProjectCreationDialog { Owner = this };
         EditorTheme.Apply(method, settings.Theme);
         if (method.ShowDialog() != true) return;
@@ -383,6 +385,24 @@ public partial class MainWindow : Window
         // Restoring the same path is not a user request to leave the active editor.
         if (updatingBrowserTree || e.NewValue is not ProjectTreeNode node || node.RelativePath.Equals(selectedTreePath, StringComparison.OrdinalIgnoreCase)) return;
         TryNavigateBrowserDirectory(node.File == null ? node.RelativePath : Path.GetDirectoryName(node.RelativePath) ?? "", node.RelativePath, node.File == null);
+    }
+
+    private void ProjectFilesTree_Collapsed(object sender, RoutedEventArgs args)
+    {
+        // Let WPF finish moving selection out of the collapsed subtree before
+        // returning the horizontal viewport to the folder indentation.
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            if (!closed) FindTreeScrollViewer(ProjectFilesTree)?.ScrollToLeftEnd();
+        }));
+    }
+
+    private static ScrollViewer? FindTreeScrollViewer(DependencyObject parent)
+    {
+        if (parent is ScrollViewer scroll) return scroll;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            if (FindTreeScrollViewer(VisualTreeHelper.GetChild(parent, i)) is { } nested) return nested;
+        return null;
     }
 
     private void WatchProject(string path)

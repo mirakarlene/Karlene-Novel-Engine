@@ -23,7 +23,7 @@ public sealed class SceneParametersWindow : Window
     private bool loading;
     private readonly ContentControl pageContent = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
     private readonly List<UIElement> pages = [];
-    private readonly TextBlock pageLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new(10, 0, 10, 0) };
+    private readonly TextBlock pageLabel = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new(10, 0, 10, 0), Width = 48, TextAlignment = TextAlignment.Center };
     internal int Page { get; private set; }
     internal Button PreviousPage { get; } = new() { Content = "‹", Padding = new(12, 3, 12, 3) };
     internal Button NextPage { get; } = new() { Content = "›", Padding = new(12, 3, 12, 3) };
@@ -59,7 +59,7 @@ public sealed class SceneParametersWindow : Window
         SceneInput.ItemsSource = Choices();
         var root = new DockPanel { Margin = new(16) };
         var header = new StackPanel(); header.Children.Add(new TextBlock { Text = "Выберите сцену: файл · функция (.krl / .knegraph)" }); header.Children.Add(SceneInput); DockPanel.SetDock(header, Dock.Top); root.Children.Add(header);
-        var footer = new StackPanel(); footer.Children.Add(status); var actions = new StackPanel { Orientation = Orientation.Horizontal };
+        var footer = new StackPanel(); footer.Children.Add(status); var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
         var cancel = new Button { Content = "Отмена", IsCancel = true, Padding = new(16, 8, 16, 8), Margin = new(8, 0, 0, 0) }; cancel.Click += (_, _) => Close();
         actions.Children.Add(save); actions.Children.Add(cancel); footer.Children.Add(actions); DockPanel.SetDock(footer, Dock.Bottom); root.Children.Add(footer);
         var basic = Card("Основное"); Field(basic, "Название сцены", NameInput); Field(basic, "Имя функции", FunctionInput); basic.Children.Add(Hint("main() остаётся точкой запуска. Статические ссылки обновляются при сохранении; пути файлов остаются прежними. Вычисляемые имена требуют проверки в коде."));
@@ -91,7 +91,7 @@ public sealed class SceneParametersWindow : Window
     {
         Page = Math.Clamp(page, 0, 3); pageContent.Content = pages[Page]; PreviousPage.IsEnabled = Page > 0; NextPage.IsEnabled = Page < 3;
         foreach (var item in pages) item.IsEnabled = selected != null;
-        pageLabel.Text = (Page + 1) + " / 4 · " + new[] { "Основное и графика", "Музыка и переходы", "Сохранения и выполнение", "Начальное состояние" }[Page];
+        pageLabel.Text = $"{Page + 1} / {pages.Count}";
     }
     private GraphicsOption<string>[] Choices() => definitions.Select(scene => new GraphicsOption<string>(scene.Key, scene.Label)).ToArray();
     private void SelectScene()

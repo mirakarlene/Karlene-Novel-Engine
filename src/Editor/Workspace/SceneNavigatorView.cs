@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -15,6 +16,13 @@ public sealed class SceneNavigatorView : UserControl
     private readonly TextBlock status = new() { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
     private readonly ScrollViewer viewport;
     private readonly ScaleTransform zoom = new(1, 1);
+    private readonly TranslateTransform pan = new();
+    private readonly Slider zoomSlider = new()
+    {
+        Width = 120, Minimum = .4, Maximum = 1.5, Value = 1, TickFrequency = .1,
+        IsSnapToTickEnabled = true, IsMoveToPointEnabled = true,
+        VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0)
+    };
     private readonly Func<bool> captureMouse;
     private bool panning;
     private Point panStart, panOrigin;
@@ -29,20 +37,41 @@ public sealed class SceneNavigatorView : UserControl
         var header = new DockPanel { Margin = new Thickness(12, 8, 12, 12) }; DockPanel.SetDock(header, Dock.Top);
         var refresh = new Button { Content = "Обновить", Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(12, 0, 0, 0) };
         DockPanel.SetDock(refresh, Dock.Right); refresh.Click += (_, _) => RefreshRequested?.Invoke(this, EventArgs.Empty);
-        header.Children.Add(refresh); header.Children.Add(status); panel.Children.Add(header);
+        AutomationProperties.SetName(zoomSlider, "Масштаб схемы");
+        zoomSlider.ToolTip = "Масштаб схемы · 100 %";
+        DockPanel.SetDock(zoomSlider, Dock.Right);
+        header.Children.Add(refresh); header.Children.Add(zoomSlider); header.Children.Add(status); panel.Children.Add(header);
         graph.SetResourceReference(Panel.BackgroundProperty, "Editor.Background");
         graph.LayoutTransform = zoom;
+        graph.RenderTransform = pan;
         viewport = new ScrollViewer { Content = graph, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Background = Brushes.Transparent, Focusable = true, ToolTip = "ПКМ + перетаскивание — обзор · Ctrl + колесо — масштаб" };
         this.captureMouse = captureMouse ?? viewport.CaptureMouse;
-        viewport.PreviewMouseRightButtonDown += (_, args) => { BeginPan(args.GetPosition(viewport)); args.Handled = panning; };
-        viewport.PreviewMouseMove += (_, args) => { if (panning) { PanTo(args.GetPosition(viewport)); args.Handled = true; } };
-        viewport.PreviewMouseRightButtonUp += (_, args) => { if (panning) { EndPan(); args.Handled = true; } };
+        viewport.AddHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler((_, args) =>
+        {
+            if (args.ChangedButton != MouseButton.Right) return;
+            BeginPan(args.GetPosition(viewport));
+            if (panning) args.Handled = true;
+        }), handledEventsToo: true);
+        viewport.AddHandler(Mouse.PreviewMouseMoveEvent, new MouseEventHandler((_, args) =>
+        {
+            if (!panning) return;
+            PanTo(args.GetPosition(viewport));
+            args.Handled = true;
+        }), handledEventsToo: true);
+        viewport.AddHandler(Mouse.PreviewMouseUpEvent, new MouseButtonEventHandler((_, args) =>
+        {
+            if (!panning || args.ChangedButton != MouseButton.Right) return;
+            EndPan();
+            args.Handled = true;
+        }), handledEventsToo: true);
         viewport.LostMouseCapture += (_, _) => EndPan();
         viewport.PreviewMouseWheel += (_, args) =>
         {
             if (ZoomWithWheel(args.Delta, Keyboard.Modifiers, args.GetPosition(viewport))) args.Handled = true;
         };
+        zoomSlider.ValueChanged += (_, args) => ChangeZoom(Math.Round(args.NewValue, 2),
+            new Point(viewport.ViewportWidth / 2, viewport.ViewportHeight / 2));
         Unloaded += (_, _) => EndPan();
         panel.Children.Add(viewport);
         Content = panel;
@@ -50,17 +79,35 @@ public sealed class SceneNavigatorView : UserControl
 
     internal void BeginPan(Point position)
     {
+        if (Index is not { Nodes.Count: > 0 }) return;
         viewport.Focus();
         if (!captureMouse()) return;
-        panning = true; panStart = position; panOrigin = new(viewport.HorizontalOffset, viewport.VerticalOffset);
+        panning = true; panStart = position; panOrigin = ViewOffset;
         viewport.Cursor = Cursors.SizeAll;
     }
 
     internal void PanTo(Point position)
     {
         if (!panning) return;
-        viewport.ScrollToHorizontalOffset(panOrigin.X + panStart.X - position.X);
-        viewport.ScrollToVerticalOffset(panOrigin.Y + panStart.Y - position.Y);
+        MoveViewport(panOrigin + (panStart - position));
+    }
+
+    private Point ViewOffset => new(viewport.HorizontalOffset - pan.X, viewport.VerticalOffset - pan.Y);
+
+    private void MoveViewport(Point offset)
+    {
+        viewport.ScrollToHorizontalOffset(offset.X);
+        viewport.ScrollToVerticalOffset(offset.Y);
+        pan.X = SmallGraphShift(offset.X, viewport.ScrollableWidth, viewport.ViewportWidth, graph.Width * zoom.ScaleX);
+        pan.Y = SmallGraphShift(offset.Y, viewport.ScrollableHeight, viewport.ViewportHeight, graph.Height * zoom.ScaleY);
+    }
+
+    private static double SmallGraphShift(double offset, double scrollable, double viewportSize, double graphSize)
+    {
+        if (scrollable > 0 || !double.IsFinite(graphSize)) return 0;
+        // A graph that fits can still be dragged, keeping an edge in view so it can be found again.
+        const double visibleSize = 44;
+        return Math.Clamp(-offset, -Math.Max(0, graphSize - visibleSize), Math.Max(0, viewportSize - visibleSize));
     }
 
     private void EndPan()
@@ -73,22 +120,23 @@ public sealed class SceneNavigatorView : UserControl
     internal bool ZoomWithWheel(int delta, ModifierKeys modifiers, Point anchor)
     {
         if (!modifiers.HasFlag(ModifierKeys.Control)) return false;
-        if (delta != 0) ChangeZoom(delta > 0 ? 1 : -1, anchor);
+        if (delta != 0) ChangeZoom(Math.Round(zoom.ScaleX + Math.Sign(delta) * zoomSlider.TickFrequency, 2), anchor);
         return true;
     }
 
-    private void ChangeZoom(int steps, Point anchor)
+    private void ChangeZoom(double value, Point anchor)
     {
-        double next = Math.Clamp(Math.Round(zoom.ScaleX + steps * .1, 2), .4, 1.5);
+        double next = Math.Clamp(value, zoomSlider.Minimum, zoomSlider.Maximum);
         if (next == zoom.ScaleX) return;
         Point logical = viewport.TranslatePoint(anchor, graph);
         zoom.ScaleX = zoom.ScaleY = next;
+        zoomSlider.Value = next;
+        zoomSlider.ToolTip = $"Масштаб схемы · {next * 100:0} %";
         viewport.UpdateLayout();
         Point moved = graph.TranslatePoint(logical, viewport);
-        viewport.ScrollToHorizontalOffset(viewport.HorizontalOffset + moved.X - anchor.X);
-        viewport.ScrollToVerticalOffset(viewport.VerticalOffset + moved.Y - anchor.Y);
+        MoveViewport(ViewOffset + (moved - anchor));
         viewport.UpdateLayout();
-        if (panning) { panStart = anchor; panOrigin = new(viewport.HorizontalOffset, viewport.VerticalOffset); }
+        if (panning) { panStart = anchor; panOrigin = ViewOffset; }
     }
 
     public void Present(SceneNavigationIndex index)

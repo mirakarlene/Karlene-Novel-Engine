@@ -312,6 +312,54 @@ public sealed class ShaderRemovalTests
     }
 
     [Theory]
+    [InlineData(ScriptEndAction.Return)]
+    [InlineData(ScriptEndAction.Menu)]
+    [InlineData(ScriptEndAction.Screen)]
+    [InlineData(ScriptEndAction.Exit)]
+    public async Task GraphEnd_ClearsEveryLayerBeforeTheConfiguredEndAction(ScriptEndAction action)
+    {
+        using var fixture = new TempProject();
+        string[] layers = ["scene", "background", "sprite", "ui", "screen"];
+        foreach (string layer in layers) WriteShader(fixture, layer, layer, layer == "screen" ? "Настройки" : "");
+        var graph = VisualScript.Create();
+        graph.FunctionName = "outro";
+        graph.Nodes.Single(node => node.Kind == ScriptNodeKind.Dialogue).Text = "outro";
+        var end = graph.Nodes.Single(node => node.Kind == ScriptNodeKind.End);
+        end.EndAction = action;
+        if (action == ScriptEndAction.Screen) end.Path = "main_menu";
+        fixture.Write("game/scenes/outro.knegraph", graph.Serialize());
+        string activate = string.Join('\n', layers.Select(layer => $"    apply_shader('{ShaderPath(layer)}')"));
+        fixture.Write("game/scenes/main.krl", $$"""
+            function main()
+            {{activate}}
+                call_scene(outro)
+                d(nil,'caller')
+                apply_shader('{{ShaderPath("ui")}}')
+                d(nil,'resumed')
+            end
+            """);
+        await using var session = new ProcessGameSession(await fixture.LoadAsync(), _ => { });
+        await session.StartAsync();
+        Assert.Equal("outro", session.Story.Text);
+        Assert.Equal(layers.Select(ShaderPath), session.Visuals.Shaders);
+        await session.AdvanceAsync();
+        Assert.Empty(session.Visuals.Shaders);
+        Assert.Empty(session.Visuals.ShaderSuppressions);
+        if (action == ScriptEndAction.Return)
+        {
+            Assert.Equal("caller", session.Story.Text);
+            await session.AdvanceAsync();
+            Assert.Equal("resumed", session.Story.Text);
+            Assert.Equal([ShaderPath("ui")], session.Visuals.Shaders);
+        }
+        else
+        {
+            Assert.True(session.Story.Completed);
+            Assert.Equal(action.ToString().ToLowerInvariant(), session.Story.EndAction);
+        }
+    }
+
+    [Theory]
     [InlineData("clear_layer_shaders('missing')")]
     [InlineData("clear_layer_shaders('screen', '')")]
     [InlineData("clear_layer_shaders('screen', string.rep('x',129))")]

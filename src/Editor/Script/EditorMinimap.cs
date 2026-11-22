@@ -4,7 +4,7 @@ using System.Windows.Media;
 
 namespace KNE;
 
-internal readonly record struct MinimapNode(Rect Bounds, string Category);
+internal readonly record struct MinimapNode(Rect Bounds, string Category, bool IsStart = false);
 
 /// <summary>Compact overview of an editor surface with a draggable viewport.</summary>
 public sealed class EditorMinimap : FrameworkElement
@@ -92,7 +92,7 @@ public sealed class EditorMinimap : FrameworkElement
                 map = new Rect((ActualWidth - world.Width * scale) / 2, (ActualHeight - world.Height * scale) / 2,
                     world.Width * scale, world.Height * scale);
             }
-            foreach (var node in nodes) dc.DrawRectangle(NodeBrush(node.Category), null, Project(node.Bounds));
+            foreach (var node in nodes) dc.DrawRectangle(node.IsStart ? Brushes.White : NodeBrush(node.Category), null, Project(node.Bounds));
             viewport = Project(snapshot.Viewport);
         }
         if (!viewport.IsEmpty) dc.DrawRectangle(View, Outline, viewport);

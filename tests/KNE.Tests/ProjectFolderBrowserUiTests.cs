@@ -15,6 +15,36 @@ public sealed class ProjectFolderBrowserUiTests : IDisposable
     public ProjectFolderBrowserUiTests() => PluginCatalog.Current = null;
     public void Dispose() => PluginCatalog.Current = previous;
 
+    [Fact]
+    public Task CollapsingFolderRestoresTreeHorizontalOrigin() => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        fixture.Write($"chapters/{new string('д', 120)}.txt", "");
+        fixture.Write($"{new string('и', 120)}.txt", "");
+        var window = Create(fixture);
+        try
+        {
+            await WorkspaceTabsTests.Invoke(window, "OpenProjectAsync", fixture.ProjectPath, false);
+            Layout(window, 1100);
+            var tree = Find<TreeView>(window, "ProjectFilesTree");
+            var node = tree.Items.Cast<ProjectTreeNode>().Single(item => item.Name == "chapters");
+            var folder = Assert.IsType<TreeViewItem>(tree.ItemContainerGenerator.ContainerFromItem(node));
+            folder.IsExpanded = true;
+            Layout(window, 1100);
+            var scroll = FileBrowserDesignTests.Descendants(tree).OfType<ScrollViewer>().Single();
+            Assert.True(scroll.ScrollableWidth > 0);
+            scroll.ScrollToRightEnd();
+            Layout(window, 1100);
+            Assert.True(scroll.HorizontalOffset > 0);
+            folder.IsExpanded = false;
+            await Idle(window);
+            Layout(window, 1100);
+            Assert.True(scroll.ScrollableWidth > 0);
+            Assert.Equal(0, scroll.HorizontalOffset);
+        }
+        finally { window.Close(); }
+    });
+
     [Theory]
     [InlineData(1100)]
     [InlineData(1500)]

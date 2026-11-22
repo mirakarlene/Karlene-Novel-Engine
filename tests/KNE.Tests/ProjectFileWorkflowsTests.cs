@@ -72,7 +72,9 @@ public sealed class ProjectFileWorkflowsTests
             Assert.All(rows, row => { Assert.Equal(3, row.Columns); Assert.Equal(3, row.Children.Count); });
             var formats = rows.SelectMany(row => row.Children.OfType<Button>())
                 .Select(button => Assert.IsType<ProjectFileFormat>(button.Tag)).ToArray();
-            var csv = formats[2];
+            Assert.Equal(new[] { "Папка", "Текст", "JSON", "Сценарий KRL", "Скрипт Lua", "Скрипт C#",
+                "Блок-схема KNE", "Шейдерная схема", "VLua-модуль", "Таблица CSV", "Другое", "…" }, formats.Select(format => format.Title));
+            var csv = formats[9];
             Assert.Equal(".csv", csv.Extension);
             Assert.Single(formats, format => format.Color == csv.Color);
             Assert.True(formats[^1].IsPlaceholder);
@@ -114,12 +116,39 @@ public sealed class ProjectFileWorkflowsTests
             Assert.Equal(4, rows.Length);
             Assert.All(rows, row => { Assert.Equal(4, row.Columns); Assert.Equal(4, row.Children.Count); });
             var formats = rows.SelectMany(row => row.Children.OfType<Button>()).Select(button => (ProjectFileFormat)button.Tag).ToArray();
+            Assert.Equal(new[] { "Папка", "Текст", "JSON", "Markdown", "Документ Word", "Сценарий KRL", "Скрипт Lua", "Сценарий Ren’Py",
+                "Видео", "Блок-схема KNE", "Шейдерная схема", "VLua-модуль", "Изображения", "Аудио", "Другое", "…" }, formats.Select(format => format.Title));
             Assert.Single(formats, format => format.IsPlaceholder);
             Assert.True(formats[^1].IsPlaceholder);
             Assert.Contains(formats, format => format.IsDirectory);
             Assert.Contains(formats, format => format.Title == "Другое");
         }
         finally { dialog.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task EditorNameAndNoticePromptsUseTheActivePalette() => WorkspaceTabsTests.Sta(() =>
+    {
+        var name = new EditorPromptWindow("Создание проекта", "Введите имя нового проекта:", "forest", "");
+        var notice = new EditorPromptWindow("KNE", "KNE ещё на стадии разработки.", "forest");
+        var light = new EditorPromptWindow("Имя", "Введите имя:", "light", "file");
+        try
+        {
+            Assert.Same(name.FindResource("Editor.Background"), name.Background);
+            Assert.Equal(((SolidColorBrush)name.Background).Color, ((SolidColorBrush)notice.Background).Color);
+            Assert.NotEqual(((SolidColorBrush)name.Background).Color, ((SolidColorBrush)light.Background).Color);
+            var body = (StackPanel)name.Content;
+            var buttons = body.Children.OfType<StackPanel>().Single().Children.OfType<Button>().ToArray();
+            Assert.False(buttons.Single(button => button.IsDefault).IsEnabled);
+            Assert.Single(buttons, button => button.IsCancel);
+            body.Children.OfType<TextBox>().Single().Text = "Новый проект";
+            Assert.Equal("Новый проект", name.Value);
+            Assert.True(buttons.Single(button => button.IsDefault).IsEnabled);
+            Assert.Empty(((StackPanel)notice.Content).Children.OfType<TextBox>());
+            Assert.Equal("file", light.Value);
+        }
+        finally { name.Close(); notice.Close(); light.Close(); }
         return Task.CompletedTask;
     });
 
@@ -191,6 +220,25 @@ public sealed class ProjectFileWorkflowsTests
             bitmap.CopyPixels(new Int32Rect(65, 37, 1, 1), bytes, bytes.Length, 0);
             return BitConverter.ToInt32(bytes);
         }
+    });
+
+    [Fact]
+    public Task GraphMinimapMarksStartInWhiteWithAndWithoutCategoryColors() => WorkspaceTabsTests.Sta(() =>
+    {
+        var map = new EditorMinimap();
+        map.Bind(() => ([new MinimapNode(new Rect(0, 0, 150, 150), "terminals", IsStart: true)], new Rect(240, 240, 20, 20)), _ => { });
+        var size = new Size(168, 117);
+        map.Measure(size); map.Arrange(new Rect(size));
+        foreach (bool colors in new[] { false, true })
+        {
+            map.ColorCategories = colors;
+            var bitmap = new RenderTargetBitmap(168, 117, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(map);
+            byte[] pixel = new byte[4];
+            bitmap.CopyPixels(new Int32Rect(65, 37, 1, 1), pixel, pixel.Length, 0);
+            Assert.All(pixel, channel => Assert.Equal(byte.MaxValue, channel));
+        }
+        return Task.CompletedTask;
     });
 
     [Fact]

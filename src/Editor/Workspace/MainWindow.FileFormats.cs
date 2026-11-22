@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using Microsoft.Win32;
-using Microsoft.VisualBasic;
 
 namespace KNE;
 
@@ -20,7 +19,7 @@ public partial class MainWindow
                     var format = (ProjectFileFormat)button.Tag;
                     if (format.IsPlaceholder)
                     {
-                        MessageBox.Show(window, "KNE ещё на стадии разработки.", "KNE", MessageBoxButton.OK, MessageBoxImage.Information);
+                        new EditorPromptWindow("KNE", "KNE ещё на стадии разработки.", settings.Theme) { Owner = window }.ShowDialog();
                         return;
                     }
                     selected = format;
@@ -90,11 +89,21 @@ public partial class MainWindow
     private string? PickNamedDestination(string allowedRoot, string initial, string suggestedName, string extension)
     {
         string prompt = extension.Length == 0 ? "Введите имя:" : $"Введите имя. Формат {extension} выбран.";
-        string name = Interaction.InputBox(prompt, "Имя", suggestedName);
-        if (name.Length == 0) return null;
+        return PromptName("Имя", prompt, suggestedName) is { } name
+            ? PickDestinationForName(allowedRoot, initial, name, extension) : null;
+    }
+
+    private string? PickDestinationForName(string allowedRoot, string initial, string name, string extension)
+    {
         name = CompleteFileName(name, extension);
         string? directory = PickDestinationFolder(allowedRoot, initial);
         return directory == null ? null : PathSafety.EnsureInside(allowedRoot, Path.Combine(directory, name));
+    }
+
+    private string? PromptName(string title, string prompt, string initialName)
+    {
+        var dialog = new EditorPromptWindow(title, prompt, settings.Theme, initialName) { Owner = this };
+        return dialog.ShowDialog() == true ? dialog.Value : null;
     }
 
     internal static string CompleteFileName(string name, string extension)
