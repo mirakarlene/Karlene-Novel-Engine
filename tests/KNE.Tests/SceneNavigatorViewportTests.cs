@@ -24,7 +24,7 @@ public sealed class SceneNavigatorViewportTests
         Assert.Equal(before.X - 40, after.X, 5); Assert.Equal(before.Y - 30, after.Y, 5);
         host.View.PanTo(new(170, 100)); host.Layout();
         Assert.Equal(2080, host.Viewport.HorizontalOffset, 5); Assert.Equal(1280, host.Viewport.VerticalOffset, 5);
-        host.Viewport.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Right) { RoutedEvent = UIElement.PreviewMouseRightButtonUpEvent });
+        host.Viewport.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Right) { RoutedEvent = Mouse.PreviewMouseUpEvent });
         Assert.Null(host.Viewport.Cursor);
         host.View.PanTo(new(100, 50)); host.Layout();
         Assert.Equal(2080, host.Viewport.HorizontalOffset, 5); Assert.Equal(1280, host.Viewport.VerticalOffset, 5);
@@ -103,6 +103,42 @@ public sealed class SceneNavigatorViewportTests
         double x = host.Viewport.HorizontalOffset, y = host.Viewport.VerticalOffset;
         host.View.PanTo(new(230, 160)); host.Layout();
         Assert.Equal(x + 30, host.Viewport.HorizontalOffset, 5); Assert.Equal(y + 20, host.Viewport.VerticalOffset, 5);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task RightDragMovesAGraphThatFitsWithoutScrolling() => WorkspaceTabsTests.Sta(() =>
+    {
+        using var host = new NavigatorHost(1100, 700);
+        host.View.Present(new SceneNavigationIndex([new SceneNavigationNode("main", "main", "main.knegraph", 1, true, [])], [], 0));
+        host.Layout();
+        Assert.Equal(0, host.Viewport.ScrollableWidth);
+        Assert.Equal(0, host.Viewport.ScrollableHeight);
+        var node = host.Graph.Children.OfType<Border>().Single();
+        var before = node.TranslatePoint(new Point(), host.Viewport);
+        host.View.BeginPan(new(200, 150));
+        host.View.PanTo(new(244, 188));
+        host.Layout();
+        Assert.Equal(before + new Vector(44, 38), node.TranslatePoint(new Point(), host.Viewport));
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ZoomSliderSharesTheWheelScaleAndKeepsTheViewportCenterAnchored() => WorkspaceTabsTests.Sta(() =>
+    {
+        using var host = new NavigatorHost(1100, 700);
+        host.Scroll(2000, 1200);
+        var header = ((DockPanel)host.View.Content).Children.OfType<DockPanel>().Single();
+        var slider = header.Children.OfType<Slider>().Single();
+        Assert.Equal(1, slider.Value);
+        var center = new Point(host.Viewport.ViewportWidth / 2, host.Viewport.ViewportHeight / 2);
+        var logical = host.Viewport.TranslatePoint(center, host.Graph);
+        slider.Value = 1.4;
+        Assert.Equal(1.4, host.Scale.ScaleX, 5);
+        var after = host.Graph.TranslatePoint(logical, host.Viewport);
+        Assert.Equal(center.X, after.X, 5); Assert.Equal(center.Y, after.Y, 5);
+        host.View.ZoomWithWheel(-120, ModifierKeys.Control, center);
+        Assert.Equal(1.3, slider.Value, 5);
         return Task.CompletedTask;
     });
 

@@ -26,7 +26,9 @@ public sealed class CompactParameterWindowsTests
             Show(window, width, height); var root = (FrameworkElement)window.Content;
             var save = Logical(root).OfType<Button>().Single(button => Equals(button.Content, "Сохранить"));
             var cancel = Logical(root).OfType<Button>().Single(button => Equals(button.Content, "Отмена"));
-            var fixedBounds = new FrameworkElement[] { window.SceneInput, save, cancel }.ToDictionary(input => input, input => Bounds(input, root));
+            var label = Logical(root).OfType<TextBlock>().Single(text => text.Text == "1 / 4");
+            var fixedBounds = new FrameworkElement[] { window.SceneInput, save, cancel, window.PreviousPage, label, window.NextPage }.ToDictionary(input => input, input => Bounds(input, root));
+            Assert.Equal(root.ActualWidth / 2, (fixedBounds[save].Left + fixedBounds[cancel].Right) / 2, 0);
             FrameworkElement[][] pages =
             [
                 [window.NameInput, window.FunctionInput, window.InheritResolutionInput, window.WidthInput, window.HeightInput, window.QualityInput, window.PostProcessingInput, window.HideShadersInput],
@@ -38,6 +40,7 @@ public sealed class CompactParameterWindowsTests
             {
                 Assert.Equal(page, window.Page); Layout(window); Capture(root, $"scene-compact-{width}-{page + 1}"); Assert.Empty(Logical(root).OfType<ScrollViewer>());
                 Assert.Equal(page > 0, window.PreviousPage.IsEnabled); Assert.Equal(page < pages.Length - 1, window.NextPage.IsEnabled);
+                Assert.Equal($"{page + 1} / 4", label.Text);
                 AssertVisibleInputs(root, pages[page]);
                 AssertPageLabelsFit(root);
                 foreach (var other in pages.SelectMany(p => p).Except(pages[page])) Assert.False(other.IsVisible, $"A field from another scene page is visible: {other.GetType().Name}/{other.Name}");

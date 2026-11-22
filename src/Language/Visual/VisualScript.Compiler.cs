@@ -70,7 +70,7 @@ public sealed partial class VisualScript
             Line($"if kne_plugin_node then kne_plugin_node({Quote(node.Kind.ToString())}, {Quote(node.Id)}) end");
             if (editorPreview) Line($"kne_editor_node({Quote(node.Id)})");
             // Keep the generated line spans stable so subsystem failures use the same frame IDs.
-            string command = subsystem && node.Kind == ScriptNodeKind.End && node.EndAction != ScriptEndAction.Return ? "do end" : Command(node);
+            string command = subsystem && node.Kind == ScriptNodeKind.End ? "clear_shaders(false)" : Command(node);
             if (command.Length > 0) Line(command);
             if (editorPreview && node.Kind is ScriptNodeKind.Start or ScriptNodeKind.End or ScriptNodeKind.SetVariable or ScriptNodeKind.Condition or ScriptNodeKind.Comment or ScriptNodeKind.SetFlag)
                 Line("kne_editor_pause()");
@@ -245,7 +245,8 @@ public sealed partial class VisualScript
         ScriptNodeKind.Join => $"kne_join(state[{Quote(node.Variable)}])",
         ScriptNodeKind.Timer or ScriptNodeKind.Pause => $"kne_pause({Number(node.Duration)})",
         ScriptNodeKind.WaitCondition => $"kne_wait_condition(function() return {Comparison(node)} end, {Number(node.Duration)})",
-        ScriptNodeKind.End when node.EndAction != ScriptEndAction.Return => $"kne_end({Quote(node.EndAction.ToString().ToLowerInvariant())}, {Quote(node.Path)})",
+        ScriptNodeKind.End when node.EndAction != ScriptEndAction.Return => $"clear_shaders(false); kne_end({Quote(node.EndAction.ToString().ToLowerInvariant())}, {Quote(node.Path)})",
+        ScriptNodeKind.End => "clear_shaders(false)",
         _ => ""
     };
 

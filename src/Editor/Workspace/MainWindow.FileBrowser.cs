@@ -156,7 +156,9 @@ public partial class MainWindow
                     await Task.Run(() => ProjectDirectories.Move(project.Path, source, target), lifetime.Token);
                     break;
                 case "Дублировать":
-                    target = PickNamedDestination(project.Path, parent, entry.Name + "_copy", "");
+                    string copyName = Interaction.InputBox("Введите имя:", "Имя", entry.Name + "_copy");
+                    if (copyName.Length == 0) return;
+                    target = PickDestinationForName(project.Path, parent, copyName, "");
                     if (target == null) return;
                     await ProjectDirectories.CopyAsync(project.Path, source, target, lifetime.Token);
                     break;

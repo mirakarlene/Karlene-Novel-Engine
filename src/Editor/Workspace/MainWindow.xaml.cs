@@ -4,6 +4,8 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.VisualBasic;
 using Microsoft.Win32;
 
@@ -33,6 +35,7 @@ public partial class MainWindow : Window
         Func<Window, string, string?>? selectProjectScript, Action<ProcessStartInfo>? openProjectScript)
     {
         InitializeComponent();
+        ProjectFilesTree.AddHandler(TreeViewItem.CollapsedEvent, new RoutedEventHandler(ProjectFilesTree_Collapsed));
         BehaviorSettingsPage.Content = GeneralSettingsPage.BehaviorPage;
         InitializeAutomation();
         SceneEditor.Saved += EditorSaved;
@@ -114,6 +117,7 @@ public partial class MainWindow : Window
         LoadGraphMinimapInputs();
         SceneEditor.ApplyGraphMinimap(settings.GraphMinimap);
         ApplyBrowserView();
+        ApplyProjectTreeNameMode();
         if (!prepared) ReloadApplicationPlugins();
         ResetApplicationPluginDraft();
         AppGraphicsInput.Value = settings.Graphics; GraphicsEnvironment.SetSettings(this, settings.Graphics);
@@ -236,8 +240,7 @@ public partial class MainWindow : Window
 
     private async void BtnCreateProject_Click(object sender, RoutedEventArgs e)
     {
-        string name = Interaction.InputBox("Введите имя нового проекта:", "Создание проекта", "");
-        if (string.IsNullOrWhiteSpace(name)) return;
+        if (PromptName("Создание проекта", "Введите имя нового проекта:", "") is not { } name) return;
         var method = new ProjectCreationDialog { Owner = this };
         EditorTheme.Apply(method, settings.Theme);
         if (method.ShowDialog() != true) return;
@@ -261,6 +264,7 @@ public partial class MainWindow : Window
     {
         LoadGeneralSettings();
         ProjectBrowserViewInput.SelectedValue = settings.ProjectBrowserView;
+        ProjectTreeNamesInput.SelectedIndex = settings.ScrollLongProjectTreeNames ? 1 : 0;
         GraphGridInput.IsChecked = settings.ShowGraphGrid;
         LoadGraphMinimapInputs();
         SetSettingsPage(0);
@@ -294,6 +298,7 @@ public partial class MainWindow : Window
         editor.Validate(); ValidateBackupStorage(editor, storage);
         var next = new UserSettings { ProjectBrowserView = ProjectBrowserViewInput.SelectedValue as string == "table" ? "table" : "tiles", ApplicationPlugins = applicationPluginDraft.ToList(), Graphics = AppGraphicsInput.Value, EditorPath = editorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = EditorTheme.Normalize((string?)ThemeInput.SelectedValue), UserName = userName, AccessibilityMode = BlockAccessibility.GetMode(this), WelcomeObjects = WelcomeBubbles.Normalize((string?)WelcomeObjectInput.SelectedValue) };
         next.Editor = editor; next.Hotkeys = EditorHotkeys.Validate(GeneralSettingsPage.Hotkeys);
+        next.ScrollLongProjectTreeNames = ProjectTreeNamesInput.SelectedIndex == 1;
         next.ShowGraphGrid = GraphGridInput.IsChecked == true;
         next.GraphMinimap = new(GraphMinimapColorsInput.IsChecked == true,
             GraphMinimapSizeInput.SelectedValue is double width ? width : 126,
@@ -302,6 +307,7 @@ public partial class MainWindow : Window
         settings = next; GraphicsEnvironment.SetSettings(this, settings.Graphics);
         ApplyEditorPreferences();
         ApplyBrowserView();
+        ApplyProjectTreeNameMode();
         SceneEditor.ApplyGraphMinimap(settings.GraphMinimap);
         foreach (var scriptEditor in EditorWorkspace.Children.OfType<ScriptEditor>())
         {
@@ -383,6 +389,71 @@ public partial class MainWindow : Window
         // Restoring the same path is not a user request to leave the active editor.
         if (updatingBrowserTree || e.NewValue is not ProjectTreeNode node || node.RelativePath.Equals(selectedTreePath, StringComparison.OrdinalIgnoreCase)) return;
         TryNavigateBrowserDirectory(node.File == null ? node.RelativePath : Path.GetDirectoryName(node.RelativePath) ?? "", node.RelativePath, node.File == null);
+    }
+
+    private void ProjectFilesTree_Collapsed(object sender, RoutedEventArgs args)
+    {
+        if (!settings.ScrollLongProjectTreeNames) return;
+        // Let WPF finish moving selection out of the collapsed subtree before
+        // returning the horizontal viewport to the folder indentation.
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            if (!closed) FindTreeScrollViewer(ProjectFilesTree)?.ScrollToLeftEnd();
+        }));
+    }
+
+    private void ApplyProjectTreeNameMode()
+    {
+        ProjectTreeNamesInput.SelectedIndex = settings.ScrollLongProjectTreeNames ? 1 : 0;
+        var visibility = settings.ScrollLongProjectTreeNames ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
+        if (ScrollViewer.GetHorizontalScrollBarVisibility(ProjectFilesTree) == visibility) return;
+        ScrollViewer.SetHorizontalScrollBarVisibility(ProjectFilesTree, visibility);
+        UpdateProjectTreeLabelWidths(ProjectFilesTree);
+    }
+
+    private void ProjectFilesTree_ScrollChanged(object sender, ScrollChangedEventArgs args)
+    {
+        if (!settings.ScrollLongProjectTreeNames && (args.ViewportWidthChange != 0 || args.HorizontalChange != 0))
+            UpdateProjectTreeLabelWidths(ProjectFilesTree);
+    }
+
+    private void ProjectTreeLabel_SizeChanged(object sender, SizeChangedEventArgs args)
+    {
+        if (!settings.ScrollLongProjectTreeNames && sender is TextBlock label)
+            FitProjectTreeLabel(label);
+    }
+
+    private void UpdateProjectTreeLabelWidths(DependencyObject parent)
+    {
+        if (parent is TextBlock { DataContext: ProjectTreeNode } label)
+        {
+            if (settings.ScrollLongProjectTreeNames) label.ClearValue(FrameworkElement.MaxWidthProperty);
+            else FitProjectTreeLabel(label);
+            return;
+        }
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            UpdateProjectTreeLabelWidths(VisualTreeHelper.GetChild(parent, i));
+    }
+
+    private static void FitProjectTreeLabel(TextBlock label)
+    {
+        // The native TreeViewItem header can measure to its full text width even with scrolling disabled.
+        // Use the space remaining after its actual indentation instead.
+        for (DependencyObject? parent = VisualTreeHelper.GetParent(label); parent != null; parent = VisualTreeHelper.GetParent(parent))
+        {
+            if (parent is not ScrollContentPresenter viewport) continue;
+            if (viewport.ActualWidth > 0)
+                label.MaxWidth = Math.Max(0, viewport.ActualWidth - label.TranslatePoint(new Point(), viewport).X);
+            return;
+        }
+    }
+
+    private static ScrollViewer? FindTreeScrollViewer(DependencyObject parent)
+    {
+        if (parent is ScrollViewer scroll) return scroll;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            if (FindTreeScrollViewer(VisualTreeHelper.GetChild(parent, i)) is { } nested) return nested;
+        return null;
     }
 
     private void WatchProject(string path)

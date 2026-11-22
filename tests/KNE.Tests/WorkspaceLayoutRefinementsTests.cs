@@ -69,6 +69,17 @@ public sealed class WorkspaceLayoutRefinementsTests
             Assert.Equal(Bounds(objects).Top, Bounds(files).Top, 2);
             Assert.Equal(Bounds(objects).Width, Bounds(files).Width, 2);
             Assert.True(Bounds(objects).Right < Bounds(files).Left);
+            var treeNames = Find<ComboBox>(window, "ProjectTreeNamesInput");
+            Assert.Contains(treeNames, LogicalChildren(Find<Border>(window, "DesignSettingsGroup")));
+            Fits(treeNames);
+            Assert.Equal(2, treeNames.Items.Count);
+            double renderedWidth = Bounds(settingsGrid).Width;
+            var treeNamesRow = Assert.IsType<DockPanel>(treeNames.Parent);
+            treeNamesRow.Visibility = Visibility.Collapsed;
+            Layout();
+            Assert.Equal(renderedWidth, Bounds(settingsGrid).Width, 2);
+            treeNamesRow.Visibility = Visibility.Visible;
+            Layout();
             var minimapColors = Find<CheckBox>(window, "GraphMinimapColorsInput");
             var minimapSize = Find<ComboBox>(window, "GraphMinimapSizeInput");
             var minimapCorner = Find<ComboBox>(window, "GraphMinimapCornerInput");

@@ -61,10 +61,57 @@
                         <TextBlock Text="Поиск..." Margin="9,0" VerticalAlignment="Center" Foreground="{DynamicResource Editor.Text}" Opacity="0.5" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=FileSearch}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                     </Grid>
                     <TabControl x:Name="DocumentTabs" Grid.Column="2" Margin="0,0,0,10" SelectionChanged="DocumentTabs_SelectionChanged" Visibility="Collapsed"/>
-                    <TreeView x:Name="ProjectFilesTree" Grid.Row="1" SelectedItemChanged="ProjectFilesTree_SelectedItemChanged" MouseDoubleClick="OpenScript_DoubleClick">
+                    <TreeView x:Name="ProjectFilesTree" Grid.Row="1" SelectedItemChanged="ProjectFilesTree_SelectedItemChanged" MouseDoubleClick="OpenScript_DoubleClick"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.ScrollChanged="ProjectFilesTree_ScrollChanged">
+                        <TreeView.Resources>
+                            <Style x:Key="ProjectTreeScrollPage" TargetType="RepeatButton">
+                                <Setter Property="Focusable" Value="False"/>
+                                <Setter Property="Template"><Setter.Value>
+                                    <ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate>
+                                </Setter.Value></Setter>
+                            </Style>
+                            <Style TargetType="ScrollBar" BasedOn="{StaticResource {x:Type ScrollBar}}">
+                                <Style.Triggers>
+                                    <Trigger Property="Orientation" Value="Horizontal">
+                                        <Setter Property="Width" Value="Auto"/>
+                                        <Setter Property="MaxWidth" Value="Infinity"/>
+                                        <Setter Property="Height" Value="12"/>
+                                        <Setter Property="MaxHeight" Value="12"/>
+                                        <Setter Property="IsHitTestVisible" Value="True"/>
+                                        <Setter Property="Template"><Setter.Value>
+                                            <ControlTemplate TargetType="ScrollBar">
+                                                <Border Background="{DynamicResource Editor.Background}" Padding="0,2">
+                                                    <Track x:Name="PART_Track" Orientation="Horizontal">
+                                                        <Track.DecreaseRepeatButton><RepeatButton Command="ScrollBar.PageLeftCommand" Style="{StaticResource ProjectTreeScrollPage}"/></Track.DecreaseRepeatButton>
+                                                        <Track.Thumb><Thumb><Thumb.Template>
+                                                            <ControlTemplate TargetType="Thumb">
+                                                                <Border x:Name="Grip" Background="{DynamicResource Editor.Muted}" CornerRadius="4"/>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Grip" Property="Background" Value="{DynamicResource Editor.Text}"/></Trigger>
+                                                                    <Trigger Property="IsDragging" Value="True"><Setter TargetName="Grip" Property="Background" Value="{DynamicResource KNE.AccentBrush}"/></Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Thumb.Template></Thumb></Track.Thumb>
+                                                        <Track.IncreaseRepeatButton><RepeatButton Command="ScrollBar.PageRightCommand" Style="{StaticResource ProjectTreeScrollPage}"/></Track.IncreaseRepeatButton>
+                                                    </Track>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value></Setter>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TreeView.Resources>
                         <TreeView.ItemContainerStyle><Style TargetType="TreeViewItem"><Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/><Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/></Style></TreeView.ItemContainerStyle>
                         <TreeView.ItemTemplate><HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                            <TextBlock Text="{Binding Name}" ToolTip="{Binding RelativePath}"/>
+                            <TextBlock Text="{Binding Name}" ToolTip="{Binding RelativePath}" SizeChanged="ProjectTreeLabel_SizeChanged">
+                                <TextBlock.Style><Style TargetType="TextBlock">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Path=(ScrollViewer.HorizontalScrollBarVisibility), RelativeSource={RelativeSource AncestorType=TreeView}}" Value="Disabled">
+                                            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style></TextBlock.Style>
+                            </TextBlock>
                         </HierarchicalDataTemplate></TreeView.ItemTemplate>
                     </TreeView>
                     <GridSplitter Grid.Row="1" Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
@@ -239,7 +286,17 @@
                                         </RadioButton>
                                     </DataTemplate></ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <CheckBox x:Name="GraphGridInput" Content="Показывать сетку в редакторе блок-схем" Margin="0,4,0,0"/>
+                                <DockPanel Margin="0,4,0,0">
+                                    <DockPanel DockPanel.Dock="Right">
+                                        <ComboBox x:Name="ProjectTreeNamesInput" DockPanel.Dock="Right" SelectedIndex="0" Width="198"
+                                                  AutomationProperties.Name="Длинные имена в дереве файлов">
+                                            <ComboBoxItem Content="Многоточие"/>
+                                            <ComboBoxItem Content="Горизонтальная прокрутка"/>
+                                        </ComboBox>
+                                        <TextBlock Text="Длинные имена в дереве" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    </DockPanel>
+                                    <CheckBox x:Name="GraphGridInput" Content="Показывать сетку в редакторе блок-схем" VerticalAlignment="Center"/>
+                                </DockPanel>
                                 <Grid Margin="0,5,0,0">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="1.25*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <CheckBox x:Name="GraphMinimapColorsInput" VerticalAlignment="Bottom" Margin="0,0,12,3">

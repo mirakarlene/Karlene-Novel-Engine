@@ -47,8 +47,10 @@ internal static class ProjectFileFormats
     private static readonly ProjectFileFormat Markdown = new(".md", "Markdown", "M↓", "#7166B5");
     private static readonly ProjectFileFormat Placeholder = new("", "…", "", "#53647B") { IsPlaceholder = true };
 
-    internal static IReadOnlyList<ProjectFileFormat[]> CreateGroups { get; } = [[Text, Json, Csv], [Krl, Lua, CSharp], [Graph, Shader, VisualLua], [Directory, Other, Placeholder]];
-    internal static IReadOnlyList<ProjectFileFormat[]> ImportGroups { get; } = [[Text, Json, Krl, Lua], [Graph, Shader, VisualLua, RenPy], [Word, Other, Image, Audio], [Video, Directory, Markdown, Placeholder]];
+    internal static IReadOnlyList<ProjectFileFormat[]> CreateGroups { get; } =
+        [[Directory, Text, Json], [Krl, Lua, CSharp], [Graph, Shader, VisualLua], [Csv, Other, Placeholder]];
+    internal static IReadOnlyList<ProjectFileFormat[]> ImportGroups { get; } =
+        [[Directory, Text, Json, Markdown], [Word, Krl, Lua, RenPy], [Video, Graph, Shader, VisualLua], [Image, Audio, Other, Placeholder]];
 
     private const string Page = "M5,1 H19 L27,9 V31 H5 Z M19,1 V9 H27";
     private const string FolderShape = "M2,7 H13 L16,11 H30 V27 H2 Z";

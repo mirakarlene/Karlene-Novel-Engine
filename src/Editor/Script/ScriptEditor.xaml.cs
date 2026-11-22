@@ -104,7 +104,8 @@ public partial class ScriptEditor : UserControl
         CodeMinimap.Bind(CodeEditor);
         GraphMinimap.Bind(
             () => (Document?.Graph?.Nodes.Select(node => new MinimapNode(new Rect(node.X, node.Y, NodeWidth(node), NodeHeight(node)),
-                    cards.TryGetValue(node.Id, out var card) ? BlockAccessibility.DecoratedGroup(card) : node.Category)) ?? [],
+                    cards.TryGetValue(node.Id, out var card) ? BlockAccessibility.DecoratedGroup(card) : node.Category,
+                    node.Kind == ScriptNodeKind.Start && Document.Graph is { IsShader: false, IsVisualLua: false })) ?? [],
                 new Rect(-CanvasPan.X / ZoomSlider.Value, -CanvasPan.Y / ZoomSlider.Value,
                     GraphScroll.ActualWidth / ZoomSlider.Value, GraphScroll.ActualHeight / ZoomSlider.Value)),
             center =>
