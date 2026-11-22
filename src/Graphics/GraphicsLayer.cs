@@ -119,14 +119,16 @@ internal sealed class SharedGraphicsWorker
     internal static SharedGraphicsWorker CreateStandalone() => new() { references = 1 };
     internal bool Enqueue(GraphicsFrame frame, GraphicsSettings settings, Action<GraphicsPixels?, Exception?> complete) =>
         !released && jobs.TryAdd(new(settings, complete, Frame: frame));
-    internal Task<GraphicsPixels> RenderShadersAsync(BitmapSource source, CompiledShaderGraph[] programs, GraphicsSettings settings, float seconds, Vector2 origin, Vector2 screenSize, CancellationToken token)
+    internal Task<GraphicsPixels> RenderShadersAsync(Func<GraphicsFrame> source, bool composite, CompiledShaderGraph[] programs,
+        GraphicsSettings settings, float seconds, Vector2 origin, Vector2 screenSize, CancellationToken token)
     {
         var completion = new TaskCompletionSource<GraphicsPixels>(TaskCreationOptions.RunContinuationsAsynchronously);
         GraphicsPixels Render(NativeGraphicsRenderer renderer)
         {
             token.ThrowIfCancellationRequested();
-            var texture = GraphicsTextures.Get(source);
-            return renderer.RenderChain(new(source.PixelWidth, source.PixelHeight, [new(texture, new Rect(0, 0, source.PixelWidth, source.PixelHeight))]), programs, seconds, origin, screenSize);
+            var frame = source();
+            return composite ? renderer.RenderCompositeChain(frame, programs, seconds, origin, screenSize)
+                : renderer.RenderChain(frame, programs, seconds, origin, screenSize);
         }
         void Complete(GraphicsPixels? pixels, Exception? error)
         {
