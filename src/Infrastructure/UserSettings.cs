@@ -12,6 +12,7 @@ public sealed class UserSettings
     public string ProjectsStoragePath { get; set; } = "";
     /// <summary>Embedded project explorer display mode: tiles (default) or table.</summary>
     public string ProjectBrowserView { get; set; } = "tiles";
+    public bool ScrollLongProjectTreeNames { get; set; }
     public bool ShowGraphGrid { get; set; }
     public GraphMinimapSettings GraphMinimap { get; set; } = new();
     public List<string> RecentProjects { get; set; } = [];

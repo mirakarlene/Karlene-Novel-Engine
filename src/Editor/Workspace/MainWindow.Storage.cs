@@ -50,6 +50,7 @@ public partial class MainWindow
         var next = new UserSettings { ShowGraphGrid = settings.ShowGraphGrid, ProjectBrowserView = settings.ProjectBrowserView, Graphics = settings.Graphics, EditorPath = settings.EditorPath, ProjectsStoragePath = storage, RecentProjects = settings.RecentProjects, HiddenProjects = settings.HiddenProjects, ProjectLastOpened = settings.ProjectLastOpened, Theme = settings.Theme, UserName = settings.UserName, AccessibilityMode = settings.AccessibilityMode, WelcomeObjects = settings.WelcomeObjects };
         next.Editor = settings.Editor; next.Hotkeys = settings.Hotkeys; next.ApplicationPlugins = settings.ApplicationPlugins;
         next.GraphMinimap = settings.GraphMinimap;
+        next.ScrollLongProjectTreeNames = settings.ScrollLongProjectTreeNames;
         await settingsStore.SaveAsync(next); settings = next; TxtProjectsStorage.Text = storage;
         return true;
     }

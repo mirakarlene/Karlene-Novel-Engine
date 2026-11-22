@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Windows.Media.Imaging;
@@ -16,7 +17,7 @@ public sealed class ProjectFolderBrowserUiTests : IDisposable
     public void Dispose() => PluginCatalog.Current = previous;
 
     [Fact]
-    public Task CollapsingFolderRestoresTreeHorizontalOrigin() => WorkspaceTabsTests.Sta(async () =>
+    public Task TreeNamesDefaultToEllipsisAndOptionalThemedScrollingResetsOnCollapse() => WorkspaceTabsTests.Sta(async () =>
     {
         using var fixture = new TempProject();
         fixture.Write($"chapters/{new string('д', 120)}.txt", "");
@@ -32,8 +33,47 @@ public sealed class ProjectFolderBrowserUiTests : IDisposable
             folder.IsExpanded = true;
             Layout(window, 1100);
             var scroll = FileBrowserDesignTests.Descendants(tree).OfType<ScrollViewer>().Single();
+            string longName = new string('д', 120) + ".txt";
+            var label = FileBrowserDesignTests.Descendants(folder).OfType<TextBlock>().Single(item => item.Text == longName);
+            Assert.Equal(TextTrimming.CharacterEllipsis, label.TextTrimming);
+            Assert.Equal(Path.Combine("chapters", longName), label.ToolTip);
+            double trimmedWidth = label.ActualWidth;
+            Assert.Equal(ScrollBarVisibility.Disabled, scroll.HorizontalScrollBarVisibility);
+            Assert.Equal(0, scroll.ScrollableWidth);
+            Assert.InRange(trimmedWidth, 1, scroll.ViewportWidth - 1);
+            var treeColumn = Assert.IsType<Grid>(tree.Parent).ColumnDefinitions[0];
+            treeColumn.Width = new GridLength(280);
+            Layout(window, 1100);
+            Assert.True(label.ActualWidth > trimmedWidth);
+            treeColumn.Width = new GridLength(220);
+            Layout(window, 1100);
+            Assert.Equal(trimmedWidth, label.ActualWidth, 1);
+
+            Invoke(window, "BtnSettings_Click", window, new RoutedEventArgs());
+            var mode = Find<ComboBox>(window, "ProjectTreeNamesInput");
+            Assert.Equal(0, mode.SelectedIndex);
+            mode.SelectedIndex = 1;
+            await WorkspaceTabsTests.Invoke(window, "SaveSettingsAsync");
+            Assert.True((await Store(fixture).LoadAsync()).ScrollLongProjectTreeNames);
+            Invoke(window, "ShowPanel", Find<Grid>(window, "ProjectPanel"));
+            Layout(window, 1100);
+
+            Assert.Equal(TextTrimming.None, label.TextTrimming);
+            Assert.True(label.ActualWidth > trimmedWidth);
             Assert.True(scroll.ScrollableWidth > 0);
-            scroll.ScrollToRightEnd();
+            Assert.Equal(Visibility.Visible, scroll.ComputedHorizontalScrollBarVisibility);
+            var bar = FileBrowserDesignTests.Descendants(scroll).OfType<ScrollBar>().Single(item => item.Orientation == Orientation.Horizontal);
+            Assert.True(bar.IsHitTestVisible);
+            Assert.True(bar.ActualHeight > 0);
+            var track = Assert.IsType<Track>(bar.Template.FindName("PART_Track", bar));
+            var thumb = track.Thumb;
+            var grip = Assert.IsType<Border>(thumb.Template.FindName("Grip", thumb));
+            Assert.Same(window.FindResource("Editor.Muted"), grip.Background);
+            EditorTheme.Apply(window, "forest");
+            Assert.Same(window.FindResource("Editor.Muted"), grip.Background);
+            thumb.RaiseEvent(new DragStartedEventArgs(0, 0) { RoutedEvent = Thumb.DragStartedEvent });
+            thumb.RaiseEvent(new DragDeltaEventArgs(40, 0) { RoutedEvent = Thumb.DragDeltaEvent });
+            thumb.RaiseEvent(new DragCompletedEventArgs(40, 0, false) { RoutedEvent = Thumb.DragCompletedEvent });
             Layout(window, 1100);
             Assert.True(scroll.HorizontalOffset > 0);
             folder.IsExpanded = false;
@@ -41,6 +81,23 @@ public sealed class ProjectFolderBrowserUiTests : IDisposable
             Layout(window, 1100);
             Assert.True(scroll.ScrollableWidth > 0);
             Assert.Equal(0, scroll.HorizontalOffset);
+
+            var reopened = Create(fixture);
+            try
+            {
+                await LoadPreferences(reopened);
+                Assert.Equal(1, Find<ComboBox>(reopened, "ProjectTreeNamesInput").SelectedIndex);
+                Assert.Equal(ScrollBarVisibility.Auto, ScrollViewer.GetHorizontalScrollBarVisibility(Find<TreeView>(reopened, "ProjectFilesTree")));
+            }
+            finally { await Close(reopened); }
+
+            Invoke(window, "BtnSettings_Click", window, new RoutedEventArgs());
+            mode.SelectedIndex = 0;
+            await WorkspaceTabsTests.Invoke(window, "SaveSettingsAsync");
+            Invoke(window, "ShowPanel", Find<Grid>(window, "ProjectPanel"));
+            Layout(window, 1100);
+            Assert.Equal(Visibility.Collapsed, scroll.ComputedHorizontalScrollBarVisibility);
+            Assert.Equal(0, scroll.ScrollableWidth);
         }
         finally { window.Close(); }
     });
