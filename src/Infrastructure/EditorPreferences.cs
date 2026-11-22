@@ -8,6 +8,7 @@ public sealed record EditorPreferences
     public string BackupPath { get; set; } = "";
     public int BackupMinutes { get; set; } = -1;
     public int BackupCopies { get; set; } = 5;
+    public bool ExtendedSceneBlockLimit { get; set; }
     public int AutosaveMinutes { get; set; } = 5;
     public int AutosaveVersions { get; set; } = 25;
     public bool KeepHistory { get; set; } = true;

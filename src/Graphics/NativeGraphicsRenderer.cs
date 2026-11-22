@@ -17,7 +17,10 @@ internal sealed record GraphicsSprite(GraphicsTexture Texture, Rect Bounds, floa
 internal readonly record struct GraphicsVertex(Vector2 Position, Vector2 Uv, Vector4 Color);
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct GraphicsShaderGlobals(Vector4 Frame, Vector4 Origin);
-internal sealed record GraphicsFrame(int Width, int Height, IReadOnlyList<GraphicsSprite> Sprites, IReadOnlyList<GraphicsVertex>? Geometry = null);
+internal sealed record GraphicsFrame(int Width, int Height, IReadOnlyList<GraphicsSprite> Sprites, IReadOnlyList<GraphicsVertex>? Geometry = null)
+{
+    internal RgbaFloat ClearColor { get; init; }
+}
 internal sealed class GraphicsPixels(int width, int height, byte[] pixels, string backend, int draws, long bytes, double milliseconds, int samples, Action<byte[]>? release = null) : IDisposable
 {
     internal int Width { get; } = width;
@@ -217,7 +220,7 @@ internal sealed class NativeGraphicsRenderer : IDisposable
             commands.Begin();
             commands.PushDebugGroup(shader != null ? "KNE post-effect pass" :
                 passes != null ? "KNE cached layer composition" : "KNE layer preparation");
-            commands.SetFramebuffer(framebuffer); commands.ClearColorTarget(0, new RgbaFloat(0, 0, 0, 0));
+            commands.SetFramebuffer(framebuffer); commands.ClearColorTarget(0, frame.ClearColor);
             commands.SetFullViewports(); commands.SetPipeline(pipeline); commands.SetVertexBuffer(0, vertexBuffer);
             int draws = 0;
             foreach (var sprite in frame.Sprites)

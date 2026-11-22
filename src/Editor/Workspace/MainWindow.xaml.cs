@@ -241,16 +241,41 @@ public partial class MainWindow : Window
     private async void BtnCreateProject_Click(object sender, RoutedEventArgs e)
     {
         if (PromptName("Создание проекта", "Введите имя нового проекта:", "") is not { } name) return;
-        var method = new ProjectCreationDialog { Owner = this };
-        EditorTheme.Apply(method, settings.Theme);
-        if (method.ShowDialog() != true) return;
+        if (ChooseProjectSetup(this, settings.Theme) is not { } setup) return;
         await RunOperationAsync(async () =>
         {
             if (!await EnsureProjectStorageAsync()) return;
-            string path = await ProjectCreator.CreateProjectAsync(name, settings.ProjectsStoragePath, method.AuthoringMode, method.Options, lifetime.Token);
+            string path = await ProjectCreator.CreateProjectAsync(name, settings.ProjectsStoragePath, setup.Mode, setup.Options, lifetime.Token);
             if (!await OpenProjectAsync(path, remember: true)) return;
             if (currentProject != null) await OpenScriptAsync(currentProject.MainScenePath);
         }, "Создание проекта…");
+    }
+
+    internal static (ProjectAuthoringMode Mode, ProjectCreationOptions Options)? ChooseProjectSetup(Window owner, string theme)
+    {
+        var mode = ProjectAuthoringMode.Code;
+        ProjectSetupDialog? setup = null;
+        try
+        {
+            while (true)
+            {
+                var authoring = new ProjectCreationDialog(mode) { Owner = owner };
+                EditorTheme.Apply(authoring, theme);
+                if (authoring.ShowDialog() != true) return null;
+                mode = authoring.AuthoringMode;
+                if (setup == null)
+                {
+                    setup = new ProjectSetupDialog { Owner = owner };
+                    EditorTheme.Apply(setup, theme);
+                }
+                if (setup.ShowSettings() == true) return (mode, setup.Options);
+                if (!setup.BackRequested) return null;
+            }
+        }
+        finally
+        {
+            if (setup?.BackRequested == true) setup.Close();
+        }
     }
 
     private async void BtnBack_Click(object sender, RoutedEventArgs e)

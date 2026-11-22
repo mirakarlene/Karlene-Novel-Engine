@@ -109,7 +109,8 @@ public partial class ScriptEditor
         if (graph.InitPriority != null && pasted.InitPriority != null)
             throw new InvalidDataException("В схеме уже есть блок «Инициализация».");
         if (pasted.Nodes.Count == 0) return;
-        if (graph.Nodes.Count + pasted.Nodes.Count > 500) throw new InvalidOperationException("Допускается не более 500 блоков.");
+        int limit = BlockLimit(graph);
+        if (graph.Nodes.Count + pasted.Nodes.Count > limit) throw new InvalidOperationException($"Допускается не более {limit} блоков.");
         var identities = pasted.Nodes.ToDictionary(node => node.Id, _ => Guid.NewGuid().ToString("N"), StringComparer.Ordinal);
         var characterIds = graph.Nodes.Where(node => node.Character != null).Select(node => node.Character!.Id).ToHashSet(StringComparer.Ordinal);
         var characterRemap = new Dictionary<string, string>(StringComparer.Ordinal);

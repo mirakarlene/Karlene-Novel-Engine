@@ -137,14 +137,10 @@ public sealed class ProjectSetupTests
     {
         await WorkspaceTabsTests.Sta(() =>
         {
-            var dialog = new ProjectCreationDialog(); EditorTheme.Apply(dialog, "kne");
+            var dialog = new ProjectSetupDialog(); EditorTheme.Apply(dialog, "kne");
             try
             {
-                Assert.Equal(Visibility.Visible, Find<Grid>(dialog, "AuthoringPage").Visibility);
-                Assert.Equal(Visibility.Collapsed, Find<Grid>(dialog, "SettingsPage").Visibility);
-                Click(Find<Button>(dialog, "ContinueButton"));
-                Assert.Equal(Visibility.Collapsed, Find<Grid>(dialog, "AuthoringPage").Visibility);
-                Assert.Equal(Visibility.Visible, Find<Grid>(dialog, "SettingsPage").Visibility);
+                Assert.Equal("Параметры нового проекта", dialog.Title);
                 Assert.Equal(new ProjectCreationOptions(), dialog.Options);
                 Assert.True(Find<RadioButton>(dialog, "Resolution_fhd").IsChecked); Assert.True(Find<RadioButton>(dialog, "Palette_violet").IsChecked);
                 Assert.Equal("auto", Find<ComboBox>(dialog, "GraphicsApiInput").SelectedValue); Assert.Equal(60, Find<ComboBox>(dialog, "FrameRateInput").SelectedValue);
@@ -158,7 +154,7 @@ public sealed class ProjectSetupTests
                     var body = Assert.IsType<StackPanel>(card.Content);
                     var thumbnail = Assert.Single(Assert.IsType<Canvas>(body.Children[0]).Children.OfType<Border>()); thumbnails.Add(preset.Id, thumbnail);
                     Assert.Equal((double)preset.Width / preset.Height, thumbnail.Width / thumbnail.Height, 10);
-                    Assert.Equal(preset.Title, ((TextBlock)body.Children[1]).Text); Assert.Equal(preset.Description, ((TextBlock)body.Children[2]).Text);
+                    Assert.Equal(2, body.Children.Count); Assert.Equal($"{preset.Width}×{preset.Height}", ((TextBlock)body.Children[1]).Text);
                     card.IsChecked = true; Assert.Equal(preset.Width, dialog.Options.Width); Assert.Equal(preset.Height, dialog.Options.Height);
                 }
                 Assert.True(thumbnails["wide"].Width > thumbnails["fhd"].Width); Assert.True(thumbnails["qhd"].Height > thumbnails["fhd"].Height);
@@ -189,25 +185,68 @@ public sealed class ProjectSetupTests
     {
         await WorkspaceTabsTests.Sta(() =>
         {
-            var dialog = new ProjectCreationDialog();
+            var owner = new Window { ShowInTaskbar = false, ShowActivated = false };
+            var expected = new ProjectCreationOptions { Width = 1377, Height = 777, GraphicsApi = "opengl", MaxFps = 144, Palette = "forest" };
+            ProjectCreationDialog? first = null;
+            ProjectSetupDialog? settings = null;
+            Exception? failure = null;
+            int step = 0;
+            var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(30) };
+            timer.Tick += (_, _) =>
+            {
+                try
+                {
+                    var active = owner.OwnedWindows.Cast<Window>().SingleOrDefault(window => window.IsVisible);
+                    if (active == null) return;
+                    switch (step++)
+                    {
+                        case 0:
+                            first = Assert.IsType<ProjectCreationDialog>(active);
+                            Find<RadioButton>(first, "VisualModeCard").IsChecked = true;
+                            Click(Find<Button>(first, "ContinueButton"));
+                            break;
+                        case 1:
+                            settings = Assert.IsType<ProjectSetupDialog>(active);
+                            Assert.False(first!.IsVisible);
+                            Assert.Equal(WindowStartupLocation.CenterOwner, settings.WindowStartupLocation);
+                            Find<RadioButton>(settings, "Resolution_custom").IsChecked = true;
+                            Assert.True(Find<StackPanel>(settings, "CustomResolutionFields").IsEnabled);
+                            Find<TextBox>(settings, "CustomWidthInput").Text = "1377";
+                            Find<TextBox>(settings, "CustomHeightInput").Text = "777";
+                            Find<ComboBox>(settings, "GraphicsApiInput").SelectedValue = "opengl";
+                            Find<ComboBox>(settings, "FrameRateInput").SelectedValue = 144;
+                            Find<RadioButton>(settings, "Palette_forest").IsChecked = true;
+                            Click(Find<Button>(settings, "BackButton"));
+                            break;
+                        case 2:
+                            var authoring = Assert.IsType<ProjectCreationDialog>(active);
+                            Assert.Equal(ProjectAuthoringMode.Visual, authoring.AuthoringMode);
+                            Click(Find<Button>(authoring, "ContinueButton"));
+                            break;
+                        case 3:
+                            Assert.Same(settings, active);
+                            Assert.True(settings!.TryReadOptions(out var chosen));
+                            Assert.Equal(expected, chosen);
+                            Find<RadioButton>(settings, "Resolution_hd").IsChecked = true;
+                            Assert.False(Find<StackPanel>(settings, "CustomResolutionFields").IsEnabled);
+                            Assert.Equal(1280, settings.Options.Width);
+                            Find<RadioButton>(settings, "Resolution_custom").IsChecked = true;
+                            Click(Find<Button>(settings, "CreateButton"));
+                            break;
+                    }
+                }
+                catch (Exception error) { failure = error; timer.Stop(); owner.Close(); }
+            };
             try
             {
-                Find<RadioButton>(dialog, "VisualModeCard").IsChecked = true; Click(Find<Button>(dialog, "ContinueButton"));
-                Find<RadioButton>(dialog, "Resolution_custom").IsChecked = true; Assert.True(Find<StackPanel>(dialog, "CustomResolutionFields").IsEnabled);
-                Find<TextBox>(dialog, "CustomWidthInput").Text = "1377"; Find<TextBox>(dialog, "CustomHeightInput").Text = "777";
-                Find<ComboBox>(dialog, "GraphicsApiInput").SelectedValue = "opengl"; Find<ComboBox>(dialog, "FrameRateInput").SelectedValue = 144;
-                Find<RadioButton>(dialog, "Palette_forest").IsChecked = true;
-                var expected = new ProjectCreationOptions { Width = 1377, Height = 777, GraphicsApi = "opengl", MaxFps = 144, Palette = "forest" };
-                Assert.True(dialog.TryReadOptions(out var chosen)); Assert.Equal(expected, chosen);
-                Click(Find<Button>(dialog, "BackButton")); Assert.Equal(Visibility.Visible, Find<Grid>(dialog, "AuthoringPage").Visibility);
-                Assert.Equal(ProjectAuthoringMode.Visual, dialog.AuthoringMode);
-                Click(Find<Button>(dialog, "ContinueButton")); Assert.Equal(expected, dialog.Options); Assert.True(Find<RadioButton>(dialog, "Resolution_custom").IsChecked);
-                Find<RadioButton>(dialog, "Resolution_hd").IsChecked = true; Assert.False(Find<StackPanel>(dialog, "CustomResolutionFields").IsEnabled);
-                Assert.Equal(1280, dialog.Options.Width); Assert.Equal(720, dialog.Options.Height);
-                Find<RadioButton>(dialog, "Resolution_custom").IsChecked = true; Assert.Equal(expected, dialog.Options);
+                owner.Show();
+                timer.Start();
+                var result = MainWindow.ChooseProjectSetup(owner, "kne");
+                Assert.Null(failure);
+                Assert.Equal((ProjectAuthoringMode.Visual, expected), result);
                 return Task.CompletedTask;
             }
-            finally { dialog.Close(); }
+            finally { timer.Stop(); if (owner.IsVisible) owner.Close(); }
         });
     }
 
@@ -219,10 +258,10 @@ public sealed class ProjectSetupTests
     {
         await WorkspaceTabsTests.Sta(() =>
         {
-            var dialog = new ProjectCreationDialog(); EditorTheme.Apply(dialog, "kne");
+            var dialog = new ProjectSetupDialog(); EditorTheme.Apply(dialog, "kne");
             try
             {
-                Click(Find<Button>(dialog, "ContinueButton")); var root = (FrameworkElement)dialog.Content;
+                var root = (FrameworkElement)dialog.Content;
                 root.Measure(new Size(width, height)); root.Arrange(new Rect(0, 0, width, height)); root.UpdateLayout();
                 var cards = Find<UniformGrid>(dialog, "ResolutionCards").Children.OfType<FrameworkElement>()
                     .Concat(Find<UniformGrid>(dialog, "PaletteCards").Children.OfType<FrameworkElement>()).Append(Find<Button>(dialog, "CreateButton"));
@@ -253,10 +292,10 @@ public sealed class ProjectSetupTests
     {
         await WorkspaceTabsTests.Sta(() =>
         {
-            var dialog = new ProjectCreationDialog();
+            var dialog = new ProjectSetupDialog();
             try
             {
-                Click(Find<Button>(dialog, "ContinueButton")); Find<RadioButton>(dialog, "Resolution_custom").IsChecked = true;
+                Find<RadioButton>(dialog, "Resolution_custom").IsChecked = true;
                 Find<TextBox>(dialog, "CustomWidthInput").Text = width; Find<TextBox>(dialog, "CustomHeightInput").Text = height;
                 Click(Find<Button>(dialog, "CreateButton"));
                 Assert.NotEqual(true, dialog.DialogResult); Assert.Equal(Visibility.Visible, Find<Grid>(dialog, "SettingsPage").Visibility);
@@ -276,17 +315,16 @@ public sealed class ProjectSetupTests
     {
         await WorkspaceTabsTests.Sta(() =>
         {
-            var dialog = new ProjectCreationDialog { ShowInTaskbar = false, ShowActivated = false, Left = -2000, WindowStartupLocation = WindowStartupLocation.Manual };
+            var dialog = new ProjectSetupDialog { ShowInTaskbar = false, ShowActivated = false, Left = -2000, WindowStartupLocation = WindowStartupLocation.Manual };
             dialog.Loaded += (_, _) =>
             {
-                Find<RadioButton>(dialog, "VisualModeCard").IsChecked = true; Click(Find<Button>(dialog, "ContinueButton"));
                 Find<RadioButton>(dialog, "Resolution_portrait").IsChecked = true; Find<RadioButton>(dialog, "Palette_rose").IsChecked = true;
                 Find<ComboBox>(dialog, "GraphicsApiInput").SelectedValue = "vulkan"; Find<ComboBox>(dialog, "FrameRateInput").SelectedValue = 30;
                 Click(Find<Button>(dialog, "CreateButton"));
             };
             try
             {
-                Assert.True(dialog.ShowDialog()); Assert.Equal(ProjectAuthoringMode.Visual, dialog.AuthoringMode);
+                Assert.True(dialog.ShowDialog());
                 Assert.Equal(new ProjectCreationOptions { Width = 1080, Height = 1920, Palette = "rose", GraphicsApi = "vulkan", MaxFps = 30 }, dialog.Options);
                 return Task.CompletedTask;
             }
@@ -294,10 +332,10 @@ public sealed class ProjectSetupTests
         });
     }
 
-    private static T Find<T>(ProjectCreationDialog dialog, string name) where T : class => Assert.IsAssignableFrom<T>(dialog.FindName(name));
+    private static T Find<T>(Window dialog, string name) where T : class => Assert.IsAssignableFrom<T>(dialog.FindName(name));
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-    private static void CaptureSettings(ProjectCreationDialog dialog)
+    private static void CaptureSettings(ProjectSetupDialog dialog)
     {
         if (Environment.GetEnvironmentVariable("KNE_SETUP_RENDER") is not { } directory) return;
         Directory.CreateDirectory(directory); var content = (FrameworkElement)dialog.Content;

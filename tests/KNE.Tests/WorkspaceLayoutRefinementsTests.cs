@@ -39,6 +39,12 @@ public sealed class WorkspaceLayoutRefinementsTests
             Assert.InRange(Math.Abs(Bounds(generalGrid).Left - Bounds(general).Left - (general.ActualWidth - generalGrid.ActualWidth) / 2), 0, 2);
             Assert.True(Bounds(general).Bottom - Bounds(manualBackup).Bottom > 48);
             Assert.InRange(Bounds(manualBackup).Top - Bounds(general.BackupCopies).Bottom, 0, 90);
+            Fits(general.ExtendedSceneBlockLimit);
+            Assert.Contains(general.ExtendedSceneBlockLimit, first);
+            Assert.DoesNotContain(general.ExtendedSceneBlockLimit, second);
+            Assert.False(general.ExtendedSceneBlockLimit.IsChecked);
+            Assert.InRange(Bounds(general.ExtendedSceneBlockLimit).Top - Bounds(manualBackup).Bottom, 0, 95);
+            general.ExtendedSceneBlockLimit.IsChecked = true;
             foreach (var control in new FrameworkElement[] { general.BackupPath, general.BackupFrequency, general.BackupCopies, general.AutosaveInterval, general.HistoryLimit, general.KeepHistory }) { Assert.Contains(control, first); Assert.DoesNotContain(control, second); Fits(control); }
             Assert.Contains(first.OfType<Button>(), button => Equals(button.Content, "Настроить горячие клавиши"));
             Assert.DoesNotContain(first.OfType<Button>(), button => Equals(button.Content, "Удалить весь кэш"));
@@ -99,6 +105,7 @@ public sealed class WorkspaceLayoutRefinementsTests
             await WorkspaceTabsTests.Invoke(window, "SaveSettingsAsync");
             var saved = await store.LoadAsync();
             Assert.Equal(expected with { LuaLibraryMotion = false }, saved.Editor);
+            Assert.True(Find<ScriptEditor>(window, "SceneEditor").ExtendedSceneBlockLimit);
             Assert.Equal(new GraphMinimapSettings(true, 168, "top_left"), saved.GraphMinimap);
             var canvasMinimap = Find<EditorMinimap>(Find<ScriptEditor>(window, "SceneEditor"), "GraphMinimap");
             Assert.True(canvasMinimap.ColorCategories);

@@ -9,6 +9,9 @@ namespace KNE;
 /// <summary>Versioned source document for a visual scene. Layout is independent of execution order.</summary>
 public sealed partial class VisualScript
 {
+    internal const int DefaultBlockLimit = 500;
+    internal const int ExtendedBlockLimit = 1000;
+    internal int BlockCapacity => IsShader || IsVisualLua ? DefaultBlockLimit : ExtendedBlockLimit;
     /// <summary>Shader graphs use data ports and never export a Lua entry point.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool IsShader { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool IsVisualLua { get; set; }
@@ -94,7 +97,7 @@ public sealed partial class VisualScript
         if (LuaEncoding != null && (!IsVisualLua || LuaEncoding is not ("utf8-bom" or "utf16-le" or "utf16-be" or "utf32-le" or "utf32-be")))
             throw new InvalidDataException("Неизвестная кодировка исходного файла Lua.");
         if (!LuaSource.IsIdentifier(FunctionName)) throw new InvalidDataException("Имя функции блок-схемы: латинские буквы, цифры и _, без цифры в начале и ключевых слов Lua.");
-        if (Nodes == null || Nodes.Count > 500) throw new InvalidDataException("Допускается не более 500 блоков.");
+        if (Nodes == null || Nodes.Count > BlockCapacity) throw new InvalidDataException($"Допускается не более {BlockCapacity} блоков.");
         if (Nodes.Count(node => node?.Kind == ScriptNodeKind.Initialization) > 1)
             throw new InvalidDataException("В файле разрешён один блок «Инициализация».");
         var ids = new HashSet<string>(StringComparer.Ordinal);

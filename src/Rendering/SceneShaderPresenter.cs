@@ -7,6 +7,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using RgbaFloat = Veldrid.RgbaFloat;
 
 namespace KNE;
 
@@ -24,8 +25,6 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
         internal RenderTargetBitmap? Capture;
         internal GraphicsTexture? Snapshot;
         internal WaveInput? Waves;
-        internal GraphicsTexture? WaveBacking;
-        internal Color BackingColor;
         internal long Revision = -1, RenderedRevision = -1;
         internal int Width, Height;
         internal Point Origin, ScreenSize;
@@ -320,19 +319,34 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
                 float seconds = (float)clock.Elapsed.TotalSeconds;
                 var origin = new Vector2((float)point.X, (float)point.Y);
                 var size = new Vector2((float)screenSize.X, (float)screenSize.Y);
-                var result = wave is { } input
-                    ? await currentGpu.RenderCompositeAsync(WaveFrame(surface, input),
-                        effects, settings, seconds, origin, lifetime.Token, size)
-                    : await currentGpu.RenderAsync(surface.Snapshot!, effects, settings, seconds, origin, lifetime.Token, size);
+                using var result = wave is { } input
+                    ? await currentGpu.RenderPixelsAsync(WaveFrame(surface, input), true,
+                        effects, settings, seconds, origin, size, lifetime.Token)
+                    : await currentGpu.RenderPixelsAsync(surface.Snapshot!, effects, settings, seconds, origin, lifetime.Token, size);
                 if (disposed || disabled || version != generation || !ReferenceEquals(gpu, currentGpu)) return;
+                if (!PresentPixels(image, result)) continue;
                 RenderCount++; surface.RenderedRevision = surface.Revision;
                 surface.Origin = point; surface.ScreenSize = screenSize;
-                image.Source = result; target.SetCurrentValue(UIElement.OpacityMaskProperty, Brushes.Transparent);
+                if (target.OpacityMask != Brushes.Transparent)
+                    target.SetCurrentValue(UIElement.OpacityMaskProperty, Brushes.Transparent);
             }
         }
         catch (OperationCanceledException) when (disposed) { }
         catch (Exception error) when (!disposed) { StopRendering(); Restore(); ReleaseGpu(); fail(error); }
         finally { busy = false; }
+    }
+
+    private static bool PresentPixels(Image output, GraphicsPixels pixels)
+    {
+        var bitmap = output.Source as WriteableBitmap;
+        bool replace = bitmap == null || bitmap.PixelWidth != pixels.Width || bitmap.PixelHeight != pixels.Height;
+        if (replace) bitmap = new WriteableBitmap(pixels.Width, pixels.Height, 96, 96, PixelFormats.Pbgra32, null);
+        // Preserve the last completed frame if WPF still holds this surface for composition.
+        if (!bitmap!.TryLock(new Duration(TimeSpan.Zero))) return false;
+        try { bitmap.WritePixels(new Int32Rect(0, 0, pixels.Width, pixels.Height), pixels.Pixels, pixels.Width * 4, 0); }
+        finally { bitmap.Unlock(); }
+        if (replace) output.Source = bitmap;
+        return true;
     }
     private WaveInput? ReadWaves(Surface surface, int width, int height, long budget)
     {
@@ -361,25 +375,19 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
             return null;
         return new(atlas!, bounds, brush.Color, true);
     }
-    private static GraphicsTexture WaveBacking(Surface surface, Color color)
-    {
-        if (surface.WaveBacking != null && surface.BackingColor == color) return surface.WaveBacking;
-        surface.BackingColor = color;
-        byte Premultiply(byte channel) => (byte)((channel * color.A + 127) / 255);
-        return surface.WaveBacking = GraphicsTextures.Snapshot(1, 1,
-            [Premultiply(color.B), Premultiply(color.G), Premultiply(color.R), color.A]);
-    }
     private static Func<GraphicsFrame> WaveFrame(Surface surface, WaveInput input)
     {
         int width = surface.Width, height = surface.Height;
         var bounds = input.Bounds;
         bounds.Scale(width / surface.Target.ActualWidth, height / surface.Target.ActualHeight);
-        var backing = WaveBacking(surface, input.Color);
         var foreground = surface.Snapshot;
         var full = new Rect(0, 0, width, height);
+        var color = input.Color;
+        float Premultiply(byte channel) => ((channel * color.A + 127) / 255) / 255f;
+        var clear = new RgbaFloat(Premultiply(color.R), Premultiply(color.G), Premultiply(color.B), color.A / 255f);
         return () => new(width, height, foreground == null
-            ? [new(backing, full), new(GraphicsTextures.Get(input.Atlas), bounds)]
-            : [new(backing, full), new(GraphicsTextures.Get(input.Atlas), bounds), new(foreground, full)]);
+            ? [new(GraphicsTextures.Get(input.Atlas), bounds)]
+            : [new(GraphicsTextures.Get(input.Atlas), bounds), new(foreground, full)]) { ClearColor = clear };
     }
     private void Restore(FrameworkElement target)
     {
