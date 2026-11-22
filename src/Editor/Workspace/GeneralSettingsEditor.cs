@@ -11,6 +11,7 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     internal TextBox BackupPath { get; } = new();
     internal ComboBox BackupFrequency { get; } = Choice([(-1, "При каждом сохранении проекта"), (120, "Раз в два часа"), (60, "Раз в час"), (30, "Раз в 30 минут"), (10, "Раз в 10 минут"), (0, "Вручную (только по кнопке)")]);
     internal ComboBox BackupCopies { get; } = Choice(EditorPreferences.BackupLimits.Select(n => (n, n.ToString())));
+    internal CheckBox ExtendedSceneBlockLimit { get; } = Check("Увеличить лимит блоков до 1000 на сцену");
     internal ComboBox AutosaveInterval { get; } = Choice([(1, "1 минута"), (5, "5 минут"), (10, "10 минут"), (30, "30 минут"), (0, "Отключено")]);
     internal ComboBox HistoryLimit { get; } = Choice(EditorPreferences.HistoryLimits.Select(n => (n, n.ToString())));
     internal CheckBox KeepHistory { get; } = Check("Сохранять историю изменений");
@@ -42,14 +43,27 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     {
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto; HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         var (grid, left, right) = Columns(); Content = grid;
+        grid.HorizontalAlignment = HorizontalAlignment.Stretch;
         grid.SetBinding(MinHeightProperty, new Binding(nameof(ViewportHeight)) { Source = this });
         var (behaviorGrid, behaviorLeft, behaviorRight) = Columns(); BehaviorPage.Content = behaviorGrid;
         behaviorGrid.SetBinding(MinHeightProperty, new Binding(nameof(ViewportHeight)) { Source = BehaviorPage });
         var backup = Section(left, "Резервное копирование"); Field(backup, "Путь хранения", PathRow(BackupPath, "Выбрать…", () => BrowseFolder(BackupPath)));
         backup.Children.Add(Hint("Резервные копии хранятся отдельно от проектов. При перемещении хранилища проекты не перемещаются автоматически"));
-        Field(backup, "Частота создания", BackupFrequency); Field(backup, "Хранить последних копий", BackupCopies);
+        var backupPolicy = new Grid();
+        backupPolicy.ColumnDefinitions.Add(new() { Width = new GridLength(1.4, GridUnitType.Star) });
+        backupPolicy.ColumnDefinitions.Add(new() { Width = new GridLength(12) });
+        backupPolicy.ColumnDefinitions.Add(new());
+        var frequency = new StackPanel();
+        var copies = new StackPanel();
+        Field(frequency, "Частота создания", BackupFrequency);
+        Field(copies, "Хранить последних копий", BackupCopies);
+        Grid.SetColumn(copies, 2);
+        backupPolicy.Children.Add(frequency);
+        backupPolicy.Children.Add(copies);
+        backup.Children.Add(backupPolicy);
         backup.Children.Add(Hint("Старые копии автоматически удаляются. Это не влияет на историю версий автосохранения"));
         Button(backup, "Создать резервную копию", () => BackupRequested?.Invoke() ?? Task.CompletedTask);
+        Section(left, "Блок-схемы").Children.Add(ExtendedSceneBlockLimit);
         var autosave = Section(right, "Автосохранение"); Field(autosave, "Интервал автосохранения", AutosaveInterval); Field(autosave, "Максимум версий на проект", HistoryLimit); autosave.Children.Add(KeepHistory);
         Button(autosave, "Просмотреть историю", () => HistoryRequested?.Invoke() ?? Task.CompletedTask);
         var keys = Section(right, "Горячие клавиши"); Button(keys, "Настроить горячие клавиши", () =>
@@ -78,6 +92,7 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     internal void Load(EditorPreferences value, Dictionary<string, string> keys, string defaultBackup)
     {
         BackupPath.Text = value.BackupPath == "" ? defaultBackup : value.BackupPath; BackupFrequency.SelectedValue = value.BackupMinutes; BackupCopies.SelectedValue = value.BackupCopies;
+        ExtendedSceneBlockLimit.IsChecked = value.ExtendedSceneBlockLimit;
         AutosaveInterval.SelectedValue = value.AutosaveMinutes; HistoryLimit.SelectedValue = value.AutosaveVersions; KeepHistory.IsChecked = value.KeepHistory;
         Startup.SelectedValue = value.Startup; StartupProject.Text = value.StartupProject; SoundEnabled.IsChecked = value.NotificationSound; Sound.SelectedValue = value.Sound; SoundFile.Text = value.SoundFile;
         Toasts.IsChecked = value.Toasts; Aggregate.IsChecked = value.AggregateNotifications; Minimized.IsChecked = value.NotifyMinimized; Tips.IsChecked = value.NotifyTips;
@@ -87,6 +102,7 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     internal EditorPreferences Value => new()
     {
         BackupPath = BackupPath.Text.Trim(), BackupMinutes = (int?)BackupFrequency.SelectedValue ?? -1, BackupCopies = (int?)BackupCopies.SelectedValue ?? 5,
+        ExtendedSceneBlockLimit = ExtendedSceneBlockLimit.IsChecked == true,
         AutosaveMinutes = (int?)AutosaveInterval.SelectedValue ?? 5, AutosaveVersions = (int?)HistoryLimit.SelectedValue ?? 25, KeepHistory = KeepHistory.IsChecked == true,
         Startup = (string?)Startup.SelectedValue ?? "home", StartupProject = StartupProject.Text.Trim(), NotificationSound = SoundEnabled.IsChecked == true, Sound = (string?)Sound.SelectedValue ?? "standard", SoundFile = SoundFile.Text,
         Toasts = Toasts.IsChecked == true, AggregateNotifications = Aggregate.IsChecked == true, NotifyMinimized = Minimized.IsChecked == true, NotifyTips = Tips.IsChecked == true,

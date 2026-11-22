@@ -52,7 +52,7 @@ public partial class MainWindow
 
     private ScriptEditor CreateTabEditor()
     {
-        var editor = new ScriptEditor { ShowGraphGrid = settings.ShowGraphGrid };
+        var editor = new ScriptEditor { ShowGraphGrid = settings.ShowGraphGrid, ExtendedSceneBlockLimit = settings.Editor.ExtendedSceneBlockLimit };
         editor.ApplyGraphMinimap(settings.GraphMinimap);
         editor.Saved += EditorSaved;
         editor.BlockLibraryRequested += SceneEditor_BlockLibraryRequested;

@@ -43,6 +43,8 @@ public partial class MainWindow
     private void ApplyEditorPreferences()
     {
         EditorHotkeys.SetProfile(this, settings.Hotkeys);
+        SceneEditor.ExtendedSceneBlockLimit = settings.Editor.ExtendedSceneBlockLimit;
+        foreach (var editor in OpenEditors) editor.ExtendedSceneBlockLimit = settings.Editor.ExtendedSceneBlockLimit;
         saveSchedule.Reset(sessionTime.Elapsed); UpdateBreakUi();
     }
     private void EditorSaved(ScriptEditor editor, bool changed)

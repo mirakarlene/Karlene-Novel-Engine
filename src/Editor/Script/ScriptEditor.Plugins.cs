@@ -18,9 +18,11 @@ public partial class ScriptEditor
     /// <summary>Commits a validated plugin edit as one undo operation.</summary>
     public void ReplacePluginGraph(VisualScript graph)
     {
-        if (Document?.Graph == null) throw new InvalidOperationException("Откройте блок-схему.");
+        if (Document?.Graph is not { } current) throw new InvalidOperationException("Откройте блок-схему.");
         var copy = VisualScript.Parse(graph.Serialize());
-        if (copy.IsShader != Document.Graph.IsShader) throw new InvalidOperationException("Нельзя менять тип документа генератором.");
+        if (copy.IsShader != current.IsShader || copy.IsVisualLua != current.IsVisualLua) throw new InvalidOperationException("Нельзя менять тип документа генератором.");
+        int limit = BlockLimit(current);
+        if (copy.Nodes.Count > Math.Max(current.Nodes.Count, limit)) throw new InvalidOperationException($"Допускается не более {limit} блоков.");
         ApplyProperties(); Remember(); Document.Graph = copy; selectedIds.Clear(); selectedId = null; Repaint(); UpdateTitle();
     }
     internal void ApplyPluginTexture()

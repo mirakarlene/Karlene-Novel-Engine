@@ -378,14 +378,36 @@ public sealed class VisualScriptTests
     }
 
     [Fact]
+    public Task ExtendedSceneLimit_AllowsGrowingAndSavingScenesWithoutLockingThemAfterDisabling() => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        var graph = VisualScript.Create();
+        while (graph.Nodes.Count < 500)
+            graph.Nodes.Add(new() { Id = "comment_" + graph.Nodes.Count, Kind = ScriptNodeKind.Comment });
+        string path = fixture.Write("game/scenes/large.knegraph", graph.Serialize());
+        var editor = new ScriptEditor();
+        await editor.OpenAsync(fixture.ProjectPath, path);
+        Assert.Contains("500", editor.GetBlockUnavailableReason(ScriptNodeKind.Comment));
+        editor.ExtendedSceneBlockLimit = true;
+        editor.AddBlock(ScriptNodeKind.Comment);
+        Assert.Equal(501, editor.Document!.Graph!.Nodes.Count);
+        editor.ExtendedSceneBlockLimit = false;
+        Assert.False(editor.CanAddBlock(ScriptNodeKind.Comment));
+        await editor.SaveAsync();
+        var saved = VisualScript.Parse(await File.ReadAllTextAsync(path));
+        Assert.Equal(501, saved.Nodes.Count);
+        Assert.Contains("function main()", saved.Compile());
+    });
+
+    [Fact]
     public void DraftLimits_AllowBoundariesAndRejectExcess()
     {
         var graph = new VisualScript
         {
-            Nodes = Enumerable.Range(0, 500).Select(i => new ScriptNode
+            Nodes = Enumerable.Range(0, 1000).Select(i => new ScriptNode
                 { Id = "n" + i, Kind = ScriptNodeKind.End, X = 10000, Y = 10000 }).ToList()
         };
-        Assert.Equal(500, VisualScript.Parse(graph.Serialize()).Nodes.Count);
+        Assert.Equal(1000, VisualScript.Parse(graph.Serialize()).Nodes.Count);
         graph.Nodes.Add(new() { Id = "extra", Kind = ScriptNodeKind.End });
         Assert.Throws<InvalidDataException>(() => graph.Serialize());
         graph = VisualScript.Create();

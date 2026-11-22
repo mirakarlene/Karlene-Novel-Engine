@@ -34,6 +34,16 @@ public sealed class WavePostProcessingTests(ITestOutputHelper output)
         Assert.Equal(4, actual.DrawCalls);
         Assert.Equal(before + 1, renderer.Readbacks);
         Assert.Equal(expected.Pixels, actual.Pixels);
+
+        var clearedFrame = frame with
+        {
+            Sprites = frame.Sprites.Skip(1).ToArray(),
+            ClearColor = new(80 / 255f, 40 / 255f, 20 / 255f, 1)
+        };
+        using var cleared = renderer.RenderCompositeChain(clearedFrame, [program], 0, default, default);
+        Assert.Equal(3, cleared.DrawCalls);
+        Assert.Equal(before + 2, renderer.Readbacks);
+        Assert.Equal(expected.Pixels, cleared.Pixels);
     }
 
     [GpuTheory]
@@ -92,13 +102,15 @@ public sealed class WavePostProcessingTests(ITestOutputHelper output)
                 var timer = (System.Windows.Threading.DispatcherTimer)typeof(SceneShaderPresenter)
                     .GetField("timer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(presenter)!;
                 Assert.Equal(TimeSpan.FromMilliseconds(1000d / 60), timer.Interval);
+                var outputImage = ((Panel)targetLayer.Parent).Children.OfType<Image>().Single(image => image.Source != null);
+                var outputBitmap = Assert.IsType<System.Windows.Media.Imaging.WriteableBitmap>(outputImage.Source);
                 long captures = presenter.Captures;
                 var filtered = await Sample();
                 Assert.True(presenter.RenderCount > before + 3);
                 Assert.Equal(captures, presenter.Captures);
                 Assert.Same(atlas, layer.Bitmap);
                 Assert.Equal(prepared, telemetry.PreparationCount);
-                var outputImage = ((Panel)targetLayer.Parent).Children.OfType<Image>().Single(image => image.Source != null);
+                Assert.Same(outputBitmap, outputImage.Source);
                 output.WriteLine($"{api}/{quality}/{target}: target {targetLayer.ActualWidth:F0}×{targetLayer.ActualHeight:F0}, output {outputImage.Source.Width:F0}×{outputImage.Source.Height:F0}, atlas {atlas.PixelWidth}×{atlas.PixelHeight}, composition {warm.Composition:F1} -> {filtered.Composition:F1} fps, effect {filtered.Effect:F1} fps, WPF recaptures {presenter.Captures - captures}");
             }
             finally

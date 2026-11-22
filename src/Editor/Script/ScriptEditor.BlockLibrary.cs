@@ -8,6 +8,8 @@ namespace KNE;
 public partial class ScriptEditor
 {
     private readonly List<Action<ScriptNode>> extendedEdits = [];
+    internal bool ExtendedSceneBlockLimit { get; set; }
+    private int BlockLimit(VisualScript graph) => ExtendedSceneBlockLimit ? graph.BlockCapacity : VisualScript.DefaultBlockLimit;
     internal void FocusAddBlock() => AddBlockButton.Focus();
 
     /// <summary>Checks the block limit and the unique entry-point rule without modifying the graph.</summary>
@@ -22,7 +24,8 @@ public partial class ScriptEditor
             return "Блок несовместим с этой схемой.";
         if (kind is ScriptNodeKind.Start or ScriptNodeKind.Initialization && graph.Nodes.Any(node => node.Kind == kind))
             return kind == ScriptNodeKind.Start ? "В схеме уже есть начало." : "В схеме уже есть блок инициализации.";
-        return graph.Nodes.Count >= 500 ? "Достигнут предел в 500 блоков." : null;
+        int limit = BlockLimit(graph);
+        return graph.Nodes.Count >= limit ? $"Достигнут предел в {limit} блоков." : null;
     }
 
     /// <summary>Creates a command at the center of the visible canvas, retaining the viewport and undo history.</summary>
