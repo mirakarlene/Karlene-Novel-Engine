@@ -2,6 +2,8 @@ using System.IO;
 
 namespace KNE;
 
+internal enum BlockGlowMode { Off, Weak, Medium, Squares }
+
 /// <summary>User-owned editor automation preferences, independent of game runtime settings.</summary>
 public sealed record EditorPreferences
 {
@@ -9,6 +11,8 @@ public sealed record EditorPreferences
     public int BackupMinutes { get; set; } = -1;
     public int BackupCopies { get; set; } = 5;
     public bool ExtendedSceneBlockLimit { get; set; }
+    public string BlockGlow { get; set; } = nameof(BlockGlowMode.Medium);
+    public bool SmoothBlockGlow { get; set; } = true;
     public int AutosaveMinutes { get; set; } = 5;
     public int AutosaveVersions { get; set; } = 25;
     public bool KeepHistory { get; set; } = true;
@@ -34,6 +38,7 @@ public sealed record EditorPreferences
     public static int[] HistoryLimits => [5, 10, 25, 50, 100];
     public static int[] BreakIntervals => [30, 45, 60, 90, 120];
     public static int[] BreakDurations => [5, 10, 15, 30];
+    internal BlockGlowMode GlowMode => Enum.TryParse<BlockGlowMode>(BlockGlow, out var mode) && Enum.IsDefined(mode) ? mode : BlockGlowMode.Medium;
 
     internal void Validate()
     {

@@ -49,6 +49,12 @@ internal static class NarrativeRuntimeLua
                 if thread then speakers[thread] = "" else main_speaker = "" end
                 kne_editor_pause()
             end
+            function set_text_speed(speed)
+                if type(speed) ~= "number" then error("set_text_speed требует число", 2) end
+                local problem = kne_set_dialogue_speed(speed)
+                if problem ~= "" then error(problem, 2) end
+                kne_editor_pause()
+            end
             function kne_say(speaker, text, character, effect, auto_seconds, skippable, narration, reverse)
                 if character ~= nil and type(character) ~= "string" then error("ID персонажа должен быть строкой", 2) end
                 if effect ~= nil and type(effect) ~= "string" then error("Эффект должен быть JSON-строкой", 2) end
@@ -75,7 +81,10 @@ internal static class NarrativeRuntimeLua
                 if narration then speaker, character = "", nil end
                 local result = kne_prepare_dialogue(speaker, character, effect)
                 if result[3] ~= "" then error(result[3], 2) end
-                local parts = kne_prepare_inline_dialogue(tostring(text), reverse or 0)
+                local flags = reverse or 0
+                local from_end = (flags & 1) ~= 0
+                local speed = kne_dialogue_speed()
+                local parts = kne_prepare_inline_dialogue(tostring(text), speed >= 0 and (flags | 8) or flags)
                 if parts[0] ~= "" then error(parts[0], 2) end
                 local name = kne_inline_text(result[0])
                 local count, presentation, revealed = tonumber(parts[1]), nil, 0
@@ -89,21 +98,26 @@ internal static class NarrativeRuntimeLua
                     local event = {kind = "dialogue", speaker = name, text = parts[part],
                         character = result[1], effect = result[2], seconds = wait,
                         skippable = final and skippable ~= false or not final and wait == nil, presentation_id = presentation}
-                    if letters < total_letters then event.reveal_visible = letters end
+                    if letters < total_letters then
+                        event.reveal_visible = letters
+                        event.reveal_from_end = from_end
+                    end
                     if not kne_interactive or not coroutine.isyieldable() then
                         if index == count then
                             last = event
                             print_to_ui(kne_inline_plain(event.speaker == "" and event.text or event.speaker .. ": " .. event.text))
                         end
                     else
-                        if letters > revealed then
+                        speed = kne_dialogue_speed()
+                        if letters > revealed and speed ~= 0 then
+                            local duration = speed < 0 and math.min((letters - revealed) / 35, 12) or (letters - revealed) / speed
                             local reveal = {kind = "dialogue", speaker = name, text = event.text, character = result[1], effect = result[2],
-                                seconds = math.min((letters - revealed) / 35, 12), skippable = true, presentation_id = presentation,
-                                reveal_from = revealed, reveal_count = letters}
+                                seconds = duration, skippable = true, presentation_id = presentation,
+                                reveal_from = revealed, reveal_count = letters, reveal_from_end = from_end}
                             emit(reveal)
                             event.presentation_id = reveal.presentation_id
-                            revealed = letters
                         end
+                        revealed = letters
                         emit(event)
                         presentation = event.presentation_id
                     end

@@ -217,6 +217,7 @@ public sealed class AppearanceUiTests
         var gallery = document.Layout.AddScreen("Галерея");
         document.Layout.Find("main_menu")!.Elements.Add(new() { Text = "Галерея", Action = "navigate", Target = gallery.Id, X = 40, Y = 580 });
         document.Layout.Find("main_menu")!.Elements.Single(e => e.Action == "settings").X = 300;
+        document.Layout.Find("settings")!.Elements.RemoveAll(e => e.Action == "text_speed");
         await document.SaveAsync(); project = await fixture.LoadAsync();
         await Sta(async () =>
         {
@@ -241,10 +242,15 @@ public sealed class AppearanceUiTests
                 Assert.Equal(WindowStyle.None, window.WindowStyle);
                 full.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var music = ScreenCanvas(window).Children.OfType<StackPanel>().Single(p => ((ScreenElement)p.Tag).Action == "music_volume").Children.OfType<Slider>().Single();
+                var speed = ScreenCanvas(window).Children.OfType<StackPanel>().Single(p => ((ScreenElement)p.Tag).Action == "text_speed").Children.OfType<Slider>().Single();
+                Assert.Equal(40, speed.Value);
+                Assert.Equal(120, speed.Maximum);
+                speed.Value = 30;
                 music.Value = 0.25; Invoke(window, "RenderOutput");
                 using var prefs = JsonDocument.Parse(File.ReadAllText(Path.Combine(saves.DirectoryPath, "preferences.json")));
                 Assert.Equal(0.25, prefs.RootElement.GetProperty("MusicVolume").GetDouble());
                 Assert.False(prefs.RootElement.GetProperty("Animate").GetBoolean());
+                Assert.Equal(30, prefs.RootElement.GetProperty("TextSpeed").GetInt32());
                 CaptureWindow(window, "settings.png");
                 ScreenButton(window, "back").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 CaptureWindow(window, "main-menu.png");
@@ -262,8 +268,39 @@ public sealed class AppearanceUiTests
                 ScreenButton(reopened, "settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var volume = ScreenCanvas(reopened).Children.OfType<StackPanel>().Single(p => ((ScreenElement)p.Tag).Action == "music_volume").Children.OfType<Slider>().Single();
                 Assert.Equal(0.25, volume.Value);
+                Assert.Equal(30, ScreenCanvas(reopened).Children.OfType<StackPanel>().Single(p => ((ScreenElement)p.Tag).Action == "text_speed").Children.OfType<Slider>().Single().Value);
             }
             finally { reopened.Close(); }
+        });
+    }
+
+    [Fact]
+    public async Task Runtime_ClickRevealsOnlyTheCurrentSegmentBeforeWaitingAtAnInlinePause()
+    {
+        using var fixture = new TempProject();
+        fixture.Write("engine/game.json", """{"main_menu":false,"auto_save":false}""");
+        fixture.Write("game/scenes/main.krl", "function main() d(nil, 'АБВГ{w}ДЕЖЗ'); d(nil, 'Дальше') end");
+        fixture.Write("saves/preferences.json", """{"TextSpeed":1}""");
+        var project = await fixture.LoadAsync();
+        await Sta(async () =>
+        {
+            var window = new GameWindow(project);
+            try
+            {
+                await Act(window, () => window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent)));
+                var text = Find<TextBlock>(window, "DialogueText");
+                Assert.Contains(text.Inlines.OfType<System.Windows.Documents.Run>(), run => ReferenceEquals(run.Foreground, Brushes.Transparent));
+                await Act(window, () => Click(window, "NextButton"));
+                Assert.Equal("АБВГ", string.Concat(text.Inlines.OfType<System.Windows.Documents.Run>()
+                    .Where(run => !ReferenceEquals(run.Foreground, Brushes.Transparent)).Select(run => run.Text)));
+                await Act(window, () => Click(window, "NextButton"));
+                Assert.Equal("АБВГДЕЖЗ", text.Text);
+                Assert.Contains(text.Inlines.OfType<System.Windows.Documents.Run>(), run => run.Text == "ДЕЖЗ" && ReferenceEquals(run.Foreground, Brushes.Transparent));
+                await Act(window, () => Click(window, "NextButton"));
+                Assert.DoesNotContain(text.Inlines.OfType<System.Windows.Documents.Run>(), run => ReferenceEquals(run.Foreground, Brushes.Transparent));
+                Assert.Equal("АБВГДЕЖЗ", text.Text);
+            }
+            finally { window.Close(); }
         });
     }
 
@@ -272,6 +309,7 @@ public sealed class AppearanceUiTests
     {
         using var fixture = new TempProject();
         fixture.Write("engine/game.json", """{"main_menu":false,"auto_save":false}""");
+        fixture.Write("saves/preferences.json", """{"TextSpeed":0}""");
         var project = await fixture.LoadAsync();
         await Sta(async () =>
         {

@@ -11,6 +11,11 @@ internal sealed class EditorPromptWindow : Window
 
     internal string? Value => input?.Text;
 
+    internal static void ShowDevelopmentNotice(Window owner, string theme)
+    {
+        new EditorPromptWindow("KNE", "KNE ещё на стадии разработки.", theme) { Owner = owner }.ShowDialog();
+    }
+
     internal EditorPromptWindow(string title, string prompt, string theme, string? initialName = null)
     {
         Title = title;

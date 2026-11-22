@@ -24,7 +24,7 @@ public sealed class ErrorActionsUiTests
         await Sta(async () =>
         {
             var store = new GameSaveStore(project.Path);
-            var window = new GameWindow(project, store);
+            var window = new GameWindow(project, store.WithInstantDialogue());
             object content = window.Content;
             try
             {
@@ -59,7 +59,7 @@ public sealed class ErrorActionsUiTests
         project.Engine.Game.DebugEnabled = false;
         await Sta(async () =>
         {
-            var window = new GameWindow(project);
+            var window = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue());
             object content = window.Content;
             try
             {
@@ -105,7 +105,7 @@ public sealed class ErrorActionsUiTests
         var project = await fixture.LoadAsync();
         await Sta(async () =>
         {
-            var window = new GameWindow(project);
+            var window = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue());
             try
             {
                 await Start(window);
@@ -140,7 +140,7 @@ public sealed class ErrorActionsUiTests
         var project = await fixture.LoadAsync();
         await Sta(async () =>
         {
-            var window = new GameWindow(project);
+            var window = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue());
             try
             {
                 window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
@@ -171,7 +171,7 @@ public sealed class ErrorActionsUiTests
         var project = await fixture.LoadAsync();
         await Sta(async () =>
         {
-            var window = new GameWindow(project);
+            var window = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue());
             try
             {
                 await Start(window);
@@ -211,7 +211,7 @@ public sealed class ErrorActionsUiTests
         var project = await fixture.LoadAsync();
         await Sta(async () =>
         {
-            var window = new GameWindow(project);
+            var window = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue());
             try
             {
                 window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
@@ -238,7 +238,7 @@ public sealed class ErrorActionsUiTests
         await Sta(async () =>
         {
             var original = Clipboard.GetDataObject();
-            var window = new GameWindow(project);
+            var window = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue());
             try
             {
                 await Start(window);

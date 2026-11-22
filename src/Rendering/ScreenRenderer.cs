@@ -18,7 +18,7 @@ public static class ScreenRenderer
             "text" => new TextBlock { Text = label, Foreground = TextBrush(), TextWrapping = TextWrapping.Wrap, FontSize = element.FontSize, VerticalAlignment = VerticalAlignment.Center },
             "panel" => new Border { Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(theme.ButtonColor)), CornerRadius = new CornerRadius(16) },
             "toggle" => new CheckBox { Content = label, Foreground = TextBrush(), FontSize = element.FontSize, VerticalContentAlignment = VerticalAlignment.Center },
-            "slider" => SliderView(label, TextBrush(), element.FontSize),
+            "slider" => SliderView(label, TextBrush(), element.FontSize, element.Action == "text_speed"),
             "image" => ImageView(root, element.Image, loadImage),
             "save_list" => new ListBox { ItemsSource = new[] { "Ручной слот · текущая реплика", "Автосохранение · дата и время" }, FontSize = 18 },
             "save_name" => new TextBox { Text = "Имя ручного слота", Padding = new Thickness(8), FontSize = 18 },
@@ -36,12 +36,18 @@ public static class ScreenRenderer
         return view;
     }
 
-    private static FrameworkElement SliderView(string text, Brush brush, double fontSize)
+    private static FrameworkElement SliderView(string text, Brush brush, double fontSize, bool textSpeed)
     {
         var stack = new StackPanel();
         var label = InlineTextPresentation.Label(text); label.Foreground = brush; label.FontSize = fontSize;
         stack.Children.Add(label);
-        stack.Children.Add(new Slider { Minimum = 0, Maximum = 1, Value = 0.8, Margin = new Thickness(0, 8, 0, 0) });
+        stack.Children.Add(new Slider
+        {
+            Minimum = 0, Maximum = textSpeed ? DialogueSpeed.Maximum : 1,
+            Value = textSpeed ? DialogueSpeed.Default : 0.8,
+            TickFrequency = 1, IsSnapToTickEnabled = textSpeed, SmallChange = textSpeed ? 1 : .1,
+            Margin = new Thickness(0, 8, 0, 0)
+        });
         return stack;
     }
     private static Image ImageView(string root, string? relative, Func<string, BitmapSource>? loadImage)

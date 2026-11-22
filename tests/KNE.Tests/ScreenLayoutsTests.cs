@@ -15,7 +15,7 @@ public sealed class ScreenLayoutsTests
         Assert.Equal(new[] { "start", "continue", "settings", "saves", "exit" }, main.Elements.Where(e => e.Type == "button").Select(e => e.Action));
         Assert.All(main.Elements.Where(e => e.Type == "button"), e => Assert.Equal(300, e.Width));
         Assert.DoesNotContain(main.Elements, e => e.Text.Contains("ВИЗУАЛЬНАЯ НОВЕЛЛА"));
-        Assert.Equal(new[] { "fullscreen", "animation", "music_volume", "sound_volume", "back" }, layouts.Find("settings")!.Elements.Where(e => e.Type != "text").Select(e => e.Action));
+        Assert.Equal(new[] { "fullscreen", "animation", "music_volume", "sound_volume", "back", "text_speed" }, layouts.Find("settings")!.Elements.Where(e => e.Type != "text").Select(e => e.Action));
         Assert.Empty(layouts.Find("gameplay")!.Elements);
     }
 

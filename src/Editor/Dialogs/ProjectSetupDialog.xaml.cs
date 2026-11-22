@@ -50,9 +50,10 @@ public partial class ProjectSetupDialog : Window
         double width = (preset?.Width ?? 1920) * .035, height = (preset?.Height ?? 1080) * .035;
         var screen = new Border { Width = width, Height = height, CornerRadius = new(3), BorderThickness = new(1.5), BorderBrush = new SolidColorBrush(Color.FromRgb(167, 144, 241)), Background = new LinearGradientBrush(Color.FromRgb(59, 40, 95), Color.FromRgb(124, 92, 255), 45) };
         Canvas.SetLeft(screen, (160 - width) / 2); Canvas.SetTop(screen, (72 - height) / 2); canvas.Children.Add(screen);
-        screen.Child = new TextBlock { Text = preset == null ? "?" : "KNE", Foreground = Brushes.White, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        if (preset == null)
+            screen.Child = new TextBlock { Text = "?", Foreground = Brushes.White, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         body.Children.Add(canvas);
-        body.Children.Add(new TextBlock { Text = preset == null ? "Свой вариант" : $"{preset.Width}×{preset.Height}", FontWeight = FontWeights.SemiBold, FontSize = 13, TextWrapping = TextWrapping.Wrap, Margin = new(0, 2, 0, 3) });
+        body.Children.Add(new TextBlock { Text = preset == null ? "Свой вариант" : $"{preset.Width}×{preset.Height}", FontWeight = FontWeights.SemiBold, FontSize = 15, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, Margin = new(0, 2, 0, 3) });
         var card = Card("Resolution_" + (preset?.Id ?? "custom"), "Resolution", body); card.Tag = preset;
         card.Checked += (_, _) => { resolution = preset; CustomResolutionFields.IsEnabled = preset == null; SetupErrorText.Text = ""; };
         ResolutionCards.Children.Add(card); if (preset?.Id == "fhd") card.IsChecked = true;
@@ -64,7 +65,7 @@ public partial class ProjectSetupDialog : Window
         var body = new StackPanel(); var preview = new Border { Height = 28, CornerRadius = new(5), Background = Brush(theme.BackgroundColor), Padding = new(7) };
         var swatches = new UniformGrid { Columns = 3 };
         foreach (string color in new[] { theme.PatternColor, theme.AccentColor, theme.ButtonColor }) swatches.Children.Add(new Border { Background = Brush(color), Margin = new(3, 0, 3, 0), CornerRadius = new(2) });
-        preview.Child = swatches; body.Children.Add(preview); body.Children.Add(new TextBlock { Text = item.Label, FontSize = 12, Margin = new(0, 3, 0, 0) });
+        preview.Child = swatches; body.Children.Add(preview); body.Children.Add(new TextBlock { Text = item.Label, FontSize = 12, TextAlignment = TextAlignment.Center, Margin = new(0, 3, 0, 0) });
         var card = Card("Palette_" + item.Value, "Palette", body); card.Tag = item.Value;
         card.Checked += (_, _) => palette = item.Value; PaletteCards.Children.Add(card); card.IsChecked = item.Value == "violet";
     }
@@ -79,6 +80,8 @@ public partial class ProjectSetupDialog : Window
         BackRequested = true;
         Hide();
     }
+
+    private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
     private void Create_Click(object sender, RoutedEventArgs e)
     {

@@ -17,6 +17,29 @@ public sealed class NarrativeRenderingTests
     public static IEnumerable<object[]> Effects => TextEffectSettings.Kinds.Select(kind => new object[] { kind });
 
     [Fact]
+    public Task EffectRevealKeepsItsGlyphsAndMasksCharactersByOriginalTextPosition() => Sta(() =>
+    {
+        var text = new TextBlock { Foreground = Brushes.White, FontSize = 24 };
+        var effects = new EffectTextPresenter();
+        var story = new StoryFrame("dialogue", "", "А\n{b}Б{/b}", [])
+        {
+            TextEffect = new TextEffectSettings { Kind = "rainbow" }, VisiblePrefix = 1, PresentationId = 1
+        };
+        NarrativePresentation.ApplyDialogueText(text, effects, story, true);
+        Arrange(effects, 300, 150);
+        var glyphs = effects.Children.OfType<TextBlock>().ToArray();
+        Assert.Equal(new[] { 1d, 0d }, glyphs.Select(glyph => glyph.Opacity));
+        NarrativePresentation.ApplyDialogueText(text, effects, story with { VisiblePrefix = 2 }, true);
+        Assert.Equal(0, glyphs[1].Opacity);
+        NarrativePresentation.ApplyDialogueText(text, effects, story with { VisiblePrefix = 3 }, true);
+        Arrange(effects, 300, 150);
+        Assert.Equal(glyphs, effects.Children.OfType<TextBlock>());
+        Assert.Equal(1, glyphs[1].Opacity);
+        Assert.Equal(FontWeights.Bold, glyphs[1].FontWeight);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task Effect_DisabledScrambleShowsReadableText_AndReenablingRestoresTheEffect() => Sta(() =>
     {
         var text = new TextBlock { Text = "Алиса 👩‍👩‍👧‍👦", FontSize = 24, Foreground = Brushes.White };

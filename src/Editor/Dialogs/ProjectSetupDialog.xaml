@@ -36,14 +36,14 @@
                 </Grid>
                 <Grid Grid.Row="4">
                     <Grid.RowDefinitions><RowDefinition Height="22"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                    <TextBlock Text="Цветовая палитра игры" FontWeight="SemiBold" Margin="4,0"/>
+                    <TextBlock Text="Цветовая палитра" FontWeight="SemiBold" Margin="4,0"/>
                     <UniformGrid x:Name="PaletteCards" Grid.Row="1" Columns="5"/>
                 </Grid>
                 <TextBlock x:Name="SetupErrorText" Grid.Row="5" Foreground="#E46A83" TextWrapping="Wrap" FontSize="12" Margin="4,0"/>
                 <DockPanel Grid.Row="6">
-                    <Button x:Name="BackButton" Content="Назад" Padding="18,4" Click="Back_Click"/>
+                    <Button x:Name="CancelButton" Content="Отмена" IsCancel="True" Padding="18,4" Click="Cancel_Click"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Content="Отмена" IsCancel="True" Padding="18,4" Margin="0,0,10,0"/>
+                        <Button x:Name="BackButton" Content="Назад" Padding="18,4" Margin="0,0,10,0" Click="Back_Click"/>
                         <Button x:Name="CreateButton" Content="Создать проект" IsDefault="True" Padding="22,4" Click="Create_Click"/>
                     </StackPanel>
                 </DockPanel>

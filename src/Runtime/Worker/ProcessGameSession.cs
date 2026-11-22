@@ -28,6 +28,19 @@ public sealed class ProcessGameSession : IGameSession
     private GameSystemServices? localSystem;
     internal Func<SystemCall, CancellationToken, Task<SystemReply>>? SystemHost { get; init; }
     internal Func<double>? PlayClock { get; init; }
+    private int? playerDialogueSpeed;
+    private long dialogueSpeedVersion, appliedDialogueSpeedVersion;
+    internal int? InitialDialogueSpeed { init => playerDialogueSpeed = value; }
+    internal int? EffectiveDialogueSpeed
+    {
+        get { lock (sync) return dialogueSpeedVersion != appliedDialogueSpeedVersion ? playerDialogueSpeed : snapshot.DialogueSpeed ?? playerDialogueSpeed; }
+    }
+
+    internal void SetPlayerDialogueSpeed(int speed)
+    {
+        DialogueSpeed.Validate(speed);
+        lock (sync) { playerDialogueSpeed = speed; dialogueSpeedVersion++; }
+    }
     private double playedSeconds;
     private readonly bool pluginsEnabled;
     private readonly string[] applicationPlugins;
@@ -220,6 +233,16 @@ public sealed class ProcessGameSession : IGameSession
 
     private async Task<WorkerMessage> SendAsync(Process process, WorkerRequest request, CancellationToken token)
     {
+        long speedVersion;
+        lock (sync)
+        {
+            speedVersion = dialogueSpeedVersion;
+            request = request with
+            {
+                DialogueSpeed = playerDialogueSpeed,
+                ConfirmedDialogueSpeed = speedVersion != appliedDialogueSpeedVersion
+            };
+        }
         request = request with { ApplicationPlugins = applicationPlugins, PlayedSeconds = PlayClock?.Invoke() ?? playedSeconds };
         var reader = responses!;
         await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(request).AsMemory(), token).ConfigureAwait(false);
@@ -270,6 +293,7 @@ public sealed class ProcessGameSession : IGameSession
                 throw CreateException(message);
             }
             if (message.Type != "result" || message.Snapshot == null) throw new InvalidDataException("Некорректный ответ Lua.");
+            lock (sync) appliedDialogueSpeedVersion = speedVersion;
             if (request.Command == "restore" && request.Checkpoint != null) playedSeconds = request.Checkpoint.PlayedSeconds;
             return message;
         }

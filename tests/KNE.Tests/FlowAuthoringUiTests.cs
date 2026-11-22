@@ -73,7 +73,7 @@ public sealed class FlowAuthoringUiTests
         var project = await fixture.LoadAsync();
         await WorkspaceTabsTests.Sta(async () =>
         {
-            var window = new GameWindow(project, new GameSaveStore(project.Path, Path.Combine(fixture.Root, "saves")));
+            var window = new GameWindow(project, new GameSaveStore(project.Path, Path.Combine(fixture.Root, "saves")).WithInstantDialogue());
             try
             {
                 await GameAction(window, () => window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent)));
@@ -312,7 +312,7 @@ public sealed class FlowAuthoringUiTests
         var project = await fixture.LoadAsync();
         await WorkspaceTabsTests.Sta(async () =>
         {
-            var window = new GameWindow(project, new GameSaveStore(project.Path, Path.Combine(fixture.Root, "saves")));
+            var window = new GameWindow(project, new GameSaveStore(project.Path, Path.Combine(fixture.Root, "saves")).WithInstantDialogue());
             try
             {
                 await GameAction(window, () => window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent)));

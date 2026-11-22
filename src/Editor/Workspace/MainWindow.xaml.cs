@@ -245,7 +245,7 @@ public partial class MainWindow : Window
         await RunOperationAsync(async () =>
         {
             if (!await EnsureProjectStorageAsync()) return;
-            string path = await ProjectCreator.CreateProjectAsync(name, settings.ProjectsStoragePath, setup.Mode, setup.Options, lifetime.Token);
+            string path = await ProjectCreator.CreateEmptyProjectAsync(name, settings.ProjectsStoragePath, setup.Mode, setup.Options, lifetime.Token);
             if (!await OpenProjectAsync(path, remember: true)) return;
             if (currentProject != null) await OpenScriptAsync(currentProject.MainScenePath);
         }, "Создание проекта…");
@@ -263,13 +263,22 @@ public partial class MainWindow : Window
                 EditorTheme.Apply(authoring, theme);
                 if (authoring.ShowDialog() != true) return null;
                 mode = authoring.AuthoringMode;
-                if (setup == null)
+                while (true)
                 {
-                    setup = new ProjectSetupDialog { Owner = owner };
-                    EditorTheme.Apply(setup, theme);
+                    var templates = new ProjectTemplateDialog(theme) { Owner = owner };
+                    if (templates.ShowDialog() != true)
+                    {
+                        if (templates.BackRequested) break;
+                        return null;
+                    }
+                    if (setup == null)
+                    {
+                        setup = new ProjectSetupDialog { Owner = owner };
+                        EditorTheme.Apply(setup, theme);
+                    }
+                    if (setup.ShowSettings() == true) return (mode, setup.Options);
+                    if (!setup.BackRequested) return null;
                 }
-                if (setup.ShowSettings() == true) return (mode, setup.Options);
-                if (!setup.BackRequested) return null;
             }
         }
         finally

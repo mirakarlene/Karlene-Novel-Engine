@@ -44,7 +44,12 @@ public partial class MainWindow
     {
         EditorHotkeys.SetProfile(this, settings.Hotkeys);
         SceneEditor.ExtendedSceneBlockLimit = settings.Editor.ExtendedSceneBlockLimit;
-        foreach (var editor in OpenEditors) editor.ExtendedSceneBlockLimit = settings.Editor.ExtendedSceneBlockLimit;
+        SceneEditor.ApplyBlockGlow(settings.Editor.GlowMode, settings.Editor.SmoothBlockGlow);
+        foreach (var editor in OpenEditors)
+        {
+            editor.ExtendedSceneBlockLimit = settings.Editor.ExtendedSceneBlockLimit;
+            editor.ApplyBlockGlow(settings.Editor.GlowMode, settings.Editor.SmoothBlockGlow);
+        }
         saveSchedule.Reset(sessionTime.Elapsed); UpdateBreakUi();
     }
     private void EditorSaved(ScriptEditor editor, bool changed)

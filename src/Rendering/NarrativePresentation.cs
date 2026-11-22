@@ -34,6 +34,12 @@ internal static class NarrativePresentation
         { "center" => TextAlignment.Center, "right" => TextAlignment.Right, "justify" => TextAlignment.Justify, _ => TextAlignment.Left };
         InlineTextPresentation.Apply(speaker, story.Speaker);
         speaker.Visibility = story.Speaker.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        ApplyDialogueText(text, effects, story, animate);
+    }
+
+    internal static void ApplyDialogueText(TextBlock text, EffectTextPresenter effects, StoryFrame story, bool animate)
+    {
+        var cache = brushes.GetOrCreateValue(text);
         int? visible = null;
         if (story.Kind == "clear_text")
         {
@@ -41,11 +47,12 @@ internal static class NarrativePresentation
             int count = Math.Clamp((int)Math.Ceiling(elements.Length * (1 - story.EraseProgress)), 0, elements.Length);
             visible = elements.Take(count).Sum(element => element.Length);
         }
-        InlineTextPresentation.Apply(text, story.Text, visible, story.VisibleSuffix, preserveLayout: story.VisibleSuffix.HasValue);
+        InlineTextPresentation.Apply(text, story.Text, visible, story.VisibleSuffix,
+            preserveLayout: story.VisibleSuffix.HasValue || story.VisiblePrefix.HasValue, visiblePrefix: story.VisiblePrefix);
         bool continuation = story.PresentationId > 0 && Equals(cache.SpokenFrame, story.PresentationId);
         if (story.PresentationId > 0) cache.SpokenFrame = story.PresentationId;
         else if (story.Kind == "dialogue") cache.SpokenFrame = story.Identity;
-        effects.Present(text, story.VisibleSuffix.HasValue ? null : story.TextEffect, animate, cache.SpokenFrame, continuation || story.Kind is "text_pause" or "clear_text");
+        effects.PresentNarrative(text, story, animate, cache.SpokenFrame, continuation || story.Kind is "text_pause" or "clear_text");
     }
 
     private static Brush Brush(string value)

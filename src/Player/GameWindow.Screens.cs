@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -25,6 +26,7 @@ public partial class GameWindow
                 preferences = JsonSerializer.Deserialize<GamePreferences>(File.ReadAllText(path)) ?? new();
             preferences.MusicVolume = double.IsFinite(preferences.MusicVolume) ? Math.Clamp(preferences.MusicVolume, 0, 1) : 0.8;
             preferences.SoundVolume = double.IsFinite(preferences.SoundVolume) ? Math.Clamp(preferences.SoundVolume, 0, 1) : 0.8;
+            preferences.TextSpeed = Math.Clamp(preferences.TextSpeed, 0, DialogueSpeed.Maximum);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { QueueOutput("Настройки игрока не прочитаны: " + ex.Message); }
         music.Volume = preferences.MusicVolume; sound.Volume = preferences.SoundVolume;
@@ -54,10 +56,14 @@ public partial class GameWindow
         var layout = project.Engine.Screens.Screens.FirstOrDefault(s => s.Id == id);
         if (layout == null) { Notify("Экран не найден."); return; }
         activeScreen = id;
+        PauseDialogueReveal();
         MenuOverlay.Visibility = Visibility.Visible; DialoguePanel.Visibility = Visibility.Collapsed; GameControls.Visibility = Visibility.Collapsed;
         ScreenViewbox.Visibility = Visibility.Visible; SaveBrowserPanel.Visibility = Visibility.Collapsed;
         MenuScroll.Visibility = Visibility.Collapsed;
         ScreenCanvas.Children.Clear(); screenButtons.Clear();
+        DialogueSpeedFallback.Content = null;
+        DialogueSpeedFallback.Visibility = Visibility.Collapsed;
+        ScreenViewbox.Margin = new Thickness();
         foreach (var element in layout.Elements)
         {
             FrameworkElement view;
@@ -115,13 +121,60 @@ public partial class GameWindow
                     preferencesDirty = true;
                 };
             }
+            if (view is StackPanel textSpeed && element.Type == "slider" && element.Action == "text_speed")
+                BindTextSpeed(textSpeed);
             ScreenCanvas.Children.Add(view);
             ScreenRenderer.Animate(view, element, preferences.Animate && project.Engine.Theme.AnimationEnabled);
         }
+        if (layout.Kind == "settings" && !layout.Elements.Any(element => element is { Type: "slider", Action: "text_speed" }))
+            AddLegacyTextSpeed(layout);
         UpdateScreenButtons();
         MenuOverlay.BeginAnimation(OpacityProperty, null); MenuOverlay.Opacity = 1;
         if (preferences.Animate && project.Engine.Theme.AnimationEnabled)
             MenuOverlay.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromSeconds(0.25)));
+    }
+
+    private void BindTextSpeed(StackPanel panel)
+    {
+        var slider = panel.Children.OfType<Slider>().Single();
+        var label = panel.Children.OfType<TextBlock>().Single();
+        string title = label.Text;
+        AutomationProperties.SetName(slider, title);
+        slider.Value = (runtime as ProcessGameSession)?.EffectiveDialogueSpeed ?? preferences.TextSpeed;
+        UpdateLabel();
+        slider.ValueChanged += (_, _) =>
+        {
+            preferences.TextSpeed = (int)slider.Value;
+            preferencesDirty = true;
+            (runtime as ProcessGameSession)?.SetPlayerDialogueSpeed(preferences.TextSpeed);
+            UpdateLabel();
+        };
+
+        void UpdateLabel() => label.Text = slider.Value == 0 ? $"{title} · мгновенно" : $"{title} · {slider.Value:0} симв/с";
+    }
+
+    private void AddLegacyTextSpeed(GameScreen layout)
+    {
+        var element = ScreenLayouts.DialogueSpeedElement();
+        var occupied = layout.Elements.Where(item => item.Type is not ("panel" or "image"))
+            .Select(item => new Rect(item.X, item.Y, item.Width, item.Height)).ToArray();
+        foreach (double x in new[] { element.X, 24, 856 })
+        foreach (double y in new[] { element.Y }.Concat(Enumerable.Range(0, 11).Select(index => (double)index * 60 + 12)))
+        {
+            if (occupied.Any(bounds => bounds.IntersectsWith(new Rect(x, y, element.Width, element.Height)))) continue;
+            element.X = x; element.Y = y;
+            var slider = (StackPanel)ScreenRenderer.Create(element, project.Engine.Theme, project.Path, ResolveScreenText);
+            BindTextSpeed(slider);
+            ScreenCanvas.Children.Add(slider);
+            return;
+        }
+        var footer = (StackPanel)ScreenRenderer.Create(element, project.Engine.Theme, project.Path, ResolveScreenText);
+        footer.Width = double.NaN;
+        footer.MinWidth = 230;
+        BindTextSpeed(footer);
+        DialogueSpeedFallback.Content = footer;
+        DialogueSpeedFallback.Visibility = Visibility.Visible;
+        ScreenViewbox.Margin = new Thickness(0, 0, 0, element.Height + DialogueSpeedFallback.Margin.Bottom);
     }
 
     private async Task DispatchScreenActionAsync(ScreenElement element)
@@ -232,4 +285,5 @@ public sealed class GamePreferences
     public bool? Fullscreen { get; set; }
     public double MusicVolume { get; set; } = 0.8;
     public double SoundVolume { get; set; } = 0.8;
+    public int TextSpeed { get; set; } = DialogueSpeed.Default;
 }

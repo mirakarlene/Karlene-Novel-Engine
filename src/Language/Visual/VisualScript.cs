@@ -274,7 +274,7 @@ public enum ScriptNodeKind
     Initialization, ReverseDialogue, Watermark, ShowInput, GlobalTimer, BuildInfo, ConnectFont, LuaBlock, CallVisualLua,
     ShowVideo, EnableConsole, DisableConsole, GlobalPause,
     TriggerSequence, TriggerPointerMove, TriggerPointerEnterZone, TriggerPointerLeave, TriggerDoubleClick, TriggerLongPress,
-    TriggerWheel, TriggerFocus, TriggerResize, TriggerClipboard, TriggerGesture
+    TriggerWheel, TriggerFocus, TriggerResize, TriggerClipboard, TriggerGesture, SetDialogueSpeed
 }
 
 /// <summary>Explicit game termination policy; Return preserves existing subroutine graphs.</summary>
@@ -472,6 +472,7 @@ public sealed class ScriptNode
         ScriptNodeKind.Timer => "Таймер", ScriptNodeKind.Pause => "Пауза", ScriptNodeKind.WaitCondition => "Ожидание условия",
         ScriptNodeKind.IncludeLua => "Подключить .lua", ScriptNodeKind.IncludeCs => "Подключить .cs", ScriptNodeKind.Script => "Скрипт", ScriptNodeKind.CallVisualLua => "Вызвать VLua",
         ScriptNodeKind.ConfigureDialogue => "Настроить текстовое окно", ScriptNodeKind.ConfigureButton => "Настроить кнопку",
+        ScriptNodeKind.SetDialogueSpeed => "Изменить скорость текста",
         ScriptNodeKind.ClearBackgrounds => "Удалить все фоны", ScriptNodeKind.ClearSprites => "Удалить все спрайты",
         ScriptNodeKind.RegisterCharacter => "Персонаж", ScriptNodeKind.UpdateCharacter => "Изменить персонажа",
         ScriptNodeKind.SetSpeaker => "Установить спикера", ScriptNodeKind.ResetSpeakers => "Сбросить спикеров", ScriptNodeKind.TextPause => "Пауза в тексте",

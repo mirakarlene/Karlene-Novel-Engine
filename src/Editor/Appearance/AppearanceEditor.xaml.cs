@@ -28,7 +28,7 @@ public partial class AppearanceEditor : UserControl
         ElementAction.ItemsSource = new[] { new AppearanceChoice("none", "Без действия"), new("start", "Новая игра"), new("continue", "Продолжить"),
             new("resume", "Вернуться к игре"), new("save", "Быстрое сохранение"), new("saves", "Выбор сохранений"), new("settings", "Настройки"),
             new("back", "Назад"), new("exit", "Выйти"), new("navigate", "Перейти на экран"), new("fullscreen", "Полный экран"),
-            new("animation", "Анимация"), new("music_volume", "Громкость музыки"), new("sound_volume", "Громкость звука"),
+            new("animation", "Анимация"), new("music_volume", "Громкость музыки"), new("sound_volume", "Громкость звука"), new("text_speed", "Скорость текста"),
             new("save_slot", "Записать ручной слот"), new("load_slot", "Загрузить выбранный слот"), new("delete_slot", "Удалить выбранный слот") };
         ScreenRole.ItemsSource = new[] { new AppearanceChoice("custom", "Свой экран"), new("main_menu", "Главное меню"), new("pause", "Пауза"), new("settings", "Настройки"), new("saves", "Сохранения"), new("gameplay", "Игровая сцена") };
         PaletteChoice.ItemsSource = new[] { new AppearanceChoice("violet", "Фиолетовая"), new("ocean", "Океан"), new("rose", "Розовая"), new("forest", "Лес"), new("amber", "Янтарь"), new("custom", "Своя") };

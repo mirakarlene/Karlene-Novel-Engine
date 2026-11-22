@@ -53,6 +53,7 @@ public partial class MainWindow
     private ScriptEditor CreateTabEditor()
     {
         var editor = new ScriptEditor { ShowGraphGrid = settings.ShowGraphGrid, ExtendedSceneBlockLimit = settings.Editor.ExtendedSceneBlockLimit };
+        editor.ApplyBlockGlow(settings.Editor.GlowMode, settings.Editor.SmoothBlockGlow);
         editor.ApplyGraphMinimap(settings.GraphMinimap);
         editor.Saved += EditorSaved;
         editor.BlockLibraryRequested += SceneEditor_BlockLibraryRequested;
@@ -94,6 +95,7 @@ public partial class MainWindow
         if (tab == null || !await editor.CanLeaveAsync()) return;
         DocumentTabs.Items.Remove(tab);
         DetachTabState(editor);
+        editor.CloseDetachedProperties();
         editor.Clear();
         if (editor != SceneEditor) EditorWorkspace.Children.Remove(editor);
         ShowActiveEditor();
@@ -120,6 +122,7 @@ public partial class MainWindow
         foreach (var editor in editors)
         {
             DetachTabState(editor);
+            editor.CloseDetachedProperties();
             editor.Clear();
             if (editor != SceneEditor) EditorWorkspace.Children.Remove(editor);
         }

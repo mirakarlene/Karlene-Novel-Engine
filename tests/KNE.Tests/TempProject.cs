@@ -33,3 +33,14 @@ internal sealed class TempProject : IDisposable
         Directory.Delete(fullPath, recursive: true);
     }
 }
+
+internal static class PlayerTestPreferences
+{
+    internal static GameSaveStore WithInstantDialogue(this GameSaveStore store)
+    {
+        Directory.CreateDirectory(store.DirectoryPath);
+        string path = Path.Combine(store.DirectoryPath, "preferences.json");
+        if (!File.Exists(path)) File.WriteAllText(path, """{"TextSpeed":0}""");
+        return store;
+    }
+}

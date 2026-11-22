@@ -14,6 +14,30 @@ public sealed class ProjectSetupTests
     [Theory]
     [InlineData(ProjectAuthoringMode.Code)]
     [InlineData(ProjectAuthoringMode.Visual)]
+    public async Task EmptyTemplate_HasWorkingEntryAndLuaDiagnosticsWithoutDemoContent(ProjectAuthoringMode mode)
+    {
+        using var fixture = new TempProject();
+        string path = await ProjectCreator.CreateEmptyProjectAsync("Пустой проект", fixture.Root, mode, new ProjectCreationOptions());
+        var project = await ProjectLoader.LoadProjectAsync(path);
+        Assert.Equal(ProjectDiagnosticsTemplate.CodePath, project.Configuration.EntryPoints!.InitScript);
+        Assert.True(File.Exists(Path.Combine(path, "README.txt")));
+        Assert.True(File.Exists(Path.Combine(path, ProjectDiagnosticsTemplate.CodePath)));
+        Assert.False(File.Exists(Path.Combine(path, ProjectDiagnosticsTemplate.GraphPath)));
+        if (mode == ProjectAuthoringMode.Visual)
+        {
+            var graph = VisualScript.Parse(await File.ReadAllTextAsync(project.MainScenePath));
+            Assert.Equal(new[] { ScriptNodeKind.Start, ScriptNodeKind.End }, graph.Nodes.Select(node => node.Kind));
+            Assert.Equal(graph.Nodes[1].Id, graph.Nodes[0].Next);
+        }
+        else Assert.Equal("function main()\nend", (await File.ReadAllTextAsync(project.MainScenePath)).Trim());
+        await using var runtime = new LuaRuntime(project, _ => { }, interactive: true);
+        await runtime.StartAsync();
+        Assert.True(runtime.Story.Completed);
+    }
+
+    [Theory]
+    [InlineData(ProjectAuthoringMode.Code)]
+    [InlineData(ProjectAuthoringMode.Visual)]
     public async Task Creation_DefaultsToFullHdAutomaticApiSixtyFpsAndVioletForBothAuthoringModes(ProjectAuthoringMode mode)
     {
         using var fixture = new TempProject();
@@ -154,7 +178,12 @@ public sealed class ProjectSetupTests
                     var body = Assert.IsType<StackPanel>(card.Content);
                     var thumbnail = Assert.Single(Assert.IsType<Canvas>(body.Children[0]).Children.OfType<Border>()); thumbnails.Add(preset.Id, thumbnail);
                     Assert.Equal((double)preset.Width / preset.Height, thumbnail.Width / thumbnail.Height, 10);
-                    Assert.Equal(2, body.Children.Count); Assert.Equal($"{preset.Width}×{preset.Height}", ((TextBlock)body.Children[1]).Text);
+                    Assert.Null(thumbnail.Child);
+                    Assert.Equal(2, body.Children.Count);
+                    var label = Assert.IsType<TextBlock>(body.Children[1]);
+                    Assert.Equal($"{preset.Width}×{preset.Height}", label.Text);
+                    Assert.Equal(TextAlignment.Center, label.TextAlignment);
+                    Assert.Equal(15, label.FontSize);
                     card.IsChecked = true; Assert.Equal(preset.Width, dialog.Options.Width); Assert.Equal(preset.Height, dialog.Options.Height);
                 }
                 Assert.True(thumbnails["wide"].Width > thumbnails["fhd"].Width); Assert.True(thumbnails["qhd"].Height > thumbnails["fhd"].Height);
@@ -165,6 +194,7 @@ public sealed class ProjectSetupTests
                 {
                     var card = Find<RadioButton>(dialog, "Palette_" + palette.Value); card.IsChecked = true; Assert.Equal(palette.Value, dialog.Options.Palette);
                     var preview = Assert.IsType<Border>(Assert.IsType<StackPanel>(card.Content).Children[0]);
+                    Assert.Equal(TextAlignment.Center, Assert.IsType<TextBlock>(((StackPanel)card.Content).Children[1]).TextAlignment);
                     var expected = new GameTheme(); if (palette.Value != "violet") ThemePalettes.Apply(expected, palette.Value);
                     Assert.Equal((Color)ColorConverter.ConvertFromString(expected.BackgroundColor), Assert.IsType<SolidColorBrush>(preview.Background).Color);
                     previewColors.Add(Assert.IsType<SolidColorBrush>(preview.Background).Color);
@@ -206,6 +236,17 @@ public sealed class ProjectSetupTests
                             Click(Find<Button>(first, "ContinueButton"));
                             break;
                         case 1:
+                        case 5:
+                            var templates = Assert.IsType<ProjectTemplateDialog>(active);
+                            var container = Assert.IsType<StackPanel>(templates.Content);
+                            var tiles = Assert.IsType<UniformGrid>(container.Children[0]);
+                            Assert.Equal((4, 2, 8), (tiles.Columns, tiles.Rows, tiles.Children.Count));
+                            var empty = Assert.IsType<Button>(tiles.Children[0]);
+                            Assert.Equal("Пустой шаблон", empty.Content);
+                            Assert.All(tiles.Children.OfType<Button>().Skip(1), placeholder => Assert.Equal("…", Assert.IsType<TextBlock>(placeholder.Content).Text));
+                            Click(empty);
+                            break;
+                        case 2:
                             settings = Assert.IsType<ProjectSetupDialog>(active);
                             Assert.False(first!.IsVisible);
                             Assert.Equal(WindowStartupLocation.CenterOwner, settings.WindowStartupLocation);
@@ -218,12 +259,17 @@ public sealed class ProjectSetupTests
                             Find<RadioButton>(settings, "Palette_forest").IsChecked = true;
                             Click(Find<Button>(settings, "BackButton"));
                             break;
-                        case 2:
+                        case 3:
+                            var templateBack = Assert.IsType<ProjectTemplateDialog>(active);
+                            var templateActions = Assert.IsType<DockPanel>(((StackPanel)templateBack.Content).Children[1]);
+                            Click(templateActions.Children.OfType<Button>().Single(button => Equals(button.Content, "Назад")));
+                            break;
+                        case 4:
                             var authoring = Assert.IsType<ProjectCreationDialog>(active);
                             Assert.Equal(ProjectAuthoringMode.Visual, authoring.AuthoringMode);
                             Click(Find<Button>(authoring, "ContinueButton"));
                             break;
-                        case 3:
+                        case 6:
                             Assert.Same(settings, active);
                             Assert.True(settings!.TryReadOptions(out var chosen));
                             Assert.Equal(expected, chosen);
@@ -249,6 +295,16 @@ public sealed class ProjectSetupTests
             finally { timer.Stop(); if (owner.IsVisible) owner.Close(); }
         });
     }
+
+    [Fact]
+    public Task Wizard_CancelExitsWithoutReturningToTemplateSelection() => WorkspaceTabsTests.Sta(() =>
+    {
+        var dialog = new ProjectSetupDialog { ShowInTaskbar = false, ShowActivated = false, Left = -2000, WindowStartupLocation = WindowStartupLocation.Manual };
+        dialog.Loaded += (_, _) => Click(Find<Button>(dialog, "CancelButton"));
+        Assert.False(dialog.ShowSettings());
+        Assert.False(dialog.BackRequested);
+        return Task.CompletedTask;
+    });
 
     [Theory]
     [InlineData(1024, 701)]

@@ -21,7 +21,7 @@ public sealed class PlayerProgressOptionsTests
         fixture.Write("engine/game.json", JsonSerializer.Serialize(new GameDefaults { AutoSave = false, RollbackDepth = depth }, EngineSettings.JsonOptions));
         await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, new() { Preloading = false });
         fixture.Write("game/scenes/main.krl", "function main() state.step=1; d(nil,'one'); state.step=2; d(nil,'two'); state.step=3; d(nil,'three'); state.step=4; d(nil,'four') end");
-        var project = await fixture.LoadAsync(); var slots = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "slots")); var window = new GameWindow(project, slots);
+        var project = await fixture.LoadAsync(); var slots = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "slots")); var window = new GameWindow(project, slots.WithInstantDialogue());
         try
         {
             await InvokeTask(window, "StartGameAsync");
@@ -57,7 +57,7 @@ public sealed class PlayerProgressOptionsTests
         fixture.Write("engine/game.json", JsonSerializer.Serialize(new GameDefaults { AutoSaveInterval = interval, AutoSaveActions = 2 }, EngineSettings.JsonOptions));
         await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, new() { Preloading = false });
         fixture.Write("game/scenes/main.krl", "function main() d(nil,'one'); local chosen=choice('Choose',{'Left','Right'}); state.answer=chosen; d(nil,'two'); d(nil,'three'); d(nil,'four') end");
-        var project = await fixture.LoadAsync(); var slots = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "slots")); var window = new GameWindow(project, slots);
+        var project = await fixture.LoadAsync(); var slots = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "slots")); var window = new GameWindow(project, slots.WithInstantDialogue());
         try
         {
             await InvokeTask(window, "StartGameAsync"); Assert.Equal("one", (await slots.LoadAsync("auto")).Frame.Text);
@@ -132,7 +132,7 @@ public sealed class PlayerProgressOptionsTests
         await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, new() { Preloading = false });
         fixture.Write("game/plugins/save-hook.lua", "function save_hook(data) state.save_events=(state.save_events or 0)+1 end; kne.on('on_save','save_hook')");
         fixture.Write("game/scenes/main.krl", "function main() include_lua('game/plugins/save-hook.lua'); state.save_events=0; d(nil,'one'); d(nil,'two'); d(nil,'three'); d(nil,'four') end");
-        var project = await fixture.LoadAsync(); var slots = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "slots")); var window = new GameWindow(project, slots);
+        var project = await fixture.LoadAsync(); var slots = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "slots")); var window = new GameWindow(project, slots.WithInstantDialogue());
         try
         {
             await InvokeTask(window, "StartGameAsync"); await Next(window, "two");

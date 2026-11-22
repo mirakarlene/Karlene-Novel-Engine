@@ -125,6 +125,8 @@ public partial class ScriptEditor
             Choice("ScreenLayerInput", "Слой", node.ScreenLayer, ["main", "overlay"], (value, text) => value.ScreenLayer = text);
         }
         if (node.Kind is ScriptNodeKind.ConfigureDialogue or ScriptNodeKind.ConfigureButton) AddUiConfigurationFields(node);
+        if (node.Kind == ScriptNodeKind.SetDialogueSpeed)
+            Number("DialogueSpeedInput", "Символов в секунду (0 — мгновенно)", node.Amount, (value, speed) => value.Amount = DialogueSpeed.Validate(speed));
         if (node.Kind == ScriptNodeKind.Script)
         {
             var edit = new Button { Name = "EditProjectScriptButton", Content = "Создать / редактировать скрипт…", Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(0, 0, 0, 10) };

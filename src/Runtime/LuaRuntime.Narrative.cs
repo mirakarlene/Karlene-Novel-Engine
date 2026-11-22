@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json;
 using NLua;
 
@@ -5,6 +6,34 @@ namespace KNE;
 
 public sealed partial class LuaRuntime
 {
+    private int? playerDialogueSpeed, initialDialogueSpeed, currentDialogueSpeed;
+    internal int? CurrentDialogueSpeed => currentDialogueSpeed;
+
+    internal Task SetPlayerDialogueSpeedAsync(int? speed, CancellationToken token = default, bool confirmed = false)
+    {
+        if (speed == null || speed == playerDialogueSpeed && (!confirmed || speed == currentDialogueSpeed)) return Task.CompletedTask;
+        DialogueSpeed.Validate(speed.Value);
+        return RunAsync(() =>
+        {
+            playerDialogueSpeed = speed;
+            if (initialized) ApplyPlayerDialogueSpeed(speed.Value);
+        }, token);
+    }
+
+    private void ApplyPlayerDialogueSpeed(int speed)
+    {
+        history.Add(new StoryAction("text_speed", FrameSignature(Story), Option: speed));
+        currentDialogueSpeed = speed;
+    }
+
+    public int ReadDialogueSpeedForLua() => currentDialogueSpeed ?? -1;
+
+    public string ApplyDialogueSpeedForLua(double speed)
+    {
+        try { currentDialogueSpeed = DialogueSpeed.Validate(speed); return ""; }
+        catch (InvalidDataException error) { return error.Message; }
+    }
+
     private readonly Dictionary<string, CharacterProfile> characters = new(StringComparer.Ordinal);
 
     private void InitializeNarrative()
@@ -85,24 +114,24 @@ public sealed partial class LuaRuntime
         TextEffectSettings? effect = null;
         if (value["character"] is string characterJson && characterJson.Length > 0) character = ReadNarrative<CharacterProfile>(characterJson);
         if (value["effect"] is string effectJson && effectJson.Length > 0) effect = ReadNarrative<TextEffectSettings>(effectJson);
+        var remaining = value["remaining"] is { } seconds ? Convert.ToDouble(seconds) : (double?)null;
+        bool fromEnd = value["reveal_from_end"] as bool? != false;
+        var reveal = value["reveal_count"] is { } count
+            ? new DialogueReveal(Convert.ToInt32(value["reveal_from"]), Convert.ToInt32(count), Convert.ToDouble(value["seconds"]), fromEnd)
+            : null;
+        int? visible = reveal?.VisibleAt(remaining ?? reveal.Duration);
+        if (visible == null && value["reveal_visible"] is { } revealed) visible = Convert.ToInt32(revealed);
         return frame with
         {
             Character = character, TextEffect = effect,
             PresentationId = Convert.ToInt64(value["presentation_id"] ?? 0),
-            RemainingSeconds = value["remaining"] is { } remaining ? Convert.ToDouble(remaining) : null,
+            RemainingSeconds = remaining,
             IsSkippable = value["skippable"] as bool? != false,
             EraseProgress = value["erase_progress"] is { } progress ? Convert.ToDouble(progress) : 0,
-            VisibleSuffix = value["reveal_count"] is { } count
-                ? VisibleSuffix(value, Convert.ToInt32(count))
-                : value["reveal_visible"] is { } visible ? Convert.ToInt32(visible) : null
+            Reveal = reveal,
+            VisibleSuffix = fromEnd ? visible : null,
+            VisiblePrefix = fromEnd ? null : visible
         };
     }
 
-    private static int VisibleSuffix(LuaTable value, int count)
-    {
-        int start = Convert.ToInt32(value["reveal_from"]);
-        double duration = Convert.ToDouble(value["seconds"]);
-        double progress = Math.Clamp(1 - Convert.ToDouble(value["remaining"] ?? duration) / duration, 0, 1);
-        return start + (int)Math.Floor(progress * (count - start));
-    }
 }

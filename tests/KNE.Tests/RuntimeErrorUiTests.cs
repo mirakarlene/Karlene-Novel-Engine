@@ -24,7 +24,7 @@ public sealed class RuntimeErrorUiTests
         await Sta(async () =>
         {
             var store = new GameSaveStore(project.Path);
-            var window = new GameWindow(project, store);
+            var window = new GameWindow(project, store.WithInstantDialogue());
             object content = window.Content;
             bool closed = false;
             window.Closed += (_, _) => closed = true;
@@ -57,7 +57,7 @@ public sealed class RuntimeErrorUiTests
         await Sta(async () =>
         {
             var store = new GameSaveStore(project.Path);
-            var window = new GameWindow(project, store);
+            var window = new GameWindow(project, store.WithInstantDialogue());
             try
             {
                 await Start(window);
@@ -82,7 +82,7 @@ public sealed class RuntimeErrorUiTests
         await Sta(async () =>
         {
             using var source = new HwndSource(new HwndSourceParameters("KNE runtime error keyboard test") { Width = 1, Height = 1, WindowStyle = 0 });
-            var window = new GameWindow(project);
+            var window = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue());
             try
             {
                 await Start(window);
@@ -110,7 +110,7 @@ public sealed class RuntimeErrorUiTests
         await Sta(async () =>
         {
             var store = new GameSaveStore(project.Path);
-            var window = new GameWindow(project, store);
+            var window = new GameWindow(project, store.WithInstantDialogue());
             try
             {
                 window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
@@ -139,7 +139,7 @@ public sealed class RuntimeErrorUiTests
         await Sta(async () =>
         {
             var store = new GameSaveStore(project.Path);
-            var window = new GameWindow(project, store);
+            var window = new GameWindow(project, store.WithInstantDialogue());
             try
             {
                 await Start(window);
@@ -162,7 +162,7 @@ public sealed class RuntimeErrorUiTests
         await Sta(async () =>
         {
             var store = new GameSaveStore(project.Path);
-            var window = new GameWindow(project, store);
+            var window = new GameWindow(project, store.WithInstantDialogue());
             try
             {
                 await Start(window);
