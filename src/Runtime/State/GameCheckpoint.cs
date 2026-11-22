@@ -20,6 +20,8 @@ public sealed record GameCheckpoint(int Version, string ProjectPath, string Fing
     /// <summary>Active play time accumulated in this timeline.</summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
     public double PlayedSeconds { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? InitialDialogueSpeed { get; init; }
 }
 
 public interface IGameSession : IAsyncDisposable

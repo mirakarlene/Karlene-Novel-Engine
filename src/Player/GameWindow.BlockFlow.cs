@@ -25,6 +25,14 @@ public partial class GameWindow
     {
         if (pumpingSceneTime || clockSuspended || closed || startupFailed || systemFrozen || !ready || execution != null ||
             MenuOverlay.Visibility == System.Windows.Visibility.Visible || !runtime.Story.NeedsTick) return;
+        // The visible characters are interpolated locally. A foreground-only reveal needs
+        // one worker tick at its deadline, not a replay entry for every display update.
+        if (runtime.Story is { Reveal: not null, HasBackgroundTasks: false, RemainingSeconds: double remaining } reveal)
+        {
+            double batch = Math.Min(60, remaining);
+            if (!ReferenceEquals(reveal, dialogueRevealFrame) || RevealElapsed < batch) return;
+            seconds = batch;
+        }
         pumpingSceneTime = true;
         using var operation = CancellationTokenSource.CreateLinkedTokenSource(blockFlowLifetime.Token);
         clockTickOperation = operation; StopButton.IsEnabled = true;

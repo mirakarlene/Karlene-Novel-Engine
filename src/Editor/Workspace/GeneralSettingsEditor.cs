@@ -12,6 +12,11 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     internal ComboBox BackupFrequency { get; } = Choice([(-1, "При каждом сохранении проекта"), (120, "Раз в два часа"), (60, "Раз в час"), (30, "Раз в 30 минут"), (10, "Раз в 10 минут"), (0, "Вручную (только по кнопке)")]);
     internal ComboBox BackupCopies { get; } = Choice(EditorPreferences.BackupLimits.Select(n => (n, n.ToString())));
     internal CheckBox ExtendedSceneBlockLimit { get; } = Check("Увеличить лимит блоков до 1000 на сцену");
+    internal ComboBox BlockGlowInput { get; } = GraphicsSettingsEditor.Choice([
+        new GraphicsOption<BlockGlowMode>(BlockGlowMode.Off, "Отключить"), new(BlockGlowMode.Weak, "Слабое"),
+        new(BlockGlowMode.Medium, "Среднее"), new(BlockGlowMode.Squares, "Квадратные лампочки")]);
+    internal ComboBox BlockGlowSmoothingInput { get; } = GraphicsSettingsEditor.Choice([
+        new GraphicsOption<bool>(false, "Отключить"), new(true, "Включить")]);
     internal ComboBox AutosaveInterval { get; } = Choice([(1, "1 минута"), (5, "5 минут"), (10, "10 минут"), (30, "30 минут"), (0, "Отключено")]);
     internal ComboBox HistoryLimit { get; } = Choice(EditorPreferences.HistoryLimits.Select(n => (n, n.ToString())));
     internal CheckBox KeepHistory { get; } = Check("Сохранять историю изменений");
@@ -63,7 +68,16 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         backup.Children.Add(backupPolicy);
         backup.Children.Add(Hint("Старые копии автоматически удаляются. Это не влияет на историю версий автосохранения"));
         Button(backup, "Создать резервную копию", () => BackupRequested?.Invoke() ?? Task.CompletedTask);
-        Section(left, "Блок-схемы").Children.Add(ExtendedSceneBlockLimit);
+        var graphs = Section(left, "Блок-схемы");
+        graphs.Children.Add(ExtendedSceneBlockLimit);
+        var glow = new Grid();
+        glow.ColumnDefinitions.Add(new());
+        glow.ColumnDefinitions.Add(new() { Width = new GridLength(12) });
+        glow.ColumnDefinitions.Add(new());
+        Field(glow, "Свечение вокруг блоков", BlockGlowInput, compact: true);
+        Field(glow, "Сглаживание свечения", BlockGlowSmoothingInput, compact: true);
+        Grid.SetColumn(glow.Children[1], 2);
+        graphs.Children.Add(glow);
         var autosave = Section(right, "Автосохранение"); Field(autosave, "Интервал автосохранения", AutosaveInterval); Field(autosave, "Максимум версий на проект", HistoryLimit); autosave.Children.Add(KeepHistory);
         Button(autosave, "Просмотреть историю", () => HistoryRequested?.Invoke() ?? Task.CompletedTask);
         var keys = Section(right, "Горячие клавиши"); Button(keys, "Настроить горячие клавиши", () =>
@@ -93,6 +107,8 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     {
         BackupPath.Text = value.BackupPath == "" ? defaultBackup : value.BackupPath; BackupFrequency.SelectedValue = value.BackupMinutes; BackupCopies.SelectedValue = value.BackupCopies;
         ExtendedSceneBlockLimit.IsChecked = value.ExtendedSceneBlockLimit;
+        BlockGlowInput.SelectedValue = value.GlowMode;
+        BlockGlowSmoothingInput.SelectedValue = value.SmoothBlockGlow;
         AutosaveInterval.SelectedValue = value.AutosaveMinutes; HistoryLimit.SelectedValue = value.AutosaveVersions; KeepHistory.IsChecked = value.KeepHistory;
         Startup.SelectedValue = value.Startup; StartupProject.Text = value.StartupProject; SoundEnabled.IsChecked = value.NotificationSound; Sound.SelectedValue = value.Sound; SoundFile.Text = value.SoundFile;
         Toasts.IsChecked = value.Toasts; Aggregate.IsChecked = value.AggregateNotifications; Minimized.IsChecked = value.NotifyMinimized; Tips.IsChecked = value.NotifyTips;
@@ -103,6 +119,8 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     {
         BackupPath = BackupPath.Text.Trim(), BackupMinutes = (int?)BackupFrequency.SelectedValue ?? -1, BackupCopies = (int?)BackupCopies.SelectedValue ?? 5,
         ExtendedSceneBlockLimit = ExtendedSceneBlockLimit.IsChecked == true,
+        BlockGlow = (BlockGlowInput.SelectedValue is BlockGlowMode mode ? mode : BlockGlowMode.Medium).ToString(),
+        SmoothBlockGlow = BlockGlowSmoothingInput.SelectedValue is not false,
         AutosaveMinutes = (int?)AutosaveInterval.SelectedValue ?? 5, AutosaveVersions = (int?)HistoryLimit.SelectedValue ?? 25, KeepHistory = KeepHistory.IsChecked == true,
         Startup = (string?)Startup.SelectedValue ?? "home", StartupProject = StartupProject.Text.Trim(), NotificationSound = SoundEnabled.IsChecked == true, Sound = (string?)Sound.SelectedValue ?? "standard", SoundFile = SoundFile.Text,
         Toasts = Toasts.IsChecked == true, AggregateNotifications = Aggregate.IsChecked == true, NotifyMinimized = Minimized.IsChecked == true, NotifyTips = Tips.IsChecked == true,
@@ -128,7 +146,14 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         var grid = new Grid { MaxWidth = 1300, HorizontalAlignment = HorizontalAlignment.Center }; grid.ColumnDefinitions.Add(new()); grid.ColumnDefinitions.Add(new() { Width = new GridLength(18) }); grid.ColumnDefinitions.Add(new());
         var left = new UniformSettingsColumn(); var right = new UniformSettingsColumn(); Grid.SetColumn(right, 2); grid.Children.Add(left); grid.Children.Add(right); return (grid, left, right);
     }
-    private static void Field(Panel panel, string label, FrameworkElement input) { var field = new StackPanel(); field.Children.Add(new TextBlock { Text = label, Margin = new(0, 4, 0, 5) }); input.Margin = new(0, 0, 0, 5); field.Children.Add(input); panel.Children.Add(field); }
+    private static void Field(Panel panel, string label, FrameworkElement input, bool compact = false)
+    {
+        var field = new StackPanel();
+        field.Children.Add(new TextBlock { Text = label, Margin = compact ? new(0, 0, 0, 3) : new(0, 4, 0, 5) });
+        input.Margin = compact ? new Thickness() : new Thickness(0, 0, 0, 5);
+        field.Children.Add(input);
+        panel.Children.Add(field);
+    }
     private static TextBlock Hint(string text) { var hint = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontSize = 11, Margin = new(0, 3, 0, 7) }; hint.SetResourceReference(TextBlock.ForegroundProperty, "Editor.Muted"); return hint; }
     private static DockPanel PathRow(TextBox input, string title, Action browse)
     {

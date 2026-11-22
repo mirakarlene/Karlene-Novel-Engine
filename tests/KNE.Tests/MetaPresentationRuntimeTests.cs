@@ -63,6 +63,11 @@ public sealed class MetaPresentationRuntimeTests
         await using IGameSession runtime = worker ? new ProcessGameSession(project, _ => { }) : new LuaRuntime(project, _ => { }, interactive: true);
         await runtime.StartAsync();
         Assert.Equal(0, runtime.Story.VisibleSuffix);
+        var reveal = Assert.IsType<DialogueReveal>(runtime.Story.Reveal);
+        Assert.Equal(0, reveal.First);
+        Assert.Equal(2, reveal.Last);
+        Assert.Equal(1, reveal.VisibleAt(reveal.Duration - .03));
+        Assert.Equal(2, reveal.VisibleAt(0));
         Assert.Equal("АБ Анна!", InlineText.Parse(runtime.Story.Text).Text);
         long presentation = runtime.Story.PresentationId;
         await runtime.TickAsync(.03);
@@ -91,6 +96,78 @@ public sealed class MetaPresentationRuntimeTests
         Assert.True(line.Runs[1].Bold);
         await runtime.AdvanceAsync();
         Assert.Equal("after", runtime.Story.Text);
+    }
+
+    [Fact]
+    public async Task DialogueSpeedUsesGraphemesAndRestoresAnExistingSegmentBeforeApplyingTheCurrentPreference()
+    {
+        using var fixture = Scene("d(nil, 'á🙂{w}XY'); d(nil, 'done')");
+        var project = await fixture.LoadAsync();
+        await using var player = new ProcessGameSession(project, _ => { }) { InitialDialogueSpeed = 10 };
+        await player.StartAsync();
+        Assert.Equal(0, player.Story.VisiblePrefix);
+        Assert.Equal(new DialogueReveal(0, 2, .2, false), player.Story.Reveal);
+        await player.TickAsync(.1);
+        Assert.Equal(1, player.Story.VisiblePrefix);
+        var first = await player.GetCheckpointAsync();
+        Assert.Equal(10, first.InitialDialogueSpeed);
+        await player.AdvanceAsync();
+        Assert.Equal(2, player.Story.VisiblePrefix);
+        Assert.Null(player.Story.Reveal);
+        player.SetPlayerDialogueSpeed(0);
+        await player.AdvanceAsync();
+        Assert.Null(player.Story.Reveal);
+        Assert.Equal("á🙂XY", InlineText.Parse(player.Story.Text).Text);
+
+        await using var restored = new ProcessGameSession(project, _ => { }) { InitialDialogueSpeed = 20 };
+        await restored.RestoreAsync(first);
+        Assert.Equal(1, restored.Story.VisiblePrefix);
+        Assert.Equal(.2, restored.Story.Reveal!.Duration);
+        await restored.AdvanceAsync();
+        await restored.AdvanceAsync();
+        Assert.Equal(new DialogueReveal(2, 4, .1, false), restored.Story.Reveal);
+        await restored.AdvanceAsync();
+        await restored.AdvanceAsync();
+        Assert.Equal(new DialogueReveal(0, 4, .2, false), restored.Story.Reveal);
+    }
+
+    [Theory]
+    [InlineData(ScriptNodeKind.Dialogue, false)]
+    [InlineData(ScriptNodeKind.EffectDialogue, false)]
+    [InlineData(ScriptNodeKind.ReverseDialogue, true)]
+    public async Task VisualDialogueUsesTheAuthoredSpeedAndManualSelectionCanOverrideIt(ScriptNodeKind kind, bool fromEnd)
+    {
+        using var fixture = new TempProject();
+        var graph = VisualScript.Create();
+        var speed = BlockLibrary.Create(ScriptNodeKind.SetDialogueSpeed);
+        speed.Id = "speed";
+        speed.Amount = 4;
+        speed.Next = "dialogue";
+        graph.Nodes[0].Next = speed.Id;
+        var line = BlockLibrary.Create(kind);
+        line.Id = "dialogue";
+        line.Text = "АБ";
+        var second = BlockLibrary.Create(kind);
+        second.Id = "second";
+        second.Text = "ВГ";
+        line.Next = second.Id;
+        second.Next = "end";
+        graph.Nodes[1] = line;
+        graph.Nodes.Add(speed);
+        graph.Nodes.Add(second);
+        fixture.Write("game/scenes/main.knegraph", graph.Serialize());
+        fixture.Write("game/scenes/main.krl", "");
+        var project = await fixture.LoadAsync();
+        project.Configuration.EntryPoints!.MainScene = "game/scenes/main.knegraph";
+        await using var player = new LuaRuntime(project, _ => { }, interactive: true);
+        await player.SetPlayerDialogueSpeedAsync(10);
+        await player.StartAsync();
+        Assert.Equal(4, player.CurrentDialogueSpeed);
+        Assert.Equal(new DialogueReveal(0, 2, .5, fromEnd), player.Story.Reveal);
+        await player.SetPlayerDialogueSpeedAsync(10, confirmed: true);
+        await player.AdvanceAsync();
+        await player.AdvanceAsync();
+        Assert.Equal(new DialogueReveal(0, 2, .2, fromEnd), player.Story.Reveal);
     }
 
     [Fact]

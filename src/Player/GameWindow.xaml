@@ -98,6 +98,8 @@
                 </StackPanel>
             </ScrollViewer>
             <Viewbox x:Name="ScreenViewbox" Stretch="Uniform"><Canvas x:Name="ScreenCanvas" Width="1280" Height="720"/></Viewbox>
+            <ContentControl x:Name="DialogueSpeedFallback" Visibility="Collapsed" VerticalAlignment="Bottom"
+                            HorizontalAlignment="Center" Margin="12,0,12,8"/>
             <Border x:Name="SaveBrowserPanel" Visibility="Collapsed" Width="540" MaxHeight="{Binding ActualHeight, ElementName=SceneArea}" VerticalAlignment="Center" Padding="24" Background="#F0201530" CornerRadius="16">
                 <StackPanel>
                     <TextBlock Text="Сохранения" Foreground="{DynamicResource GameTextBrush}" FontSize="28" Margin="0,0,0,16"/>

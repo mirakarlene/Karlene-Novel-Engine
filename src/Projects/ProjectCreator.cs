@@ -25,6 +25,14 @@ public static class ProjectCreator
 
     /// <summary>Atomically creates a project using validated creation choices.</summary>
     public static string CreateProject(string projectName, string basePath, ProjectAuthoringMode authoringMode, ProjectCreationOptions options, CancellationToken cancellationToken = default)
+        => CreateProjectCore(projectName, basePath, authoringMode, options, empty: false, cancellationToken);
+
+    internal static Task<string> CreateEmptyProjectAsync(string projectName, string basePath, ProjectAuthoringMode authoringMode,
+        ProjectCreationOptions options, CancellationToken cancellationToken = default)
+        => Task.Run(() => CreateProjectCore(projectName, basePath, authoringMode, options, empty: true, cancellationToken), cancellationToken);
+
+    private static string CreateProjectCore(string projectName, string basePath, ProjectAuthoringMode authoringMode,
+        ProjectCreationOptions options, bool empty, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(options); options.Validate();
         if (!Enum.IsDefined(authoringMode)) throw new ArgumentOutOfRangeException(nameof(authoringMode));
@@ -49,7 +57,21 @@ public static class ProjectCreator
             Directory.CreateDirectory(Path.Combine(staging, "metadata"));
             cancellationToken.ThrowIfCancellationRequested();
             string mainScene = authoringMode == ProjectAuthoringMode.Visual ? "game/scenes/main.knegraph" : "game/scenes/main.krl";
-            if (authoringMode == ProjectAuthoringMode.Visual)
+            if (empty && authoringMode == ProjectAuthoringMode.Visual)
+            {
+                var graph = new VisualScript
+                {
+                    Nodes =
+                    [
+                        new() { Id = "start", Kind = ScriptNodeKind.Start, X = 40, Y = 60, Next = "end" },
+                        new() { Id = "end", Kind = ScriptNodeKind.End, X = 330, Y = 60 }
+                    ]
+                };
+                File.WriteAllText(Path.Combine(staging, "game", "scenes", "main.knegraph"), graph.Serialize());
+            }
+            else if (empty)
+                File.WriteAllText(Path.Combine(staging, "game", "scenes", "main.krl"), "function main()\nend\n");
+            else if (authoringMode == ProjectAuthoringMode.Visual)
             {
                 var graph = VisualScript.Create();
                 graph.Nodes.Single(node => node.Kind == ScriptNodeKind.End).EndAction = ScriptEndAction.Menu;
@@ -71,7 +93,7 @@ public static class ProjectCreator
                     d("Игрок", "Нажмите «Далее» или пробел, чтобы продолжить.")
                 end
                 """);
-            string initScript = ProjectDiagnosticsTemplate.Create(authoringMode, staging);
+            string initScript = ProjectDiagnosticsTemplate.Create(empty ? ProjectAuthoringMode.Code : authoringMode, staging);
             File.WriteAllText(Path.Combine(staging, "README.txt"), $$"""
                 Проект: {{projectName}}
                 Точки входа задаются в project.json.

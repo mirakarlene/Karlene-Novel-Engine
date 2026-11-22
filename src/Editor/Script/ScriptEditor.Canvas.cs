@@ -58,6 +58,36 @@ public partial class ScriptEditor
 {
     private readonly Dictionary<(string NodeId, int? Output), GraphPort> graphPorts = [];
     private readonly Dictionary<string, Rectangle> cardShadows = [];
+    private BlockGlowMode blockGlow = BlockGlowMode.Medium;
+    private bool smoothBlockGlow = true;
+
+    internal void ApplyBlockGlow(BlockGlowMode mode, bool smooth)
+    {
+        if (mode == blockGlow && smooth == smoothBlockGlow) return;
+        blockGlow = mode;
+        smoothBlockGlow = smooth;
+        foreach (var shadow in cardShadows.Values) UpdateBlockGlow(shadow);
+    }
+
+    private void UpdateBlockGlow(Rectangle shadow)
+    {
+        shadow.Visibility = blockGlow == BlockGlowMode.Off ? Visibility.Collapsed : Visibility.Visible;
+        shadow.RadiusX = shadow.RadiusY = blockGlow == BlockGlowMode.Squares ? 0 : 11;
+        RenderOptions.SetEdgeMode(shadow, smoothBlockGlow ? EdgeMode.Unspecified : EdgeMode.Aliased);
+        if (blockGlow == BlockGlowMode.Off)
+        {
+            shadow.Effect = null;
+            return;
+        }
+        shadow.Effect = new DropShadowEffect
+        {
+            Color = ((SolidColorBrush)shadow.Fill).Color,
+            BlurRadius = blockGlow == BlockGlowMode.Weak ? 8 : 14,
+            ShadowDepth = blockGlow == BlockGlowMode.Squares ? 0 : 2,
+            Opacity = blockGlow == BlockGlowMode.Weak ? .12 : .23,
+            RenderingBias = smoothBlockGlow ? RenderingBias.Quality : RenderingBias.Performance
+        };
+    }
     private readonly List<(Thumb Handle, string NodeId, int Horizontal, int Vertical)> resizeHandles = [];
     private GraphPort? draggingPort;
     private Point portDragOrigin;
@@ -146,6 +176,14 @@ public partial class ScriptEditor
             header.Child = null;
             var heading = new DockPanel(); var badge = new CategoryIcon { Group = category, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             heading.Children.Add(badge); heading.Children.Add(title); header.Child = heading;
+            // Keep the glow on a separate surface so it never rasterizes the text or ports.
+            var shadow = new Rectangle
+            {
+                Width = NodeWidth(node), Height = NodeHeight(node), Fill = brush, IsHitTestVisible = false,
+                UseLayoutRounding = true, SnapsToDevicePixels = true
+            };
+            Canvas.SetLeft(shadow, node.X); Canvas.SetTop(shadow, node.Y); Panel.SetZIndex(shadow, 0);
+            GraphCanvas.Children.Add(shadow); cardShadows.Add(node.Id, shadow);
             BlockAccessibility.Decorate(card, category, presentation =>
             {
                 bool adapted = BlockAccessibility.GetMode(card) != "normal";
@@ -155,17 +193,9 @@ public partial class ScriptEditor
                 title.Foreground = graph.IsVisualLua ? new SolidColorBrush(presentation.Foreground) : node.Kind == ScriptNodeKind.Start ? Brushes.Black : node.Kind == ScriptNodeKind.End ? Brushes.White : adapted ? new SolidColorBrush(presentation.Foreground) : CalculationCompiler.IsCalculation(node.Kind) || graph.IsShader || category == "shaders" ? Brushes.Black : Brushes.White;
                 badge.Foreground = title.Foreground;
                 foreach (var port in ports.Children.OfType<GraphPort>()) port.Foreground = tint;
-                if (cardShadows.TryGetValue(node.Id, out var softBorder) && softBorder.Effect is DropShadowEffect effect) effect.Color = tint.Color;
+                shadow.Fill = tint;
+                UpdateBlockGlow(shadow);
             });
-            // Shader effects rasterize the entire subtree. Keep glyphs and ports outside that surface.
-            var shadow = new Rectangle
-            {
-                Width = NodeWidth(node), Height = NodeHeight(node), RadiusX = 11, RadiusY = 11,
-                Fill = Brushes.White, IsHitTestVisible = false,
-                Effect = new DropShadowEffect { Color = color, BlurRadius = 14, ShadowDepth = 2, Opacity = .23 }
-            };
-            Canvas.SetLeft(shadow, node.X); Canvas.SetTop(shadow, node.Y); Panel.SetZIndex(shadow, 0);
-            GraphCanvas.Children.Add(shadow); cardShadows.Add(node.Id, shadow);
             card.PreviewMouseLeftButtonDown += (_, args) =>
             {
                 if (node.Kind is not (ScriptNodeKind.Subsystem or ScriptNodeKind.ShaderContainer or ScriptNodeKind.CallVisualLua) || args.ClickCount != 2) return;

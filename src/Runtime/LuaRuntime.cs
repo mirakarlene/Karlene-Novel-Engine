@@ -85,6 +85,8 @@ public sealed partial class LuaRuntime : IGameSession
     private void StartCore(bool bootstrapOnly = false, bool preMenu = false)
     {
         if (initialized) throw new InvalidOperationException("Игра уже запущена.");
+        if (!replaying) initialDialogueSpeed = playerDialogueSpeed;
+        currentDialogueSpeed = initialDialogueSpeed;
         transitionPending = false;
         nextVariablesAt = 0;
         lock (stateLock) location = null;
@@ -411,7 +413,8 @@ public sealed partial class LuaRuntime : IGameSession
         {
             Lists = CaptureLists(),
             SystemResults = systemHistory.Count == 0 ? null : systemHistory.ToArray(),
-            PlayedSeconds = PlayedSeconds
+            PlayedSeconds = PlayedSeconds,
+            InitialDialogueSpeed = initialDialogueSpeed
         };
     }
 
@@ -428,6 +431,8 @@ public sealed partial class LuaRuntime : IGameSession
                 EngineSettings.ValidateState(pair.Value, 0);
             }
         PrepareSystemReplay(checkpoint);
+        initialDialogueSpeed = checkpoint.InitialDialogueSpeed is { } speed ? DialogueSpeed.Validate(speed) : null;
+        int? replayedPlayerSpeed = initialDialogueSpeed;
         replaying = true;
         initialized = false;
         seed = checkpoint.Seed;
@@ -451,6 +456,9 @@ public sealed partial class LuaRuntime : IGameSession
                     case "plugin_event_input" when action.Command != null:
                         PublishPluginInputEvent(JsonSerializer.Deserialize<PluginInput>(action.Command) ?? throw new InvalidDataException("Пустое событие плагина.")); break;
                     case "advance" when Story.CanAdvance: ResumeStory(null); break;
+                    case "text_speed":
+                        replayedPlayerSpeed = currentDialogueSpeed = DialogueSpeed.Validate(action.Option);
+                        break;
                     case "system_continue" when Story.Kind == "system_save": ResumeStory(null); break;
                     case "project_event" when action.Command != null:
                         InvokeProjectEvent(JsonSerializer.Deserialize<ProjectLifecycleEvent>(action.Command)
@@ -487,6 +495,7 @@ public sealed partial class LuaRuntime : IGameSession
             };
         }
         finally { replaying = false; systemReplay = []; }
+        if (playerDialogueSpeed is int preferred && preferred != replayedPlayerSpeed) ApplyPlayerDialogueSpeed(preferred);
         if (pluginHost != null) { using var context = new PluginContext(this); pluginHost.Api.RestoreScreens(context); }
         PublishPluginEvent("on_load");
         DrainNamedSaves(write: false);
@@ -536,10 +545,11 @@ public sealed partial class LuaRuntime : IGameSession
     private static string FrameSignature(StoryFrame frame)
     {
         string original = JsonSerializer.Serialize(new { frame.Kind, frame.Speaker, frame.Text, frame.Options, frame.Completed });
-        if (frame.Character is null && frame.TextEffect is null && frame.RemainingSeconds is null && frame.IsSkippable && frame.EraseProgress == 0 && frame.Input is null && frame.ChoiceOptions is null && frame.ChoiceTimer is null && frame.VisibleSuffix is null) return original;
+        if (frame.Character is null && frame.TextEffect is null && frame.RemainingSeconds is null && frame.IsSkippable && frame.EraseProgress == 0 && frame.Input is null && frame.ChoiceOptions is null && frame.ChoiceTimer is null && frame.VisibleSuffix is null && frame.VisiblePrefix is null) return original;
         string narrative = original + JsonSerializer.Serialize(new { frame.Character, frame.TextEffect, frame.RemainingSeconds, frame.IsSkippable, frame.EraseProgress });
         if (frame.Input != null) narrative += JsonSerializer.Serialize(new { frame.Input, frame.InputFeedback });
         if (frame.VisibleSuffix != null) narrative += JsonSerializer.Serialize(frame.VisibleSuffix);
+        if (frame.VisiblePrefix != null) narrative += JsonSerializer.Serialize(frame.VisiblePrefix);
         return frame.ChoiceOptions is null && frame.ChoiceTimer is null ? narrative : narrative + JsonSerializer.Serialize(new { frame.ChoiceOptions, frame.ChoiceTimer });
     }
 

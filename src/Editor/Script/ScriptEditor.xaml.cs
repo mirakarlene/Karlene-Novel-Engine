@@ -347,6 +347,7 @@ public partial class ScriptEditor : UserControl
     {
         bool graph = Document?.IsVisual == true && GraphMode.IsChecked == true;
         GraphPanel.Visibility = graph ? Visibility.Visible : Visibility.Collapsed;
+        UpdateDetachedPropertiesVisibility();
         CodeEditor.Visibility = Document != null && !graph ? Visibility.Visible : Visibility.Collapsed;
         ExternalEditorButton.Visibility = Document?.IsVisual == false && !graph ? Visibility.Visible : Visibility.Collapsed;
         if (!graph && Document?.Graph is { } model)
@@ -441,8 +442,9 @@ public partial class ScriptEditor : UserControl
         {
             var node = Selected;
             FunctionNameInput.Text = Document?.Graph?.FunctionName ?? "";
-            PropertiesPanel.IsEnabled = true;
-            SelectedTitle.Text = node?.Title ?? "Выберите блок";
+            Visible(PropertiesPanel, node != null);
+            Visible(NoBlockSelected, node == null);
+            SelectedTitle.Text = node?.Title ?? "";
             ApplyPropertiesButton.IsEnabled = DeleteBlockButton.IsEnabled = node != null;
             UpdateExtendedProperties(node);
             if (Document?.Graph?.IsShader == true)

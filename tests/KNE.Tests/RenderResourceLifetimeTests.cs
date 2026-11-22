@@ -21,7 +21,7 @@ public sealed class RenderResourceLifetimeTests
         var project = await fixture.LoadAsync();
         await WorkspaceTabsTests.Sta(async () =>
         {
-            var window = new GameWindow(project);
+            var window = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue());
             try
             {
                 await InvokeTask(window, "StartGameAsync");
@@ -48,7 +48,7 @@ public sealed class RenderResourceLifetimeTests
         var project = await fixture.LoadAsync();
         await WorkspaceTabsTests.Sta(async () =>
         {
-            var window = new GameWindow(project);
+            var window = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue());
             try
             {
                 await InvokeTask(window, "StartGameAsync");
@@ -107,7 +107,7 @@ public sealed class RenderResourceLifetimeTests
         var project = await fixture.LoadAsync();
         await WorkspaceTabsTests.Sta(async () =>
         {
-            var game = previewMode ? null : new GameWindow(project); var preview = previewMode ? new ScenePreview() : null;
+            var game = previewMode ? null : new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue()); var preview = previewMode ? new ScenePreview() : null;
             FrameworkElement owner = game is null ? preview! : game;
             try
             {

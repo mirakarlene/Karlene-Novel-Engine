@@ -22,7 +22,7 @@ public sealed class EngineWindowTests
         await OnStaAsync(async () =>
         {
             var saves = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "saves"));
-            var window = new GameWindow(project, saves);
+            var window = new GameWindow(project, saves.WithInstantDialogue());
             try
             {
                 window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
@@ -67,7 +67,7 @@ public sealed class EngineWindowTests
         var project = await fixture.LoadAsync();
         await OnStaAsync(() =>
         {
-            var window = new GameWindow(project);
+            var window = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue());
             try
             {
                 Assert.Equal(900, window.Width); Assert.Equal(600, window.Height);
@@ -112,7 +112,7 @@ public sealed class EngineWindowTests
         var project = await fixture.LoadAsync();
         await OnStaAsync(() =>
         {
-            var window = new GameWindow(project);
+            var window = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue());
             try
             {
                 window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
@@ -147,7 +147,7 @@ public sealed class EngineWindowTests
         }
         await OnStaAsync(async () =>
         {
-            var window = new GameWindow(project, saves);
+            var window = new GameWindow(project, saves.WithInstantDialogue());
             try
             {
                 window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
@@ -171,7 +171,7 @@ public sealed class EngineWindowTests
         await OnStaAsync(async () =>
         {
             var saves = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "saves"));
-            var window = new GameWindow(project, saves);
+            var window = new GameWindow(project, saves.WithInstantDialogue());
             try
             {
                 await ActAsync(window, () => window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent)));
@@ -197,7 +197,7 @@ public sealed class EngineWindowTests
         File.WriteAllText(Path.Combine(saves.DirectoryPath, "quick.json"), "broken json");
         await OnStaAsync(async () =>
         {
-            var window = new GameWindow(project, saves);
+            var window = new GameWindow(project, saves.WithInstantDialogue());
             try
             {
                 window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
@@ -231,7 +231,7 @@ public sealed class EngineWindowTests
             encoder.Frames.Add(BitmapFrame.Create(BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 0, 0, 255, 255 }, 4)));
             using (var file = File.Create(Path.Combine(fixture.ProjectPath, "game", "backgrounds", "default.png"))) encoder.Save(file);
             var project = await fixture.LoadAsync();
-            var window = new GameWindow(project, new GameSaveStore(project.Path, Path.Combine(fixture.Root, "saves")));
+            var window = new GameWindow(project, new GameSaveStore(project.Path, Path.Combine(fixture.Root, "saves")).WithInstantDialogue());
             try
             {
                 Assert.IsType<SolidColorBrush>(Find<Border>(window, "DefaultBackground").Background);
@@ -283,7 +283,7 @@ public sealed class EngineWindowTests
         await OnStaAsync(async () =>
         {
             using var source = new HwndSource(new HwndSourceParameters("KNE keyboard test") { Width = 1, Height = 1, WindowStyle = 0 });
-            var window = new GameWindow(project, new GameSaveStore(project.Path, Path.Combine(fixture.Root, "saves")));
+            var window = new GameWindow(project, new GameSaveStore(project.Path, Path.Combine(fixture.Root, "saves")).WithInstantDialogue());
             void Key(Key key)
             {
                 var args = new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, key) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
@@ -319,7 +319,7 @@ public sealed class EngineWindowTests
         var project = await fixture.LoadAsync();
         await OnStaAsync(async () =>
         {
-            var window = new GameWindow(project, new GameSaveStore(project.Path, Path.Combine(fixture.Root, "preview")), preview: true);
+            var window = new GameWindow(project, new GameSaveStore(project.Path, Path.Combine(fixture.Root, "preview")).WithInstantDialogue(), preview: true);
             try
             {
                 await ActAsync(window, () => window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent)));

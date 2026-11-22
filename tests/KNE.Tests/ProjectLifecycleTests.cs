@@ -49,7 +49,7 @@ public sealed class ProjectLifecycleTests
             entries.ExitScript = "game/scripts/exit.lua";
         });
         string menuFile = Path.Combine(project.Path, "menu-event.txt"), exitFile = Path.Combine(project.Path, "exit-event.txt");
-        var game = new GameWindow(project) { ShowActivated = false, ShowInTaskbar = false };
+        var game = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue()) { ShowActivated = false, ShowInTaskbar = false };
         bool confirmationReached = false;
         try
         {

@@ -58,7 +58,7 @@ public sealed class ProjectRuntimeOptionsTests
         var project = await fixture.LoadAsync();
         await WorkspaceTabsTests.Sta(async () =>
         {
-            var window = new GameWindow(project);
+            var window = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue());
             try
             {
                 await InvokeTask(window, "StartGameAsync"); var cache = Field<SceneAssetCache>(window, "assets");

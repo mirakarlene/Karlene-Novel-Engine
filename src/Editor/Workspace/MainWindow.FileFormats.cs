@@ -19,7 +19,7 @@ public partial class MainWindow
                     var format = (ProjectFileFormat)button.Tag;
                     if (format.IsPlaceholder)
                     {
-                        new EditorPromptWindow("KNE", "KNE ещё на стадии разработки.", settings.Theme) { Owner = window }.ShowDialog();
+                        EditorPromptWindow.ShowDevelopmentNotice(window, settings.Theme);
                         return;
                     }
                     selected = format;

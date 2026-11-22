@@ -12,6 +12,8 @@ public sealed partial class LuaRuntime
         Register(nameof(PrepareInlineForLua), "kne_prepare_inline");
         Register(nameof(PrepareInlineDialogueForLua), "kne_prepare_inline_dialogue");
         Register(nameof(InlinePlainForLua), "kne_inline_plain");
+        Register(nameof(ReadDialogueSpeedForLua), "kne_dialogue_speed");
+        Register(nameof(ApplyDialogueSpeedForLua), "kne_set_dialogue_speed");
         lua!.DoString("""
             kne_inline_known = {}
             for key in pairs(state) do kne_inline_known[key] = true end
@@ -41,9 +43,9 @@ public sealed partial class LuaRuntime
         try
         {
             var document = InlineText.Reverse(ResolveInline(source), (flags & 2) != 0, (flags & 4) != 0);
-            bool fromEnd = (flags & 1) != 0;
-            int[] elements = fromEnd ? [.. StringInfo.ParseCombiningCharacters(document.Text), document.Text.Length] : [];
-            string? fullMarkup = fromEnd ? InlineText.ToMarkup(document) : null;
+            bool reveal = (flags & 9) != 0;
+            int[] elements = reveal ? [.. StringInfo.ParseCombiningCharacters(document.Text), document.Text.Length] : [];
+            string? fullMarkup = reveal ? InlineText.ToMarkup(document) : null;
             var result = new List<string> { "" };
             var pauses = document.Pauses.Where(pause => pause.Seconds != 0).ToArray();
             foreach (var pause in pauses)
@@ -60,7 +62,7 @@ public sealed partial class LuaRuntime
             void Fragment(int offset, string duration)
             {
                 int count = 0;
-                if (fromEnd)
+                if (reveal)
                 {
                     int index = Array.BinarySearch(elements, offset);
                     count = index < 0 ? ~index : index;

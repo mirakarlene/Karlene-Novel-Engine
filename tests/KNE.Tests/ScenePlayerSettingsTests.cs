@@ -25,7 +25,7 @@ public sealed class ScenePlayerSettingsTests
             ["main"] = new() { AllowSaves = false, AllowAutosave = true, CheckpointOnEntry = true },
             ["allowed"] = new() { AllowAutosave = false, CheckpointOnEntry = true }
         } } });
-        var project = await fixture.LoadAsync(); var slots = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "slots")); var window = new GameWindow(project, slots);
+        var project = await fixture.LoadAsync(); var slots = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "slots")); var window = new GameWindow(project, slots.WithInstantDialogue());
         try
         {
             await InvokeTask(window, "StartGameAsync"); var runtime = Field<IGameSession>(window, "runtime"); Assert.Equal("locked:1", runtime.Story.Text); Assert.False(Find<Button>(window, "SaveButton").IsEnabled);
@@ -50,7 +50,7 @@ public sealed class ScenePlayerSettingsTests
         fixture.Write("game/scenes/main.krl", "function main() d(nil,'caller:before'); call_scene(child); d(nil,'caller:after'); call_scene(child); d(nil,'caller:finish') end\nfunction child() state.hits=state.hits+1; d(nil,'child:'..state.hits) end");
         await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, new() { Preloading = false });
         await PerformanceSettingsStore.SaveScenesAsync(fixture.ProjectPath, new() { Functions = new() { ["game/scenes/main.krl"] = new() { ["main"] = new() { CheckpointOnEntry = true }, ["child"] = new() { CheckpointOnEntry = true } } } });
-        var project = await fixture.LoadAsync(); var slots = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "slots")); var original = new GameWindow(project, slots);
+        var project = await fixture.LoadAsync(); var slots = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "slots")); var original = new GameWindow(project, slots.WithInstantDialogue());
         string callerEntry, childEntry; byte[] callerBytes, firstChildBytes;
         try
         {
@@ -58,7 +58,7 @@ public sealed class ScenePlayerSettingsTests
             await Next(original, "child:1"); var runtime = Field<IGameSession>(original, "runtime"); childEntry = SceneSavePolicy.SlotName(runtime.Visuals.Scene!); firstChildBytes = File.ReadAllBytes(slots.SlotPath(childEntry)); await slots.SaveAsync("resume", await runtime.GetCheckpointAsync());
         }
         finally { original.Close(); }
-        var restored = new GameWindow(project, slots);
+        var restored = new GameWindow(project, slots.WithInstantDialogue());
         try
         {
             await InvokeTask(restored, "LoadGameAsync", "resume"); Assert.Equal("child:1", Field<IGameSession>(restored, "runtime").Story.Text); Assert.Equal(firstChildBytes, File.ReadAllBytes(slots.SlotPath(childEntry)));
@@ -80,7 +80,7 @@ public sealed class ScenePlayerSettingsTests
         fixture.Write("game/scenes/main.krl", "function main() d(nil,'main'); call_scene(muted); d(nil,'back'); goto_scene(inherited) end\nfunction muted() d(nil,'muted') end\nfunction inherited() d(nil,'inherited') end");
         await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, new() { Preloading = false });
         await PerformanceSettingsStore.SaveScenesAsync(fixture.ProjectPath, new() { Functions = new() { ["game/scenes/main.krl"] = new() { ["main"] = new() { Music = "theme.wav", MusicVolume = 25, LoopMusic = true }, ["muted"] = new() { MusicVolume = 0, StopMusicOnExit = true } } } });
-        var window = new GameWindow(await fixture.LoadAsync()); var output = new AudioOutput(); var music = new GameAudioPlayer(_ => output, source => new WaveFileReader(source));
+        var project = await fixture.LoadAsync(); var window = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue()); var output = new AudioOutput(); var music = new GameAudioPlayer(_ => output, source => new WaveFileReader(source));
         Field<GameAudioPlayer>(window, "music").Dispose(); typeof(GameWindow).GetField("music", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(window, music); Field<Dictionary<string, GameAudioPlayer>>(window, "audioPlayers")["music"] = music;
         var preferences = Field<object>(window, "preferences"); preferences.GetType().GetProperty("MusicVolume")!.SetValue(preferences, .4);
         try
@@ -100,7 +100,7 @@ public sealed class ScenePlayerSettingsTests
         using var fixture = new TempProject(); fixture.Write("engine/game.json", JsonSerializer.Serialize(new GameDefaults { AutoSave = false }, EngineSettings.JsonOptions));
         fixture.Write("game/scenes/main.krl", "function main() kne_pause(10); d(nil,'after wait') end"); await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, new() { Preloading = false });
         await PerformanceSettingsStore.SaveScenesAsync(fixture.ProjectPath, new() { Functions = new() { ["game/scenes/main.krl"] = new() { ["main"] = new() { ExitTransition = new() { Kind = "fade", Duration = .3 } } } } });
-        var project = await fixture.LoadAsync(); var slots = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "slots")); var window = new GameWindow(project, slots) { ShowInTaskbar = false, ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
+        var project = await fixture.LoadAsync(); var slots = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "slots")); var window = new GameWindow(project, slots.WithInstantDialogue()) { ShowInTaskbar = false, ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
         var preferences = Field<object>(window, "preferences"); preferences.GetType().GetProperty("Animate")!.SetValue(preferences, true);
         try
         {

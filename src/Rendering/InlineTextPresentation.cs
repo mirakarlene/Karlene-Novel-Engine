@@ -15,9 +15,11 @@ internal static class InlineTextPresentation
         public string? Markup;
         public int Length = -1;
         public int Offset;
+        public int VisibleEnd;
         public bool PreserveLayout;
         public object? Fonts;
         public InlineTextDocument? Document;
+        public int[]? TextElements;
     }
     private static readonly ConditionalWeakTable<TextBlock, Cache> caches = new();
     private static readonly Dictionary<string, Brush> brushes = new(StringComparer.Ordinal);
@@ -36,27 +38,37 @@ internal static class InlineTextPresentation
         target.SetValue(FontContextProperty, new FontContext(root, sources));
     }
 
-    public static void Apply(TextBlock target, string markup, int? visibleLength = null, int? visibleSuffix = null, bool preserveLayout = false)
+    internal static void CopyFonts(DependencyObject source, DependencyObject target) =>
+        target.SetValue(FontContextProperty, source.GetValue(FontContextProperty));
+
+    public static void Apply(TextBlock target, string markup, int? visibleLength = null, int? visibleSuffix = null, bool preserveLayout = false, int? visiblePrefix = null)
     {
         var cache = caches.GetOrCreateValue(target);
         bool changed = cache.Markup != markup;
-        if (changed || cache.Document == null) cache.Document = InlineText.Parse(markup);
+        if (changed || cache.Document == null)
+        {
+            cache.Document = InlineText.Parse(markup);
+            cache.TextElements = null;
+        }
         var document = cache.Document;
         int length = Math.Clamp(visibleLength ?? document.Text.Length, 0, document.Text.Length);
+        int visibleEnd = length;
         int offset = 0;
-        if (visibleSuffix is int suffix)
+        if (visibleSuffix != null || visiblePrefix != null)
         {
-            int[] elements = System.Globalization.StringInfo.ParseCombiningCharacters(document.Text);
-            int index = Math.Max(0, elements.Length - suffix);
-            offset = index == elements.Length ? document.Text.Length : elements[index];
+            int[] elements = cache.TextElements ??= System.Globalization.StringInfo.ParseCombiningCharacters(document.Text);
+            int Boundary(int index) => index >= elements.Length ? document.Text.Length : elements[Math.Max(0, index)];
+            if (visibleSuffix is int suffix) offset = Boundary(elements.Length - suffix);
+            if (visiblePrefix is int prefix) visibleEnd = Math.Min(length, Boundary(prefix));
         }
+        if (!preserveLayout) length = visibleEnd;
         var fonts = (FontContext?)target.GetValue(FontContextProperty);
         int start = preserveLayout ? 0 : offset;
-        if (!changed && cache.Length == length && cache.Offset == offset && cache.PreserveLayout == preserveLayout &&
+        if (!changed && cache.Length == length && cache.Offset == offset && cache.VisibleEnd == visibleEnd && cache.PreserveLayout == preserveLayout &&
             ReferenceEquals(cache.Fonts, fonts) && target.Text == document.Text[start..length]) return;
         cache.Markup = markup; cache.Length = length;
-        cache.Offset = offset; cache.Fonts = fonts; cache.PreserveLayout = preserveLayout;
-        bool hasStyles = document.Runs.Count > 0 || preserveLayout && offset > 0;
+        cache.Offset = offset; cache.VisibleEnd = visibleEnd; cache.Fonts = fonts; cache.PreserveLayout = preserveLayout;
+        bool hasStyles = document.Runs.Count > 0 || preserveLayout && (offset > 0 || visibleEnd < length);
         if (!hasStyles) target.Inlines.Clear();
         target.Text = document.Text[start..length];
         if (!hasStyles) return;
@@ -77,8 +89,9 @@ internal static class InlineTextPresentation
         void Add(int begin, int end, InlineTextRun? style)
         {
             if (begin < offset && end > offset) { Add(begin, offset, style); Add(offset, end, style); return; }
+            if (begin < visibleEnd && end > visibleEnd) { Add(begin, visibleEnd, style); Add(visibleEnd, end, style); return; }
             var inline = new Run(document.Text[begin..end]);
-            if (end <= offset) inline.Foreground = Brushes.Transparent;
+            if (end <= offset || begin >= visibleEnd) inline.Foreground = Brushes.Transparent;
             else if (style?.Color is { } color) inline.Foreground = Brush(color);
             if (style?.Bold == true) inline.FontWeight = FontWeights.Bold;
             if (style?.Italic == true) inline.FontStyle = FontStyles.Italic;

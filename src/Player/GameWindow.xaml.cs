@@ -249,6 +249,7 @@ public partial class GameWindow : Window
         ResetTriggerInput();
         gameplayUi?.Reset();
         DialogueEffects.Reset();
+        StopDialogueReveal();
         choicePresentation?.Reset();
         clockSuspended = false;
         lastSceneTick = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -510,7 +511,7 @@ public partial class GameWindow : Window
     {
         if (await TryButtonTriggerAsync(sender)) { e.Handled = true; return; }
         if (NextButton.IsEnabled && MenuOverlay.Visibility != Visibility.Visible)
-            await ExecuteAsync(() => runtime.AdvanceAsync(execution!.Token), operation: "Продолжение сценария", playerAction: true);
+            await ExecuteAsync(() => runtime.AdvanceAsync(execution!.Token), operation: "Продолжение сценария", playerAction: runtime.Story.Reveal == null);
         e.Handled = true;
     }
 
@@ -577,6 +578,7 @@ public partial class GameWindow : Window
         CloseAudio();
         sceneEffects?.Stop();
         execution?.Cancel();
+        StopDialogueReveal();
         DialogueEffects.Stop();
         choicePresentation?.Stop();
         if (shaders != null) await shaders.DisposeAsync();

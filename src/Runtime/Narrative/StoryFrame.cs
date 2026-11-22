@@ -25,9 +25,23 @@ public sealed record StoryFrame(string Kind, string Speaker, string Text, IReadO
     public double EraseProgress { get; init; }
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public int? VisibleSuffix { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? VisiblePrefix { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public DialogueReveal? Reveal { get; init; }
     public bool CanAdvance => Kind == "preview" || (Kind is "dialogue" or "text_pause" && IsSkippable);
     public string? EndAction { get; init; }
     public string? EndScreen { get; init; }
     public static StoryFrame Empty { get; } = new("idle", "", "", Array.Empty<string>());
     public bool Completed => Kind == "completed";
+}
+
+/// <summary>Timing of a text fragment in Unicode text elements.</summary>
+public sealed record DialogueReveal(int First, int Last, double Duration, bool FromEnd = true)
+{
+    internal int VisibleAt(double remaining)
+    {
+        double progress = Math.Clamp(1 - remaining / Duration, 0, 1);
+        return First + (int)Math.Floor(progress * (Last - First));
+    }
 }

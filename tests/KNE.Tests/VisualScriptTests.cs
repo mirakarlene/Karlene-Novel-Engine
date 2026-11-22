@@ -1,10 +1,83 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Effects;
+using System.Windows.Shapes;
+using Path = System.IO.Path;
 using Xunit;
 
 namespace KNE.Tests;
 
 public sealed class VisualScriptTests
 {
+    [Theory]
+    [InlineData(".knegraph")]
+    [InlineData(".kneshader")]
+    [InlineData(".vlua")]
+    public Task InspectorShowsOnlyTheEmptyHintWithoutASelectedBlock(string extension) => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        string path = Path.Combine(fixture.ProjectPath, "game", "scenes", "inspector" + extension);
+        await ScriptDocument.CreateVisualAsync(fixture.ProjectPath, path);
+        var editor = new ScriptEditor();
+        await editor.OpenAsync(fixture.ProjectPath, path);
+        var hint = WorkspaceTabsTests.Find<System.Windows.Controls.TextBlock>(editor, "NoBlockSelected");
+        var panel = WorkspaceTabsTests.Find<System.Windows.Controls.StackPanel>(editor, "PropertiesPanel");
+        editor.SelectGraphBlocks([]);
+        Assert.Equal(System.Windows.Visibility.Collapsed, panel.Visibility);
+        Assert.Equal(System.Windows.Visibility.Visible, hint.Visibility);
+        Assert.Equal("Выберите блок чтоб здесь отобразились его опции", hint.Text);
+
+        var node = editor.Document!.Graph!.Nodes[0];
+        editor.SelectGraphBlocks([node.Id]);
+        Assert.Equal(System.Windows.Visibility.Visible, panel.Visibility);
+        Assert.Equal(System.Windows.Visibility.Collapsed, hint.Visibility);
+        Assert.Equal(node.Title, WorkspaceTabsTests.Find<System.Windows.Controls.TextBlock>(editor, "SelectedTitle").Text);
+    });
+
+    [Fact]
+    public Task DetachedInspectorKeepsItsControlsAndTracksSelectionThenReturnsOnClose() => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        string path = fixture.Write("game/scenes/inspector.knegraph", VisualScript.Create().Serialize());
+        var editor = new ScriptEditor();
+        var owner = new Window { Content = editor, ShowInTaskbar = false, ShowActivated = false, Left = -2000, WindowStartupLocation = WindowStartupLocation.Manual };
+        try
+        {
+            owner.Show();
+            await editor.OpenAsync(fixture.ProjectPath, path);
+            editor.SelectGraphBlocks(["dialogue"]);
+            var body = WorkspaceTabsTests.Find<ScrollViewer>(editor, "BlockPropertiesView");
+            var input = WorkspaceTabsTests.Find<TextBox>(editor, "SceneTextInput");
+            input.Text = "Черновик";
+            WorkspaceTabsTests.Find<Button>(editor, "DetachBlockPropertiesButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var detached = Assert.Single(owner.OwnedWindows.Cast<Window>());
+            Assert.Same(body, detached.Content);
+            Assert.Equal("Черновик", input.Text);
+            editor.SelectGraphBlocks(["end"]);
+            Assert.Equal(editor.Document!.Graph!.Nodes.Single(node => node.Id == "end").Title, WorkspaceTabsTests.Find<TextBlock>(editor, "SelectedTitle").Text);
+            editor.SelectGraphBlocks([]);
+            Assert.Equal(Visibility.Visible, WorkspaceTabsTests.Find<TextBlock>(editor, "NoBlockSelected").Visibility);
+            detached.Close();
+            Assert.Same(body, WorkspaceTabsTests.Find<Border>(editor, "BlockPropertiesDock").Child);
+            Assert.Equal("Черновик", editor.Document.Graph.Nodes.Single(node => node.Id == "dialogue").Text);
+
+            var canvas = WorkspaceTabsTests.Find<Canvas>(editor, "GraphCanvas");
+            var shadows = canvas.Children.OfType<Rectangle>().Where(item => item.Effect is DropShadowEffect).ToArray();
+            Assert.Equal(3, shadows.Length);
+            editor.ApplyBlockGlow(BlockGlowMode.Squares, smooth: false);
+            Assert.All(shadows, shadow =>
+            {
+                Assert.Equal(0, shadow.RadiusX);
+                Assert.Equal(EdgeMode.Aliased, RenderOptions.GetEdgeMode(shadow));
+            });
+            editor.ApplyBlockGlow(BlockGlowMode.Off, smooth: true);
+            Assert.All(shadows, shadow => Assert.Null(shadow.Effect));
+        }
+        finally { owner.Close(); }
+    });
+
     [Theory]
     [InlineData("game/scenes/chapter.krl")]
     [InlineData("goto")]

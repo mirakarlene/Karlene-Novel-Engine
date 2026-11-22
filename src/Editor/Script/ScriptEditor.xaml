@@ -87,8 +87,11 @@
                 </Border>
             </Grid>
             <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch"/>
-            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
-                <StackPanel x:Name="PropertiesPanel" IsEnabled="False">
+            <Border x:Name="BlockPropertiesDock" Grid.Column="2">
+            <ScrollViewer x:Name="BlockPropertiesView" VerticalScrollBarVisibility="Auto">
+                <Grid>
+                    <TextBlock x:Name="NoBlockSelected" Text="Выберите блок чтоб здесь отобразились его опции" Foreground="{DynamicResource Editor.Muted}" TextWrapping="Wrap"/>
+                <StackPanel x:Name="PropertiesPanel" Visibility="Collapsed">
                     <TextBlock x:Name="SelectedTitle" Text="Свойства блока" FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,0,8"/>
                     <StackPanel x:Name="SpeakerField"><TextBlock Text="Говорящий (пусто — спикер по умолчанию / рассказчик)" TextWrapping="Wrap"/><TextBox x:Name="SpeakerInput" Margin="0,3,0,5"/><TextBlock x:Name="SpeakerReference" Foreground="{DynamicResource Editor.Muted}" TextWrapping="Wrap" Margin="0,0,0,5"/><Button x:Name="SelectCharacterButton" Content="Выбрать персонажа…" Click="SelectCharacter_Click" Margin="0,0,0,5"/><Button x:Name="NarratorButton" Content="Рассказчик / мысль" Click="Narrator_Click" Margin="0,0,0,8"/></StackPanel>
                     <StackPanel x:Name="TextField"><TextBlock Text="Текст / вопрос"/><TextBox x:Name="SceneTextInput" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" Margin="0,3,0,8"/></StackPanel>
@@ -103,8 +106,11 @@
                     <Button x:Name="ApplyPropertiesButton" Content="Применить свойства" Click="Apply_Click" Padding="8,5" Margin="0,0,0,6"/>
                     <Button x:Name="DeleteBlockButton" Content="Удалить блок" Click="Delete_Click" Padding="8,5" Margin="0,0,0,8"/>
                     <TextBlock Text="ПКМ — двигать обзор; Ctrl+колесо и +/− — масштаб. ЛКМ на пустом месте — область выделения; Ctrl/Shift — добавить блок. Тяните порт для связи, край — для размера, заголовок — для переноса. Ctrl+C/V/D — копировать/вставить/дублировать; Ctrl+Z/X — отменить/повторить. Delete — удалить выделенные блоки." Foreground="{DynamicResource Editor.Muted}" TextWrapping="Wrap"/>
+                    <Button x:Name="DetachBlockPropertiesButton" Content="Отобразить в новом окне" Click="DetachBlockProperties_Click" Padding="8,5" Margin="0,8,0,0"/>
                 </StackPanel>
+                </Grid>
             </ScrollViewer>
+            </Border>
         </Grid>
         <Grid Grid.Row="2" Margin="0,8,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

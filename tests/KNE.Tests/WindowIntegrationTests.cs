@@ -79,7 +79,7 @@ public sealed class WindowIntegrationTests
         var project = await fixture.LoadAsync();
         await OnStaAsync(async () =>
         {
-            var window = new GameWindow(project, new GameSaveStore(project.Path, System.IO.Path.Combine(fixture.Root, "saves")));
+            var window = new GameWindow(project, new GameSaveStore(project.Path, System.IO.Path.Combine(fixture.Root, "saves")).WithInstantDialogue());
             try
             {
                 var input = (TextBox)window.FindName("CommandInput");
@@ -143,7 +143,7 @@ public sealed class WindowIntegrationTests
             using (var file = System.IO.File.Create(System.IO.Path.Combine(fixture.ProjectPath, "game", "backgrounds", "test.png"))) encoder.Save(file);
             var project = await fixture.LoadAsync();
             var saves = new GameSaveStore(project.Path, System.IO.Path.Combine(fixture.Root, "saves"));
-            var window = new GameWindow(project, saves);
+            var window = new GameWindow(project, saves.WithInstantDialogue());
             var input = (TextBox)window.FindName("CommandInput");
             async Task ActAsync(Action action)
             {
@@ -199,7 +199,7 @@ public sealed class WindowIntegrationTests
             encoder.Frames.Add(BitmapFrame.Create(BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 0, 0, 255, 255 }, 4)));
             using (var file = System.IO.File.Create(System.IO.Path.Combine(fixture.ProjectPath, "game", "characters", "valid.png"))) encoder.Save(file);
             var project = await fixture.LoadAsync();
-            var window = new GameWindow(project, new GameSaveStore(project.Path, System.IO.Path.Combine(fixture.Root, "saves")));
+            var window = new GameWindow(project, new GameSaveStore(project.Path, System.IO.Path.Combine(fixture.Root, "saves")).WithInstantDialogue());
             var log = (TextBlock)window.FindName("ConsoleOutput");
             var loggedError = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var textProperty = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(TextBlock.TextProperty, typeof(TextBlock));

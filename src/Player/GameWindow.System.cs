@@ -27,7 +27,8 @@ public partial class GameWindow
     private ProcessGameSession CreateGameSession() => new(project, QueueOutput, preview: preview)
     {
         SystemHost = InvokeSystemAsync,
-        PlayClock = ReadPlayTime
+        PlayClock = ReadPlayTime,
+        InitialDialogueSpeed = preferences.TextSpeed
     };
 
     private void UpdatePlayClock()

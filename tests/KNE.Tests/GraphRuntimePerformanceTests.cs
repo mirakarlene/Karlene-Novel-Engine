@@ -49,7 +49,7 @@ public sealed class GraphRuntimePerformanceTests
         await WorkspaceTabsTests.Sta(async () =>
         {
             using var source = new HwndSource(new HwndSourceParameters("KNE performance keyboard test") { Width = 1, Height = 1, WindowStyle = 0 });
-            var window = new GameWindow(project);
+            var window = new GameWindow(project, new GameSaveStore(project.Path).WithInstantDialogue());
             try
             {
                 Assert.Equal(graphics, GraphicsEnvironment.GetSettings(window)); Assert.Equal(graphics, GraphicsEnvironment.GetSettings(Find<AnimatedBackground>(window, "AnimatedBackdrop")));

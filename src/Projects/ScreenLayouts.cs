@@ -58,7 +58,7 @@ public sealed class ScreenLayouts
                 Bound(element.Delay, 0, 60, "delay"); Bound(element.Duration, 0.1, 60, "duration");
                 if (element.MotionOrder is < 0 or > 100) throw new InvalidDataException("motion_order должен быть от 0 до 100.");
                 if (element.Type == "toggle" && element.Action is not ("none" or "fullscreen" or "animation")) throw new InvalidDataException("Переключатель поддерживает none/fullscreen/animation.");
-                if (element.Type == "slider" && element.Action is not ("none" or "music_volume" or "sound_volume")) throw new InvalidDataException("Ползунок поддерживает none/music_volume/sound_volume.");
+                if (element.Type == "slider" && element.Action is not ("none" or "music_volume" or "sound_volume" or "text_speed")) throw new InvalidDataException("Неизвестное действие ползунка.");
             }
             if (screen.Elements.Count(e => e.Type == "save_list") > 1 || screen.Elements.Count(e => e.Type == "save_name") > 1)
                 throw new InvalidDataException("На экране может быть по одному списку сохранений и полю имени.");
@@ -68,7 +68,7 @@ public sealed class ScreenLayouts
                 throw new InvalidDataException("Кнопка перехода должна ссылаться на существующий экран вне геймплея.");
     }
 
-    public static readonly string[] Actions = ["none", "start", "continue", "resume", "save", "saves", "settings", "back", "exit", "navigate", "fullscreen", "animation", "music_volume", "sound_volume", "save_slot", "load_slot", "delete_slot"];
+    public static readonly string[] Actions = ["none", "start", "continue", "resume", "save", "saves", "settings", "back", "exit", "navigate", "fullscreen", "animation", "music_volume", "sound_volume", "text_speed", "save_slot", "load_slot", "delete_slot"];
     private static void Bound(double value, double min, double max, string name)
     {
         if (!double.IsFinite(value) || value < min || value > max) throw new InvalidDataException("Некорректное значение элемента: " + name);
@@ -127,6 +127,7 @@ public sealed class ScreenLayouts
         settings.Elements.Add(new() { Type = "slider", Text = "Музыка", Action = "music_volume", X = 440, Y = 360, Width = 400, Height = 60 });
         settings.Elements.Add(new() { Type = "slider", Text = "Звуки", Action = "sound_volume", X = 440, Y = 440, Width = 400, Height = 60 });
         Button(settings, "back", "Назад", 540, 0);
+        settings.Elements.Add(DialogueSpeedElement());
         var saves = Screen("saves", "Экран сохранений"); Text(saves, "title", "Сохранения", 100, 36);
         saves.Elements.Add(new() { Type = "save_list", Text = "Список слотов", X = 380, Y = 220, Width = 520, Height = 200 });
         saves.Elements.Add(new() { Type = "save_name", Text = "Имя слота", X = 380, Y = 440, Width = 520, Height = 44 });
@@ -136,6 +137,12 @@ public sealed class ScreenLayouts
         Button(saves, "back", "Назад", 580, 0);
         return result;
     }
+
+    internal static ScreenElement DialogueSpeedElement() => new()
+    {
+        Id = "text_speed", Type = "slider", Text = "Скорость текста", Action = "text_speed",
+        X = 440, Y = 600, Width = 400, Height = 60
+    };
 }
 
 public sealed class GameScreen
