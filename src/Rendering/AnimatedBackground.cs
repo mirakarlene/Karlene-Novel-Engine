@@ -46,6 +46,13 @@ public sealed class AnimatedBackground : FrameworkElement
     }
     public static double WaveY(double x, double width, double baseline, double amplitude, double phase) =>
         baseline + amplitude * Math.Sin(x / Math.Max(width, 1) * 4 * Math.PI + phase);
+    private Rect WaveBounds => new(-Phase / Math.Tau * ActualWidth / 2, 0, ActualWidth * 1.5, ActualHeight);
+    internal bool TryGetWaveAtlas(out System.Windows.Media.Imaging.BitmapSource? atlas, out Rect bounds)
+    {
+        atlas = graphics?.Bitmap;
+        bounds = WaveBounds;
+        return theme.PatternStyle == "waves" && IsAnimating && atlas != null;
+    }
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
@@ -59,7 +66,7 @@ public sealed class AnimatedBackground : FrameworkElement
             if (graphics.TryGetBitmap(() => preparedFrame, preparedFrame, out var bitmap))
             {
                 dc.PushClip(new RectangleGeometry(new Rect(RenderSize)));
-                var bounds = theme.PatternStyle == "waves" ? new Rect(-Phase / Math.Tau * ActualWidth / 2, 0, ActualWidth * 1.5, ActualHeight)
+                var bounds = theme.PatternStyle == "waves" ? WaveBounds
                     : new Rect(-60 + Phase / Math.Tau * 60, -60 + Phase / Math.Tau * 60, ActualWidth + 120, ActualHeight + 120);
                 dc.DrawImage(bitmap, bounds); dc.Pop(); return;
             }

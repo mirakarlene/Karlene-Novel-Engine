@@ -7,7 +7,8 @@ public partial class GameWindow
     private SceneShaderPresenter? shaders;
     private void InitializeShaders()
     {
-        shaders = new(project, (FrameworkElement)Content, ResolveShaderTarget, error => ShowStartupError(error, "Шейдеры GLSL/HLSL"));
+        shaders = new(project, (FrameworkElement)Content, ResolveShaderTarget,
+            error => ShowStartupError(error, "Шейдеры GLSL/HLSL"), ShaderBackgroundLayer, SceneArea);
         Loaded += async (_, _) => { if (!closed) await shaders.InitializeAsync(); };
     }
     private FrameworkElement? ResolveShaderTarget(CompiledShaderGraph shader) => shader.Target switch

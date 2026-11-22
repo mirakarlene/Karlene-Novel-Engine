@@ -49,6 +49,7 @@ internal sealed class NativeGraphicsRenderer : IDisposable
     private string fragmentSource = FragmentShader;
     private readonly DeviceBuffer shaderGlobals;
     private readonly CommandList commands;
+    private Fence? readbackFence;
     private readonly DeviceBuffer vertexBuffer;
     private readonly Dictionary<long, (Texture Texture, ResourceSet Binding, long Bytes)> textures = [];
     private readonly GraphicsTexture white = new(long.MinValue, 1, 1, [255, 255, 255, 255]);
@@ -147,6 +148,15 @@ internal sealed class NativeGraphicsRenderer : IDisposable
         return RenderCore(frame, 0, programs[0], seconds, screenOrigin, screenSize, programs);
     }
 
+    internal GraphicsPixels RenderCompositeChain(GraphicsFrame frame, IReadOnlyList<CompiledShaderGraph> programs,
+        float seconds, Vector2 screenOrigin, Vector2 screenSize)
+    {
+        if (programs.Count is < 1 or > 16) throw new ArgumentException("Нужно от 1 до 16 проходов шейдера.");
+        // Draw the cached background layers into a sampled render target before the
+        // first effect. Only the final result crosses back to WPF.
+        return RenderCore(frame, 0, null, seconds, screenOrigin, screenSize, programs);
+    }
+
     private GraphicsPixels RenderCore(GraphicsFrame frame, int msaaSamples, CompiledShaderGraph? shader, float seconds, Vector2 screenOrigin, Vector2 screenSize, IReadOnlyList<CompiledShaderGraph>? passes)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
@@ -161,12 +171,15 @@ internal sealed class NativeGraphicsRenderer : IDisposable
         var watch = Stopwatch.StartNew();
         EnsureSurface(frame.Width, frame.Height, msaaSamples);
         Pipeline[] passPipelines = [];
-        if (passes is { Count: > 1 })
+        int firstEffect = shader == null ? 0 : 1;
+        if (passes != null && passes.Count > firstEffect)
         {
             EnsurePassSurface();
-            passPipelines = new Pipeline[passes.Count]; passPipelines[0] = pipeline!;
-            for (int i = 1; i < passes.Count; i++) { SelectShader(passes[i].Glsl); EnsurePipeline(); passPipelines[i] = pipeline!; }
-            pipeline = passPipelines[0];
+            var firstPipeline = pipeline;
+            passPipelines = new Pipeline[passes.Count - firstEffect];
+            for (int i = 0; i < passPipelines.Length; i++)
+            { SelectShader(passes[firstEffect + i].Glsl); EnsurePipeline(); passPipelines[i] = pipeline!; }
+            pipeline = firstPipeline;
         }
         var used = frame.Sprites.Select(sprite => sprite.Texture.Id).ToHashSet();
         if (frame.Geometry is { Count: > 0 }) used.Add(white.Id);
@@ -179,7 +192,8 @@ internal sealed class NativeGraphicsRenderer : IDisposable
                 textures.Clear(); textures.Add(source.Id, previous);
             }
         }
-        foreach (long key in textures.Keys.Where(key => !used.Contains(key)).ToArray())
+        var retiredTextures = textures.Keys.Where(key => !used.Contains(key)).ToArray();
+        foreach (long key in retiredTextures)
             { var old = textures[key]; old.Binding.Dispose(); old.Texture.Dispose(); textureBytes -= old.Bytes; textures.Remove(key); }
         // Prepare resources before command recording, so rejected uploads cannot leave an open command list.
         foreach (var sprite in frame.Sprites) _ = TextureBinding(sprite.Texture);
@@ -200,7 +214,10 @@ internal sealed class NativeGraphicsRenderer : IDisposable
             if (frame.Geometry != null)
                 foreach (var vertex in frame.Geometry) vertices[index++] = Vertex(vertex.Position.X, vertex.Position.Y, vertex.Uv.X, vertex.Uv.Y, vertex.Color);
             if (vertexCount > 0) device.UpdateBuffer(vertexBuffer, 0, vertices.AsSpan(0, vertexCount));
-            commands.Begin(); commands.SetFramebuffer(framebuffer); commands.ClearColorTarget(0, new RgbaFloat(0, 0, 0, 0));
+            commands.Begin();
+            commands.PushDebugGroup(shader != null ? "KNE post-effect pass" :
+                passes != null ? "KNE cached layer composition" : "KNE layer preparation");
+            commands.SetFramebuffer(framebuffer); commands.ClearColorTarget(0, new RgbaFloat(0, 0, 0, 0));
             commands.SetFullViewports(); commands.SetPipeline(pipeline); commands.SetVertexBuffer(0, vertexBuffer);
             int draws = 0;
             foreach (var sprite in frame.Sprites)
@@ -213,17 +230,34 @@ internal sealed class NativeGraphicsRenderer : IDisposable
                 commands.SetGraphicsResourceSet(0, TextureBinding(white)); commands.Draw((uint)geometryCount, 1, (uint)(frame.Sprites.Count * 6), 0); draws++;
             }
             if (msaaSamples > 0) commands.ResolveTexture(target, resolved);
+            commands.PopDebugGroup();
             Texture final = resolved!;
-            for (int i = 1; i < passPipelines.Length; i++)
+            for (int i = 0; i < passPipelines.Length; i++)
             {
-                bool toScratch = (i & 1) == 1;
+                commands.PushDebugGroup("KNE post-effect pass");
+                bool toScratch = (i & 1) == 0;
                 commands.SetFramebuffer(toScratch ? scratchFramebuffer! : framebuffer!);
                 commands.ClearColorTarget(0, new RgbaFloat(0, 0, 0, 0)); commands.SetFullViewports();
                 commands.SetPipeline(passPipelines[i]); commands.SetVertexBuffer(0, passVertices!);
                 commands.SetGraphicsResourceSet(0, toScratch ? resolvedBinding! : scratchBinding!);
                 commands.Draw(6); draws++; final = toScratch ? scratch! : resolved!;
+                commands.PopDebugGroup();
             }
-            commands.CopyTexture(final, staging!); commands.End(); device.SubmitCommands(commands); device.WaitForIdle(); Readbacks++;
+            commands.PushDebugGroup("KNE output readback");
+            commands.CopyTexture(final, staging!);
+            commands.PopDebugGroup();
+            commands.End();
+            // Vulkan maps host memory without waiting for its producer. Direct3D 11
+            // maps the staging resource synchronously, and OpenGL maps it on the command queue.
+            if (device.BackendType == GraphicsBackend.Vulkan)
+            {
+                readbackFence ??= device.ResourceFactory.CreateFence(false);
+                device.SubmitCommands(commands, readbackFence);
+                device.WaitForFence(readbackFence);
+                device.ResetFence(readbackFence);
+            }
+            else device.SubmitCommands(commands);
+            Readbacks++;
             var mapped = device.Map(staging!, MapMode.Read);
             pixels = Interlocked.Exchange(ref readbackBuffer, null);
             int byteCount = checked(width * height * 4);
@@ -237,6 +271,9 @@ internal sealed class NativeGraphicsRenderer : IDisposable
                 }
             }
             finally { device.Unmap(staging!); }
+            bool retiredShaders = TrimShaderVariants();
+            if (device.BackendType == GraphicsBackend.OpenGL && (retiredTextures.Length != 0 || retiredShaders))
+                device.WaitForIdle(); // Drain Veldrid's deferred GL deletes only when resources retire.
             long allocated = textureBytes + (long)width * height * 4 * ((msaaSamples > 0 ? msaaSamples + 1 : 1) + 1 + (scratch == null ? 0 : 1));
             watch.Stop();
             var result = new GraphicsPixels(width, height, pixels, Backend, draws, allocated, watch.Elapsed.TotalMilliseconds, msaaSamples, ReturnReadback);
@@ -298,13 +335,18 @@ internal sealed class NativeGraphicsRenderer : IDisposable
         }
         shaders = compiled; fragmentSource = fragment;
         pipeline = pipelines.GetValueOrDefault(fragment);
+    }
+    private bool TrimShaderVariants()
+    {
+        // Keep every pipeline referenced by the submission alive until its output is ready.
+        bool retired = shaderVariants.Count > 17;
         while (shaderVariants.Count > 17)
         {
-            device.WaitForIdle();
-            string oldest = shaderVariants.Keys.First(key => key != fragment);
+            string oldest = shaderVariants.Keys.First(key => key != fragmentSource);
             if (pipelines.Remove(oldest, out var oldPipeline)) oldPipeline.Dispose();
             foreach (var old in shaderVariants[oldest]) old.Dispose(); shaderVariants.Remove(oldest);
         }
+        return retired;
     }
     private void EnsurePipeline()
     {
@@ -363,7 +405,7 @@ internal sealed class NativeGraphicsRenderer : IDisposable
     {
         if (disposed) return; disposed = true;
         Interlocked.Exchange(ref readbackBuffer, null);
-        try { device.WaitForIdle(); DisposeSurface(); foreach (var item in textures.Values) { item.Binding.Dispose(); item.Texture.Dispose(); } foreach (var variant in shaderVariants.Values) foreach (var shader in variant) shader.Dispose(); shaderVariants.Clear(); vertexBuffer.Dispose(); shaderGlobals.Dispose(); commands.Dispose(); layout.Dispose(); }
+        try { device.WaitForIdle(); DisposeSurface(); foreach (var item in textures.Values) { item.Binding.Dispose(); item.Texture.Dispose(); } foreach (var variant in shaderVariants.Values) foreach (var shader in variant) shader.Dispose(); shaderVariants.Clear(); vertexBuffer.Dispose(); shaderGlobals.Dispose(); readbackFence?.Dispose(); commands.Dispose(); layout.Dispose(); }
         finally { device.Dispose(); window?.Close(); }
     }
     internal const string VertexShader = """

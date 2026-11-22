@@ -22,13 +22,36 @@ internal sealed class ShaderGpuSession : IAsyncDisposable
         if (programs.Length > 16) throw new ArgumentException("Одновременно допускается не более 16 шейдеров.");
         var active = programs.Where(program => !program.IsIdentity).ToArray();
         if (active.Length == 0) return Task.FromResult(source);
+        return Queue(() => AsFrame(GraphicsTextures.Get(source)), false, active, settings, seconds, origin, screenSize, token);
+    }
+    internal Task<BitmapSource> RenderAsync(GraphicsTexture source, CompiledShaderGraph[] programs, GraphicsSettings settings,
+        float seconds, Vector2 origin, CancellationToken token, Vector2 screenSize)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        token.ThrowIfCancellationRequested();
+        return Queue(() => AsFrame(source), false, programs, settings, seconds, origin, screenSize, token);
+    }
+    internal Task<BitmapSource> RenderCompositeAsync(Func<GraphicsFrame> source, CompiledShaderGraph[] programs, GraphicsSettings settings,
+        float seconds, Vector2 origin, CancellationToken token, Vector2 screenSize)
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        token.ThrowIfCancellationRequested();
+        return Queue(source, true, programs, settings, seconds, origin, screenSize, token);
+    }
+    private static GraphicsFrame AsFrame(GraphicsTexture source) => new(source.Width, source.Height,
+        [new(source, new Rect(0, 0, source.Width, source.Height))]);
+
+    private Task<BitmapSource> Queue(Func<GraphicsFrame> source, bool composite, CompiledShaderGraph[] programs, GraphicsSettings settings,
+        float seconds, Vector2 origin, Vector2 screenSize, CancellationToken token)
+    {
         if (pending is { IsCompleted: false }) throw new InvalidOperationException("Shader queue is busy.");
-        pending = RenderCoreAsync(source, active, settings with { }, seconds, origin, screenSize, token);
+        pending = RenderCoreAsync(source, composite, programs, settings with { }, seconds, origin, screenSize, token);
         return pending;
     }
-    private async Task<BitmapSource> RenderCoreAsync(BitmapSource source, CompiledShaderGraph[] programs, GraphicsSettings settings, float seconds, Vector2 origin, Vector2 screenSize, CancellationToken token)
+    private async Task<BitmapSource> RenderCoreAsync(Func<GraphicsFrame> source, bool composite, CompiledShaderGraph[] programs,
+        GraphicsSettings settings, float seconds, Vector2 origin, Vector2 screenSize, CancellationToken token)
     {
-        using var pixels = await Worker.RenderShadersAsync(source, programs, settings, seconds, origin, screenSize, token).ConfigureAwait(false);
+        using var pixels = await Worker.RenderShadersAsync(source, composite, programs, settings, seconds, origin, screenSize, token).ConfigureAwait(false);
         var image = BitmapSource.Create(pixels.Width, pixels.Height, 96, 96, PixelFormats.Pbgra32, null, pixels.Pixels, pixels.Width * 4); image.Freeze();
         return image;
     }
