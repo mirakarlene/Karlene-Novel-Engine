@@ -57,6 +57,8 @@ public sealed class ProjectFolderBrowserUiTests : IDisposable
             Assert.True((await Store(fixture).LoadAsync()).ScrollLongProjectTreeNames);
             Invoke(window, "ShowPanel", Find<Grid>(window, "ProjectPanel"));
             Layout(window, 1100);
+            await Idle(window);
+            Layout(window, 1100);
 
             Assert.Equal(TextTrimming.None, label.TextTrimming);
             Assert.True(label.ActualWidth > trimmedWidth);

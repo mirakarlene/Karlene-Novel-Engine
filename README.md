@@ -34,9 +34,11 @@ dotnet publish KNE.csproj -c Release -r win-x64 --self-contained false -o artifa
 
 ### Linux и macOS через Wine
 
-KNE использует WPF. На Linux и macOS запускается Windows-сборка в Wine, а на Linux её также можно запустить через Steam Proton. Совместимость зависит от версии Wine или Proton и драйверов устройства. [Microsoft: WPF](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/overview) · [WineHQ](https://www.winehq.org/) · [Valve: Proton](https://github.com/ValveSoftware/Proton)
+KNE использует WPF. Режим совместимости Windows-сборки рассчитан на Wine в Linux и macOS и на Steam Proton в Linux. Результат запуска зависит от версии Wine или Proton и драйверов устройства. [Документация Microsoft по WPF](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/overview) · [WineHQ](https://www.winehq.org/) · [Valve Proton](https://github.com/ValveSoftware/Proton)
 
-Скачайте архив редактора для Windows x64 из [Releases](https://github.com/mirakarlene/Karlene-Novel-Engine/releases), если он опубликован, и распакуйте его целиком. На Windows можно подготовить самодостаточную сборку с .NET Desktop Runtime в комплекте:
+Скачайте архив редактора для Windows x64 из Releases, если он опубликован, и распакуйте его целиком. [Выпуски KNE](https://github.com/mirakarlene/Karlene-Novel-Engine/releases)
+
+На Windows следующая команда подготовит самодостаточную сборку с .NET Desktop Runtime в комплекте.
 
 ```powershell
 dotnet publish KNE.csproj -c Release -r win-x64 --self-contained true -o artifacts/publish/win-x64-wine
@@ -44,7 +46,7 @@ dotnet publish KNE.csproj -c Release -r win-x64 --self-contained true -o artifac
 
 Перенесите весь каталог сборки и расположите его, например, в `$HOME/KNE`.
 
-На Linux x86-64 установите Wine из репозитория дистрибутива:
+На Linux x86-64 установите Wine из репозитория вашего дистрибутива.
 
 - Arch Linux — `sudo pacman -Syu wine`. [Пакет Wine в Arch Linux](https://archlinux.org/packages/extra/x86_64/wine/)
 - Debian — `sudo apt update`, затем `sudo apt install wine wine64`. [Пакет Wine в Debian](https://packages.debian.org/stable/wine)
@@ -56,7 +58,7 @@ dotnet publish KNE.csproj -c Release -r win-x64 --self-contained true -o artifac
 export PATH="/Applications/Wine Stable.app/Contents/Resources/wine/bin:$PATH"
 ```
 
-Запуск на Linux и macOS выполняется из каталога сборки. Отдельный префикс `$HOME/.wine-kne` сохраняет настройки и зависимости редактора:
+Запуск на Linux и macOS выполняется из каталога сборки. Отдельный префикс `$HOME/.wine-kne` сохраняет настройки и зависимости редактора.
 
 ```sh
 cd "$HOME/KNE"
