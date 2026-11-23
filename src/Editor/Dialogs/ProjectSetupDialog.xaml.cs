@@ -10,6 +10,8 @@ namespace KNE;
 /// <summary>Window, graphics and palette choices for a new project.</summary>
 public partial class ProjectSetupDialog : Window
 {
+    internal sealed record Draft(string Resolution, string Width, string Height, string GraphicsApi, int MaxFps, string Palette);
+
     internal bool BackRequested { get; private set; }
     private ProjectResolution? resolution = ProjectCreationOptions.Resolutions[0];
     private string palette = "violet";
@@ -75,10 +77,23 @@ public partial class ProjectSetupDialog : Window
         return ShowDialog();
     }
 
+    internal Draft ReadDraft() => new(resolution?.Id ?? "custom", CustomWidthInput.Text, CustomHeightInput.Text,
+        (string?)GraphicsApiInput.SelectedValue ?? "auto", (int?)FrameRateInput.SelectedValue ?? 60, palette);
+
+    internal void RestoreDraft(Draft draft)
+    {
+        CustomWidthInput.Text = draft.Width;
+        CustomHeightInput.Text = draft.Height;
+        ((RadioButton)FindName("Resolution_" + draft.Resolution)).IsChecked = true;
+        GraphicsApiInput.SelectedValue = draft.GraphicsApi;
+        FrameRateInput.SelectedValue = draft.MaxFps;
+        ((RadioButton)FindName("Palette_" + draft.Palette)).IsChecked = true;
+    }
+
     private void Back_Click(object sender, RoutedEventArgs e)
     {
         BackRequested = true;
-        Hide();
+        DialogResult = false;
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;

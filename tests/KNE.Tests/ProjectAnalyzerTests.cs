@@ -223,6 +223,66 @@ public sealed class ProjectAnalyzerTests
     }
 
     [Fact]
+    public async Task Analyze_CountsAuthoredContentAndReportsDiagnosticsBySeverity()
+    {
+        using var fixture = new TempProject();
+        fixture.Write("game/scenes/main.krl", """
+            function main()
+                state.used = 1
+                state.unused = 2
+                d("Мира", "{b}Два слова{/b} {used}")
+                goto_scene("linked")
+                enable_console()
+                read_text_file("README.txt")
+            end
+            """);
+        var linked = VisualScript.Create();
+        linked.FunctionName = "linked";
+        var dialogue = linked.Nodes.Single(node => node.Kind == ScriptNodeKind.Dialogue);
+        dialogue.Kind = ScriptNodeKind.ReverseDialogue;
+        dialogue.Text = "{w=0.5}";
+        dialogue.Speaker = "Мира";
+        fixture.Write("game/scenes/linked.knegraph", linked.Serialize());
+        fixture.Write("game/scenes/unused.krl", "function unused_scene() end");
+        var module = VisualLua.ParseSource("local answer = 42\nreturn answer");
+        fixture.Write("game/scripts/helper.vlua", module.Serialize());
+        var graphics = new ProjectPerformanceSettings { RenderProxy = "skia" };
+        graphics.Graphics.MsaaSamples = 4;
+        await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, graphics);
+
+        var result = await ProjectAnalyzer.AnalyzeAsync(fixture.ProjectPath);
+        Assert.Equal(0, result.ErrorCount);
+        Assert.Equal(1, result.InformationCount);
+        Assert.Equal(new ProjectAnalysisStatistics(2, 2, 1, linked.Nodes.Count, 9,
+            File.ReadLines(Path.Combine(fixture.ProjectPath, ProjectDiagnosticsTemplate.CodePath)).Count(), module.Nodes.Count), result.Statistics);
+        Assert.Contains(result.Findings, finding => finding.Code == "KNE305" && finding.BlockId == dialogue.Id);
+        Assert.Contains(result.Findings, finding => finding.Code == "KNE306" && finding.Severity == ProjectDiagnosticSeverity.Warning);
+        Assert.Contains(result.Findings, finding => finding.Code == "KNE307" && finding.File.EndsWith("unused.krl"));
+        Assert.DoesNotContain(result.Findings, finding => finding.Code == "KNE307" && finding.File.EndsWith("linked.knegraph"));
+        var variable = Assert.Single(result.Findings, finding => finding.Code == "KNE308");
+        Assert.Contains("state.unused", variable.Message);
+        Assert.Contains(result.Findings, finding => finding.Code == "KNE601" && finding.Severity == ProjectDiagnosticSeverity.Information);
+        Assert.Contains(result.Findings, finding => finding.Code == "KNE602" && finding.Severity == ProjectDiagnosticSeverity.Warning);
+    }
+
+    [Fact]
+    public async Task Analyze_ComputedLookupSuppressesUnusedWarnings()
+    {
+        using var fixture = new TempProject();
+        fixture.Write("game/scenes/main.krl", """
+            function main()
+                state.value = 3
+                print(state[get_key()])
+                goto_scene(get_scene())
+            end
+            function chapter() end
+            """);
+        var result = await ProjectAnalyzer.AnalyzeAsync(fixture.ProjectPath);
+        Assert.Equal(0, result.ErrorCount);
+        Assert.DoesNotContain(result.Findings, finding => finding.Code is "KNE307" or "KNE308");
+    }
+
+    [Fact]
     public async Task Analyze_InvalidGraphAndEngineJson_DoNotPreventOtherDiagnostics()
     {
         using var fixture = new TempProject();
@@ -280,7 +340,7 @@ public sealed class ProjectAnalyzerTests
         string report = await File.ReadAllTextAsync(first);
         Assert.Equal(report, await File.ReadAllTextAsync(second));
         Assert.Contains("Новелла с пробелами", report);
-        Assert.Contains("Ошибок: 0; предупреждений: 1", report);
+        Assert.Contains("Ошибок: 0, предупреждений: 1, сообщений: 0", report);
         Assert.Contains("game/scenes/main.krl:2", report);
         Assert.Contains("фрейм сцены", report);
         Assert.Contains("Сценарии не запускались", report);

@@ -56,6 +56,13 @@ internal static class ProjectFileFormats
     private const string FolderShape = "M2,7 H13 L16,11 H30 V27 H2 Z";
     internal const string LuaMark = "M11,20 A5,5 0 1 0 21,20 A5,5 0 1 0 11,20 M21,14 A2,2 0 1 0 25,14 A2,2 0 1 0 21,14";
 
+    internal static FrameworkElement BlankFileIcon()
+    {
+        var icon = new Path { Data = Geometry.Parse(Page), Width = 32, Height = 32, StrokeThickness = 1.5 };
+        icon.SetResourceReference(Shape.StrokeProperty, "Editor.Text");
+        return icon;
+    }
+
     internal static FrameworkElement Icon(ProjectFileFormat format)
     {
         var color = new SolidColorBrush((Color)ColorConverter.ConvertFromString(format.Color));

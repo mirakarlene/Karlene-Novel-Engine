@@ -59,6 +59,7 @@ internal sealed class WindowsEditorNotifications : IDisposable
         if (disposed) return "Закрыто";
         if (preferences.NotificationSound) PlaySound(preferences);
         if (!preferences.Toasts) return "Визуальные уведомления отключены.";
+        if (WineCompatibility.Enabled) return "Windows Action Center недоступен в режиме Wine/Proton.";
         string executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
         var start = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardInputEncoding = new UTF8Encoding(false), StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
         foreach (string argument in new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(Bridge)) }) start.ArgumentList.Add(argument);
@@ -76,6 +77,11 @@ internal sealed class WindowsEditorNotifications : IDisposable
     private void PlaySound(EditorPreferences preferences)
     {
         string file = preferences.Sound == "custom" ? preferences.SoundFile : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Media", "Windows Notify System Generic.wav");
+        if (WineCompatibility.Enabled && preferences.Sound != "custom" && !File.Exists(file))
+        {
+            System.Media.SystemSounds.Asterisk.Play();
+            return;
+        }
         if (!File.Exists(file)) throw new FileNotFoundException("Звук уведомления не найден.", file);
         sound?.Close(); var player = new MediaPlayer { Volume = preferences.Sound switch { "quiet" => .2, "loud" => 1, _ => .5 } }; sound = player;
         player.MediaEnded += (_, _) => { player.Close(); if (ReferenceEquals(sound, player)) sound = null; }; player.Open(new Uri(file)); player.Play();

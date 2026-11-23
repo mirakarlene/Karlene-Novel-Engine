@@ -247,7 +247,8 @@ public partial class ScriptEditor : UserControl
         ApplyLuaModeAppearance(false);
         CodeEditor.Visibility = GraphPanel.Visibility = Visibility.Collapsed;
         ExternalEditorButton.Visibility = Visibility.Collapsed;
-        PropertiesPanel.IsEnabled = false;
+        Visible(PropertiesPanel, false);
+        Visible(NoBlockSelected, true);
         EditorStatus.Text = "";
         updating = false;
         UpdateTitle();

@@ -12,6 +12,12 @@ public partial class MainWindow
         await RunOperationAsync(async () =>
         {
             await SaveAllEditorsAsync();
+            var analysis = await ProjectAnalyzer.AnalyzeAsync(project.Path, lifetime.Token);
+            if (analysis.RequiresBuildConfirmation && new ReleaseAnalysisWindow(this, settings.Theme, analysis).ShowDialog() != true)
+            {
+                OperationStatus.Text = analysis.ErrorCount > 0 ? "Сборка остановлена из-за ошибок проекта." : "Сборка отменена.";
+                return;
+            }
             var options = ProjectBuildSettingsStore.Load(project.Path);
             var loaded = await ProjectLoader.LoadProjectAsync(project.Path, lifetime.Token);
             if (options.GameId == "" || string.IsNullOrWhiteSpace(options.ReleasePath))

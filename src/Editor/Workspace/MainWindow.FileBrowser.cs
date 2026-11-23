@@ -31,10 +31,8 @@ public partial class MainWindow
 
     private void ShowFileBrowser()
     {
-        FileBrowserPanel.Visibility = Visibility.Visible;
-        EditorWorkspace.Visibility = Visibility.Collapsed;
-        foreach (var editor in OpenEditors) editor.Visibility = Visibility.Collapsed;
-        ApplyBrowserView();
+        DocumentTabs.SelectedIndex = -1;
+        ShowActiveEditor();
     }
 
     private void RefreshBrowserEntries(string? selectedPath = null)

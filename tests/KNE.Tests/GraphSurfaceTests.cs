@@ -70,7 +70,19 @@ public sealed class GraphSurfaceTests
         var shadows = (Dictionary<string, Rectangle>)typeof(ScriptEditor).GetField("cardShadows", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(editor)!;
         var shadow = Assert.IsType<DropShadowEffect>(shadows["dialogue"].Effect);
         Assert.Equal(((SolidColorBrush)card.BorderBrush).Color, shadow.Color);
-        Assert.True(card.CornerRadius.TopLeft > 0); Assert.InRange(shadow.Opacity, .01, .35);
+        Assert.True(card.CornerRadius.TopLeft > 0);
+        byte medium = GlowAlpha(53);
+        Assert.True(medium > 0);
+        editor.ApplyBlockGlow(BlockGlowMode.Weak, smooth: true);
+        Assert.True(GlowAlpha(53) < medium);
+        editor.ApplyBlockGlow(BlockGlowMode.Squares, smooth: true);
+        Assert.True(GlowAlpha(35) > 0);
+        Assert.Equal(0, shadows["dialogue"].RadiusX);
+        editor.ApplyBlockGlow(BlockGlowMode.Off, smooth: false);
+        Assert.Equal(0, GlowAlpha(53));
+        Assert.Equal(EdgeMode.Aliased, RenderOptions.GetEdgeMode(card));
+        editor.ApplyBlockGlow(BlockGlowMode.Medium, smooth: true);
+        Assert.Equal(EdgeMode.Unspecified, RenderOptions.GetEdgeMode(card));
         var ports = Ports(card).ToArray(); Assert.Equal(2, ports.Length);
         var input = ports.Single(p => Equals(p.Content, "Вход"));
         var output = ports.Single(p => !Equals(p.Content, "Вход"));
@@ -80,6 +92,16 @@ public sealed class GraphSurfaceTests
         Assert.Equal(new[] { Cursors.SizeWE, Cursors.SizeNS, Cursors.SizeNWSE, Cursors.SizeNESW }.OrderBy(c => c.ToString()),
             handles.Select(h => h.Cursor).Distinct().OrderBy(c => c.ToString()));
         await Task.CompletedTask;
+
+        byte GlowAlpha(int y)
+        {
+            Layout(editor);
+            var bitmap = new RenderTargetBitmap(650, 232, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(canvas);
+            var pixel = new byte[4];
+            bitmap.CopyPixels(new Int32Rect(435, y, 1, 1), pixel, 4, 0);
+            return pixel[3];
+        }
     });
 
     [Fact]

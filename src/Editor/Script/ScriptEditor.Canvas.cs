@@ -66,8 +66,12 @@ public partial class ScriptEditor
         if (mode == blockGlow && smooth == smoothBlockGlow) return;
         blockGlow = mode;
         smoothBlockGlow = smooth;
+        foreach (var card in cards.Values) ApplyCardAntialiasing(card);
         foreach (var shadow in cardShadows.Values) UpdateBlockGlow(shadow);
     }
+
+    private void ApplyCardAntialiasing(Border card) =>
+        RenderOptions.SetEdgeMode(card, smoothBlockGlow ? EdgeMode.Unspecified : EdgeMode.Aliased);
 
     private void UpdateBlockGlow(Rectangle shadow)
     {
@@ -79,14 +83,22 @@ public partial class ScriptEditor
             shadow.Effect = null;
             return;
         }
-        shadow.Effect = new DropShadowEffect
+        var (radius, opacity) = blockGlow switch
+        {
+            BlockGlowMode.Weak => (10d, .35),
+            BlockGlowMode.Medium => (24d, .78),
+            _ => (48d, 1d)
+        };
+        var effect = new DropShadowEffect
         {
             Color = ((SolidColorBrush)shadow.Fill).Color,
-            BlurRadius = blockGlow == BlockGlowMode.Weak ? 8 : 14,
-            ShadowDepth = blockGlow == BlockGlowMode.Squares ? 0 : 2,
-            Opacity = blockGlow == BlockGlowMode.Weak ? .12 : .23,
+            BlurRadius = radius,
+            ShadowDepth = 0,
+            Opacity = opacity,
             RenderingBias = smoothBlockGlow ? RenderingBias.Quality : RenderingBias.Performance
         };
+        effect.Freeze();
+        shadow.Effect = effect;
     }
     private readonly List<(Thumb Handle, string NodeId, int Horizontal, int Vertical)> resizeHandles = [];
     private GraphPort? draggingPort;
@@ -171,6 +183,7 @@ public partial class ScriptEditor
                 Child = contents, Tag = node.Id
             };
             card.SetResourceReference(Border.BackgroundProperty, "Editor.Surface");
+            ApplyCardAntialiasing(card);
             string category = graph.IsVisualLua && node.Kind == ScriptNodeKind.Start ? "lua_flow" : node.Category.Length > 0 ? node.Category : BlockLibrary.Definitions.First(entry => entry.Kind == (node.Kind == ScriptNodeKind.Condition ? ScriptNodeKind.Branching : node.Kind)).Group;
             var title = (TextBlock)header.Child;
             header.Child = null;

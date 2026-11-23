@@ -35,7 +35,7 @@
     </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+        <StackPanel Grid.Row="0" Margin="1,0,0,8">
             <TextBlock x:Name="DocumentTitle" Text="Выберите сценарий в дереве и нажмите «Открыть сценарий»." TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,6"/>
             <WrapPanel>
                 <Button x:Name="SaveButton" Content="Сохранить" Padding="8,5" Margin="0,0,5,4" Click="Save_Click" IsEnabled="False"/>
@@ -117,8 +117,8 @@
             <TextBlock x:Name="EditorStatus" TextWrapping="Wrap" Foreground="{DynamicResource Editor.Muted}" Margin="0,0,8,0"/>
             <Border x:Name="ModeTrack" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Bottom">
                 <StackPanel Orientation="Horizontal">
-                    <RadioButton x:Name="CodeMode" Content="Код" GroupName="EditorMode" Margin="8,0" Checked="Mode_Changed" IsEnabled="False"/>
-                    <RadioButton x:Name="GraphMode" Content="Блок-схема" GroupName="EditorMode" Checked="Mode_Changed" IsEnabled="False"/>
+                    <RadioButton x:Name="CodeMode" Content="Код" Margin="8,0" Checked="Mode_Changed" IsEnabled="False"/>
+                    <RadioButton x:Name="GraphMode" Content="Блок-схема" Checked="Mode_Changed" IsEnabled="False"/>
                 </StackPanel>
             </Border>
         </Grid>

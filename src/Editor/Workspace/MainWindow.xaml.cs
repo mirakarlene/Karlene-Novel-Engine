@@ -60,7 +60,7 @@ public partial class MainWindow : Window
     private async void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (EngineDiagnostics.Current?.Snapshot.Failure != null) { closeApproved = true; return; }
-        if (closeApproved || (ActiveEditor.Document == null && !busy && !LibraryView.HasPendingPreferenceSave)) return;
+        if (closeApproved || (!OpenEditors.Any() && !busy && !LibraryView.HasPendingPreferenceSave)) return;
         e.Cancel = true;
         if (checkingClose || busy) return;
         checkingClose = true;
@@ -254,36 +254,28 @@ public partial class MainWindow : Window
     internal static (ProjectAuthoringMode Mode, ProjectCreationOptions Options)? ChooseProjectSetup(Window owner, string theme)
     {
         var mode = ProjectAuthoringMode.Code;
-        ProjectSetupDialog? setup = null;
-        try
+        ProjectSetupDialog.Draft? draft = null;
+        while (true)
         {
+            var authoring = new ProjectCreationDialog(mode) { Owner = owner };
+            EditorTheme.Apply(authoring, theme);
+            if (authoring.ShowDialog() != true) return null;
+            mode = authoring.AuthoringMode;
             while (true)
             {
-                var authoring = new ProjectCreationDialog(mode) { Owner = owner };
-                EditorTheme.Apply(authoring, theme);
-                if (authoring.ShowDialog() != true) return null;
-                mode = authoring.AuthoringMode;
-                while (true)
+                var templates = new ProjectTemplateDialog(theme, mode) { Owner = owner };
+                if (templates.ShowDialog() != true)
                 {
-                    var templates = new ProjectTemplateDialog(theme) { Owner = owner };
-                    if (templates.ShowDialog() != true)
-                    {
-                        if (templates.BackRequested) break;
-                        return null;
-                    }
-                    if (setup == null)
-                    {
-                        setup = new ProjectSetupDialog { Owner = owner };
-                        EditorTheme.Apply(setup, theme);
-                    }
-                    if (setup.ShowSettings() == true) return (mode, setup.Options);
-                    if (!setup.BackRequested) return null;
+                    if (templates.BackRequested) break;
+                    return null;
                 }
+                var setup = new ProjectSetupDialog { Owner = owner };
+                EditorTheme.Apply(setup, theme);
+                if (draft != null) setup.RestoreDraft(draft);
+                if (setup.ShowSettings() == true) return (mode, setup.Options);
+                if (!setup.BackRequested) return null;
+                draft = setup.ReadDraft();
             }
-        }
-        finally
-        {
-            if (setup?.BackRequested == true) setup.Close();
         }
     }
 

@@ -5,25 +5,40 @@ using System.Text.Json;
 
 namespace KNE;
 
-public enum ProjectDiagnosticSeverity { Warning, Error }
+public enum ProjectDiagnosticSeverity { Warning, Error, Information }
 
 public sealed record ProjectDiagnostic(ProjectDiagnosticSeverity Severity, string Code, string File, int? Line,
     string Message, string? BlockId = null, FrameIdentity? Frame = null);
 
 public sealed record ProjectAnalysisResult(string ProjectName, DateTimeOffset OccurredAt, IReadOnlyList<ProjectDiagnostic> Findings)
 {
+    public ProjectAnalysisStatistics Statistics { get; init; } = new();
     public int ErrorCount => Findings.Count(f => f.Severity == ProjectDiagnosticSeverity.Error);
     public int WarningCount => Findings.Count(f => f.Severity == ProjectDiagnosticSeverity.Warning);
+    public int InformationCount => Findings.Count(f => f.Severity == ProjectDiagnosticSeverity.Information);
+    internal bool RequiresBuildConfirmation => ErrorCount + WarningCount > 0;
 
     public string ToText()
     {
         var text = new StringBuilder("Анализ проекта KNE\nПроект: ").Append(ProjectName)
             .Append("\nВремя: ").Append(OccurredAt.ToString("O", CultureInfo.InvariantCulture))
-            .Append("\nОшибок: ").Append(ErrorCount).Append("; предупреждений: ").Append(WarningCount)
+            .Append("\nОшибок: ").Append(ErrorCount).Append(", предупреждений: ").Append(WarningCount)
+            .Append(", сообщений: ").Append(InformationCount)
+            .Append("\nРеплик: ").Append(Statistics.Dialogues).Append(", слов в репликах: ").Append(Statistics.DialogueWords)
+            .Append(", персонажей: ").Append(Statistics.Characters)
+            .Append("\nБлоков .knegraph и .kneshader: ").Append(Statistics.ScenarioBlocks)
+            .Append(", строк .krl: ").Append(Statistics.KrlLines)
+            .Append(", строк .lua: ").Append(Statistics.LuaLines)
+            .Append(", блоков .vlua: ").Append(Statistics.VisualLuaBlocks)
             .Append("\n\nСценарии не запускались. Предупреждения — статические эвристики, а не доказательство ошибки.\n")
             .Append("Динамические пути, вычисляемые переходы и значения переменных требуют проверки в игре.\n\n");
         foreach (var item in Findings)
-            text.Append(item.Severity == ProjectDiagnosticSeverity.Error ? "ОШИБКА " : "ПРЕДУПРЕЖДЕНИЕ ")
+            text.Append(item.Severity switch
+                {
+                    ProjectDiagnosticSeverity.Error => "ОШИБКА ",
+                    ProjectDiagnosticSeverity.Warning => "ПРЕДУПРЕЖДЕНИЕ ",
+                    _ => "СООБЩЕНИЕ "
+                })
                 .Append(item.Code).Append(" | ").Append(item.File)
                 .Append(item.Line is { } number ? ":" + number.ToString(CultureInfo.InvariantCulture) : "")
                 .Append(item.BlockId is { } block ? " | блок " + block : "")
@@ -34,8 +49,11 @@ public sealed record ProjectAnalysisResult(string ProjectName, DateTimeOffset Oc
     }
 }
 
+public sealed record ProjectAnalysisStatistics(int Dialogues = 0, int DialogueWords = 0, int Characters = 0,
+    int ScenarioBlocks = 0, int KrlLines = 0, int LuaLines = 0, int VisualLuaBlocks = 0);
+
 /// <summary>Static diagnostics over saved sources; game scripts are not executed. Registered extension validators run trusted plugin code.</summary>
-public static class ProjectAnalyzer
+public static partial class ProjectAnalyzer
 {
     private const long SourceLimit = 8 * 1024 * 1024;
     private sealed record Source(string Path, string Text, List<Lexeme> Tokens);
@@ -58,7 +76,12 @@ public static class ProjectAnalyzer
         var functions = new List<Function>();
         var references = new List<Reference>();
         var sources = new List<Source>();
+        var graphSources = new Dictionary<string, (VisualScript Graph, HashSet<string> Reachable)>(StringComparer.OrdinalIgnoreCase);
+        var variables = new VariableAnalysis();
+        var narrative = new NarrativeAnalysis(findings);
+        int scenarioBlocks = 0, krlLines = 0, luaLines = 0, visualLuaBlocks = 0;
         string projectName = Path.GetFileName(root);
+        ProjectConfiguration? configuration = null;
         void Add(string code, string path, int? line, string message, ProjectDiagnosticSeverity severity = ProjectDiagnosticSeverity.Error, string? block = null)
             => findings.Add(new(severity, code, path, line, message, block));
 
@@ -68,16 +91,24 @@ public static class ProjectAnalyzer
         try
         {
             string config = await File.ReadAllTextAsync(configPath, token).ConfigureAwait(false);
-            var configuration = JsonSerializer.Deserialize<ProjectConfiguration>(config, ProjectConfiguration.JsonOptions)
+            configuration = JsonSerializer.Deserialize<ProjectConfiguration>(config, ProjectConfiguration.JsonOptions)
                 ?? throw new InvalidDataException("project.json не должен содержать null.");
             projectName = configuration.DisplayName(projectName);
-            foreach (string? entry in new[] { configuration.EntryPoints?.InitScript, configuration.EntryPoints?.MainScene })
+            var project = new ProjectInfo { Path = root, Configuration = configuration };
+            foreach (string? entry in new[] { configuration.EntryPoints?.InitScript, configuration.EntryPoints?.MainScene }
+                         .OfType<string>().Concat(ProjectLifecycle.Paths(configuration.EntryPoints)))
                 if (!string.IsNullOrWhiteSpace(entry))
-                    try { if (!File.Exists(PathSafety.ResolveRelative(root, entry))) Add("KNE002", "project.json", null, "Не найден файл entry_points: " + entry); }
+                    try
+                    {
+                        string fullPath = entry == configuration.EntryPoints?.InitScript ? project.InitScriptPath :
+                            entry == configuration.EntryPoints?.MainScene ? project.MainScenePath : PathSafety.ResolveRelative(root, entry);
+                        if (!File.Exists(fullPath)) Add("KNE002", "project.json", null, "Не найден файл entry_points: " + entry);
+                    }
                     catch (Exception error) when (error is IOException or ArgumentException or UnauthorizedAccessException) { Add("KNE002", "project.json", null, error.Message); }
         }
         catch (Exception error) when (error is JsonException or InvalidDataException or IOException or UnauthorizedAccessException)
         { Add("KNE003", "project.json", JsonLine(error), error.Message); }
+        AnalyzeGraphics(root, findings);
 
         foreach (string file in files.Files)
         {
@@ -90,10 +121,27 @@ public static class ProjectAnalyzer
             {
                 if (new FileInfo(file).Length > SourceLimit) { Add("KNE004", path, null, "Файл превышает допустимые 8 МБ."); continue; }
                 string text = await File.ReadAllTextAsync(file, token).ConfigureAwait(false);
-                if (ScriptDocument.IsVisualLuaPath(file)) text = VisualScript.Parse(text).Compile();
+                bool visualLuaSource = ScriptDocument.IsVisualLuaPath(file);
+                if (visualLuaSource)
+                {
+                    var visualLua = VisualScript.Parse(text);
+                    visualLuaBlocks += visualLua.Nodes.Count;
+                    if (!visualLua.IsVisualLua) throw new InvalidDataException("Для .vlua нужна блок-схема Visual Lua.");
+                    AnalyzeUnreachableBlocks(visualLua, path, findings);
+                    text = visualLua.Compile();
+                }
+                else if (path.EndsWith(".krl", StringComparison.OrdinalIgnoreCase)) krlLines += CountLines(text);
+                else if (path.EndsWith(".lua", StringComparison.OrdinalIgnoreCase)) luaLines += CountLines(text);
                 if (shader)
                 {
-                    try { var compiled = ShaderGraphCompiler.Compile(VisualScript.Parse(text), root, file); _ = compiled.ToHlsl(); }
+                    var visual = VisualScript.Parse(text);
+                    scenarioBlocks += visual.Nodes.Count;
+                    try
+                    {
+                        var compiled = ShaderGraphCompiler.Compile(visual, root, file);
+                        _ = compiled.ToHlsl();
+                        AnalyzeShaderReachability(visual, path, findings);
+                    }
                     catch (Exception error) when (error is InvalidDataException or IOException or ArgumentException or Veldrid.SPIRV.SpirvCompilationException) { Add("KNE501", path, null, error.Message); }
                 }
                 else if (config)
@@ -104,16 +152,19 @@ public static class ProjectAnalyzer
                 else if (graph)
                 {
                     var visual = VisualScript.Parse(text);
+                    scenarioBlocks += visual.Nodes.Count;
                     functions.Add(new(visual.FunctionName, path, 1, []));
                     foreach (var node in visual.Nodes)
                     {
+                        narrative.ReadBlock(path, node);
+                        AnalyzeSystemUse(SystemBlocks.All.GetValueOrDefault(node.Kind), path, null, node.Id, findings);
                         if (node.Kind is ScriptNodeKind.Background or ScriptNodeKind.Character or ScriptNodeKind.Music or ScriptNodeKind.Sound or ScriptNodeKind.Voice or ScriptNodeKind.IncludeLua or ScriptNodeKind.IncludeCs or ScriptNodeKind.Script or ScriptNodeKind.Subsystem && !string.IsNullOrWhiteSpace(node.Path))
                             CheckResource(root, path, null, node.Path, findings, node.Id);
                         if (node.Ui?.Texture is { Length: > 0 } texture) CheckResource(root, path, null, texture, findings, node.Id);
                         if (node.Kind is ScriptNodeKind.CallScene or ScriptNodeKind.GotoScene or ScriptNodeKind.ConditionalGoto)
                             references.Add(new(node.Path, path, 1, node.Id));
                     }
-                    AnalyzeGraph(visual, path, findings);
+                    graphSources.Add(path, (visual, AnalyzeGraph(visual, path, findings)));
                     if (PluginCatalog.Current is { } pluginApi && pluginApi.ProjectDirectory.Equals(root, StringComparison.OrdinalIgnoreCase))
                     {
                         try
@@ -123,7 +174,7 @@ public static class ProjectAnalyzer
                         }
                         catch (Exception error) { Add("KNEPLUGIN", path, null, "Ошибка валидатора плагина: " + error.Message); }
                     }
-                    try { visual.Compile(); }
+                    try { variables.Read(Lex(visual.Compile()), path, graph: true); }
                     catch (InvalidDataException error) { Add("KNE101", path, null, error.Message); }
                 }
                 else
@@ -132,6 +183,8 @@ public static class ProjectAnalyzer
                     try { prepared = LuaSource.Prepare(StartupScripts.Declaration(text).Source); }
                     catch (InvalidDataException error) { Add("KNE102", path, LuaSource.FirstExecutableLine(text), error.Message); prepared = LuaSource.Prepare(text); }
                     var source = new Source(path, text, Lex(text));
+                    narrative.ReadSource(source, visualLuaSource);
+                    variables.Read(source.Tokens, path, generatedCode: visualLuaSource);
                     sources.Add(new(path, prepared, source.Tokens));
                     var declarations = LuaSource.Functions(text);
                     foreach (var declaration in declarations)
@@ -175,6 +228,9 @@ public static class ProjectAnalyzer
         foreach (var reference in references)
             if (!names.Contains(reference.Name) && !(reference.Identifier && assigned.Contains(reference.Name)))
                 Add("KNE203", reference.Path, reference.Line, "Не найдена глобальная функция перехода: " + reference.Name + "().", block: reference.Block);
+        if (configuration != null && mains.Length == 1)
+            AnalyzeSceneReachability(configuration.EntryPoints, functions, sources, graphSources, findings, token);
+        variables.AddFindings(narrative.InlineVariables, findings);
         AnalyzeRecursion(functions, findings);
         try
         {
@@ -196,7 +252,11 @@ public static class ProjectAnalyzer
                 Add("KNE008", "engine/frame-ids.json", JsonLine(error), error.Message);
         }
         return new(projectName, DateTimeOffset.Now, findings.OrderBy(f => f.File, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(f => f.Line ?? 0).ThenBy(f => f.Code, StringComparer.Ordinal).ToArray());
+            .ThenBy(f => f.Line ?? 0).ThenBy(f => f.Code, StringComparer.Ordinal).ToArray())
+        {
+            Statistics = new(narrative.Dialogues, narrative.Words, narrative.CharacterCount,
+                scenarioBlocks, krlLines, luaLines, visualLuaBlocks)
+        };
     }
 
     public static async Task<string> SaveReportAsync(string projectRoot, ProjectAnalysisResult result, CancellationToken cancellationToken = default)
@@ -249,6 +309,8 @@ public static class ProjectAnalyzer
         {
             if (!IsGlobalCall(tokens, i) || shadowed.Contains(tokens[i].Text)) continue;
             string name = tokens[i].Text;
+            AnalyzeSystemUse(SystemFunctions.GetValueOrDefault(name), source.Path,
+                ScriptDocument.IsVisualLuaPath(source.Path) ? null : tokens[i].Line, null, findings);
             AnalyzeNilArguments(source, i, findings);
             int argument = i + 2;
             bool simple = argument + 1 < tokens.Count && tokens[argument + 1].Text is "," or ")";
@@ -332,16 +394,23 @@ public static class ProjectAnalyzer
         { findings.Add(new(ProjectDiagnosticSeverity.Error, "KNE204", path, line, "Недопустимый путь ресурса «" + resource + "»: " + error.Message, block)); }
     }
 
-    private static void AnalyzeGraph(VisualScript graph, string path, List<ProjectDiagnostic> findings)
+    private static HashSet<string> AnalyzeGraph(VisualScript graph, string path, List<ProjectDiagnostic> findings)
     {
         var map = graph.Nodes.ToDictionary(n => n.Id, StringComparer.Ordinal);
         foreach (var node in graph.Nodes)
             foreach (var (_, target) in node.Outputs())
                 if ((target == null && node.Kind != ScriptNodeKind.Comment) || (target != null && !map.ContainsKey(target)))
                     findings.Add(new(ProjectDiagnosticSeverity.Error, "KNE103", path, null, "Выход блока не соединён с существующим блоком: " + (target ?? "(нет цели)"), node.Id));
+        return AnalyzeUnreachableBlocks(graph, path, findings, map);
+    }
+
+    private static HashSet<string> AnalyzeUnreachableBlocks(VisualScript graph, string path, List<ProjectDiagnostic> findings,
+        IReadOnlyDictionary<string, ScriptNode>? map = null)
+    {
+        map ??= graph.Nodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
         var starts = graph.Nodes.Where(n => n.Kind == ScriptNodeKind.Start).ToArray();
-        if (starts.Length != 1) return;
         var visited = new HashSet<string>(StringComparer.Ordinal);
+        if (starts.Length != 1) return visited;
         var pending = new Stack<string>(); pending.Push(starts[0].Id);
         foreach (var trigger in graph.Nodes.Where(node => node.IsTrigger)) pending.Push(trigger.Id);
         while (pending.TryPop(out string? id))
@@ -352,8 +421,9 @@ public static class ProjectAnalyzer
                 if (map[id].Kind == ScriptNodeKind.SendFlow && map.TryGetValue(map[id].Target, out var anchor) && anchor.Kind == ScriptNodeKind.Anchor)
                     pending.Push(anchor.Id);
             }
-        foreach (var node in graph.Nodes.Where(n => n.Kind != ScriptNodeKind.Comment && !visited.Contains(n.Id)))
+        foreach (var node in graph.Nodes.Where(n => n.Kind is not (ScriptNodeKind.Comment or ScriptNodeKind.Initialization) && !visited.Contains(n.Id)))
             findings.Add(new(ProjectDiagnosticSeverity.Warning, "KNE304", path, null, "Блок недостижим из «Начала».", node.Id));
+        return visited;
     }
 
     private static string? Literal(Lexeme token)

@@ -46,10 +46,12 @@ public sealed class VisualScriptTests
         try
         {
             owner.Show();
+            editor.Clear();
             await editor.OpenAsync(fixture.ProjectPath, path);
             editor.SelectGraphBlocks(["dialogue"]);
             var body = WorkspaceTabsTests.Find<ScrollViewer>(editor, "BlockPropertiesView");
             var input = WorkspaceTabsTests.Find<TextBox>(editor, "SceneTextInput");
+            Assert.True(input.IsEnabled);
             input.Text = "Черновик";
             WorkspaceTabsTests.Find<Button>(editor, "DetachBlockPropertiesButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var detached = Assert.Single(owner.OwnedWindows.Cast<Window>());

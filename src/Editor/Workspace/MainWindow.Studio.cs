@@ -85,7 +85,7 @@ public partial class MainWindow
         var result = await ProjectAnalyzer.AnalyzeAsync(currentProject.Path, lifetime.Token);
         string report = await ProjectAnalyzer.SaveReportAsync(currentProject.Path, result, lifetime.Token);
         presentAnalysisReport(report);
-        OperationStatus.Text = $"Анализ завершён: ошибок {result.ErrorCount}, предупреждений {result.WarningCount}. Отчёт: {report}";
+        OperationStatus.Text = $"Анализ завершён: ошибок {result.ErrorCount}, предупреждений {result.WarningCount}, сообщений {result.InformationCount}. Отчёт: {report}";
         return report;
     }
     private async void BtnAnalyzeProject_Click(object sender, RoutedEventArgs e) =>

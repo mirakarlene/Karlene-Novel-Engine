@@ -77,15 +77,15 @@ public partial class MainWindow
     private void ShowActiveEditor()
     {
         if (EditorWorkspace == null) return;
-        if (!DocumentTabs.Items.Contains(DocumentTabs.SelectedItem) && DocumentTabs.Items.Count > 0) DocumentTabs.SelectedIndex = 0;
-        bool any = DocumentTabs.Items.Count > 0;
-        DocumentTabs.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        var active = (DocumentTabs.SelectedItem as TabItem)?.Tag;
+        bool editing = active != null;
+        DocumentTabs.Visibility = DocumentTabs.HasItems ? Visibility.Visible : Visibility.Collapsed;
         foreach (var editor in EditorWorkspace.Children.OfType<ScriptEditor>())
-            editor.Visibility = any && (DocumentTabs.SelectedItem as TabItem)?.Tag == editor ? Visibility.Visible : Visibility.Collapsed;
+            editor.Visibility = ReferenceEquals(active, editor) ? Visibility.Visible : Visibility.Collapsed;
         foreach (var view in EditorWorkspace.Children.OfType<FrameworkElement>().Where(view => view.Tag is PluginEditorTab or SceneNavigatorTab or RemoteDebugTab))
-            view.Visibility = any && ReferenceEquals((DocumentTabs.SelectedItem as TabItem)?.Tag, view.Tag) ? Visibility.Visible : Visibility.Collapsed;
-        EditorWorkspace.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
-        FileBrowserPanel.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+            view.Visibility = ReferenceEquals(active, view.Tag) ? Visibility.Visible : Visibility.Collapsed;
+        EditorWorkspace.Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
+        FileBrowserPanel.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
         ApplyBrowserView();
     }
 
