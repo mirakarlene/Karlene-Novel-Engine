@@ -60,10 +60,13 @@ export PATH="/Applications/Wine Stable.app/Contents/Resources/wine/bin:$PATH"
 
 Запуск на Linux и macOS выполняется из каталога сборки. Отдельный префикс `$HOME/.wine-kne` сохраняет настройки и зависимости редактора.
 
+Если в префиксе нет Arial, установите его через Winetricks перед первым запуском. WPF использует этот шрифт при подборе замены и может аварийно завершиться без него. [Winetricks](https://github.com/Winetricks/winetricks#readme) · [Сообщение о сбое под Wine](https://bugs.winehq.org/show_bug.cgi?id=60172)
+
 ```sh
 cd "$HOME/KNE"
 export WINEPREFIX="$HOME/.wine-kne"
 wineboot -u
+winetricks arial
 wine ./KNE.exe
 ```
 
@@ -73,6 +76,7 @@ wine ./KNE.exe
 
 1. Распакуйте самодостаточную Windows x64 сборку. В Steam выберите «Игры → Добавить стороннюю игру в мою библиотеку» и укажите `KNE.exe`. В поле «Рабочая папка» задайте каталог с EXE. [Steam Support: сторонние игры](https://help.steampowered.com/en/faqs/view/4B8B-9697-2338-40EC)
 2. В свойствах ярлыка откройте «Совместимость», включите принудительное использование инструмента Steam Play и выберите Proton. Запускайте KNE из этого ярлыка, чтобы настройки и дочерние процессы работали в одном префиксе. [Steam Support: настройки Proton](https://help.steampowered.com/en/faqs/view/7DD4-C618-182E-0E49)
+3. Если окно не открывается из-за отсутствия Arial, запустите `protontricks --gui`. Выберите ярлык KNE и установите компонент `arial` в его префикс. [Protontricks](https://github.com/Matoking/protontricks#readme)
 
 В Wine и Proton WPF использует программную композицию, а выбор графического API проекта применяется к игровым слоям. Windows Action Center пропускается. Доступность видео, речи, системных диалогов и графических эффектов зависит от префикса. При сбое сохраните вывод `wine ./KNE.exe` из терминала. В Steam для журнала можно указать параметры запуска `PROTON_LOG=1 %command%`. Ключ `--wine-compatibility` принудительно включает тот же режим, если определение Wine не сработало. [Valve: параметры запуска Proton](https://github.com/ValveSoftware/Proton#runtime-config-options)
 
