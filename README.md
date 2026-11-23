@@ -70,6 +70,14 @@ winetricks arial
 wine ./KNE.exe
 ```
 
+На Linux также можно использовать DejaVu Sans. Скопируйте установленный `DejaVuSans.ttf` в `$WINEPREFIX/drive_c/windows/Fonts/` и назначьте семейство как замену в префиксе KNE. После этого запустите `wine ./KNE.exe`.
+
+```sh
+for family in 'Arial' 'Segoe UI' 'Segoe UI Symbol' 'Ebrima'; do
+  wine reg add 'HKCU\Software\Wine\Fonts\Replacements' /v "$family" /t REG_SZ /d 'DejaVu Sans' /f
+done
+```
+
 Для сборки без встроенного рантайма сначала скачайте установщик **.NET Desktop Runtime 10 Windows x64** и запустите его командой `wine` с тем же `WINEPREFIX`. Для сборки релиза из редактора нужен **.NET SDK 10 Windows x64** в том же префиксе. [Загрузки .NET 10](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
 
 ### Linux и Steam Deck через Proton
