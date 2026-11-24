@@ -60,7 +60,7 @@
                         <TextBox x:Name="FileSearch" Padding="8" ToolTip="Поиск файлов по имени и относительному пути" AutomationProperties.Name="Поиск файлов" TextChanged="FileSearch_TextChanged"/>
                         <TextBlock Text="Поиск..." Margin="9,0" VerticalAlignment="Center" Foreground="{DynamicResource Editor.Text}" Opacity="0.5" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=FileSearch}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                     </Grid>
-                    <TabControl x:Name="DocumentTabs" Grid.Column="2" Margin="0,0,0,10" SelectionChanged="DocumentTabs_SelectionChanged" Visibility="Collapsed"/>
+                    <TabControl x:Name="DocumentTabs" Grid.Column="2" Margin="1,0,0,10" SelectionChanged="DocumentTabs_SelectionChanged" Visibility="Collapsed"/>
                     <TreeView x:Name="ProjectFilesTree" Grid.Row="1" SelectedItemChanged="ProjectFilesTree_SelectedItemChanged" MouseDoubleClick="OpenScript_DoubleClick"
                               ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.ScrollChanged="ProjectFilesTree_ScrollChanged">
                         <TreeView.Resources>

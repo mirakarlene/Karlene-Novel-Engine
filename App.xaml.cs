@@ -13,6 +13,7 @@ namespace KNE
 
         protected override async void OnStartup(StartupEventArgs e)
         {
+            WineCompatibility.ApplyOverride(e.Args);
             if (e.Args.Contains("--disable-plugins", StringComparer.Ordinal))
                 Environment.SetEnvironmentVariable(EngineLaunch.PluginsEnvironment, "1");
             if (e.Args.Length == 4 && e.Args[0] == "--engine-watchdog")
@@ -52,6 +53,8 @@ namespace KNE
                 Shutdown(exitCode);
                 return;
             }
+            if (WineCompatibility.Enabled)
+                System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
 #if KNE_PLAYER
             ProjectInfo standaloneProject;
             try { standaloneProject = await StandalonePlayer.LoadAsync(); }
@@ -96,6 +99,7 @@ namespace KNE
                 string directory = StandalonePlayer.DiagnosticsDirectory;
                 diagnostics = new(Path.Combine(directory, $"engine-{process.Id}-{Guid.NewGuid():N}.json"), process.Id, process.StartTime.ToUniversalTime().Ticks, !EngineLaunch.PluginsEnabled);
                 EngineDiagnostics.Current = diagnostics;
+                if (WineCompatibility.Enabled) diagnostics.Record("Режим Wine/Proton", "Программный композитор WPF");
                 try
                 {
                     using (Process.Start(EngineLaunch.CreateStartInfo("--engine-watchdog", process.Id.ToString(CultureInfo.InvariantCulture), process.StartTime.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture), diagnostics.SessionPath))) { }

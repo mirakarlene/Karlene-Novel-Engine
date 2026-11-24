@@ -10,14 +10,26 @@ namespace KNE.Tests;
 public sealed class ProjectBuildUiTests
 {
     [Fact]
-    public async Task ReleaseAction_SavesDraftInitializesDefaultBuildSettingsAndKeepsTabOnValidationFailure()
+    public async Task ReleaseAction_SavesDraftAndBlocksBuildWithoutWritingReportOnAnalysisError()
     {
         using var fixture = new TempProject();
         await WorkspaceTabsTests.Sta(async () =>
         {
-            var window = new MainWindow();
+            var window = new MainWindow { ShowInTaskbar = false, ShowActivated = false };
+            ReleaseAnalysisWindow? analysis = null;
+            bool? canContinue = null;
+            var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(25) };
+            timer.Tick += (_, _) =>
+            {
+                analysis = window.OwnedWindows.OfType<ReleaseAnalysisWindow>().FirstOrDefault(dialog => dialog.IsVisible);
+                if (analysis == null) return;
+                canContinue = WorkspaceTabsTests.Find<Button>(analysis, "ContinueButton").IsEnabled;
+                timer.Stop();
+                analysis.Close();
+            };
             try
             {
+                window.Show();
                 await WorkspaceTabsTests.Invoke(window, "OpenProjectAsync", fixture.ProjectPath, false);
                 string path = Path.Combine(fixture.ProjectPath, "game", "scenes", "main.krl");
                 await WorkspaceTabsTests.Invoke(window, "OpenScriptAsync", path);
@@ -25,22 +37,54 @@ public sealed class ProjectBuildUiTests
                 var selected = (TabItem)tabs.SelectedItem; var editor = (ScriptEditor)selected.Tag;
                 const string source = "function chapter() end"; // No main: fail validation before invoking dotnet publish.
                 WorkspaceTabsTests.Find<KrlCodeEditor>(editor, "CodeEditor").Text = source;
+                timer.Start();
                 Click(WorkspaceTabsTests.Find<Button>(window, "BuildReleaseButton"));
                 var status = WorkspaceTabsTests.Find<TextBlock>(window, "OperationStatus");
-                for (int i = 0; i < 500 && !status.Text.StartsWith("Операция не завершена."); i++) await Task.Delay(10);
-                Assert.Contains("нужна одна функция main()", status.Text);
+                for (int i = 0; i < 500 && analysis == null; i++) await Task.Delay(10);
+                Assert.NotNull(analysis);
+                Assert.False(canContinue);
+                Assert.Equal("Сборка остановлена из-за ошибок проекта.", status.Text);
                 Assert.Equal(source, File.ReadAllText(path)); Assert.False(editor.HasUnsavedChanges);
                 Assert.Same(selected, tabs.SelectedItem); Assert.Single(tabs.Items.Cast<TabItem>());
                 Assert.Equal(Visibility.Collapsed, WorkspaceTabsTests.Find<Grid>(window, "FileBrowserPanel").Visibility);
-                var options = ProjectBuildSettingsStore.Load(fixture.ProjectPath);
-                Assert.True(Guid.TryParseExact(options.GameId, "N", out _));
-                Assert.Equal(ProjectBuildSettings.DefaultOutput(fixture.ProjectPath), options.ReleasePath);
-                Assert.Equal("self_contained", options.ReleaseMode);
-                Assert.False(Directory.Exists(options.ReleasePath));
+                Assert.False(File.Exists(Path.Combine(fixture.ProjectPath, "engine", "build.json")));
+                Assert.False(Directory.Exists(Path.Combine(fixture.ProjectPath, "reports")));
             }
-            finally { window.Close(); }
+            finally { timer.Stop(); window.Close(); }
         });
     }
+
+    [Theory]
+    [InlineData(680, 480, "kne")]
+    [InlineData(470, 330, "light")]
+    public Task ReleaseAnalysis_WarningAllowsContinueAndDialogFits(double width, double height, string theme) => WorkspaceTabsTests.Sta(() =>
+    {
+        var owner = new Window { ShowInTaskbar = false, ShowActivated = false, Left = -2000, WindowStartupLocation = WindowStartupLocation.Manual };
+        owner.Show();
+        try
+        {
+            var info = new ProjectDiagnostic(ProjectDiagnosticSeverity.Information, "KNE601", "game/scenes/main.krl", 12, "Теоретическая угроза безопасности");
+            var warning = new ProjectDiagnostic(ProjectDiagnosticSeverity.Warning, "KNE307", "game/scenes/chapter.krl", 20, "Сцена недостижима.");
+            Assert.False(new ProjectAnalysisResult("Игра", DateTimeOffset.Now, [info]).RequiresBuildConfirmation);
+            var result = new ProjectAnalysisResult("Игра", DateTimeOffset.Now, [info, warning]);
+            Assert.True(result.RequiresBuildConfirmation);
+            var dialog = new ReleaseAnalysisWindow(owner, theme, result) { Width = width, Height = height };
+            dialog.Loaded += (_, _) =>
+            {
+                dialog.UpdateLayout();
+                var cancel = WorkspaceTabsTests.Find<Button>(dialog, "CancelBuildButton");
+                var collect = WorkspaceTabsTests.Find<Button>(dialog, "ContinueButton");
+                Assert.True(cancel.ActualWidth >= cancel.DesiredSize.Width - cancel.Margin.Right);
+                Assert.True(collect.ActualWidth >= collect.DesiredSize.Width);
+                Assert.True(collect.TranslatePoint(new Point(collect.ActualWidth, collect.ActualHeight), dialog).X < dialog.ActualWidth);
+                Assert.Equal(2, WorkspaceTabsTests.Find<ListBox>(dialog, "Diagnostics").Items.Count);
+                Click(collect);
+            };
+            Assert.True(dialog.ShowDialog());
+        }
+        finally { owner.Close(); }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public async Task FourProjectPagesKeepAllDraftsAndSaveBuildMetadataAndPerformanceTogether()

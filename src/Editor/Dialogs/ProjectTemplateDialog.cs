@@ -8,7 +8,7 @@ internal sealed class ProjectTemplateDialog : Window
 {
     internal bool BackRequested { get; private set; }
 
-    internal ProjectTemplateDialog(string theme)
+    internal ProjectTemplateDialog(string theme, ProjectAuthoringMode mode)
     {
         Title = "Шаблоны";
         SizeToContent = SizeToContent.WidthAndHeight;
@@ -17,9 +17,14 @@ internal sealed class ProjectTemplateDialog : Window
 
         var body = new StackPanel { Margin = new Thickness(16) };
         var tiles = new UniformGrid { Columns = 4, Rows = 2, Margin = new Thickness(0, 0, 0, 6) };
+        var emptyTile = new StackPanel();
+        var icon = ProjectFileFormats.BlankFileIcon();
+        icon.HorizontalAlignment = HorizontalAlignment.Center;
+        emptyTile.Children.Add(icon);
+        emptyTile.Children.Add(new TextBlock { Text = "Пустой шаблон", TextAlignment = TextAlignment.Center });
         var empty = new Button
         {
-            Content = "Пустой шаблон", Width = 148, Height = 82, Margin = new Thickness(3), IsDefault = true
+            Content = emptyTile, Width = 148, Height = 82, Margin = new Thickness(3), IsDefault = true
         };
         empty.Click += (_, _) => DialogResult = true;
         tiles.Children.Add(empty);
@@ -34,6 +39,14 @@ internal sealed class ProjectTemplateDialog : Window
             tiles.Children.Add(placeholder);
         }
         body.Children.Add(tiles);
+        string scene = mode == ProjectAuthoringMode.Visual ? "main.knegraph" : "main.krl";
+        var description = new TextBlock
+        {
+            Text = $"Пустой шаблон создаёт системные папки, project.json, README.txt, стартовую сцену {scene} и скрипт диагностики gamelogic.lua.",
+            TextWrapping = TextWrapping.Wrap, MaxWidth = 608, Margin = new Thickness(3, 2, 3, 10)
+        };
+        description.SetResourceReference(TextBlock.ForegroundProperty, "Editor.Muted");
+        body.Children.Add(description);
 
         var actions = new DockPanel();
         var back = new Button { Content = "Назад", Padding = new Thickness(12, 4, 12, 4) };

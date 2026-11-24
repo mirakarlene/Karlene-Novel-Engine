@@ -309,6 +309,11 @@ public sealed class ProjectFolderBrowserUiTests : IDisposable
             var tree = Find<TreeView>(window, "ProjectFilesTree"); var game = tree.Items.Cast<ProjectTreeNode>().Single(n => n.Name == "game");
             Assert.IsType<TreeViewItem>(tree.ItemContainerGenerator.ContainerFromItem(game)).IsSelected = true;
             Assert.Equal(Visibility.Visible, browser.Visibility); Assert.Equal(Path.Combine(fixture.ProjectPath, "game"), Find<TextBox>(window, "FileBrowserPath").Text);
+            Assert.Null(tabs.SelectedItem); Assert.False(selected.IsSelected); Assert.Equal(2, tabs.Items.Count);
+            tabs.SelectedItem = selected;
+            Assert.Equal(Visibility.Visible, active.Visibility);
+            Assert.Equal(Visibility.Collapsed, browser.Visibility);
+            Assert.True(WorkspaceTabsTests.Find<RadioButton>(active, graph ? "GraphMode" : "CodeMode").IsChecked);
         }
         finally { await Close(window); }
     });

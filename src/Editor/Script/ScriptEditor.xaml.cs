@@ -247,7 +247,8 @@ public partial class ScriptEditor : UserControl
         ApplyLuaModeAppearance(false);
         CodeEditor.Visibility = GraphPanel.Visibility = Visibility.Collapsed;
         ExternalEditorButton.Visibility = Visibility.Collapsed;
-        PropertiesPanel.IsEnabled = false;
+        Visible(PropertiesPanel, false);
+        Visible(NoBlockSelected, true);
         EditorStatus.Text = "";
         updating = false;
         UpdateTitle();
@@ -339,13 +340,18 @@ public partial class ScriptEditor : UserControl
         Guard(() =>
         {
             ApplyProperties();
-            ShowMode();
+            ShowMode(ReferenceEquals(sender, GraphMode));
         });
     }
 
-    private void ShowMode()
+    private void ShowMode(bool? showGraph = null)
     {
-        bool graph = Document?.IsVisual == true && GraphMode.IsChecked == true;
+        bool graph = Document?.IsVisual == true && (showGraph ?? (GraphMode.IsChecked == true));
+        bool wasUpdating = updating;
+        updating = true;
+        GraphMode.IsChecked = graph;
+        CodeMode.IsChecked = Document != null && !graph;
+        updating = wasUpdating;
         GraphPanel.Visibility = graph ? Visibility.Visible : Visibility.Collapsed;
         UpdateDetachedPropertiesVisibility();
         CodeEditor.Visibility = Document != null && !graph ? Visibility.Visible : Visibility.Collapsed;

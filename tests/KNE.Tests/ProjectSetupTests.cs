@@ -242,7 +242,10 @@ public sealed class ProjectSetupTests
                             var tiles = Assert.IsType<UniformGrid>(container.Children[0]);
                             Assert.Equal((4, 2, 8), (tiles.Columns, tiles.Rows, tiles.Children.Count));
                             var empty = Assert.IsType<Button>(tiles.Children[0]);
-                            Assert.Equal("Пустой шаблон", empty.Content);
+                            var tile = Assert.IsType<StackPanel>(empty.Content);
+                            Assert.IsType<System.Windows.Shapes.Path>(tile.Children[0]);
+                            Assert.Equal("Пустой шаблон", Assert.IsType<TextBlock>(tile.Children[1]).Text);
+                            Assert.Contains("main.knegraph", Assert.IsType<TextBlock>(container.Children[1]).Text);
                             Assert.All(tiles.Children.OfType<Button>().Skip(1), placeholder => Assert.Equal("…", Assert.IsType<TextBlock>(placeholder.Content).Text));
                             Click(empty);
                             break;
@@ -261,7 +264,7 @@ public sealed class ProjectSetupTests
                             break;
                         case 3:
                             var templateBack = Assert.IsType<ProjectTemplateDialog>(active);
-                            var templateActions = Assert.IsType<DockPanel>(((StackPanel)templateBack.Content).Children[1]);
+                            var templateActions = Assert.IsType<DockPanel>(((StackPanel)templateBack.Content).Children[2]);
                             Click(templateActions.Children.OfType<Button>().Single(button => Equals(button.Content, "Назад")));
                             break;
                         case 4:
@@ -270,8 +273,9 @@ public sealed class ProjectSetupTests
                             Click(Find<Button>(authoring, "ContinueButton"));
                             break;
                         case 6:
-                            Assert.Same(settings, active);
-                            Assert.True(settings!.TryReadOptions(out var chosen));
+                            Assert.NotSame(settings, active);
+                            settings = Assert.IsType<ProjectSetupDialog>(active);
+                            Assert.True(settings.TryReadOptions(out var chosen));
                             Assert.Equal(expected, chosen);
                             Find<RadioButton>(settings, "Resolution_hd").IsChecked = true;
                             Assert.False(Find<StackPanel>(settings, "CustomResolutionFields").IsEnabled);
@@ -300,7 +304,15 @@ public sealed class ProjectSetupTests
     public Task Wizard_CancelExitsWithoutReturningToTemplateSelection() => WorkspaceTabsTests.Sta(() =>
     {
         var dialog = new ProjectSetupDialog { ShowInTaskbar = false, ShowActivated = false, Left = -2000, WindowStartupLocation = WindowStartupLocation.Manual };
-        dialog.Loaded += (_, _) => Click(Find<Button>(dialog, "CancelButton"));
+        dialog.Loaded += (_, _) =>
+        {
+            var button = Find<Button>(dialog, "CancelButton");
+            dialog.UpdateLayout();
+            var point = button.TranslatePoint(new Point(button.ActualWidth / 2, button.ActualHeight / 2), dialog);
+            Assert.True(button.IsAncestorOf((DependencyObject)dialog.InputHitTest(point)) || ReferenceEquals(dialog.InputHitTest(point), button));
+            var peer = new System.Windows.Automation.Peers.ButtonAutomationPeer(button);
+            ((System.Windows.Automation.Provider.IInvokeProvider)peer).Invoke();
+        };
         Assert.False(dialog.ShowSettings());
         Assert.False(dialog.BackRequested);
         return Task.CompletedTask;

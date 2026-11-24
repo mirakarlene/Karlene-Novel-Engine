@@ -1,0 +1,34 @@
+<Window x:Class="KNE.ReleaseAnalysisWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:ClassModifier="internal"
+        Title="Проверка перед сборкой" Width="680" Height="480" MinWidth="470" MinHeight="330"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <StackPanel Margin="0,0,0,10">
+            <TextBlock x:Name="Summary" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"/>
+            <TextBlock x:Name="BuildStatus" Foreground="{DynamicResource Editor.Muted}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+        <ListBox x:Name="Diagnostics" Grid.Row="1" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto" HorizontalContentAlignment="Stretch"
+                 Background="{DynamicResource Editor.Surface}" Foreground="{DynamicResource Editor.Text}"
+                 BorderBrush="{DynamicResource Editor.Border}">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Margin="5,4">
+                        <TextBlock Text="{Binding Title}" Foreground="{Binding Color}" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding Location}" Foreground="{DynamicResource Editor.Muted}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding Message}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,12,0,0">
+            <Button x:Name="CancelBuildButton" Content="Отменить релиз" IsCancel="True" Padding="12,5" Margin="0,0,8,0"/>
+            <Button x:Name="ContinueButton" Content="Проигнорировать и собрать релиз" Padding="12,5" Click="Continue_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
