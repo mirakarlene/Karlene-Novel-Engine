@@ -179,6 +179,53 @@ public sealed class CompactProjectParametersTests
         });
     }
 
+    [Theory]
+    [InlineData("forest", 780, 840)]
+    [InlineData("light", 740, 680)]
+    public Task DangerZoneConfirmationsUseTheOwnersPaletteAndDefaultToNo(string theme, double width, double height) =>
+        WorkspaceTabsTests.Sta(async () =>
+        {
+            using var fixture = new TempProject();
+            var window = new ProjectParametersWindow(await fixture.LoadAsync())
+            {
+                Width = width, Height = height, ShowInTaskbar = false, ShowActivated = false,
+                Left = -2000, WindowStartupLocation = WindowStartupLocation.Manual
+            };
+            try
+            {
+                EditorTheme.Apply(window, theme);
+                window.Show();
+                await Verify("Удаление проекта", window.ConfirmProjectDeletion, accept: false);
+                await Verify("Сброс прогресса", window.ConfirmResetProgress, accept: true);
+            }
+            finally { window.Close(); }
+
+            async Task Verify(string title, Func<bool> confirm, bool accept)
+            {
+                var respond = window.Dispatcher.InvokeAsync(() =>
+                {
+                    var dialog = Assert.Single(window.OwnedWindows.Cast<Window>(), child => child.IsVisible);
+                    try
+                    {
+                        Assert.Equal(title, dialog.Title);
+                        Assert.Same(window.FindResource("Editor.Background"), dialog.Background);
+                        Assert.Same(window.FindResource("Editor.Text"), dialog.Foreground);
+                        var content = Assert.IsType<StackPanel>(dialog.Content);
+                        var buttons = Descendants(content).OfType<Button>().ToDictionary(button => (string)button.Content);
+                        Assert.True(buttons["Нет"].IsDefault);
+                        Assert.True(buttons["Нет"].IsCancel);
+                        Assert.False(buttons["Да"].IsDefault);
+                        AssertFits(buttons["Да"], content);
+                        AssertFits(buttons["Нет"], content);
+                        Click(buttons[accept ? "Да" : "Нет"]);
+                    }
+                    finally { if (dialog.IsVisible) dialog.Close(); }
+                }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                Assert.Equal(accept, confirm());
+                await respond.Task;
+            }
+        });
+
     [Fact]
     public async Task DeleteButton_ConfirmationThenExactly72ActualClickEventsRequestsDeletionWithoutTouchingProjectFiles()
     {

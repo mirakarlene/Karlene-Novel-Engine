@@ -54,7 +54,7 @@ public partial class ScriptEditor
             choose.Click += SelectCharacter_Click; ExtendedProperties.Children.Add(choose);
         }
         if (IsDialogue(node.Kind))
-            Check("ExplicitNarratorInput", "Рассказчик: игнорировать спикера по умолчанию", node.Narration, (value, enabled) => value.Narration = enabled);
+            Check("ExplicitNarratorInput", "Игнорировать спикера", node.Narration, (value, enabled) => value.Narration = enabled);
         if (node.Kind is ScriptNodeKind.Branching or ScriptNodeKind.CompareVariables)
         {
             Text("BranchVariableInput", "Первая переменная state", node.Variable, (value, text) => { ValidateKey(text); value.Variable = text.Trim(); });

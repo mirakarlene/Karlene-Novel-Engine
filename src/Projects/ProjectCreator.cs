@@ -95,28 +95,26 @@ public static class ProjectCreator
                 """);
             string initScript = ProjectDiagnosticsTemplate.Create(empty ? ProjectAuthoringMode.Code : authoringMode, staging);
             File.WriteAllText(Path.Combine(staging, "README.txt"), $$"""
-                Проект: {{projectName}}
-                Точки входа задаются в project.json.
-                engine/*.json — окно, оформление, меню и начальное состояние; см. engine/README.txt.
-                {{initScript}} — стартовая диагностика целостности проекта. Команда diagnostics повторяет проверку.
-                Проверка записи использует отдельный временный файл в папке сохранений. Отчёт учитывает рекомендации Microsoft и Valve и модель качества ISO/IEC 25010.
-                {{mainScene}} — главная сцена с функцией main().
-                game/shaders — шейдерные файлы .kneshader; подключайте контейнером в нужном месте сценария.
-                Основной способ: {{(authoringMode == ProjectAuthoringMode.Visual ? "визуальные блок-схемы; откройте main.knegraph и редактируйте связанные блоки" : "традиционный код; откройте main.krl и редактируйте функцию main()")}}.
-                init(-10) в начале Lua/KRL подключает файл к загрузке: меньшие числа раньше.
-                main() — единственная глобальная функция старта во всём проекте; дубликаты показывают экран ошибки.
-                goto(chapter) — переход в function chapter() без возврата; также goto_scene(chapter) и jump(chapter).
-                call(chapter) — вызов function chapter() с возвратом после её завершения; также call_scene(chapter).
-                Аргумент перехода — функция или строка с её именем, без пути к файлу.
-                Остальные функции имеют свои имена; у блок-схем имя задаётся полем «Функция».
-                scene("chapter", function() ... end) объявляет сцену, доступную по имени.
-                API: d(имя или nil, текст), print(...), print_to_ui(текст),
-                choice(вопрос, {"Ответ 1", "Ответ 2"}) возвращает индекс ответа с 1.
-                background("game/backgrounds/фон.png"), show_character(путь, "center"), hide_character(),
-                play_music("game/audio/музыка.mp3", true), stop_music(), play_sound(путь).
-                Переменные для сохранения храните в state: state.score = 0.
-                Кнопки «Сохранить» и «Загрузить» работают с ручным слотом; есть автосохранение.
-                set_window_title(текст), set_window_size(ширина, высота), set_bg_color(цвет).
+                {{projectName}}
+
+                Лицензия проекта
+
+                Заполните этот раздел перед публикацией проекта.
+                Правообладатель — [имя или название команды]
+                Лицензия — [название, версия и ссылка на текст лицензии]
+                Контакт правообладателя — [при необходимости]
+
+                Условия использования
+
+                [Укажите, при каких условиях разрешены использование, копирование,
+                изменение и распространение проекта и его материалов.]
+                [Укажите лицензии материалов третьих лиц, если они используются.]
+
+                Лицензия движка
+
+                Karlene Novel Engine распространяется по GNU General Public License
+                версии 3 или любой более поздней версии (GPL-3.0-or-later).
+                https://www.gnu.org/licenses/gpl-3.0.html
                 """);
             var configuration = new ProjectConfiguration
             {

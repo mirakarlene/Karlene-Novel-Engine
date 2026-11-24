@@ -21,6 +21,12 @@ public sealed class BlockLibraryTests
         Assert.Throws<ArgumentOutOfRangeException>(() => BlockLibrary.Create(ScriptNodeKind.Condition));
         Assert.Single(BlockLibrary.Definitions, entry => entry.Kind == ScriptNodeKind.Branching && entry.Group == "narrative");
         Assert.Single(BlockLibrary.Definitions, entry => entry.Kind == ScriptNodeKind.CompareVariables && entry.Group == "logic");
+        ScriptNodeKind[] logicOrder = BlockLibrary.Definitions.Where(entry => entry.Group == "logic").Select(entry => entry.Kind).ToArray();
+        Assert.Equal(new[] { ScriptNodeKind.CompareVariables, ScriptNodeKind.SetVariable, ScriptNodeKind.Switch }, logicOrder.Take(3));
+        int firstArrayCommand = Array.IndexOf(logicOrder, ScriptNodeKind.CreateList);
+        Assert.InRange(Array.IndexOf(logicOrder, ScriptNodeKind.ResetVariable), 0, firstArrayCommand - 1);
+        Assert.Equal(Enum.GetValues<ScriptNodeKind>().Where(kind => kind is >= ScriptNodeKind.CreateList and <= ScriptNodeKind.ListRandom),
+            logicOrder.Skip(firstArrayCommand));
         Assert.Equal("#FFFFFF", BlockLibrary.ColorFor(BlockLibrary.Create(ScriptNodeKind.Start)));
         Assert.Equal("#000000", BlockLibrary.ColorFor(BlockLibrary.Create(ScriptNodeKind.End)));
         var narrative = BlockLibrary.Create(ScriptNodeKind.Branching, "narrative"); var logic = BlockLibrary.Create(ScriptNodeKind.CompareVariables, "logic");

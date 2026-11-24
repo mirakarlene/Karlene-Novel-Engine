@@ -476,6 +476,7 @@ public partial class ScriptEditor : UserControl
             Visible(PropertiesPanel, node != null);
             Visible(NoBlockSelected, node == null);
             Visible(DetachBlockPropertiesButton, node != null && detachedBlockProperties == null);
+            Visible(ApplyPropertiesButton, node?.Kind != ScriptNodeKind.Start);
             SelectedTitle.Text = node?.Title ?? "";
             ApplyPropertiesButton.IsEnabled = DeleteBlockButton.IsEnabled = node != null;
             UpdateExtendedProperties(node);

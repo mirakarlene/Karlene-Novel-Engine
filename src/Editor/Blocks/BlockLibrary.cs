@@ -84,8 +84,6 @@ public static class BlockLibrary
         Add("narrative", ScriptNodeKind.EffectDialogue, "Реплика с эффектом", "Анимация каждой буквы: волна, дрожание, радуга и другие эффекты.");
         Add("narrative", ScriptNodeKind.ReverseDialogue, "Обратная реплика", "Раскрыть реплику с конца, изменить порядок слов или букв.");
         Add("logic", ScriptNodeKind.CompareVariables, "Условие", "Сравнить две переменные state без реплики или остановки игры.");
-        foreach (var kind in Enum.GetValues<ScriptNodeKind>().Where(LogicCompiler.IsLogic))
-            Add("logic", kind, LogicCompiler.Label(kind), "Работа со списками, текстом и переменными. Индексы списков начинаются с 0; результат записывается в state.");
         foreach (var (kind, block) in SystemBlocks.All)
             Add(kind == ScriptNodeKind.ShowVideo ? "visual" : "meta_system", kind, block.Title, block.Description);
         Add("meta_system", ScriptNodeKind.ConsoleWrite, "Запись в консоль", "Вывести сообщение в игровую консоль и продолжить сценарий.");
@@ -98,6 +96,9 @@ public static class BlockLibrary
         Add("logic", ScriptNodeKind.SetFlag, "Установить флаг", "Записать true или false в логическую переменную.");
         Add("logic", ScriptNodeKind.CheckFlag, "Проверить флаг", "Выбрать ветку по логическому значению.");
         Add("logic", ScriptNodeKind.Random, "Случайное значение", "Число от A до B; целые границы дают целое значение. Сохранить в state.");
+        foreach (var kind in Enum.GetValues<ScriptNodeKind>().Where(LogicCompiler.IsLogic)
+                     .OrderBy(kind => kind is >= ScriptNodeKind.CreateList and <= ScriptNodeKind.ListRandom))
+            Add("logic", kind, LogicCompiler.Label(kind), "Работа со списками, текстом и переменными. Индексы списков начинаются с 0; результат записывается в state.");
         Add("visual", ScriptNodeKind.Background, "Отобразить фон", "Показать изображение из проекта.");
         Add("visual", ScriptNodeKind.HideBackground, "Скрыть фон", "Вернуть фон из оформления проекта.");
         Add("visual", ScriptNodeKind.Character, "Отобразить спрайт", "Показать персонажа слева, по центру или справа.");
