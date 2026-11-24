@@ -26,6 +26,12 @@ public partial class MainWindow
     {
         GeneralSettingsPage.ThemeProvider = () => (string?)ThemeInput.SelectedValue ?? settings.Theme;
         GeneralSettingsPage.BackupRequested = ManualBackupAsync;
+        GeneralSettingsPage.ClearRecentBlocksRequested = async () =>
+        {
+            bool saved = await LibraryView.ClearRecentAsync();
+            GeneralSettingsPage.Status.Text = saved ? "Раздел «Недавнее» очищен." :
+                "Раздел «Недавнее» очищен в этом сеансе. Изменения не удалось записать.";
+        };
         GeneralSettingsPage.HistoryRequested = OpenVersionHistoryAsync;
         GeneralSettingsPage.TestNotificationRequested = async () =>
         {
