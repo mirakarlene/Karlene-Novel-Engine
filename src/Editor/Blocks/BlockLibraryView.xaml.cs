@@ -110,6 +110,7 @@ public partial class BlockLibraryView : UserControl
     }
     private void Group_Changed(object sender, SelectionChangedEventArgs e) { page = 0; Render(); }
     private void Search_Changed(object sender, TextChangedEventArgs e) { page = 0; Render(); }
+    private void Filters_Changed(object sender, RoutedEventArgs e) { page = 0; Render(); }
     private void Close_Click(object sender, RoutedEventArgs e) => CloseRequested?.Invoke(this, EventArgs.Empty);
     private void PreviousPage_Click(object sender, RoutedEventArgs e) { page--; Render(); }
     private void NextPage_Click(object sender, RoutedEventArgs e) { page++; Render(); }
@@ -123,8 +124,21 @@ public partial class BlockLibraryView : UserControl
             _ => Definitions.Where(entry => entry.Group == group.Id)
         };
         string search = BlockSearch.Text.Trim();
-        return entries.Where(entry => entry.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-            entry.Description.Contains(search, StringComparison.OrdinalIgnoreCase)).ToArray();
+        entries = entries.Where(entry => entry.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+            entry.Description.Contains(search, StringComparison.OrdinalIgnoreCase));
+        if (OnlyAvailable.IsChecked == true)
+            entries = entries.Where(entry => canAdd(entry.Kind) && unavailableReason?.Invoke(entry.Kind) == null);
+        if (FavoritesFirst.IsChecked == true || RecentFirst.IsChecked == true)
+        {
+            var favorites = FavoritesFirst.IsChecked == true ? preferences.Favorites.ToHashSet(StringComparer.Ordinal) : null;
+            entries = entries.OrderByDescending(entry => favorites?.Contains(BlockLibraryPreferences.Key(entry)) == true)
+                .ThenBy(entry =>
+                {
+                    int rank = RecentFirst.IsChecked == true ? preferences.Recent.IndexOf(BlockLibraryPreferences.Key(entry)) : -1;
+                    return rank < 0 ? int.MaxValue : rank;
+                });
+        }
+        return entries.ToArray();
     }
     private void Render()
     {

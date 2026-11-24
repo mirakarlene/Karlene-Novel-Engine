@@ -24,9 +24,11 @@ public sealed class VisualScriptTests
         await editor.OpenAsync(fixture.ProjectPath, path);
         var hint = WorkspaceTabsTests.Find<System.Windows.Controls.TextBlock>(editor, "NoBlockSelected");
         var panel = WorkspaceTabsTests.Find<System.Windows.Controls.StackPanel>(editor, "PropertiesPanel");
+        var detach = WorkspaceTabsTests.Find<Button>(editor, "DetachBlockPropertiesButton");
         editor.SelectGraphBlocks([]);
         Assert.Equal(System.Windows.Visibility.Collapsed, panel.Visibility);
         Assert.Equal(System.Windows.Visibility.Visible, hint.Visibility);
+        Assert.Equal(Visibility.Collapsed, detach.Visibility);
         Assert.Equal("Выберите блок чтоб здесь отобразились его опции", hint.Text);
 
         var node = editor.Document!.Graph!.Nodes[0];
@@ -34,6 +36,50 @@ public sealed class VisualScriptTests
         Assert.Equal(System.Windows.Visibility.Visible, panel.Visibility);
         Assert.Equal(System.Windows.Visibility.Collapsed, hint.Visibility);
         Assert.Equal(node.Title, WorkspaceTabsTests.Find<System.Windows.Controls.TextBlock>(editor, "SelectedTitle").Text);
+        Assert.Equal(Visibility.Visible, detach.Visibility);
+        var dock = Assert.IsType<DockPanel>(detach.Parent);
+        Assert.Equal(Dock.Top, DockPanel.GetDock(detach));
+        Assert.Same(detach, dock.Children[0]);
+        Assert.DoesNotContain(panel.Children.OfType<TextBlock>(), text => text.Text.Contains("Ctrl+колесо"));
+    });
+
+    [Theory]
+    [InlineData(ScriptNodeKind.Dialogue)]
+    [InlineData(ScriptNodeKind.AutoDialogue)]
+    [InlineData(ScriptNodeKind.EffectDialogue)]
+    [InlineData(ScriptNodeKind.ReverseDialogue)]
+    public Task DialogueText_UpdatesModelAndCardDuringTypingAndCanBeUndoneWithoutSaving(ScriptNodeKind kind) => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        var graph = VisualScript.Create();
+        var dialogue = graph.Nodes.Single(node => node.Id == "dialogue");
+        dialogue.Kind = kind;
+        dialogue.Text = "Исходная реплика";
+        string original = graph.Serialize();
+        string path = fixture.Write("game/scenes/dialogue.knegraph", original);
+        var editor = new ScriptEditor();
+        await editor.OpenAsync(fixture.ProjectPath, path);
+        editor.SelectGraphBlocks(["dialogue"]);
+        var input = WorkspaceTabsTests.Find<TextBox>(editor, "SceneTextInput");
+        var canvas = WorkspaceTabsTests.Find<Canvas>(editor, "GraphCanvas");
+        Border Card() => canvas.Children.OfType<Border>().Single(card => Equals(card.Tag, "dialogue"));
+        var card = Card();
+        string DraftText() => editor.Document!.Graph!.Nodes.Single(node => node.Id == "dialogue").Text;
+
+        input.Text = "Новая";
+        input.Text = "Новая реплика";
+        Assert.Same(card, Card());
+        Assert.EndsWith("Новая реплика", Assert.IsType<StackPanel>(card.Child).Children.OfType<TextBlock>().Single().Text);
+        Assert.Equal("Новая реплика", DraftText());
+        Assert.True(editor.HasUnsavedChanges);
+        Assert.Equal(original, await File.ReadAllTextAsync(path));
+        WorkspaceTabsTests.Find<Button>(editor, "UndoButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal("Исходная реплика", DraftText());
+        Assert.Equal("Исходная реплика", input.Text);
+        Assert.False(editor.HasUnsavedChanges);
+        WorkspaceTabsTests.Find<Button>(editor, "RedoButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal("Новая реплика", DraftText());
+        Assert.Equal("Новая реплика", input.Text);
     });
 
     [Fact]

@@ -128,6 +128,54 @@ public sealed class BrandThemeTests
     });
 
     [Fact]
+    public Task LeavingSettingsDiscardsUncommittedValuesAndLivePreviews() => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new Fixture();
+        await fixture.Store.SaveAsync(new UserSettings { Theme = "ocean", UserName = "Алиса", AccessibilityMode = "normal", WelcomeObjects = "bubbles" });
+        byte[] original = await File.ReadAllBytesAsync(fixture.Store.SettingsPath);
+        var window = CreateWindow(fixture);
+        try
+        {
+            Invoke(window, "Window_Loaded", window, new RoutedEventArgs());
+            await Idle(window);
+            Invoke(window, "BtnSettings_Click", window, new RoutedEventArgs());
+            var theme = Find<ComboBox>(window, "ThemeInput");
+            var objects = Find<ComboBox>(window, "WelcomeObjectInput");
+            var name = Find<TextBox>(window, "TxtUserName");
+            var bubbles = Find<WelcomeBubbles>(window, "WelcomeBubbleField");
+            var general = Find<GeneralSettingsEditor>(window, "GeneralSettingsPage");
+            Color savedBackground = ColorOf(window.Background);
+            theme.SelectedValue = "forest";
+            objects.SelectedValue = "stars";
+            name.Text = "Черновик";
+            general.ShaderGradientInput.SelectedValue = false;
+            Find<TextBox>(window, "TxtEditorPath").Text = "invalid";
+            BlockAccessibility.Apply(window, "high_contrast");
+            Assert.NotEqual(savedBackground, ColorOf(window.Background));
+            Assert.Equal("stars", bubbles.ObjectKind);
+
+            Invoke(window, "BtnSettingsBack_Click", window, new RoutedEventArgs());
+            Assert.Equal(Visibility.Visible, Find<FrameworkElement>(window, "WelcomePanel").Visibility);
+            Assert.Equal(savedBackground, ColorOf(window.Background));
+            Assert.Equal("bubbles", bubbles.ObjectKind);
+            Assert.Equal("normal", BlockAccessibility.GetMode(window));
+            Assert.Equal(original, await File.ReadAllBytesAsync(fixture.Store.SettingsPath));
+
+            Invoke(window, "BtnSettings_Click", window, new RoutedEventArgs());
+            Assert.Equal("ocean", theme.SelectedValue);
+            Assert.Equal("Алиса", name.Text);
+            Assert.Equal(true, general.ShaderGradientInput.SelectedValue);
+            Assert.Empty(Find<TextBox>(window, "TxtEditorPath").Text);
+            name.Text = "Сохранено";
+            await WorkspaceTabsTests.Invoke(window, "SaveSettingsAsync");
+            name.Text = "Следующий черновик";
+            Invoke(window, "BtnSettingsBack_Click", window, new RoutedEventArgs());
+            Assert.Equal("Сохранено", (await fixture.Store.LoadAsync()).UserName);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
     public Task Appearance_ClosedComboboxRendersLabelsForObjectsAndItems_AndEditableAndCustomTemplatesStillWork() => WorkspaceTabsTests.Sta(async () =>
     {
         using var fixture = new Fixture();

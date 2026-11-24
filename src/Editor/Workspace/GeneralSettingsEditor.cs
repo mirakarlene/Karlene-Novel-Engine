@@ -70,26 +70,8 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         backup.Children.Add(backupPolicy);
         backup.Children.Add(Hint("Старые копии автоматически удаляются. Это не влияет на историю версий автосохранения"));
         Button(backup, "Создать резервную копию", () => BackupRequested?.Invoke() ?? Task.CompletedTask);
-        var graphs = Section(left, "Блок-схемы");
-        var graphTitle = (TextBlock)graphs.Children[0];
-        graphs.Children.RemoveAt(0);
-        const string gradientLabel = "Переливающийся градиент для блоков шейдеров";
-        var graphHeader = new DockPanel();
-        DockPanel.SetDock(graphTitle, Dock.Left);
-        DockPanel.SetDock(ShaderGradientInput, Dock.Right);
-        ShaderGradientInput.MinWidth = 110;
-        ShaderGradientInput.Width = 110;
-        ShaderGradientInput.Margin = new Thickness();
-        ShaderGradientInput.VerticalAlignment = VerticalAlignment.Center;
-        System.Windows.Automation.AutomationProperties.SetName(ShaderGradientInput, gradientLabel);
-        graphHeader.Children.Add(graphTitle);
-        graphHeader.Children.Add(ShaderGradientInput);
-        graphHeader.Children.Add(new TextBlock
-        {
-            Text = gradientLabel, FontSize = 12, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 8, 0)
-        });
-        graphs.Children.Add(graphHeader);
+        var graphs = Section(left, "Блок-схемы", verticalPadding: 8, titleBottomMargin: 6);
+        ExtendedSceneBlockLimit.Margin = new Thickness(0, 3, 0, 3);
         graphs.Children.Add(ExtendedSceneBlockLimit);
         var glow = new Grid();
         glow.ColumnDefinitions.Add(new());
@@ -99,6 +81,20 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         Field(glow, "Сглаживание свечения", BlockGlowSmoothingInput, compact: true);
         Grid.SetColumn(glow.Children[1], 2);
         graphs.Children.Add(glow);
+        const string gradientLabel = "Градиент для блоков шейдеров";
+        var gradient = new DockPanel();
+        DockPanel.SetDock(ShaderGradientInput, Dock.Right);
+        ShaderGradientInput.MinWidth = 110;
+        ShaderGradientInput.Width = 110;
+        ShaderGradientInput.Margin = new Thickness();
+        System.Windows.Automation.AutomationProperties.SetName(ShaderGradientInput, gradientLabel);
+        gradient.Children.Add(ShaderGradientInput);
+        gradient.Children.Add(new TextBlock
+        {
+            Text = gradientLabel, FontSize = 12, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0)
+        });
+        graphs.Children.Add(gradient);
         var autosave = Section(right, "Автосохранение"); Field(autosave, "Интервал автосохранения", AutosaveInterval); Field(autosave, "Максимум версий на проект", HistoryLimit); autosave.Children.Add(KeepHistory);
         Button(autosave, "Просмотреть историю", () => HistoryRequested?.Invoke() ?? Task.CompletedTask);
         var keys = Section(right, "Горячие клавиши"); Button(keys, "Настроить горячие клавиши", () =>
@@ -159,10 +155,19 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     private void BrowseFolder(TextBox input) { var dialog = new OpenFolderDialog(); if (dialog.ShowDialog(Window.GetWindow(this)) == true) input.Text = dialog.FolderName; }
     private static ComboBox Choice(IEnumerable<(int Value, string Label)> values) => GraphicsSettingsEditor.Choice(values.Select(value => new GraphicsOption<int>(value.Value, value.Label)).ToArray());
     private static CheckBox Check(string label) => new() { Content = new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap }, Margin = new(0, 5, 0, 5), VerticalContentAlignment = VerticalAlignment.Center };
-    private static Panel Section(Panel parent, string title)
+    private static Panel Section(Panel parent, string title, double verticalPadding = 18, double titleBottomMargin = 12)
     {
-        var panel = new DistributedSettingsPanel(); panel.Children.Add(new TextBlock { Text = title, FontSize = 21, FontWeight = FontWeights.SemiBold, Margin = new(0, 0, 0, 12) });
-        var border = new Border { Child = panel, Padding = new(18), BorderThickness = new(1), CornerRadius = new(10), Margin = new(0, 0, 0, 12) }; border.SetResourceReference(BackgroundProperty, "Editor.Surface"); border.SetResourceReference(Border.BorderBrushProperty, "Editor.Border"); parent.Children.Add(border); return panel;
+        var panel = new DistributedSettingsPanel();
+        panel.Children.Add(new TextBlock { Text = title, FontSize = 21, FontWeight = FontWeights.SemiBold, Margin = new(0, 0, 0, titleBottomMargin) });
+        var border = new Border
+        {
+            Child = panel, Padding = new(18, verticalPadding, 18, verticalPadding), BorderThickness = new(1),
+            CornerRadius = new(10), Margin = new(0, 0, 0, 12)
+        };
+        border.SetResourceReference(BackgroundProperty, "Editor.Surface");
+        border.SetResourceReference(Border.BorderBrushProperty, "Editor.Border");
+        parent.Children.Add(border);
+        return panel;
     }
     private static (Grid Grid, UniformSettingsColumn Left, UniformSettingsColumn Right) Columns()
     {

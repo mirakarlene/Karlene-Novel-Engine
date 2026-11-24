@@ -88,6 +88,7 @@ public partial class ScriptEditor : UserControl
     private bool updating;
     private bool saving;
     private bool propertyDraft;
+    private bool editingDialogueText;
     private string? selectedId;
     private (string Id, int Port)? pendingConnection;
     private readonly Stack<string> undo = new();
@@ -126,8 +127,10 @@ public partial class ScriptEditor : UserControl
         ComparisonInput.ItemsSource = Enum.GetValues<ScriptComparison>().Select((value, index) =>
             new { Label = new[] { "=", "≠", ">", "<", "≥", "≤" }[index], Value = value }).ToArray();
         foreach (var input in new[]
-                     { SpeakerInput, SceneTextInput, OptionsInput, PathInput, VariableInput, ValueInput, FunctionNameInput })
+                     { SpeakerInput, OptionsInput, PathInput, VariableInput, ValueInput, FunctionNameInput })
             input.TextChanged += (_, _) => TrackProperties();
+        SceneTextInput.TextChanged += SceneText_Changed;
+        SceneTextInput.LostKeyboardFocus += (_, _) => editingDialogueText = false;
         foreach (var input in new[] { PositionInput, ValueTypeInput, ComparisonInput })
             input.SelectionChanged += (_, _) => TrackProperties();
         SpeakerInput.TextChanged += (_, _) =>
@@ -148,6 +151,26 @@ public partial class ScriptEditor : UserControl
     {
         if (updating || Selected == null) return;
         propertyDraft = true;
+        UpdateTitle();
+    }
+
+    private void SceneText_Changed(object sender, TextChangedEventArgs args)
+    {
+        if (updating || Selected is not { } node) return;
+        if (!IsDialogue(node.Kind))
+        {
+            TrackProperties();
+            return;
+        }
+        if (node.Text == SceneTextInput.Text) return;
+
+        // Keep one undo step for continuous typing in the same field.
+        if (!editingDialogueText) Remember();
+        editingDialogueText = true;
+        node.Text = SceneTextInput.Text;
+        if (cards.TryGetValue(node.Id, out var card) && card.Child is StackPanel contents &&
+            contents.Children.OfType<TextBlock>().FirstOrDefault() is { } summary)
+            summary.Text = Summary(node);
         UpdateTitle();
     }
 
@@ -234,6 +257,7 @@ public partial class ScriptEditor : UserControl
         selectedIds.Clear();
         pendingConnection = null;
         propertyDraft = false;
+        editingDialogueText = false;
         undo.Clear();
         redo.Clear();
         CodeEditor.Clear();
@@ -444,12 +468,14 @@ public partial class ScriptEditor : UserControl
     {
         updating = true;
         propertyDraft = false;
+        editingDialogueText = false;
         try
         {
             var node = Selected;
             FunctionNameInput.Text = Document?.Graph?.FunctionName ?? "";
             Visible(PropertiesPanel, node != null);
             Visible(NoBlockSelected, node == null);
+            Visible(DetachBlockPropertiesButton, node != null && detachedBlockProperties == null);
             SelectedTitle.Text = node?.Title ?? "";
             ApplyPropertiesButton.IsEnabled = DeleteBlockButton.IsEnabled = node != null;
             UpdateExtendedProperties(node);
@@ -511,6 +537,7 @@ public partial class ScriptEditor : UserControl
 
     private void ApplyProperties(bool repaint = true)
     {
+        editingDialogueText = false;
         if (Document?.Graph is { IsVisualLua: false } graph && FunctionNameInput.Text.Trim() != graph.FunctionName)
         {
             var renamed = VisualScript.Parse(graph.Serialize());
@@ -520,6 +547,8 @@ public partial class ScriptEditor : UserControl
         }
         var node = Selected;
         if (node == null || Document?.Graph is not { } model) { propertyDraft = false; UpdateTitle(); return; }
+        // Dialogue text is already in the model. Leave untouched dialogue properties as they were loaded.
+        if (IsDialogue(node.Kind) && !propertyDraft) { UpdateTitle(); return; }
         // Edit a copy first so invalid draft properties cannot damage the current document.
         var copy = VisualScript.Parse(model.Serialize());
         var changed = copy.Nodes.Single(n => n.Id == node.Id);

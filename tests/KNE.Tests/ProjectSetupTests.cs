@@ -247,7 +247,30 @@ public sealed class ProjectSetupTests
                             Assert.Equal("Пустой шаблон", Assert.IsType<TextBlock>(tile.Children[1]).Text);
                             Assert.Contains("main.knegraph", Assert.IsType<TextBlock>(container.Children[1]).Text);
                             Assert.All(tiles.Children.OfType<Button>().Skip(1), placeholder => Assert.Equal("…", Assert.IsType<TextBlock>(placeholder.Content).Text));
+                            var preview = Assert.IsType<UniformGrid>(Assert.IsType<Border>(container.Children[2]).Child);
+                            var actions = Assert.IsType<DockPanel>(container.Children[3]);
+                            var buttons = actions.Children.OfType<Button>().ToDictionary(button => (string)button.Content);
+                            Assert.Equal(Dock.Left, DockPanel.GetDock(buttons["Отмена"]));
+                            Assert.Equal(Dock.Right, DockPanel.GetDock(buttons["Назад"]));
+                            var confirm = buttons["Подтвердить"];
+                            Assert.False(confirm.IsEnabled);
+                            Assert.Empty(preview.Children.Cast<UIElement>());
                             Click(empty);
+                            Assert.True(templates.IsVisible);
+                            Assert.True(confirm.IsEnabled);
+                            Assert.Equal(new[] { "game", "engine", "plugins", "saves", "metadata", "project.json", "README.txt", "game/scenes/main.knegraph", "game/scripts/gamelogic.lua" },
+                                preview.Children.OfType<StackPanel>().Select(item => (string)item.ToolTip));
+                            templates.UpdateLayout();
+                            Assert.All(preview.Children.OfType<StackPanel>(), item =>
+                            {
+                                var bounds = item.TransformToAncestor(preview).TransformBounds(new Rect(item.RenderSize));
+                                Assert.True(bounds.Width > 0 && bounds.Height > 0);
+                                Assert.InRange(bounds.Right, 0, preview.ActualWidth);
+                                Assert.InRange(bounds.Bottom, 0, preview.ActualHeight);
+                            });
+                            Click(empty);
+                            Assert.Equal(9, preview.Children.Count);
+                            Click(confirm);
                             break;
                         case 2:
                             settings = Assert.IsType<ProjectSetupDialog>(active);
@@ -264,7 +287,7 @@ public sealed class ProjectSetupTests
                             break;
                         case 3:
                             var templateBack = Assert.IsType<ProjectTemplateDialog>(active);
-                            var templateActions = Assert.IsType<DockPanel>(((StackPanel)templateBack.Content).Children[2]);
+                            var templateActions = Assert.IsType<DockPanel>(((StackPanel)templateBack.Content).Children[3]);
                             Click(templateActions.Children.OfType<Button>().Single(button => Equals(button.Content, "Назад")));
                             break;
                         case 4:

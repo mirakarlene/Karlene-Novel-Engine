@@ -177,6 +177,11 @@ public partial class MainWindow : Window
 
     private void ShowPanel(UIElement panel)
     {
+        if (SettingsPanel.Visibility == Visibility.Visible && panel != SettingsPanel)
+        {
+            ThemeInput.SelectedValue = EditorTheme.Normalize(settings.Theme);
+            UpdateDesignPreferences();
+        }
         WelcomePanel.Visibility = panel == WelcomePanel ? Visibility.Visible : Visibility.Collapsed;
         ProjectPanel.Visibility = panel == ProjectPanel ? Visibility.Visible : Visibility.Collapsed;
         SettingsPanel.Visibility = panel == SettingsPanel ? Visibility.Visible : Visibility.Collapsed;
@@ -363,11 +368,10 @@ public partial class MainWindow : Window
     private async void BtnSaveSettings_Click(object sender, RoutedEventArgs e) =>
         await RunOperationAsync(SaveSettingsAsync, "Сохранение настроек…");
 
-    private async void BtnSettingsBack_Click(object sender, RoutedEventArgs e) => await RunOperationAsync(async () =>
+    private void BtnSettingsBack_Click(object sender, RoutedEventArgs e)
     {
-        await SaveSettingsAsync();
-        ShowPanel(WelcomePanel);
-    }, "Сохранение настроек…");
+        if (!busy && !closed) ShowPanel(WelcomePanel);
+    }
 
     private void BtnSelectEditor_Click(object sender, RoutedEventArgs e)
     {
