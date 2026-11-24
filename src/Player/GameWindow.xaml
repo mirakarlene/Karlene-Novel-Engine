@@ -70,7 +70,7 @@
                                 <local:EffectTextPresenter x:Name="DialogueEffects"/>
                             </Grid>
                             <StackPanel x:Name="ChoicePanel" Margin="0,16,0,0"/>
-                            <local:TextInputPresenter x:Name="PlayerInput" Submitted="PlayerInput_Submitted"/>
+                            <local:TextInputPresenter x:Name="PlayerInput" Margin="0" Submitted="PlayerInput_Submitted"/>
                         </StackPanel>
                     </ScrollViewer>
                     <Grid x:Name="DialogueFooter" Grid.Row="1" Margin="0,8,0,0">

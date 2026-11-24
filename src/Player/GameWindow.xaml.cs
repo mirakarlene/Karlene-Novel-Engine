@@ -667,6 +667,7 @@ public partial class GameWindow : Window
         choicePresentation.Display(frame, preferences.Animate && project.Engine.Theme.AnimationEnabled && !clockSuspended &&
             MenuOverlay.Visibility != Visibility.Visible, Brush(project.Engine.Theme.AccentColor));
         PlayerInput.Display(frame);
+        PlayerInput.Feedback.Visibility = frame.InputFeedback.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         PlayerInput.SubmitButton.IsEnabled = PlayerInput.CancelButton.IsEnabled = execution == null;
         renderedStory = frame;
         NextButton.IsEnabled = execution == null && (frame.CanAdvance || HasButtonTrigger("next"));
