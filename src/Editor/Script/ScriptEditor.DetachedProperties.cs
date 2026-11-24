@@ -31,7 +31,7 @@ public partial class ScriptEditor
             detachedBlockProperties = null;
             BlockPropertiesView.Margin = new Thickness();
             BlockPropertiesDock.Child = BlockPropertiesView;
-            DetachBlockPropertiesButton.Visibility = Visibility.Visible;
+            Visible(DetachBlockPropertiesButton, Selected != null);
         };
         window.Show();
     }

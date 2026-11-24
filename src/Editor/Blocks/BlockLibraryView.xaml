@@ -19,7 +19,15 @@
             </StackPanel>
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="58"/><RowDefinition Height="426"/><RowDefinition Height="42"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                <TextBox x:Name="BlockSearch" Margin="0,0,12,8" Padding="8" TextChanged="Search_Changed" ToolTip="Поиск в выбранной группе" AutomationProperties.Name="Поиск блока"/>
+                <Grid Margin="0,0,12,8">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
+                    <TextBox x:Name="BlockSearch" Padding="8" TextChanged="Search_Changed" ToolTip="Поиск в выбранной группе" AutomationProperties.Name="Поиск блока"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <CheckBox x:Name="FavoritesFirst" Content="Избранные первыми" Margin="16,0,0,0" Checked="Filters_Changed" Unchecked="Filters_Changed"/>
+                        <CheckBox x:Name="RecentFirst" Content="Недавно использованные первыми" Margin="16,0,0,0" Checked="Filters_Changed" Unchecked="Filters_Changed"/>
+                        <CheckBox x:Name="OnlyAvailable" Content="Только доступные" Margin="16,0,0,0" Checked="Filters_Changed" Unchecked="Filters_Changed"/>
+                    </StackPanel>
+                </Grid>
                 <TextBlock x:Name="PluginWarning" Grid.Row="1" Text="Внешние файлы, особенно скачанные из интернета, могут иметь неожиданные последствия, работайте с этим на свой страх и риск" TextWrapping="Wrap" Foreground="#685620" Margin="0,0,12,8" Visibility="Hidden"/>
                 <Grid Grid.Row="2">
                     <WrapPanel x:Name="BlockCards" Width="992" Height="426" HorizontalAlignment="Left" VerticalAlignment="Top"/>

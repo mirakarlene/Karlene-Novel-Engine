@@ -71,6 +71,53 @@ public sealed class BlockLibraryPagingTests
     }
 
     [Fact]
+    public async Task Picker_SortsWithinTheGroupAndFiltersUnavailableEntriesWithoutMovingCards()
+    {
+        using var fixture = new TempProject();
+        foreach (bool lua in new[] { false, true })
+        {
+            string group = lua ? "lua_flow" : "narrative";
+            var entries = (lua ? VisualLuaCatalog.Definitions : BlockLibrary.Definitions)
+                .Where(entry => entry.Group == group).Take(5).ToArray();
+            string[] keys = entries.Select(BlockLibraryPreferences.Key).ToArray();
+            var store = Store(fixture);
+            await store.SaveAsync(new() { Favorites = [keys[3], keys[4]], Recent = [keys[1], keys[4], keys[0]] });
+            await Sta(async () =>
+            {
+                var view = new BlockLibraryView(store);
+                await view.LoadPreferencesAsync();
+                view.Open(_ => true, lua, kind => kind == entries[0].Kind ? "Недоступно" : null);
+                Select(view, group);
+                Layout(view);
+                var cards = Find<WrapPanel>(view, "BlockCards");
+                Point origin = cards.TranslatePoint(new Point(), view);
+                var search = Find<TextBox>(view, "BlockSearch");
+                Assert.InRange(search.ActualWidth, 326, 327);
+                var favorite = Find<CheckBox>(view, "FavoritesFirst");
+                var recent = Find<CheckBox>(view, "RecentFirst");
+                var available = Find<CheckBox>(view, "OnlyAvailable");
+                Assert.All(new[] { favorite, recent, available }, filter =>
+                {
+                    Assert.True(filter.ActualWidth > 0);
+                    Point right = filter.TranslatePoint(new Point(filter.ActualWidth, 0), view);
+                    Assert.InRange(right.X, origin.X + search.ActualWidth, origin.X + cards.ActualWidth);
+                });
+                favorite.IsChecked = true;
+                recent.IsChecked = true;
+                IEnumerable<string> CardKeys() => Cards(view).Select(card => (string)Star(card).Tag);
+                Assert.Equal(new[] { keys[4], keys[3], keys[1], keys[0] }, CardKeys().Take(4));
+                available.IsChecked = true;
+                Assert.DoesNotContain(keys[0], CardKeys());
+                Assert.Equal(new[] { keys[4], keys[3], keys[1] }, CardKeys().Take(3));
+                search.Text = entries[4].Title;
+                Layout(view);
+                Assert.Equal(keys[4], CardKeys().First());
+                Assert.Equal(origin, cards.TranslatePoint(new Point(), view));
+            });
+        }
+    }
+
+    [Fact]
     public async Task Picker_StarsNeverInsertBlocks_PersistAcrossViews_AndKeepConditionGroupsIndependent()
     {
         using var fixture = new TempProject();
