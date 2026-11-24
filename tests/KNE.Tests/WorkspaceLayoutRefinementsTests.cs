@@ -48,6 +48,16 @@ public sealed class WorkspaceLayoutRefinementsTests
             Fits(general.BlockGlowInput);
             Fits(general.BlockGlowSmoothingInput);
             Fits(general.ShaderGradientInput);
+            Assert.True(Bounds(general.ShaderGradientInput).Top >= Bounds(general.BlockGlowInput).Bottom);
+            Assert.Equal("Градиент для блоков шейдеров", System.Windows.Automation.AutomationProperties.GetName(general.ShaderGradientInput));
+            var gradientRow = Assert.IsType<DockPanel>(general.ShaderGradientInput.Parent);
+            var gradientLabel = Assert.Single(gradientRow.Children.OfType<TextBlock>());
+            Fits(gradientLabel);
+            Assert.Equal(12, gradientLabel.FontSize);
+            Assert.Equal(110, general.ShaderGradientInput.ActualWidth);
+            var graphSection = Assert.IsAssignableFrom<Panel>(gradientRow.Parent);
+            Assert.Same(gradientRow, graphSection.Children[^1]);
+            Assert.Equal(21, graphSection.Children.OfType<TextBlock>().Single().FontSize);
             Assert.Equal(BlockGlowMode.Medium, general.BlockGlowInput.SelectedValue);
             Assert.Equal(true, general.BlockGlowSmoothingInput.SelectedValue);
             general.BlockGlowInput.SelectedValue = BlockGlowMode.Weak;
