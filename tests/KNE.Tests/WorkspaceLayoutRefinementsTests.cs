@@ -56,7 +56,11 @@ public sealed class WorkspaceLayoutRefinementsTests
             Assert.Equal(12, gradientLabel.FontSize);
             Assert.Equal(110, general.ShaderGradientInput.ActualWidth);
             var graphSection = Assert.IsAssignableFrom<Panel>(gradientRow.Parent);
-            Assert.Same(gradientRow, graphSection.Children[^1]);
+            var clearRecent = Assert.IsType<Button>(graphSection.Children[^1]);
+            Assert.Equal("Очистить раздел «Недавнее»", clearRecent.Content);
+            Fits(clearRecent);
+            Assert.InRange(Bounds(general.ShaderGradientInput).Top - Bounds(general.BlockGlowInput).Bottom, 4, 12);
+            Assert.InRange(Bounds(clearRecent).Top - Bounds(general.ShaderGradientInput).Bottom, 4, 12);
             Assert.Equal(21, graphSection.Children.OfType<TextBlock>().Single().FontSize);
             Assert.Equal(BlockGlowMode.Medium, general.BlockGlowInput.SelectedValue);
             Assert.Equal(true, general.BlockGlowSmoothingInput.SelectedValue);

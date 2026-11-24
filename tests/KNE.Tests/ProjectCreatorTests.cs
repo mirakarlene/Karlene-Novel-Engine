@@ -20,7 +20,14 @@ public sealed class ProjectCreatorTests
         var scripts = GameScripts.Load(project);
         Assert.Single(scripts.Functions, f => f.Name == "main");
         Assert.Equal(mainPath, scripts.Main.Path);
-        Assert.Contains(mainPath, File.ReadAllText(Path.Combine(path, "README.txt")));
+        string readme = File.ReadAllText(Path.Combine(path, "README.txt"));
+        Assert.StartsWith("Выбранный способ", readme);
+        Assert.Contains("Лицензия — [название, версия и ссылка на текст лицензии]", readme);
+        Assert.Contains("Условия использования", readme);
+        Assert.Contains("Лицензия движка", readme);
+        Assert.Contains("GPL-3.0-or-later", readme);
+        Assert.DoesNotContain("goto(chapter)", readme);
+        Assert.DoesNotContain(mainPath, readme);
         using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(path, "project.json")));
         Assert.Equal(mode.ToString(), json.RootElement.GetProperty("authoring_mode").GetString());
 

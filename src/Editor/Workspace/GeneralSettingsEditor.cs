@@ -38,6 +38,7 @@ public sealed class GeneralSettingsEditor : ScrollViewer
     internal CheckBox WorkTime { get; } = Check("Показывать время работы в статус-баре");
     internal Dictionary<string, string> Hotkeys { get; private set; } = [];
     internal Func<Task>? BackupRequested { get; set; }
+    internal Func<Task>? ClearRecentBlocksRequested { get; set; }
     internal Func<Task>? HistoryRequested { get; set; }
     internal Func<Task>? TestNotificationRequested { get; set; }
     internal Action? ResetWorkRequested { get; set; }
@@ -55,7 +56,8 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         var (behaviorGrid, behaviorLeft, behaviorRight) = Columns(); BehaviorPage.Content = behaviorGrid;
         behaviorGrid.SetBinding(MinHeightProperty, new Binding(nameof(ViewportHeight)) { Source = BehaviorPage });
         var backup = Section(left, "Резервное копирование"); Field(backup, "Путь хранения", PathRow(BackupPath, "Выбрать…", () => BrowseFolder(BackupPath)));
-        backup.Children.Add(Hint("Резервные копии хранятся отдельно от проектов. При перемещении хранилища проекты не перемещаются автоматически"));
+        var storageHint = Hint("Резервные копии хранятся отдельно от проектов. При перемещении хранилища проекты не перемещаются автоматически");
+        backup.Children.Add(storageHint);
         var backupPolicy = new Grid();
         backupPolicy.ColumnDefinitions.Add(new() { Width = new GridLength(1.4, GridUnitType.Star) });
         backupPolicy.ColumnDefinitions.Add(new() { Width = new GridLength(12) });
@@ -68,7 +70,8 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         backupPolicy.Children.Add(frequency);
         backupPolicy.Children.Add(copies);
         backup.Children.Add(backupPolicy);
-        backup.Children.Add(Hint("Старые копии автоматически удаляются. Это не влияет на историю версий автосохранения"));
+        var retentionHint = Hint("Старые копии автоматически удаляются. Это не влияет на историю версий автосохранения");
+        backup.Children.Add(retentionHint);
         Button(backup, "Создать резервную копию", () => BackupRequested?.Invoke() ?? Task.CompletedTask);
         var graphs = Section(left, "Блок-схемы", verticalPadding: 8, titleBottomMargin: 6);
         ExtendedSceneBlockLimit.Margin = new Thickness(0, 3, 0, 3);
@@ -82,7 +85,7 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         Grid.SetColumn(glow.Children[1], 2);
         graphs.Children.Add(glow);
         const string gradientLabel = "Градиент для блоков шейдеров";
-        var gradient = new DockPanel();
+        var gradient = new DockPanel { Margin = new(0, 4, 0, 0) };
         DockPanel.SetDock(ShaderGradientInput, Dock.Right);
         ShaderGradientInput.MinWidth = 110;
         ShaderGradientInput.Width = 110;
@@ -95,6 +98,20 @@ public sealed class GeneralSettingsEditor : ScrollViewer
             Margin = new Thickness(0, 0, 8, 0)
         });
         graphs.Children.Add(gradient);
+        Button(graphs, "Очистить раздел «Недавнее»", () => ClearRecentBlocksRequested?.Invoke() ?? Task.CompletedTask);
+        var backupCard = (Border)backup.Parent;
+        var backupTitle = (TextBlock)backup.Children[0];
+        var graphCard = (Border)graphs.Parent;
+        SizeChanged += (_, args) =>
+        {
+            // Use less outer whitespace at the minimum window height while keeping the graph rows spaced.
+            bool compact = args.NewSize.Height < 600;
+            double padding = compact ? 10 : 18;
+            backupCard.Padding = new Thickness(18, padding, 18, padding);
+            backupTitle.Margin = new Thickness(0, 0, 0, compact ? 8 : 12);
+            storageHint.Margin = retentionHint.Margin = new Thickness(0, 3, 0, compact ? 4 : 7);
+            graphCard.Margin = new Thickness(0, 0, 0, compact ? 0 : 12);
+        };
         var autosave = Section(right, "Автосохранение"); Field(autosave, "Интервал автосохранения", AutosaveInterval); Field(autosave, "Максимум версий на проект", HistoryLimit); autosave.Children.Add(KeepHistory);
         Button(autosave, "Просмотреть историю", () => HistoryRequested?.Invoke() ?? Task.CompletedTask);
         var keys = Section(right, "Горячие клавиши"); Button(keys, "Настроить горячие клавиши", () =>

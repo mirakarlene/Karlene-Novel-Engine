@@ -178,6 +178,53 @@ public sealed class BlockLibraryPagingTests
     }
 
     [Fact]
+    public async Task SettingsClearsRecentForAllGraphsAndKeepsFavoritesWithoutSavingEditorSettings()
+    {
+        using var fixture = new TempProject();
+        var store = Store(fixture);
+        var userSettings = new UserSettingsStore(Path.Combine(fixture.Root, "user-settings.json"));
+        await userSettings.SaveAsync(new UserSettings { Theme = "forest" });
+        byte[] original = await File.ReadAllBytesAsync(userSettings.SettingsPath);
+        string[] favorites = ["narrative/Dialogue", "shaders/ShaderOutput", "lua_flow/sequence"];
+        await store.SaveAsync(new() { Favorites = favorites.ToList(), Recent = favorites.ToList() });
+        await Sta(async () =>
+        {
+            var window = new MainWindow();
+            try
+            {
+                typeof(MainWindow).GetField("settingsStore", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .SetValue(window, userSettings);
+                var library = Find<BlockLibraryView>(window, "LibraryView");
+                library.ConfigurePreferenceStore(store);
+                typeof(MainWindow).GetMethod("BtnSettings_Click", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                    .Invoke(window, [window, new RoutedEventArgs()]);
+                var settings = Find<GeneralSettingsEditor>(window, "GeneralSettingsPage");
+                var graphSection = Assert.IsAssignableFrom<Panel>(((DockPanel)settings.ShaderGradientInput.Parent).Parent);
+                var clear = Assert.IsType<Button>(graphSection.Children[^1]);
+                clear.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await library.FlushPendingPreferencesAsync();
+                await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+
+                Assert.True(clear.IsEnabled);
+                Assert.Equal("Раздел «Недавнее» очищен.", settings.Status.Text);
+                var saved = await store.LoadAsync();
+                Assert.Empty(saved.Recent);
+                Assert.Equal(favorites, saved.Favorites);
+                Assert.Equal(original, await File.ReadAllBytesAsync(userSettings.SettingsPath));
+                foreach (bool visualLua in new[] { false, true })
+                {
+                    library.Open(_ => true, visualLua);
+                    Select(library, "recent");
+                    Assert.Empty(Cards(library));
+                    Select(library, "favorites");
+                    Assert.NotEmpty(Cards(library));
+                }
+            }
+            finally { window.Close(); }
+        });
+    }
+
+    [Fact]
     public async Task Picker_RecentIsUniqueMostRecentFirst_ExactlyOnePage_AndSurvivesNewSession()
     {
         using var fixture = new TempProject(); var entries = BlockLibrary.Definitions.Take(14).ToArray();

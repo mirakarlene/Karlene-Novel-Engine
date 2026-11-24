@@ -89,24 +89,44 @@ public partial class BlockLibraryView : UserControl
     /// <summary>Records an insertion after the editor has successfully added the block.</summary>
     public Task RecordUseAsync(BlockDefinition entry) => EditPreferencesAsync(() => preferences.RecordUse(entry));
 
-    private Task EditPreferencesAsync(Action edit)
+    internal Task<bool> ClearRecentAsync() => EditPreferencesAsync(() => preferences.Recent.Clear());
+
+    private Task<bool> EditPreferencesAsync(Action edit)
     {
         preferenceEdits.RemoveAll(task => task.IsCompleted);
-        Task pending = ApplyEditAsync(edit); preferenceEdits.Add(pending); return pending;
+        var pending = ApplyEditAsync(edit);
+        preferenceEdits.Add(pending);
+        return pending;
     }
-    private async Task ApplyEditAsync(Action edit) { await LoadPreferencesAsync(); edit(); Render(); await QueueSave(); }
+    private async Task<bool> ApplyEditAsync(Action edit)
+    {
+        await LoadPreferencesAsync();
+        edit();
+        Render();
+        return await QueueSave();
+    }
 
-    private Task QueueSave()
+    private Task<bool> QueueSave()
     {
         var snapshot = new BlockLibraryPreferences { Favorites = preferences.Favorites.ToList(), Recent = preferences.Recent.ToList() };
-        return saving = SaveAfterAsync(saving, snapshot);
+        var pending = SaveAfterAsync(saving, snapshot);
+        saving = pending;
+        return pending;
     }
-    private async Task SaveAfterAsync(Task previous, BlockLibraryPreferences snapshot)
+    private async Task<bool> SaveAfterAsync(Task previous, BlockLibraryPreferences snapshot)
     {
         await previous;
-        try { await preferenceStore.SaveAsync(snapshot); PreferenceStatus.Text = ""; }
+        try
+        {
+            await preferenceStore.SaveAsync(snapshot);
+            PreferenceStatus.Text = "";
+            return true;
+        }
         catch (Exception error) when (error is System.IO.IOException or UnauthorizedAccessException)
-        { PreferenceStatus.Text = "Не удалось сохранить избранное и недавнее: " + error.Message; }
+        {
+            PreferenceStatus.Text = "Не удалось сохранить избранное и недавнее: " + error.Message;
+            return false;
+        }
     }
     private void Group_Changed(object sender, SelectionChangedEventArgs e) { page = 0; Render(); }
     private void Search_Changed(object sender, TextChangedEventArgs e) { page = 0; Render(); }

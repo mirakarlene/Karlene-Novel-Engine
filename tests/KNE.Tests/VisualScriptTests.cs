@@ -36,6 +36,11 @@ public sealed class VisualScriptTests
         Assert.Equal(System.Windows.Visibility.Visible, panel.Visibility);
         Assert.Equal(System.Windows.Visibility.Collapsed, hint.Visibility);
         Assert.Equal(node.Title, WorkspaceTabsTests.Find<System.Windows.Controls.TextBlock>(editor, "SelectedTitle").Text);
+        var apply = WorkspaceTabsTests.Find<Button>(editor, "ApplyPropertiesButton");
+        var delete = WorkspaceTabsTests.Find<Button>(editor, "DeleteBlockButton");
+        Assert.Equal(node.Kind == ScriptNodeKind.Start ? Visibility.Collapsed : Visibility.Visible, apply.Visibility);
+        Assert.Equal(Visibility.Visible, delete.Visibility);
+        Assert.True(delete.IsEnabled);
         Assert.Equal(Visibility.Visible, detach.Visibility);
         var dock = Assert.IsType<DockPanel>(detach.Parent);
         Assert.Equal(Dock.Top, DockPanel.GetDock(detach));
@@ -60,6 +65,9 @@ public sealed class VisualScriptTests
         var editor = new ScriptEditor();
         await editor.OpenAsync(fixture.ProjectPath, path);
         editor.SelectGraphBlocks(["dialogue"]);
+        Assert.Equal(Visibility.Visible, WorkspaceTabsTests.Find<Button>(editor, "ApplyPropertiesButton").Visibility);
+        var options = WorkspaceTabsTests.Find<StackPanel>(editor, "ExtendedProperties");
+        Assert.Equal("Игнорировать спикера", options.Children.OfType<CheckBox>().Single(check => check.Name == "ExplicitNarratorInput").Content);
         var input = WorkspaceTabsTests.Find<TextBox>(editor, "SceneTextInput");
         var canvas = WorkspaceTabsTests.Find<Canvas>(editor, "GraphCanvas");
         Border Card() => canvas.Children.OfType<Border>().Single(card => Equals(card.Tag, "dialogue"));

@@ -46,8 +46,10 @@ public sealed partial class ProjectParametersWindow : Window
         this.project = project; Title = "Параметры проекта · " + project.Title;
         BuildInput = new(project, projectsStoragePath) { Visibility = Visibility.Collapsed };
         Width = 780; Height = 840; MinWidth = 740; MinHeight = 680; WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ConfirmProjectDeletion = () => MessageBox.Show(this, $"Удалить проект «{project.Title}» и все файлы в папке?\n{project.Path}\n\nНесохранённые изменения будут потеряны. После подтверждения нажмите кнопку ещё 72 раза. Внешняя папка сохранений не удаляется.", "Удаление проекта", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
-        ConfirmResetProgress = () => MessageBox.Show(this, "Удалить сохранения этого проекта из сохранённой папки? Настройки и посторонние файлы останутся. Действие нельзя отменить.", "Сброс прогресса", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
+        ConfirmProjectDeletion = () => ConfirmDangerAction("Удаление проекта",
+            $"Удалить проект «{project.Title}» и все файлы в папке?\n{project.Path}\n\nНесохранённые изменения будут потеряны. После подтверждения нажмите кнопку ещё 72 раза. Внешняя папка сохранений не удаляется.");
+        ConfirmResetProgress = () => ConfirmDangerAction("Сброс прогресса",
+            "Удалить сохранения этого проекта из сохранённой папки? Настройки и посторонние файлы останутся. Действие нельзя отменить.");
         ConfirmDeleteCrashReports = () => MessageBox.Show(this, "Удалить отчёты об ошибках текущего проекта?",
             "Отчёты об ошибках", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
         DeleteCrashReportsButton.Click += async (_, _) =>
@@ -198,6 +200,40 @@ public sealed partial class ProjectParametersWindow : Window
     private static TextBlock Heading(string text) => new() { Text = text, FontWeight = FontWeights.SemiBold, FontSize = 15, Margin = new(0, 0, 0, 8) };
     private static TextBlock Hint(string text) => new() { Text = text, TextWrapping = TextWrapping.Wrap, Opacity = .65, FontWeight = FontWeights.Normal, FontSize = 10, Margin = new(0, 3, 0, 6) };
     private static Border Card(UIElement child) { var result = new Border { Child = child, Padding = new(12), CornerRadius = new(8), BorderThickness = new(1) }; result.SetResourceReference(Border.BackgroundProperty, "Editor.Surface"); result.SetResourceReference(Border.BorderBrushProperty, "Editor.Border"); return result; }
+    private bool ConfirmDangerAction(string title, string message)
+    {
+        var dialog = new Window
+        {
+            Title = title, Owner = this, Width = 460, SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false, ResizeMode = ResizeMode.NoResize
+        };
+        if (Resources.Contains("Editor.Background"))
+        {
+            dialog.Resources.MergedDictionaries.Add(Resources);
+            dialog.SetResourceReference(BackgroundProperty, "Editor.Background");
+            dialog.SetResourceReference(ForegroundProperty, "Editor.Text");
+        }
+        else EditorTheme.Apply(dialog, "kne");
+
+        var body = new StackPanel { Margin = new Thickness(18) };
+        body.Children.Add(new ScrollViewer
+        {
+            MaxHeight = 250, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap }
+        });
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new(0, 14, 0, 0) };
+        var yes = new Button { Content = "Да", MinWidth = 76, Padding = new(12, 5, 12, 5) };
+        var no = new Button { Content = "Нет", IsDefault = true, IsCancel = true, MinWidth = 76, Padding = new(12, 5, 12, 5), Margin = new(8, 0, 0, 0) };
+        yes.Click += (_, _) => dialog.DialogResult = true;
+        no.Click += (_, _) => dialog.DialogResult = false;
+        actions.Children.Add(yes);
+        actions.Children.Add(no);
+        body.Children.Add(actions);
+        dialog.Content = body;
+        dialog.Loaded += (_, _) => no.Focus();
+        return dialog.ShowDialog() == true;
+    }
+
     private static Button DangerButton(string content) => new() { Content = content, Background = Brushes.DarkRed, Foreground = Brushes.White, BorderBrush = Brushes.IndianRed, Padding = new(12, 6, 12, 6) };
     private static void AddField(Panel body, string label, UIElement input) { body.Children.Add(new TextBlock { Text = label, FontSize = 12 }); body.Children.Add(input); }
     internal Task SaveAsync() => SaveAllOptionsAsync();

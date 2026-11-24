@@ -17,7 +17,7 @@ public sealed class EngineSettingsTests
         Assert.True(project.Engine.Game.MainMenu);
         Assert.Equal("#ED21162F", project.Engine.Theme.Dialogue.BackgroundColor);
         Assert.Equal(240, project.Engine.Theme.Dialogue.Height);
-        Assert.Contains("engine/*.json", File.ReadAllText(Path.Combine(project.Path, "README.txt")));
+        Assert.Contains("window.json", File.ReadAllText(Path.Combine(project.Path, "engine", "README.txt")));
         await using var worker = new ProcessGameSession(project, _ => { });
         Assert.Equal(project.Engine.RuntimeDefaults(project.Title), worker.WindowSettings);
     }
