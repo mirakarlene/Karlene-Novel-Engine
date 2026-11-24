@@ -60,7 +60,7 @@ public sealed class RevisionWorkspaceTests
     }
 
     [Fact]
-    public Task HelpButton_OpensTheFreshLocalHtmlInsteadOfAnOutdatedModal() => WorkspaceTabsTests.Sta(async () =>
+    public Task HelpTilesStayOnTheWelcomeScreenAndGuideOpensTheFreshLocalHtml() => WorkspaceTabsTests.Sta(async () =>
     {
         using var fixture = new Fixture();
         var window = Window(fixture, new());
@@ -70,15 +70,62 @@ public sealed class RevisionWorkspaceTests
             window.HelpDocumentDirectory = directory;
             var launched = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             window.OpenHelpDocument = path => launched.TrySetResult(path);
+            var options = WorkspaceTabsTests.Find<WrapPanel>(window, "WelcomeHelpOptions");
+            Assert.Equal(Visibility.Collapsed, options.Visibility);
             Invoke(window, "BtnHelp_Click", new Button(), new RoutedEventArgs());
+            Assert.Equal(Visibility.Visible, options.Visibility);
+            Assert.False(launched.Task.IsCompleted);
+            var tiles = options.Children.OfType<Button>().ToArray();
+            Assert.Equal(new[] { "Руководство", "Туториалы" }, tiles.Select(System.Windows.Automation.AutomationProperties.GetName));
+            Assert.All(tiles, tile => Assert.IsType<System.Windows.Shapes.Path>(((StackPanel)tile.Content).Children[0]));
+            var recent = WorkspaceTabsTests.Find<ItemsControl>(window, "RecentProjectsList");
+            recent.ItemsSource = Enumerable.Range(1, 12).Select(index => new { Label = $"Проект {index}", IsAvailable = true }).ToArray();
+            var view = (FrameworkElement)window.Content;
+            foreach (var size in new[] { new Size(1080, 660), new Size(1480, 910) })
+            {
+                view.Measure(size); view.Arrange(new Rect(size)); view.UpdateLayout();
+                Assert.All(tiles, tile =>
+                {
+                    var edge = tile.TranslatePoint(new Point(tile.ActualWidth, tile.ActualHeight), view);
+                    Assert.InRange(edge.X, 0, size.Width);
+                    Assert.InRange(edge.Y, 0, size.Height);
+                });
+                var welcome = WorkspaceTabsTests.Find<StackPanel>(window, "WelcomePanel");
+                Assert.InRange(welcome.TranslatePoint(new Point(), view).Y, 0, size.Height);
+                Assert.InRange(welcome.TranslatePoint(new Point(0, welcome.ActualHeight), view).Y, 0, size.Height);
+            }
+            tiles[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             string opened = await launched.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal(Path.Combine(directory, "blocks.html"), opened);
             Assert.Contains("<article id=\"Subsystem\">", await File.ReadAllTextAsync(opened));
             Assert.Contains("<article id=\"Formula\">", await File.ReadAllTextAsync(opened));
             await Idle(window);
             Assert.Equal(Visibility.Visible, WorkspaceTabsTests.Find<StackPanel>(window, "WelcomePanel").Visibility);
+            Invoke(window, "BtnHelp_Click", new Button(), new RoutedEventArgs());
+            Assert.Equal(Visibility.Collapsed, options.Visibility);
         }
         finally { window.Close(); }
+    });
+
+    [Fact]
+    public Task TutorialWindowUsesTheSelectedPaletteAndSwitchesAuthoringModes() => WorkspaceTabsTests.Sta(() =>
+    {
+        var tutorial = new TutorialWindow("forest");
+        try
+        {
+            Assert.Same(tutorial.FindResource("Editor.Background"), tutorial.Background);
+            var traditional = WorkspaceTabsTests.Find<RadioButton>(tutorial, "TraditionalMode");
+            var visual = WorkspaceTabsTests.Find<RadioButton>(tutorial, "VisualNodesMode");
+            Assert.True(traditional.IsChecked);
+            Assert.False(visual.IsChecked);
+            visual.IsChecked = true;
+            Assert.False(traditional.IsChecked);
+            Assert.True(visual.IsChecked);
+            var tile = WorkspaceTabsTests.Find<Button>(tutorial, "TutorialPlaceholder");
+            Assert.Equal("…", Assert.IsType<TextBlock>(tile.Content).Text);
+        }
+        finally { tutorial.Close(); }
+        return Task.CompletedTask;
     });
 
     [Fact]

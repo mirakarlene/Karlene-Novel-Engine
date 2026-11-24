@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:ClassModifier="internal"
         Title="Диалоги / переводы" Width="1020" Height="720" MinWidth="760" MinHeight="510"
-        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Background="{DynamicResource Editor.Background}">
     <Window.Resources>
         <Style x:Key="TranslationRow" TargetType="ListBoxItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -14,6 +14,7 @@
             </Setter>
         </Style>
     </Window.Resources>
+    <Border Background="{DynamicResource Editor.Background}">
     <Grid x:Name="Body" Margin="18">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
@@ -89,4 +90,5 @@
                        Foreground="{DynamicResource Editor.Muted}"/>
         </DockPanel>
     </Grid>
+    </Border>
 </Window>

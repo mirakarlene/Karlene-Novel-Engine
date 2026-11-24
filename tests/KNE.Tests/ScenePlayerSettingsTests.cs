@@ -116,7 +116,9 @@ public sealed class ScenePlayerSettingsTests
             var finishing = InvokeTask(window, "ExecuteAsync", (Func<Task>)(() => runtime.AdvanceAsync()), false, "Natural scene end", true);
             var elapsed = Stopwatch.StartNew(); while (sceneArea.Children.Count == originalChildren && !finishing.IsCompleted && elapsed.Elapsed < TimeSpan.FromSeconds(5)) await Task.Delay(5);
             Assert.True(sceneArea.Children.Count > originalChildren, "Natural scene completion did not show its exit transition."); Assert.True(runtime.Visuals.Scene!.Exited); Assert.True(runtime.Story.Completed);
-            Assert.Same((Grid)window.Content, System.Windows.Media.VisualTreeHelper.GetParent(Find<StackPanel>(window, "GameControls")));
+            var footer = Find<Grid>(window, "DialogueFooter");
+            Assert.Same(footer, Find<StackPanel>(window, "GameControls").Parent);
+            Assert.True(Find<Border>(window, "DialoguePanel").IsAncestorOf(footer));
             await finishing; Assert.Equal(originalChildren, sceneArea.Children.Count); Assert.False(Field<bool>(window, "startupFailed"));
         }
         finally { window.Close(); }

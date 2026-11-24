@@ -36,9 +36,14 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="DialogueFooterButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="BorderThickness" Value="0.75"/>
+        </Style>
         </ResourceDictionary>
     </Window.Resources>
-    <Grid>
+    <Grid SizeChanged="ConsoleHost_SizeChanged">
         <Grid x:Name="SceneArea" ClipToBounds="True" SizeChanged="SceneArea_SizeChanged">
             <Grid x:Name="VisualLayer">
             <Grid x:Name="ShaderBackgroundLayer">
@@ -68,8 +73,17 @@
                             <local:TextInputPresenter x:Name="PlayerInput" Submitted="PlayerInput_Submitted"/>
                         </StackPanel>
                     </ScrollViewer>
-                    <Button x:Name="NextButton" Grid.Row="1" Content="Далее  ›" HorizontalAlignment="Right" Padding="24,8" Margin="0,12,0,0"
-                            Click="NextButton_Click" IsEnabled="False"/>
+                    <Grid x:Name="DialogueFooter" Grid.Row="1" Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel x:Name="GameControls" Orientation="Horizontal" HorizontalAlignment="Left" Visibility="Collapsed">
+                            <Button x:Name="SaveButton" Content="Сохранить" Style="{StaticResource DialogueFooterButton}" Margin="0,0,6,0" Click="SaveButton_Click" IsEnabled="False"/>
+                            <Button x:Name="LoadButton" Content="Загрузить" Style="{StaticResource DialogueFooterButton}" Margin="0,0,6,0" Click="LoadButton_Click" IsEnabled="False"/>
+                            <Button x:Name="LoadAutoButton" Content="Автосохранение" Tag="auto" Style="{StaticResource DialogueFooterButton}" Margin="0,0,6,0" Click="LoadButton_Click" IsEnabled="False"/>
+                            <Button x:Name="PauseButton" Content="Меню" Style="{StaticResource DialogueFooterButton}" Click="PauseButton_Click"/>
+                        </StackPanel>
+                        <Button x:Name="NextButton" Grid.Column="1" Content="Далее  ›" Style="{StaticResource DialogueFooterButton}"
+                                Click="NextButton_Click" IsEnabled="False"/>
+                    </Grid>
                 </Grid>
             </Border>
             <Viewbox x:Name="ScriptScreenViewbox" Panel.ZIndex="20" Stretch="Uniform" Visibility="Collapsed"><Canvas x:Name="ScriptScreenCanvas" Width="1280" Height="720"/></Viewbox>
@@ -77,12 +91,6 @@
             <Border x:Name="SceneFlash" Background="White" Opacity="0" IsHitTestVisible="False"/>
             </Grid>
         </Grid>
-        <StackPanel x:Name="GameControls" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="24" Visibility="Collapsed">
-            <Button x:Name="SaveButton" Content="Сохранить" Padding="14,7" Margin="0,0,8,0" Click="SaveButton_Click" IsEnabled="False"/>
-            <Button x:Name="LoadButton" Content="Загрузить" Padding="14,7" Margin="0,0,8,0" Click="LoadButton_Click" IsEnabled="False"/>
-            <Button x:Name="LoadAutoButton" Content="Автосохранение" Tag="auto" Padding="14,7" Margin="0,0,8,0" Click="LoadButton_Click" IsEnabled="False"/>
-            <Button x:Name="PauseButton" Content="Меню" Padding="14,7" Click="PauseButton_Click"/>
-        </StackPanel>
         <Border x:Name="MenuOverlay" Background="#AA160D24">
             <Grid>
             <ScrollViewer x:Name="MenuScroll" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -132,13 +140,16 @@
             </Grid>
         </Border>
         <Border x:Name="DebugOverlay" Panel.ZIndex="10" VerticalAlignment="Top" Background="#F0181024" BorderBrush="#FF8E60B5" BorderThickness="1" Padding="16" Margin="16" Visibility="Collapsed">
-            <StackPanel>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
                 <DockPanel>
                     <Button DockPanel.Dock="Right" Content="Закрыть консоль" Padding="12,5" Margin="8,0,0,0" Click="CloseConsole_Click"/>
                     <Button x:Name="StopButton" DockPanel.Dock="Right" Content="Остановить" Padding="12,5" Click="StopButton_Click" IsEnabled="False"/>
                     <TextBlock x:Name="StatusText" Text="Подготовка игры…" Foreground="White" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,16,0"/>
                 </DockPanel>
-                <Grid Height="140" Margin="0,10,0,0">
+                <Grid x:Name="ConsoleViewport" Grid.Row="1" Margin="0,10,0,0">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <Grid>
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -155,9 +166,21 @@
                                  ToolTip="Глобальные переменные и локальные переменные активных корутин. Обновляются во время выполнения."/>
                     </Grid>
                 </Grid>
-                <TextBox x:Name="CommandInput" Margin="0,10,0,0" Padding="6" KeyDown="CommandInput_KeyDown" IsEnabled="False"
+                <TextBox x:Name="CommandInput" Grid.Row="2" Margin="0,10,0,0" Padding="6" KeyDown="CommandInput_KeyDown" IsEnabled="False"
                          FontFamily="Consolas" FontSize="14" ToolTip="Команда отладки: Enter."/>
-            </StackPanel>
+                <Thumb x:Name="ConsoleResizeGrip" Grid.Row="3" Height="10" Margin="0,4,0,0" Cursor="SizeNS"
+                       ToolTip="Потяните, чтобы изменить высоту консоли" AutomationProperties.Name="Изменить высоту консоли"
+                       DragDelta="ConsoleResizeGrip_DragDelta">
+                    <Thumb.Template>
+                        <ControlTemplate TargetType="Thumb">
+                            <Border Background="Transparent">
+                                <Border Width="44" Height="2" Background="#FF8E60B5" CornerRadius="1"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Thumb.Template>
+                </Thumb>
+            </Grid>
         </Border>
         <Grid x:Name="ScriptHud" Panel.ZIndex="100" IsHitTestVisible="False" Visibility="Collapsed">
             <TextBlock x:Name="WatermarkText" Foreground="White" Margin="16" TextWrapping="Wrap"/>

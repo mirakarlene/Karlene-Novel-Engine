@@ -245,7 +245,9 @@ public sealed class ProjectSetupTests
                             var tile = Assert.IsType<StackPanel>(empty.Content);
                             Assert.IsType<System.Windows.Shapes.Path>(tile.Children[0]);
                             Assert.Equal("Пустой шаблон", Assert.IsType<TextBlock>(tile.Children[1]).Text);
-                            Assert.Contains("main.knegraph", Assert.IsType<TextBlock>(container.Children[1]).Text);
+                            var description = Assert.IsType<TextBlock>(container.Children[1]);
+                            Assert.Contains("main.knegraph", description.Text);
+                            Assert.Equal(Visibility.Hidden, description.Visibility);
                             Assert.All(tiles.Children.OfType<Button>().Skip(1), placeholder => Assert.Equal("…", Assert.IsType<TextBlock>(placeholder.Content).Text));
                             var preview = Assert.IsType<UniformGrid>(Assert.IsType<Border>(container.Children[2]).Child);
                             var actions = Assert.IsType<DockPanel>(container.Children[3]);
@@ -255,12 +257,18 @@ public sealed class ProjectSetupTests
                             var confirm = buttons["Подтвердить"];
                             Assert.False(confirm.IsEnabled);
                             Assert.Empty(preview.Children.Cast<UIElement>());
+                            templates.UpdateLayout();
+                            var windowSize = new Size(templates.ActualWidth, templates.ActualHeight);
+                            Point actionsOrigin = actions.TranslatePoint(new Point(), container);
                             Click(empty);
                             Assert.True(templates.IsVisible);
                             Assert.True(confirm.IsEnabled);
+                            Assert.Equal(Visibility.Visible, description.Visibility);
                             Assert.Equal(new[] { "game", "engine", "plugins", "saves", "metadata", "project.json", "README.txt", "game/scenes/main.knegraph", "game/scripts/gamelogic.lua" },
                                 preview.Children.OfType<StackPanel>().Select(item => (string)item.ToolTip));
                             templates.UpdateLayout();
+                            Assert.Equal(windowSize, new Size(templates.ActualWidth, templates.ActualHeight));
+                            Assert.Equal(actionsOrigin, actions.TranslatePoint(new Point(), container));
                             Assert.All(preview.Children.OfType<StackPanel>(), item =>
                             {
                                 var bounds = item.TransformToAncestor(preview).TransformBounds(new Rect(item.RenderSize));

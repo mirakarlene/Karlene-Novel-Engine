@@ -525,6 +525,7 @@ public partial class GameWindow : Window
 
     private void Dialogue_Click(object sender, MouseButtonEventArgs e)
     {
+        if (e.OriginalSource is Visual hit && (ReferenceEquals(hit, DialogueFooter) || DialogueFooter.IsAncestorOf(hit))) return;
         if (e.OriginalSource is not Button && NextButton.IsEnabled) NextButton_Click(NextButton, e);
     }
 
