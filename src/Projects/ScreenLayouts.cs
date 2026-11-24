@@ -22,7 +22,7 @@ public sealed class ScreenLayouts
             result.Validate();
             return result;
         }
-        catch (JsonException ex) { throw new InvalidDataException("Ошибка engine/screens.json: " + ex.Message, ex); }
+        catch (JsonException ex) { throw ProjectCompatibility.SettingsError<ScreenLayouts>("engine/screens.json", json, ex); }
     }
 
     public void Validate()

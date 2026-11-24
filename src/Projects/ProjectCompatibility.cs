@@ -5,12 +5,84 @@ using System.Text.Json;
 namespace KNE;
 
 /// <summary>A schema incompatibility, distinct from malformed JSON or an unfinished graph.</summary>
-public sealed record ProjectCompatibilityIssue(string File, string Reason, bool CanMigrate);
+public sealed record ProjectCompatibilityIssue(string File, string Reason, bool CanMigrate)
+{
+    internal bool NewerEngine { get; init; }
+}
 
 /// <summary>Detects graph schema changes without executing scripts or discarding unknown properties.</summary>
 public static class ProjectCompatibility
 {
+    // The existing metadata.kne_version field is editable and cannot enforce compatibility.
+    internal const int CurrentFormatVersion = 2;
+    private static readonly object IssueKey = new();
     private static readonly JsonSerializerOptions LegacyOptions = new(VisualScript.JsonOptions) { PropertyNameCaseInsensitive = true };
+
+    internal static void CheckEngineVersion(ProjectConfiguration configuration)
+    {
+        if (configuration.EngineFormatVersion is int required && required > CurrentFormatVersion)
+            throw Incompatible(new("project.json",
+                $"Проект использует формат KNE {required}. Установленный редактор поддерживает формат {CurrentFormatVersion}. Откройте проект в более новой версии KNE.",
+                false) { NewerEngine = true });
+    }
+
+    internal static ProjectCompatibilityIssue? FromError(InvalidDataException error) =>
+        error.Data[IssueKey] as ProjectCompatibilityIssue;
+
+    private static InvalidDataException Incompatible(ProjectCompatibilityIssue issue, Exception? cause = null)
+    {
+        var error = new InvalidDataException(issue.File + " · " + issue.Reason, cause);
+        error.Data[IssueKey] = issue;
+        return error;
+    }
+
+    internal static InvalidDataException SettingsError<T>(string file, string source, JsonException error)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(source);
+            if (UnknownField(document.RootElement, typeof(T), "$") is { } field)
+                return Incompatible(new(file,
+                    $"Поле «{field}» неизвестно этой версии KNE. Проект мог быть сохранён более новой версией. Проверьте версию редактора.",
+                    false), error);
+        }
+        catch (JsonException) { }
+        return new InvalidDataException("Ошибка " + file + ": " + error.Message, error);
+    }
+
+    private static string? UnknownField(JsonElement value, Type type, string path)
+    {
+        var contract = EngineSettings.JsonOptions.GetTypeInfo(Nullable.GetUnderlyingType(type) ?? type);
+        if (contract.Kind == System.Text.Json.Serialization.Metadata.JsonTypeInfoKind.Object && value.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in value.EnumerateObject())
+            {
+                var declared = contract.Properties.FirstOrDefault(known => known.Name == property.Name);
+                string field = path + "." + property.Name;
+                if (declared == null) return field;
+                if (UnknownField(property.Value, declared.PropertyType, field) is { } unknown) return unknown;
+            }
+        }
+        else if (contract.Kind == System.Text.Json.Serialization.Metadata.JsonTypeInfoKind.Dictionary && value.ValueKind == JsonValueKind.Object)
+        {
+            Type? dictionary = type.GetInterfaces().FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>));
+            if (dictionary != null)
+                foreach (var property in value.EnumerateObject())
+                    if (UnknownField(property.Value, dictionary.GenericTypeArguments[1], path + "[" + property.Name + "]") is { } unknown) return unknown;
+        }
+        else if (contract.Kind == System.Text.Json.Serialization.Metadata.JsonTypeInfoKind.Enumerable && value.ValueKind == JsonValueKind.Array)
+        {
+            Type? element = type.IsArray ? type.GetElementType() : type.GetInterfaces()
+                .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))?.GenericTypeArguments[0];
+            if (element != null)
+            {
+                int index = 0;
+                foreach (var item in value.EnumerateArray())
+                    if (UnknownField(item, element, path + "[" + index++ + "]") is { } unknown) return unknown;
+            }
+        }
+        return null;
+    }
 
     /// <summary>Checks graph files for obsolete blocks, property casing, and unsupported schema fields.</summary>
     public static async Task<IReadOnlyList<ProjectCompatibilityIssue>> InspectAsync(ProjectInfo project, CancellationToken cancellationToken = default)

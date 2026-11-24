@@ -50,7 +50,7 @@ public sealed partial class LuaRuntime
     /// <summary>Clears the displayed text without adding a user-input stop.</summary>
     public void ClearNarrativeText()
     {
-        lock (stateLock) story = story with { Speaker = "", Text = "", Character = null, TextEffect = null, RemainingSeconds = null, EraseProgress = 0 };
+        lock (stateLock) story = story with { Speaker = "", Text = "", Character = null, TextEffect = null, RemainingSeconds = null, EraseProgress = 0, Localized = null };
     }
 
     /// <summary>Validates and registers a profile, returning failures as Lua-safe data.</summary>

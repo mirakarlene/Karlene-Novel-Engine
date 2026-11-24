@@ -13,6 +13,7 @@ public sealed record EditorPreferences
     public bool ExtendedSceneBlockLimit { get; set; }
     public string BlockGlow { get; set; } = nameof(BlockGlowMode.Medium);
     public bool SmoothBlockGlow { get; set; } = true;
+    public bool DynamicShaderGradient { get; set; } = true;
     public int AutosaveMinutes { get; set; } = 5;
     public int AutosaveVersions { get; set; } = 25;
     public bool KeepHistory { get; set; } = true;

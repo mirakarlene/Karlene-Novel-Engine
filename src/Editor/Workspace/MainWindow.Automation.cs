@@ -43,6 +43,7 @@ public partial class MainWindow
     private void ApplyEditorPreferences()
     {
         EditorHotkeys.SetProfile(this, settings.Hotkeys);
+        ShaderRainbow.SetDynamic(this, settings.Editor.DynamicShaderGradient);
         SceneEditor.ExtendedSceneBlockLimit = settings.Editor.ExtendedSceneBlockLimit;
         SceneEditor.ApplyBlockGlow(settings.Editor.GlowMode, settings.Editor.SmoothBlockGlow);
         foreach (var editor in OpenEditors)

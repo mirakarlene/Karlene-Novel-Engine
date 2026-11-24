@@ -184,7 +184,13 @@ public partial class MainWindow : Window
 
     private async Task<bool> OpenProjectAsync(string path, bool remember = false)
     {
-        var loaded = await ProjectLoader.LoadProjectAsync(path, lifetime.Token);
+        ProjectInfo loaded;
+        try { loaded = await ProjectLoader.LoadProjectAsync(path, lifetime.Token); }
+        catch (InvalidDataException error) when (ProjectCompatibility.FromError(error) is { } issue)
+        {
+            _ = SelectCompatibilityAction([issue]);
+            return false;
+        }
         loaded.ApplicationPlugins = settings.ApplicationPlugins.ToArray();
         if (closed) return false;
         if (!await CheckCompatibilityAsync(loaded)) return false;

@@ -10,6 +10,7 @@ public sealed class ProjectConfiguration
     [JsonPropertyName("metadata")] public ProjectMetadata? Metadata { get; set; }
     [JsonPropertyName("game_info")] public GameInfo? GameInfo { get; set; }
     [JsonPropertyName("entry_points")] public EntryPoints? EntryPoints { get; set; }
+    [JsonPropertyName("kne_format_version")] public int? EngineFormatVersion { get; set; }
     [JsonPropertyName("name")] public string? LegacyName { get; set; }
     [JsonExtensionData] public Dictionary<string, JsonElement>? AdditionalData { get; set; }
 

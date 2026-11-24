@@ -29,6 +29,7 @@ public sealed class ProcessGameSession : IGameSession
     internal Func<SystemCall, CancellationToken, Task<SystemReply>>? SystemHost { get; init; }
     internal Func<double>? PlayClock { get; init; }
     private int? playerDialogueSpeed;
+    internal string? PresentationLanguage { get; set; }
     private long dialogueSpeedVersion, appliedDialogueSpeedVersion;
     internal int? InitialDialogueSpeed { init => playerDialogueSpeed = value; }
     internal int? EffectiveDialogueSpeed
@@ -243,7 +244,7 @@ public sealed class ProcessGameSession : IGameSession
                 ConfirmedDialogueSpeed = speedVersion != appliedDialogueSpeedVersion
             };
         }
-        request = request with { ApplicationPlugins = applicationPlugins, PlayedSeconds = PlayClock?.Invoke() ?? playedSeconds };
+        request = request with { ApplicationPlugins = applicationPlugins, PlayedSeconds = PlayClock?.Invoke() ?? playedSeconds, Language = PresentationLanguage };
         var reader = responses!;
         await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(request).AsMemory(), token).ConfigureAwait(false);
         await process.StandardInput.FlushAsync(token).ConfigureAwait(false);

@@ -8,6 +8,12 @@ namespace KNE;
 internal static class ShaderRainbow
 {
     private static readonly DependencyProperty BrushProperty = DependencyProperty.RegisterAttached("Brush", typeof(LinearGradientBrush), typeof(ShaderRainbow));
+    private static readonly DependencyProperty RefreshProperty = DependencyProperty.RegisterAttached("Refresh", typeof(Action), typeof(ShaderRainbow));
+    private static readonly DependencyProperty DynamicProperty = DependencyProperty.RegisterAttached("Dynamic", typeof(bool), typeof(ShaderRainbow),
+        new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.Inherits,
+            (view, _) => (view.GetValue(RefreshProperty) as Action)?.Invoke()));
+
+    internal static void SetDynamic(DependencyObject owner, bool value) => owner.SetValue(DynamicProperty, value);
     internal static LinearGradientBrush Create(FrameworkElement owner)
     {
         if (owner.GetValue(BrushProperty) is LinearGradientBrush existing) return existing;
@@ -19,9 +25,10 @@ internal static class ShaderRainbow
         void Refresh()
         {
             transform.BeginAnimation(RotateTransform.AngleProperty, null);
-            if (owner.IsLoaded && owner.IsVisible && owner.IsMouseOver && owner.IsEnabled && CategoryHover.GetAvailable(owner))
+            if ((bool)owner.GetValue(DynamicProperty) && owner.IsLoaded && owner.IsVisible && owner.IsMouseOver && owner.IsEnabled && CategoryHover.GetAvailable(owner))
                 transform.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(0, 360, TimeSpan.FromSeconds(8)) { RepeatBehavior = RepeatBehavior.Forever });
         }
+        owner.SetValue(RefreshProperty, (Action)Refresh);
         owner.Loaded += (_, _) => Refresh(); owner.Unloaded += (_, _) => transform.BeginAnimation(RotateTransform.AngleProperty, null);
         owner.IsVisibleChanged += (_, _) => Refresh(); owner.IsEnabledChanged += (_, _) => Refresh();
         owner.MouseEnter += (_, _) => Refresh(); owner.MouseLeave += (_, _) => Refresh();

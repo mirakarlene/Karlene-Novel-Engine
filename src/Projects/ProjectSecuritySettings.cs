@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json;
 
 namespace KNE;
 
@@ -17,7 +18,15 @@ public sealed class ProjectSecuritySettings
         string path = PathSafety.ResolveRelative(root, "engine/security.json");
         if (!File.Exists(path)) return new();
         if (new FileInfo(path).Length > 65536) throw new InvalidDataException("Политика безопасности больше 64 КБ.");
-        var value = System.Text.Json.JsonSerializer.Deserialize<ProjectSecuritySettings>(File.ReadAllText(path), EngineSettings.JsonOptions) ?? throw new InvalidDataException("Пустая политика безопасности."); value.Validate(); return value;
+        string source = File.ReadAllText(path);
+        try
+        {
+            var value = JsonSerializer.Deserialize<ProjectSecuritySettings>(source, EngineSettings.JsonOptions)
+                ?? throw new InvalidDataException("Пустая политика безопасности.");
+            value.Validate();
+            return value;
+        }
+        catch (JsonException error) { throw ProjectCompatibility.SettingsError<ProjectSecuritySettings>("engine/security.json", source, error); }
     }
     public void Validate()
     {

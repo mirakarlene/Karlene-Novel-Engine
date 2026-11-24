@@ -1,0 +1,92 @@
+<Window x:Class="KNE.ProjectTranslationsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:ClassModifier="internal"
+        Title="Диалоги / переводы" Width="1020" Height="720" MinWidth="760" MinHeight="510"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Window.Resources>
+        <Style x:Key="TranslationRow" TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem"><ContentPresenter/></ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <Grid x:Name="Body" Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid Margin="0,0,0,10">
+            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="14"/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock x:Name="OriginalLanguageLabel" FontSize="18" FontWeight="SemiBold"/>
+                <WrapPanel x:Name="OriginalFormats" Margin="0,6,0,0"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Выбрать" Padding="8,4" Margin="6,0,0,0" Click="SelectLanguage_Click"/>
+                    <ComboBox x:Name="LanguageInput" IsEditable="True" AutomationProperties.Name="Код языка перевода"/>
+                </DockPanel>
+                <TextBlock x:Name="TargetLanguageLabel" Margin="0,4,0,0" Foreground="{DynamicResource Editor.Muted}"/>
+                <WrapPanel x:Name="TranslationFormats" Margin="0,5,0,0">
+                    <Button x:Name="ImportButton" Content="Импорт…" Padding="6,3" Margin="0,0,6,4" Click="Import_Click"/>
+                </WrapPanel>
+            </StackPanel>
+        </Grid>
+        <ListBox x:Name="Entries" Grid.Row="1" ItemContainerStyle="{StaticResource TranslationRow}"
+                 Background="{DynamicResource Editor.Background}" Foreground="{DynamicResource Editor.Text}" BorderThickness="0"
+                 ScrollViewer.CanContentScroll="True" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 VirtualizingPanel.VirtualizationMode="Recycling">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Heading}" FontSize="16" FontWeight="Bold" Margin="0,8,0,9">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Style.Triggers><DataTrigger Binding="{Binding Heading}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <Grid Margin="0,0,4,14">
+                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="14"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBox Text="{Binding QuotedSource, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap"
+                                         BorderThickness="0" Background="{DynamicResource Editor.Surface}" Padding="6"/>
+                                <TextBlock Text="{Binding Location}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Location}"
+                                           Foreground="{DynamicResource Editor.Muted}" FontSize="11" Margin="5,2,0,0"/>
+                            </StackPanel>
+                            <Grid Grid.Column="2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="«" VerticalAlignment="Top" Margin="0,5,2,0"/>
+                                <TextBox Grid.Column="1" Text="{Binding Draft.Text, UpdateSourceTrigger=PropertyChanged}"
+                                         AcceptsReturn="True" TextWrapping="Wrap" MaxLength="16000" MaxHeight="170"
+                                         VerticalScrollBarVisibility="Auto" Padding="6"
+                                         AutomationProperties.Name="{Binding Location}"/>
+                                <TextBlock Grid.Column="1" Text="Введите перевод" IsHitTestVisible="False"
+                                           Foreground="{DynamicResource Editor.Muted}" Margin="8,6,0,0" VerticalAlignment="Top">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers><DataTrigger Binding="{Binding Draft.Text}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock Grid.Column="2" Text="»" VerticalAlignment="Bottom" Margin="2,0,0,5"/>
+                            </Grid>
+                        </Grid>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <DockPanel Grid.Row="2" Margin="0,12,0,0">
+            <Button DockPanel.Dock="Right" Content="Закрыть" IsCancel="True" Padding="10,5" Margin="6,0,0,0"/>
+            <Button DockPanel.Dock="Right" Content="Сохранить перевод" Padding="10,5" Click="Save_Click"/>
+            <TextBlock x:Name="Status" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0"
+                       Foreground="{DynamicResource Editor.Muted}"/>
+        </DockPanel>
+    </Grid>
+</Window>

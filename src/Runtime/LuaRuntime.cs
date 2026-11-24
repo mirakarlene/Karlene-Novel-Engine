@@ -165,7 +165,8 @@ public sealed partial class LuaRuntime : IGameSession
                     if type(options[i]) ~= "string" or options[i] == "" then error("Варианты choice() должны быть непустыми строками") end
                     labels[i] = kne_inline_text(options[i])
                 end
-                return coroutine.yield(kne_event_location({kind = "choice", text = kne_inline_text(prompt), options = labels}))
+                return coroutine.yield(kne_event_location({kind = "choice", text = kne_inline_text(prompt), options = labels,
+                    source_text = tostring(prompt), source_options = options}))
             end
             function kne_resume(answer, seconds, tick, signal)
                 local ok, event = coroutine.resume(kne_story, answer, seconds, tick, signal)
@@ -387,6 +388,7 @@ public sealed partial class LuaRuntime : IGameSession
             frame = frame with { Triggers = ReadTriggers(value), HasBackgroundTasks = value["background"] as bool? == true,
                 Identity = frames?.ResolveKey(value["key"] as string, Location!.File, Location.Line, Location.FunctionLine) ??
                 frames?.Resolve(Location!.File, Location.Line, Location.NodeId, Location.FunctionLine) };
+            frame = LocalizeFrame(frame, value);
             if (kind is "dialogue" or "choice" && !tick) PrintToUI(frame.Speaker.Length == 0 ? frame.Text : frame.Speaker + ": " + frame.Text);
         }
         lock (stateLock) story = frame;
@@ -725,7 +727,7 @@ public sealed partial class LuaRuntime : IGameSession
                 case "apply_shader": SetShader(Text(1)!, arguments[2] is not false, Text(3, true), Text(4, true), Text(5, true) ?? "startup"); break;
                 case "clear_layer_shaders": RemoveShaders(Text(1)!, Text(2)!, arguments[3] is true, Text(4, true) ?? "startup"); break;
                 case "clear_shaders": RemoveShaders(null, "", arguments[1] is true, Text(2, true) ?? "startup"); break;
-                case "set_window_title": SetWindowTitle(ResolveInline(Text(1)!).Text); break;
+                case "set_window_title": SetWindowTitle(ResolveLocalizedInline(GameTextCategory.Other, Text(1)!).Text); break;
                 case "set_window_size": SetWindowSize(Number(1), Number(2)); break;
                 case "set_bg_color": SetBgColor(Text(1)!); break;
                 case "background": SetBackground(Text(1, optional: true)); break;

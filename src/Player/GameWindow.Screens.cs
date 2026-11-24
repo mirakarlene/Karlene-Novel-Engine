@@ -11,6 +11,7 @@ namespace KNE;
 public partial class GameWindow
 {
     private GamePreferences preferences = new();
+    private ProjectTranslations translations = ProjectTranslations.Empty;
     private bool preferencesDirty;
     private string? activeScreen;
     private readonly Stack<string> screenHistory = new();
@@ -29,6 +30,9 @@ public partial class GameWindow
             preferences.TextSpeed = Math.Clamp(preferences.TextSpeed, 0, DialogueSpeed.Maximum);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { QueueOutput("Настройки игрока не прочитаны: " + ex.Message); }
+        try { translations = ProjectTranslations.Load(project, preferences.Language); }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException)
+        { translations = ProjectTranslations.Empty; QueueOutput("Перевод не загружен: " + ex.Message); }
         music.Volume = preferences.MusicVolume; sound.Volume = preferences.SoundVolume;
     }
 
@@ -47,14 +51,98 @@ public partial class GameWindow
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
 
-    private string ResolveScreenText(string text) => text.Replace("{{title}}", project.Title).Replace("{{subtitle}}", project.Engine.Game.Subtitle)
-        .Replace("{{start_label}}", project.Engine.Game.StartLabel).Replace("{{continue_label}}", project.Engine.Game.ContinueLabel).Replace("{{exit_label}}", project.Engine.Game.ExitLabel);
+    private string ResolveScreenText(string text) => translations.ScreenText(project, GameTextCategory.Interface, text);
+
+    private void ChangePresentationLanguage(string code)
+    {
+        translations = ProjectTranslations.Load(project, code);
+        preferences.Language = code;
+        preferencesDirty = true;
+        if (runtime is ProcessGameSession session) session.PresentationLanguage = code;
+        Title = translations.Translate(GameTextCategory.MainMenu, runtime.WindowSettings.Title);
+        if (activeScreen is { } screen) ShowLayout(screen);
+        FlushPreferences();
+    }
+
+    private void AddLanguageSelector()
+    {
+        string[] languages;
+        try { languages = ProjectTranslations.Languages(project); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            QueueOutput("Список переводов недоступен: " + ex.Message);
+            return;
+        }
+        if (languages.Length < 2) return;
+
+        string current = ProjectTranslations.LanguageCode(preferences.Language) ?? languages[0];
+        if (!languages.Contains(current)) current = languages[0];
+        string title = ResolveScreenText(GameTextCatalog.LanguageSettingLabel);
+        var label = new TextBlock { Text = title, TextWrapping = TextWrapping.Wrap, FontSize = 17,
+            VerticalAlignment = VerticalAlignment.Center, Margin = new(0, 0, 12, 0) };
+        label.SetResourceReference(TextBlock.ForegroundProperty, "GameTextBrush");
+        var selector = new ComboBox
+        {
+            ItemsSource = languages.Select(code => new GameLanguageOption(code, ProjectTranslations.LanguageLabel(code))).ToArray(),
+            DisplayMemberPath = nameof(GameLanguageOption.Label), SelectedValuePath = nameof(GameLanguageOption.Code),
+            SelectedValue = current, MinWidth = 160, FontSize = 17, VerticalAlignment = VerticalAlignment.Center
+        };
+        AutomationProperties.SetName(selector, title);
+        bool restoringSelection = false;
+        selector.SelectionChanged += (_, _) =>
+        {
+            if (restoringSelection || selector.SelectedValue is not string code) return;
+            try { ChangePresentationLanguage(code); }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException)
+            {
+                QueueOutput("Перевод не загружен: " + ex.Message);
+                Notify(GameTextCatalog.LanguageLoadFailed);
+                restoringSelection = true;
+                try { selector.SelectedValue = current; }
+                finally { restoringSelection = false; }
+            }
+        };
+
+        var row = new Grid { Width = 400, Height = 48 };
+        row.ColumnDefinitions.Add(new());
+        row.ColumnDefinitions.Add(new() { Width = new GridLength(250) });
+        row.Children.Add(label);
+        Grid.SetColumn(selector, 1);
+        row.Children.Add(selector);
+        var occupied = ScreenCanvas.Children.OfType<FrameworkElement>()
+            .Where(view => view.Tag is not ScreenElement { Type: "panel" or "image" })
+            .Select(view => new Rect(Canvas.GetLeft(view), Canvas.GetTop(view), view.Width, view.Height)).ToArray();
+        foreach (double x in new[] { 440, 24, 856 })
+        foreach (double y in new[] { 660d }.Concat(Enumerable.Range(0, 11).Select(index => (double)index * 60 + 12)))
+        {
+            if (occupied.Any(bounds => bounds.IntersectsWith(new Rect(x, y, row.Width, row.Height)))) continue;
+            Canvas.SetLeft(row, x);
+            Canvas.SetTop(row, y);
+            ScreenCanvas.Children.Add(row);
+            return;
+        }
+
+        var footer = new StackPanel();
+        if (DialogueSpeedFallback.Content is FrameworkElement existing)
+        {
+            DialogueSpeedFallback.Content = null;
+            footer.Children.Add(existing);
+        }
+        footer.Children.Add(row);
+        DialogueSpeedFallback.Content = footer;
+        DialogueSpeedFallback.Visibility = Visibility.Visible;
+        ScreenViewbox.Margin = new Thickness(0, 0, 0, ScreenViewbox.Margin.Bottom + row.Height +
+            (footer.Children.Count == 1 ? DialogueSpeedFallback.Margin.Bottom : 0));
+    }
+
+    private sealed record GameLanguageOption(string Code, string Label);
 
     private void ShowLayout(string id)
     {
         if (startupFailed) return;
         var layout = project.Engine.Screens.Screens.FirstOrDefault(s => s.Id == id);
         if (layout == null) { Notify("Экран не найден."); return; }
+        string ResolveLayoutText(string text) => translations.ScreenText(project, GameTextCatalog.ScreenCategory(layout), text);
         activeScreen = id;
         PauseDialogueReveal();
         MenuOverlay.Visibility = Visibility.Visible; DialoguePanel.Visibility = Visibility.Collapsed; GameControls.Visibility = Visibility.Collapsed;
@@ -77,12 +165,12 @@ public partial class GameWindow
             if (known != null && !ScreenCanvas.Children.Contains(known))
             {
                 if (known.Parent is Panel panel) panel.Children.Remove(known);
-                known.Content = ResolveScreenText(element.Text); known.FontSize = element.FontSize; known.Visibility = Visibility.Visible; view = known;
+                known.Content = ResolveLayoutText(element.Text); known.FontSize = element.FontSize; known.Visibility = Visibility.Visible; view = known;
             }
             else if (knownText != null && !ScreenCanvas.Children.Contains(knownText))
             {
                 if (knownText.Parent is Panel panel) panel.Children.Remove(knownText);
-                knownText.Text = ResolveScreenText(element.Text); knownText.FontSize = element.FontSize; view = knownText;
+                knownText.Text = ResolveLayoutText(element.Text); knownText.FontSize = element.FontSize; view = knownText;
             }
             else if (element.Type is "save_list" or "save_name")
             {
@@ -91,7 +179,7 @@ public partial class GameWindow
             }
             else
             {
-                try { view = ScreenRenderer.Create(element, project.Engine.Theme, project.Path, ResolveScreenText, path => assets.Load(path)); }
+                try { view = ScreenRenderer.Create(element, project.Engine.Theme, project.Path, ResolveLayoutText, path => assets.Load(path)); }
                 catch (Exception ex) when (ex is IOException or NotSupportedException or ArgumentException or FormatException)
                 { QueueOutput("Ошибка элемента оформления: " + ex.Message); Notify("Не удалось показать элемент «" + element.Text + "»."); continue; }
                 if (view is Button button) button.Click += async (_, _) => await DispatchScreenActionAsync(element);
@@ -126,8 +214,11 @@ public partial class GameWindow
             ScreenCanvas.Children.Add(view);
             ScreenRenderer.Animate(view, element, preferences.Animate && project.Engine.Theme.AnimationEnabled);
         }
-        if (layout.Kind == "settings" && !layout.Elements.Any(element => element is { Type: "slider", Action: "text_speed" }))
-            AddLegacyTextSpeed(layout);
+        if (layout.Kind == "settings")
+        {
+            if (!layout.Elements.Any(element => element is { Type: "slider", Action: "text_speed" })) AddLegacyTextSpeed(layout);
+            AddLanguageSelector();
+        }
         UpdateScreenButtons();
         MenuOverlay.BeginAnimation(OpacityProperty, null); MenuOverlay.Opacity = 1;
         if (preferences.Animate && project.Engine.Theme.AnimationEnabled)
@@ -164,6 +255,8 @@ public partial class GameWindow
             if (occupied.Any(bounds => bounds.IntersectsWith(new Rect(x, y, element.Width, element.Height)))) continue;
             element.X = x; element.Y = y;
             var slider = (StackPanel)ScreenRenderer.Create(element, project.Engine.Theme, project.Path, ResolveScreenText);
+            Canvas.SetLeft(slider, x); Canvas.SetTop(slider, y);
+            slider.Width = element.Width; slider.Height = element.Height;
             BindTextSpeed(slider);
             ScreenCanvas.Children.Add(slider);
             return;
@@ -286,4 +379,5 @@ public sealed class GamePreferences
     public double MusicVolume { get; set; } = 0.8;
     public double SoundVolume { get; set; } = 0.8;
     public int TextSpeed { get; set; } = DialogueSpeed.Default;
+    public string? Language { get; set; }
 }

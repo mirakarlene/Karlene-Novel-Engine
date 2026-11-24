@@ -77,7 +77,7 @@ public sealed class GraphSurfaceTests
         Assert.True(GlowAlpha(53) < medium);
         editor.ApplyBlockGlow(BlockGlowMode.Squares, smooth: true);
         Assert.True(GlowAlpha(35) > 0);
-        Assert.Equal(0, shadows["dialogue"].RadiusX);
+        Assert.Equal(card.CornerRadius.TopLeft, shadows["dialogue"].RadiusX);
         editor.ApplyBlockGlow(BlockGlowMode.Off, smooth: false);
         Assert.Equal(0, GlowAlpha(53));
         Assert.Equal(EdgeMode.Aliased, RenderOptions.GetEdgeMode(card));

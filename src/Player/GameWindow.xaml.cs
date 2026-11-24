@@ -41,7 +41,7 @@ public partial class GameWindow : Window
         rollback = new(project.Engine.Game.RollbackDepth);
         this.saves = saves ?? new GameSaveStore(project.Path);
         LoadPreferences();
-        Title = project.Title; Icon = ProjectIcon.Load(project.Path, project.Configuration.Metadata?.Icon); InitializePerformance();
+        Title = translations.Translate(GameTextCategory.MainMenu, project.Title); Icon = ProjectIcon.Load(project.Path, project.Configuration.Metadata?.Icon); InitializePerformance();
         ApplyEngineTheme();
         runtime = CreateGameSession();
         Activated += (_, _) => UpdatePlayClock();
@@ -137,8 +137,8 @@ public partial class GameWindow : Window
         SpeakerText.FontSize = dialogue.SpeakerFontSize; SpeakerText.Foreground = Brush(dialogue.SpeakerColor);
         DialogueText.FontSize = dialogue.FontSize; DialogueText.Foreground = Brush(dialogue.TextColor);
         CharacterImage.Width = theme.CharacterWidth;
-        MenuTitle.Text = project.Title;
-        MenuSubtitle.Text = settings.Game.Subtitle;
+        MenuTitle.Text = translations.Translate(GameTextCategory.MainMenu, project.Title);
+        MenuSubtitle.Text = translations.Translate(GameTextCategory.MainMenu, settings.Game.Subtitle);
         MenuPanel.Width = theme.Menu.Width;
         MenuTitle.FontSize = theme.Menu.TitleFontSize;
         MenuSubtitle.FontSize = theme.Menu.SubtitleFontSize;
@@ -148,9 +148,9 @@ public partial class GameWindow : Window
         {
             "left" => HorizontalAlignment.Left, "right" => HorizontalAlignment.Right, _ => HorizontalAlignment.Center
         };
-        StartButton.Content = settings.Game.StartLabel;
-        ContinueButton.Content = settings.Game.ContinueLabel;
-        ExitButton.Content = settings.Game.ExitLabel;
+        StartButton.Content = translations.Translate(GameTextCategory.MainMenu, settings.Game.StartLabel);
+        ContinueButton.Content = translations.Translate(GameTextCategory.MainMenu, settings.Game.ContinueLabel);
+        ExitButton.Content = translations.Translate(GameTextCategory.MainMenu, settings.Game.ExitLabel);
         MenuOverlay.Visibility = settings.Game.MainMenu && !preview &&
             string.IsNullOrWhiteSpace(project.Configuration.EntryPoints?.PreMenuScene) ? Visibility.Visible : Visibility.Collapsed;
         renderedSettings = settings.RuntimeDefaults(project.Title);
@@ -345,7 +345,7 @@ public partial class GameWindow : Window
     private void Notify(string text)
     {
         if (startupFailed) return;
-        NoticeText.Text = text;
+        NoticeText.Text = translations.Translate(GameTextCategory.Notifications, text);
         NoticePanel.Visibility = Visibility.Visible;
         noticeUntil = DateTime.UtcNow.AddSeconds(5);
     }
@@ -604,7 +604,7 @@ public partial class GameWindow : Window
         var settings = runtime.WindowSettings;
         if (settings != renderedSettings)
         {
-            Title = settings.Title;
+            Title = translations.Translate(GameTextCategory.MainMenu, settings.Title);
             // Apply only changed runtime values so a title update does not undo a player's window resize.
             if (renderedSettings == null && vmInitialArea is { } area && WindowState == WindowState.Normal && !fullscreen)
                 ApplyVmBounds(area, settings.Width, settings.Height);

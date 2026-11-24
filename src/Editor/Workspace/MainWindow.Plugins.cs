@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
 
 namespace KNE;
 
@@ -14,7 +13,11 @@ public partial class MainWindow
     {
         if (pluginProject == (projectDirectory ?? "")) return;
         UnloadEditorPlugins();
-        if (!EngineLaunch.PluginsEnabled) { if (projectDirectory != null) AddSceneNavigatorButton(); return; }
+        if (!EngineLaunch.PluginsEnabled)
+        {
+            if (projectDirectory != null) { AddTranslationsButton(); AddSceneNavigatorButton(); }
+            return;
+        }
         if (projectDirectory == null && settings.ApplicationPlugins.Count == 0) { EditorTheme.Apply(this, settings.Theme); return; }
         string directory = projectDirectory ?? System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(settingsStore.SettingsPath))!;
         System.IO.Directory.CreateDirectory(directory);
@@ -27,9 +30,7 @@ public partial class MainWindow
             EditorTheme.Apply(this, settings.Theme);
             applicationPluginLoadError = null;
             if (projectDirectory == null) return;
-            var translations = AddPluginButton("Диалоги / переводы", ShowPluginTranslations, 10);
-            translations.Margin = new Thickness(8, 0, 8, 0);
-            translations.SetBinding(HeightProperty, new Binding(nameof(ActualHeight)) { Source = AppearanceButton });
+            AddTranslationsButton();
             AddSceneNavigatorButton();
             foreach (var command in host.Api.commands.Where(c => c.Location == "toolbar")) AddPluginButton(command.Title, () => command.Execute(PluginEditor()));
             foreach (var tab in host.Api.tabs) AddPluginButton(tab.Title, () => OpenPluginTab(tab));

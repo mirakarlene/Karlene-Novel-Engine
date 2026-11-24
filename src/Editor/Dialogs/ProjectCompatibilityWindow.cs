@@ -11,7 +11,8 @@ internal sealed class ProjectCompatibilityWindow : Window
     internal ProjectCompatibilityAction Action { get; private set; }
     internal ProjectCompatibilityWindow(IReadOnlyList<ProjectCompatibilityIssue> issues)
     {
-        Title = "Ой-ой, похоже, ваш проект работает на старой версии KNE";
+        Title = issues.Any(issue => issue.NewerEngine) ? "Установлена устаревшая версия KNE" :
+            issues.All(issue => issue.CanMigrate) ? "Проекту требуется миграция" : "Несовместимый формат проекта";
         Width = 720; Height = 460; MinWidth = 580; MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var panel = new DockPanel { Margin = new Thickness(24) };

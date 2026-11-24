@@ -7,7 +7,7 @@ namespace KNE;
 
 internal sealed record WorkerRequest(long Id, string Command, int Option = 0, string? Text = null, GameCheckpoint? Checkpoint = null,
     EditorPreviewSource? EditorSource = null, double Seconds = 0, bool Cancel = false, string[]? ApplicationPlugins = null,
-    SystemReply? SystemReply = null, double PlayedSeconds = 0, int? DialogueSpeed = null, bool ConfirmedDialogueSpeed = false);
+    SystemReply? SystemReply = null, double PlayedSeconds = 0, int? DialogueSpeed = null, bool ConfirmedDialogueSpeed = false, string? Language = null);
 internal sealed record SessionSnapshot(RuntimeWindowSettings Window, StoryFrame Story, SceneVisuals Visuals,
     PreviewLocation? Location = null, JsonElement Variables = default, bool TransitionInProgress = false, double LogicMilliseconds = 0,
     IReadOnlyList<string>? PluginScreens = null, int? DialogueSpeed = null);
@@ -78,10 +78,11 @@ internal static class LuaWorker
                     activeRequestId = request.Id;
                     runtime ??= new LuaRuntime(project, line => Send(new("log", Text: line)),
                         TimeSpan.FromHours(1), interactive: true, preview: preview, editorSource: request.EditorSource,
-                        variablesUpdated: value => Send(new("variables", Snapshot: new(runtime!.WindowSettings, runtime.Story, runtime.Visuals,
+                        variablesUpdated: value => Send(new("variables", Snapshot: new(runtime!.WindowSettings, runtime.DisplayStory, runtime.Visuals,
                             runtime.Location, value, runtime.TransitionInProgress, DialogueSpeed: runtime.CurrentDialogueSpeed))), debugger: debug?.Debugger) { SystemHost = CallHostAsync };
                     await runtime.SetPlayerDialogueSpeedAsync(request.DialogueSpeed,
                         confirmed: request.ConfirmedDialogueSpeed && request.Command != "restore").ConfigureAwait(false);
+                    runtime.SetPresentationLanguage(request.Language);
                     runtime.PlayedSeconds = request.Checkpoint?.PlayedSeconds ?? request.PlayedSeconds;
                     var logicWatch = System.Diagnostics.Stopwatch.StartNew();
                     bool inputHandled = false;
@@ -118,10 +119,10 @@ internal static class LuaWorker
                     {
                         Send(new("log", Text: "Сохранение недоступно: " + ex.Message));
                     }
-                    Send(new("result", request.Id, Text: eventText, Snapshot: new(runtime.WindowSettings, runtime.Story, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress, logicWatch.Elapsed.TotalMilliseconds, runtime.PluginScreens, runtime.CurrentDialogueSpeed), Checkpoint: checkpoint, InputHandled: inputHandled));
+                    Send(new("result", request.Id, Text: eventText, Snapshot: new(runtime.WindowSettings, runtime.DisplayStory, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress, logicWatch.Elapsed.TotalMilliseconds, runtime.PluginScreens, runtime.CurrentDialogueSpeed), Checkpoint: checkpoint, InputHandled: inputHandled));
                 }
                 catch (Exception ex) { Send(new("error", request.Id,
-                    Snapshot: runtime == null ? null : new(runtime.WindowSettings, runtime.Story, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress),
+                    Snapshot: runtime == null ? null : new(runtime.WindowSettings, runtime.DisplayStory, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress),
                     Error: ex.Message, ErrorType: ex.GetType().Name, Report: GameErrorReport.TryGet(ex))); }
             }
             if (runtime != null) await runtime.DisposeAsync().ConfigureAwait(false);

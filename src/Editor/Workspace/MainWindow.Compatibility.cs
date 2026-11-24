@@ -10,12 +10,24 @@ public partial class MainWindow
     {
         var issues = await ProjectCompatibility.InspectAsync(project, lifetime.Token);
         if (issues.Count == 0) return true;
+        if (SelectCompatibilityAction(issues) != ProjectCompatibilityAction.Migrate || issues.Any(issue => !issue.CanMigrate)) return false;
+        if (IsDocumentOpenInProject(project.Path))
+            throw new InvalidOperationException("Закройте вкладки этого проекта перед миграцией: их несохранённые правки должны быть сохранены или отклонены.");
+        string backup = await ProjectCompatibility.MigrateAsync(project, lifetime.Token);
+        OperationStatus.Text = "Миграция завершена. Резервная копия: " + backup;
+        return true;
+    }
+
+    private ProjectCompatibilityAction SelectCompatibilityAction(IReadOnlyList<ProjectCompatibilityIssue> issues)
+    {
         ProjectCompatibilityAction action;
         if (ChooseCompatibilityAction != null) action = ChooseCompatibilityAction(issues);
         else
         {
             var dialog = new ProjectCompatibilityWindow(issues) { Owner = this };
-            dialog.ShowDialog(); action = dialog.Action;
+            EditorTheme.Apply(dialog, settings.Theme);
+            dialog.ShowDialog();
+            action = dialog.Action;
         }
         if (action == ProjectCompatibilityAction.NewProject)
         {
@@ -26,14 +38,8 @@ public partial class MainWindow
                     if (CreateReplacementProject != null) CreateReplacementProject();
                     else BtnCreateProject_Click(this, new RoutedEventArgs());
                 }));
-            return false;
         }
-        if (action != ProjectCompatibilityAction.Migrate) return false;
-        if (IsDocumentOpenInProject(project.Path))
-            throw new InvalidOperationException("Закройте вкладки этого проекта перед миграцией: их несохранённые правки должны быть сохранены или отклонены.");
-        string backup = await ProjectCompatibility.MigrateAsync(project, lifetime.Token);
-        OperationStatus.Text = "Миграция завершена. Резервная копия: " + backup;
-        return true;
+        return action;
     }
     private bool IsDocumentOpenInProject(string path) => currentProject?.Path.Equals(path, StringComparison.OrdinalIgnoreCase) == true && OpenEditors.Any();
 }

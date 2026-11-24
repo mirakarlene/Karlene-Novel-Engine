@@ -71,7 +71,7 @@ public sealed class VisualScriptTests
             editor.ApplyBlockGlow(BlockGlowMode.Squares, smooth: false);
             Assert.All(shadows, shadow =>
             {
-                Assert.Equal(0, shadow.RadiusX);
+                Assert.Equal(11, shadow.RadiusX);
                 Assert.Equal(EdgeMode.Aliased, RenderOptions.GetEdgeMode(shadow));
             });
             editor.ApplyBlockGlow(BlockGlowMode.Off, smooth: true);

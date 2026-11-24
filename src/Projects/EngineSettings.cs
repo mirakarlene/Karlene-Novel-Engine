@@ -112,13 +112,16 @@ public sealed class EngineSettings
     {
         string path = PathSafety.ResolveRelative(root, "engine/" + name);
         if (!File.Exists(path)) return fallback is null ? new T() : fallback;
+        string source = "";
         try
         {
             if (new FileInfo(path).Length > 256 * 1024) throw new InvalidDataException("Файл настроек больше 256 КБ.");
-            return JsonSerializer.Deserialize<T>(File.ReadAllText(path), JsonOptions)
+            source = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<T>(source, JsonOptions)
                 ?? throw new InvalidDataException("Настройки не должны быть null.");
         }
-        catch (Exception ex) when (ex is JsonException or InvalidDataException)
+        catch (JsonException ex) { throw ProjectCompatibility.SettingsError<T>("engine/" + name, source, ex); }
+        catch (InvalidDataException ex)
         { throw new InvalidDataException("Ошибка engine/" + name + ": " + ex.Message, ex); }
     }
 

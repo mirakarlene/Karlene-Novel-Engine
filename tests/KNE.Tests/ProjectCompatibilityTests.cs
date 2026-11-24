@@ -10,6 +10,41 @@ namespace KNE.Tests;
 
 public sealed class ProjectCompatibilityTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task OpeningRequiresCompatibleEditorBeforeAnyMigration(bool explicitVersion) => Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        string projectFile = Path.Combine(fixture.ProjectPath, "project.json");
+        if (explicitVersion) fixture.Write("project.json", """{"metadata":{"name":"Будущий проект"},"kne_format_version":99}""");
+        string setting = fixture.Write("engine/performance.json", """{"graphics":{"future_animations":true}}""");
+        string before = File.ReadAllText(projectFile);
+        var window = new MainWindow();
+        try
+        {
+            ProjectCompatibilityIssue? issue = null;
+            window.ChooseCompatibilityAction = issues =>
+            {
+                issue = Assert.Single(issues);
+                return ProjectCompatibilityAction.Migrate;
+            };
+            await Invoke(window, "OpenProjectAsync", fixture.ProjectPath, false);
+            Assert.NotNull(issue);
+            Assert.Equal(explicitVersion, issue.NewerEngine);
+            Assert.Equal(explicitVersion ? "project.json" : "engine/performance.json", issue.File);
+            Assert.Contains(explicitVersion ? "формат KNE 99" : "$.graphics.future_animations", issue.Reason);
+            Assert.False(issue.CanMigrate);
+            var dialog = new ProjectCompatibilityWindow([issue]);
+            Assert.Equal(explicitVersion ? "Установлена устаревшая версия KNE" : "Несовместимый формат проекта", dialog.Title);
+            dialog.Close();
+            Assert.Null(window.Project);
+            Assert.Equal(before, File.ReadAllText(projectFile));
+            Assert.Equal("""{"graphics":{"future_animations":true}}""", File.ReadAllText(setting));
+        }
+        finally { window.Close(); }
+    });
+
     [Fact]
     public void LegacyCatalog_IsUnavailableForCreation_AndFavoritesAndRecentMoveToBranching()
     {
@@ -173,7 +208,7 @@ public sealed class ProjectCompatibilityTests
                 Assert.True(File.Exists(Path.Combine(fixture.ProjectPath, "engine", "frame-ids.json")));
                 Assert.Empty(await ProjectCompatibility.InspectAsync(await fixture.LoadAsync()));
                 var dialog = new ProjectCompatibilityWindow([new("bad.knegraph", "Unsupported version", false)]);
-                Assert.Contains("старой версии KNE", dialog.Title);
+                Assert.Equal("Несовместимый формат проекта", dialog.Title);
                 var buttons = ((DockPanel)dialog.Content).Children.OfType<WrapPanel>().Single().Children.OfType<Button>().ToArray();
                 Assert.False(buttons.Single(button => Equals(button.Content, "Миграция данных")).IsEnabled);
                 Assert.True(buttons.Single(button => Equals(button.Content, "Создать новый проект")).IsEnabled);
