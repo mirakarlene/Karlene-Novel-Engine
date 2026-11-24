@@ -208,8 +208,9 @@ public static class PerformanceSettingsStore
         string path = PathSafety.ResolveRelative(root, "engine/" + name);
         if (!File.Exists(path)) return new();
         if (new FileInfo(path).Length > 1024 * 1024) throw new InvalidDataException("Параметры больше 1 МБ: " + name);
-        try { return JsonSerializer.Deserialize<T>(File.ReadAllText(path), EngineSettings.JsonOptions) ?? throw new InvalidDataException("Параметры не должны быть null: " + name); }
-        catch (JsonException error) { throw new InvalidDataException("Ошибка engine/" + name + ": " + error.Message, error); }
+        string source = File.ReadAllText(path);
+        try { return JsonSerializer.Deserialize<T>(source, EngineSettings.JsonOptions) ?? throw new InvalidDataException("Параметры не должны быть null: " + name); }
+        catch (JsonException error) { throw ProjectCompatibility.SettingsError<T>("engine/" + name, source, error); }
     }
     private static async Task WriteAsync<T>(string root, string name, T value, CancellationToken token)
     {

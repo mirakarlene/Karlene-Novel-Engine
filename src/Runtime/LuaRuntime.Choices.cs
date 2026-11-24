@@ -18,7 +18,7 @@ public sealed partial class LuaRuntime
                 for index = 1, tonumber(result[5]) do labels[index] = result[index + 5] end
                 local duration = tonumber(result[2])
                 return coroutine.yield(kne_event_location({kind = "choice", text = result[6 + #labels], options = labels,
-                    choice_states = result[1], seconds = duration >= 0 and duration or nil,
+                    choice_states = result[1], seconds = duration >= 0 and duration or nil, source_choice = json,
                     default_option = tonumber(result[3]), timer_display = result[4]}))
             end
             """, "KNE choices");

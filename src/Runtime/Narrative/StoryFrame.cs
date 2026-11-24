@@ -3,6 +3,8 @@ namespace KNE;
 /// <summary>The visible checkpoint of a suspended scene.</summary>
 public sealed record StoryFrame(string Kind, string Speaker, string Text, IReadOnlyList<string> Options)
 {
+    // The worker sends this view to the player. Replays and save signatures use the authored frame.
+    internal StoryFrame? Localized { get; init; }
     public FrameIdentity? Identity { get; init; }
     /// <summary>Currently armed, scene-scoped input subscriptions.</summary>
     public IReadOnlyList<TriggerSettings> Triggers { get; init; } = [];

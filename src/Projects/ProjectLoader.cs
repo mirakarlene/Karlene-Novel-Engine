@@ -73,6 +73,7 @@ public static class ProjectLoader
             throw new InvalidDataException("Некорректный project.json: " + ex.Message, ex);
         }
 
+        ProjectCompatibility.CheckEngineVersion(configuration);
         bool hasEngine = File.Exists(PathSafety.ResolveRelative(root, "engine/window.json")) ||
             File.Exists(PathSafety.ResolveRelative(root, "engine/screens.json")) ||
             File.Exists(PathSafety.ResolveRelative(root, "engine/theme.json")) ||

@@ -96,6 +96,7 @@ internal static class NarrativeRuntimeLua
                     local wait = final and auto_seconds or tonumber(duration)
                     if wait and wait < 0 then wait = nil end
                     local event = {kind = "dialogue", speaker = name, text = parts[part],
+                        source_text = tostring(text), source_speaker = result[0], source_flags = flags,
                         character = result[1], effect = result[2], seconds = wait,
                         skippable = final and skippable ~= false or not final and wait == nil, presentation_id = presentation}
                     if letters < total_letters then
@@ -112,6 +113,7 @@ internal static class NarrativeRuntimeLua
                         if letters > revealed and speed ~= 0 then
                             local duration = speed < 0 and math.min((letters - revealed) / 35, 12) or (letters - revealed) / speed
                             local reveal = {kind = "dialogue", speaker = name, text = event.text, character = result[1], effect = result[2],
+                                source_text = event.source_text, source_speaker = event.source_speaker, source_flags = flags,
                                 seconds = duration, skippable = true, presentation_id = presentation,
                                 reveal_from = revealed, reveal_count = letters, reveal_from_end = from_end}
                             emit(reveal)

@@ -17,6 +17,8 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         new(BlockGlowMode.Medium, "Среднее"), new(BlockGlowMode.Squares, "Квадратные лампочки")]);
     internal ComboBox BlockGlowSmoothingInput { get; } = GraphicsSettingsEditor.Choice([
         new GraphicsOption<bool>(false, "Отключить"), new(true, "Включить")]);
+    internal ComboBox ShaderGradientInput { get; } = GraphicsSettingsEditor.Choice([
+        new GraphicsOption<bool>(true, "Динамичный"), new(false, "Статичный")]);
     internal ComboBox AutosaveInterval { get; } = Choice([(1, "1 минута"), (5, "5 минут"), (10, "10 минут"), (30, "30 минут"), (0, "Отключено")]);
     internal ComboBox HistoryLimit { get; } = Choice(EditorPreferences.HistoryLimits.Select(n => (n, n.ToString())));
     internal CheckBox KeepHistory { get; } = Check("Сохранять историю изменений");
@@ -69,6 +71,25 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         backup.Children.Add(Hint("Старые копии автоматически удаляются. Это не влияет на историю версий автосохранения"));
         Button(backup, "Создать резервную копию", () => BackupRequested?.Invoke() ?? Task.CompletedTask);
         var graphs = Section(left, "Блок-схемы");
+        var graphTitle = (TextBlock)graphs.Children[0];
+        graphs.Children.RemoveAt(0);
+        const string gradientLabel = "Переливающийся градиент для блоков шейдеров";
+        var graphHeader = new DockPanel();
+        DockPanel.SetDock(graphTitle, Dock.Left);
+        DockPanel.SetDock(ShaderGradientInput, Dock.Right);
+        ShaderGradientInput.MinWidth = 110;
+        ShaderGradientInput.Width = 110;
+        ShaderGradientInput.Margin = new Thickness();
+        ShaderGradientInput.VerticalAlignment = VerticalAlignment.Center;
+        System.Windows.Automation.AutomationProperties.SetName(ShaderGradientInput, gradientLabel);
+        graphHeader.Children.Add(graphTitle);
+        graphHeader.Children.Add(ShaderGradientInput);
+        graphHeader.Children.Add(new TextBlock
+        {
+            Text = gradientLabel, FontSize = 12, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 8, 0)
+        });
+        graphs.Children.Add(graphHeader);
         graphs.Children.Add(ExtendedSceneBlockLimit);
         var glow = new Grid();
         glow.ColumnDefinitions.Add(new());
@@ -109,6 +130,7 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         ExtendedSceneBlockLimit.IsChecked = value.ExtendedSceneBlockLimit;
         BlockGlowInput.SelectedValue = value.GlowMode;
         BlockGlowSmoothingInput.SelectedValue = value.SmoothBlockGlow;
+        ShaderGradientInput.SelectedValue = value.DynamicShaderGradient;
         AutosaveInterval.SelectedValue = value.AutosaveMinutes; HistoryLimit.SelectedValue = value.AutosaveVersions; KeepHistory.IsChecked = value.KeepHistory;
         Startup.SelectedValue = value.Startup; StartupProject.Text = value.StartupProject; SoundEnabled.IsChecked = value.NotificationSound; Sound.SelectedValue = value.Sound; SoundFile.Text = value.SoundFile;
         Toasts.IsChecked = value.Toasts; Aggregate.IsChecked = value.AggregateNotifications; Minimized.IsChecked = value.NotifyMinimized; Tips.IsChecked = value.NotifyTips;
@@ -121,6 +143,7 @@ public sealed class GeneralSettingsEditor : ScrollViewer
         ExtendedSceneBlockLimit = ExtendedSceneBlockLimit.IsChecked == true,
         BlockGlow = (BlockGlowInput.SelectedValue is BlockGlowMode mode ? mode : BlockGlowMode.Medium).ToString(),
         SmoothBlockGlow = BlockGlowSmoothingInput.SelectedValue is not false,
+        DynamicShaderGradient = ShaderGradientInput.SelectedValue is not false,
         AutosaveMinutes = (int?)AutosaveInterval.SelectedValue ?? 5, AutosaveVersions = (int?)HistoryLimit.SelectedValue ?? 25, KeepHistory = KeepHistory.IsChecked == true,
         Startup = (string?)Startup.SelectedValue ?? "home", StartupProject = StartupProject.Text.Trim(), NotificationSound = SoundEnabled.IsChecked == true, Sound = (string?)Sound.SelectedValue ?? "standard", SoundFile = SoundFile.Text,
         Toasts = Toasts.IsChecked == true, AggregateNotifications = Aggregate.IsChecked == true, NotifyMinimized = Minimized.IsChecked == true, NotifyTips = Tips.IsChecked == true,

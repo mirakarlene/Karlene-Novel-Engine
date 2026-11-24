@@ -47,10 +47,13 @@ public sealed class WorkspaceLayoutRefinementsTests
             general.ExtendedSceneBlockLimit.IsChecked = true;
             Fits(general.BlockGlowInput);
             Fits(general.BlockGlowSmoothingInput);
+            Fits(general.ShaderGradientInput);
             Assert.Equal(BlockGlowMode.Medium, general.BlockGlowInput.SelectedValue);
             Assert.Equal(true, general.BlockGlowSmoothingInput.SelectedValue);
             general.BlockGlowInput.SelectedValue = BlockGlowMode.Weak;
             general.BlockGlowSmoothingInput.SelectedValue = false;
+            Assert.Equal(true, general.ShaderGradientInput.SelectedValue);
+            general.ShaderGradientInput.SelectedValue = false;
             foreach (var control in new FrameworkElement[] { general.BackupPath, general.BackupFrequency, general.BackupCopies, general.AutosaveInterval, general.HistoryLimit, general.KeepHistory }) { Assert.Contains(control, first); Assert.DoesNotContain(control, second); Fits(control); }
             Assert.Contains(first.OfType<Button>(), button => Equals(button.Content, "Настроить горячие клавиши"));
             Assert.DoesNotContain(first.OfType<Button>(), button => Equals(button.Content, "Удалить весь кэш"));

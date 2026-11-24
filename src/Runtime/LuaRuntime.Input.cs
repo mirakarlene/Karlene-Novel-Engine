@@ -14,7 +14,7 @@ public sealed partial class LuaRuntime
                 if type(json) ~= "string" then error("text_input() требует JSON-конфигурацию", 2) end
                 local result = kne_prepare_input(json)
                 if result[1] ~= "" then error(result[1], 2) end
-                return coroutine.yield(kne_event_location({kind = "input", input = result[0]}))
+                return coroutine.yield(kne_event_location({kind = "input", input = result[0], source_input = json}))
             end
             """, "KNE text input");
     }

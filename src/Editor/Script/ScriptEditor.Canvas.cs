@@ -76,7 +76,7 @@ public partial class ScriptEditor
     private void UpdateBlockGlow(Rectangle shadow)
     {
         shadow.Visibility = blockGlow == BlockGlowMode.Off ? Visibility.Collapsed : Visibility.Visible;
-        shadow.RadiusX = shadow.RadiusY = blockGlow == BlockGlowMode.Squares ? 0 : 11;
+        shadow.RadiusX = shadow.RadiusY = 11;
         RenderOptions.SetEdgeMode(shadow, smoothBlockGlow ? EdgeMode.Unspecified : EdgeMode.Aliased);
         if (blockGlow == BlockGlowMode.Off)
         {

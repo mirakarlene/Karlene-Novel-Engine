@@ -121,6 +121,7 @@ public static class ProjectCreator
             var configuration = new ProjectConfiguration
             {
                 AuthoringMode = authoringMode,
+                EngineFormatVersion = ProjectCompatibility.CurrentFormatVersion,
                 Metadata = new ProjectMetadata { Name = projectName, CreationName = projectName, CreatedDate = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
                 GameInfo = new GameInfo { Title = projectName, Description = "Новая визуальная новелла" },
                 EntryPoints = new EntryPoints { MainScene = mainScene, InitScript = initScript }

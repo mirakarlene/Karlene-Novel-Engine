@@ -12,7 +12,7 @@ public sealed partial class LuaRuntime
         double opacity = percent == null ? 100 : NumericValue(percent);
         if (opacity is < 0 or > 100) throw new ArgumentException("Непрозрачность должна быть от 0 до 100.");
         if (source.Length > 16000) throw new ArgumentException("Допускается до 16 000 символов.");
-        string markup = InlineText.ToMarkup(ResolveInline(source));
+        string markup = InlineText.ToMarkup(ResolveLocalizedInline(GameTextCategory.Other, source));
         lock (stateLock) visuals = visuals with { Watermark = markup.Length == 0 ? null : new(markup, position, opacity / 100) };
     }
 

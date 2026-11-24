@@ -28,7 +28,8 @@ public partial class GameWindow
     {
         SystemHost = InvokeSystemAsync,
         PlayClock = ReadPlayTime,
-        InitialDialogueSpeed = preferences.TextSpeed
+        InitialDialogueSpeed = preferences.TextSpeed,
+        PresentationLanguage = preferences.Language
     };
 
     private void UpdatePlayClock()
