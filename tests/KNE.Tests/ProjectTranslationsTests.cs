@@ -46,6 +46,10 @@ public sealed class ProjectTranslationsTests
                     Assert.InRange(point.Y, 0, dialog.ActualHeight);
                 });
                 Assert.Same(dialog.FindResource("Editor.Background"), dialog.Background);
+                var host = Assert.IsType<System.Windows.Interop.HwndSource>(PresentationSource.FromVisual(dialog));
+                var fill = Assert.IsType<System.Windows.Media.SolidColorBrush>(dialog.Background).Color;
+                Assert.Equal(System.Windows.Media.Color.FromRgb(fill.R, fill.G, fill.B), host.CompositionTarget.BackgroundColor);
+                Assert.Same(dialog.Background, Assert.IsType<Border>(dialog.Content).Background);
             }
             finally { dialog.Close(); owner.Close(); }
         });

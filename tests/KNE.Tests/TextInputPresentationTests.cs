@@ -192,7 +192,9 @@ public sealed class TextInputPresentationTests
                 var input = (TextInputPresenter)item.Owner.FindName("PlayerInput"); var dialogue = (Border)item.Owner.FindName("DialoguePanel");
                 var scroll = Descendants(dialogue).OfType<ScrollViewer>().First();
                 var position = input.CancelButton.TranslatePoint(new Point(), scroll);
-                Assert.InRange(position.Y, 0, scroll.ViewportHeight); Assert.True(position.Y + input.CancelButton.ActualHeight <= scroll.ViewportHeight);
+                Assert.InRange(position.Y, 0, scroll.ViewportHeight);
+                Assert.True(position.Y + input.CancelButton.ActualHeight <= scroll.ViewportHeight,
+                    $"{item.Name}: cancel button ends at {position.Y + input.CancelButton.ActualHeight}, viewport height is {scroll.ViewportHeight}.");
                 Assert.Equal(project.Engine.Theme.Dialogue.FontSize, input.Answer.FontSize); Assert.True(input.Answer.ActualWidth > 500);
                 if (Environment.GetEnvironmentVariable("KNE_INPUT_RENDER") is { Length: > 0 } directory)
                 {

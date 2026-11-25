@@ -11,6 +11,8 @@ public sealed partial class VisualScript
         ValidateStructure();
         var starts = Nodes.Where(n => n.Kind == ScriptNodeKind.Start).ToArray();
         if (starts.Length != 1) throw new InvalidDataException("Нужен ровно один блок «Начало».");
+        if (Nodes.Count == 1)
+            throw new InvalidDataException("В сцене есть только блок «Начало». Другие блоки не найдены.");
         var map = Nodes.ToDictionary(n => n.Id, StringComparer.Ordinal);
         foreach (var node in Nodes)
         {

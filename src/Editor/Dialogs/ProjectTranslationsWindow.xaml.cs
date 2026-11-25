@@ -4,6 +4,8 @@ using System.Text;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Interop;
+using System.Windows.Media;
 using Microsoft.Win32;
 
 namespace KNE;
@@ -45,6 +47,7 @@ internal partial class ProjectTranslationsWindow : Window
     private string[] skippedFiles = [];
     private Row[] rows = [];
     private string language = "";
+    private bool operationInProgress;
 
     internal ProjectTranslationsWindow(Window owner, string theme, ProjectInfo project,
         IReadOnlyDictionary<string, string> openSources, CancellationToken token)
@@ -72,12 +75,20 @@ internal partial class ProjectTranslationsWindow : Window
         });
     }
 
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        if (PresentationSource.FromVisual(this) is HwndSource { CompositionTarget: { } target } &&
+            Background is SolidColorBrush fill)
+            target.BackgroundColor = Color.FromRgb(fill.Color.R, fill.Color.G, fill.Color.B);
+    }
+
     private void AddExportButton(Panel panel, ProjectFileFormat format, bool translate)
     {
         string label = "Экспорт " + (translate ? "перевода " : "оригинала ") + format.Extension;
         var button = new Button { Content = ProjectFileFormats.Icon(format), ToolTip = label, Padding = new(3), Margin = new(0, 0, 5, 4) };
         AutomationProperties.SetName(button, label);
-        button.Click += async (_, _) => await RunAsync(() => ExportAsync(format, translate));
+        button.Click += async (_, _) => await RunAsync(() => ExportAsync(format, translate), opensPicker: true);
         panel.Children.Add(button);
     }
 
@@ -133,6 +144,7 @@ internal partial class ProjectTranslationsWindow : Window
         var picker = new SaveFileDialog { Filter = format.Filter, DefaultExt = format.Extension,
             FileName = "texts-" + (translate ? language : originalLanguage) + format.Extension, InitialDirectory = project.Path };
         if (picker.ShowDialog(this) != true) return;
+        Body.IsEnabled = false;
         var data = rows.Select(row =>
         {
             string text = translate ? row.Draft.Text : row.Entry.Text;
@@ -153,6 +165,7 @@ internal partial class ProjectTranslationsWindow : Window
         if (language.Length == 0) return;
         var picker = new OpenFileDialog { Filter = "Переводы (*.json;*.docx)|*.json;*.docx", InitialDirectory = project.Path };
         if (picker.ShowDialog(this) != true) return;
+        Body.IsEnabled = false;
         if (new FileInfo(picker.FileName).Length > 16 * 1024 * 1024) throw new InvalidDataException("Перевод больше 16 МБ.");
         byte[] data = await File.ReadAllBytesAsync(picker.FileName, token);
         string extension = Path.GetExtension(picker.FileName).ToLowerInvariant();
@@ -169,17 +182,18 @@ internal partial class ProjectTranslationsWindow : Window
         }
         foreach (var (draft, text) in changes) draft.Text = text;
         Status.Text = $"Импортировано строк: {imported.Count}. Сохраните перевод.";
-    });
+    }, opensPicker: true);
 
     private static string Quote(string text) => "«" + text + "»";
 
-    private async Task RunAsync(Func<Task> action)
+    private async Task RunAsync(Func<Task> action, bool opensPicker = false)
     {
-        if (!Body.IsEnabled) return;
-        Body.IsEnabled = false;
+        if (operationInProgress) return;
+        operationInProgress = true;
+        if (!opensPicker) Body.IsEnabled = false;
         try { await action(); }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { Close(); }
         catch (Exception error) { Status.Text = error.Message; }
-        finally { Body.IsEnabled = true; }
+        finally { Body.IsEnabled = true; operationInProgress = false; }
     }
 }

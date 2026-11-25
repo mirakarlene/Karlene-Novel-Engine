@@ -44,7 +44,8 @@ internal sealed class ProjectTemplateDialog : Window
         var description = new TextBlock
         {
             Text = $"Пустой шаблон создаёт системные папки, project.json, README.txt, стартовую сцену {scene} и скрипт диагностики gamelogic.lua.",
-            TextWrapping = TextWrapping.Wrap, MaxWidth = 608, Margin = new Thickness(3, 2, 3, 10)
+            TextWrapping = TextWrapping.Wrap, MaxWidth = 608, Margin = new Thickness(3, 2, 3, 10),
+            Visibility = Visibility.Hidden
         };
         description.SetResourceReference(TextBlock.ForegroundProperty, "Editor.Muted");
         body.Children.Add(description);
@@ -75,6 +76,7 @@ internal sealed class ProjectTemplateDialog : Window
         empty.Click += (_, _) =>
         {
             if (confirm.IsEnabled) return;
+            description.Visibility = Visibility.Visible;
             var formats = ProjectFileFormats.CreateGroups.SelectMany(group => group).ToArray();
             var folder = formats.Single(format => format.IsDirectory);
             foreach (string name in new[] { "game", "engine", "plugins", "saves", "metadata" })

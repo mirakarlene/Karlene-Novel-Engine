@@ -11,6 +11,23 @@ namespace KNE.Tests;
 
 public sealed class VisualScriptTests
 {
+    [Fact]
+    public async Task StartOnlyProjectReportsMissingBlocksAndPreservesTheDiagnosticForBrokenLinks()
+    {
+        using var fixture = new TempProject();
+        string root = ProjectCreator.CreateProject("Только начало", fixture.Root, ProjectAuthoringMode.Visual);
+        var project = await ProjectLoader.LoadProjectAsync(root);
+        var graph = new VisualScript { Nodes = [new ScriptNode { Id = "start", Kind = ScriptNodeKind.Start }] };
+        await File.WriteAllTextAsync(project.MainScenePath, graph.Serialize());
+        await using var runtime = new LuaRuntime(project, _ => { }, interactive: true);
+        var startup = await Assert.ThrowsAnyAsync<Exception>(() => runtime.StartAsync());
+        Assert.Contains("Другие блоки не найдены", startup.ToString());
+        Assert.DoesNotContain("соедините все выходы", startup.ToString());
+
+        graph.Nodes.Add(new ScriptNode { Id = "end", Kind = ScriptNodeKind.End });
+        Assert.Contains("соедините все выходы", Assert.Throws<InvalidDataException>(() => graph.Compile()).Message);
+    }
+
     [Theory]
     [InlineData(".knegraph")]
     [InlineData(".kneshader")]

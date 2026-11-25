@@ -228,12 +228,43 @@ public sealed class MetaPresentationRuntimeTests
             output.Text = "journal";
             toggle.Invoke(game, [true, false]);
             Assert.NotSame(game, Window.GetWindow(panel));
-            Assert.Same(game, Window.GetWindow(panel).Owner);
+            var detached = Window.GetWindow(panel);
+            Assert.Same(game, detached.Owner);
             Assert.Equal("journal", output.Text);
+            var viewport = (Grid)game.FindName("ConsoleViewport");
+            var command = (TextBox)game.FindName("CommandInput");
+            var grip = (System.Windows.Controls.Primitives.Thumb)game.FindName("ConsoleResizeGrip");
+            Assert.Equal(Visibility.Collapsed, grip.Visibility);
+            detached.Width = detached.MinWidth;
+            detached.Height = detached.MinHeight;
+            detached.UpdateLayout();
+            Size compactViewport = viewport.RenderSize;
+            Assert.True(compactViewport.Width > 0 && compactViewport.Height > 0);
+            Assert.Equal(new Thickness(), panel.Margin);
+            detached.Width = 900;
+            detached.Height = 550;
+            detached.UpdateLayout();
+            Assert.True(viewport.ActualWidth > compactViewport.Width + 300);
+            Assert.True(viewport.ActualHeight > compactViewport.Height + 240);
+            Point commandBottom = command.TranslatePoint(new Point(0, command.ActualHeight), panel);
+            Assert.Equal(panel.Padding.Bottom + panel.BorderThickness.Bottom, panel.ActualHeight - commandBottom.Y, 2);
             toggle.Invoke(game, [false, false]);
             Assert.Same(game, Window.GetWindow(panel));
             Assert.Equal(Visibility.Collapsed, panel.Visibility);
             Assert.Equal("journal", output.Text);
+
+            project.Engine.Performance.ConsoleMode = "embedded";
+            toggle.Invoke(game, [true, false]);
+            game.UpdateLayout();
+            Assert.Equal(Visibility.Visible, grip.Visibility);
+            double embeddedBefore = viewport.ActualHeight;
+            grip.RaiseEvent(new System.Windows.Controls.Primitives.DragDeltaEventArgs(0, 75)
+            {
+                RoutedEvent = System.Windows.Controls.Primitives.Thumb.DragDeltaEvent
+            });
+            game.UpdateLayout();
+            Assert.Equal(embeddedBefore + 75, viewport.ActualHeight, 2);
+            Assert.True(grip.TranslatePoint(new Point(), panel).Y > command.TranslatePoint(new Point(), panel).Y);
         }
         finally { await game.CloseForProjectDeletionAsync(); }
     });

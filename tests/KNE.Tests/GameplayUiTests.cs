@@ -302,6 +302,47 @@ public sealed class GameplayUiTests
         Assert.Equal(2, GameErrorReport.TryGet(error)!.Line);
     }
 
+    [Theory]
+    [InlineData(640, 480)]
+    [InlineData(1280, 720)]
+    public Task GameplayButtonsShareTheDialogueFooterAndLeaveLongTextScrollable(double width, double height) => Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        var game = new GameWindow(await fixture.LoadAsync());
+        try
+        {
+            Invoke(game, "ShowGameplay");
+            var panel = Find<Border>(game, "DialoguePanel");
+            var footer = Find<Grid>(game, "DialogueFooter");
+            var text = Find<TextBlock>(game, "DialogueText");
+            text.Text = string.Join('\n', Enumerable.Repeat("Длинный текст реплики", 60));
+            var content = (FrameworkElement)game.Content;
+            content.Measure(new Size(width, height));
+            content.Arrange(new Rect(0, 0, width, height));
+            content.UpdateLayout();
+
+            var scroll = Assert.IsType<Grid>(panel.Child).Children.OfType<ScrollViewer>().Single();
+            Assert.True(scroll.ScrollableHeight > 0);
+            Assert.True(scroll.TranslatePoint(new Point(0, scroll.ActualHeight), panel).Y < footer.TranslatePoint(new Point(), panel).Y);
+            var controls = Find<StackPanel>(game, "GameControls");
+            var next = Find<Button>(game, "NextButton");
+            Assert.Same(footer, controls.Parent);
+            Assert.Same(footer, next.Parent);
+            Assert.False(footer.IsAncestorOf(text));
+            double right = controls.TranslatePoint(new Point(controls.ActualWidth, 0), footer).X;
+            Assert.True(right <= next.TranslatePoint(new Point(), footer).X);
+            Assert.Equal(controls.TranslatePoint(new Point(), footer).Y, next.TranslatePoint(new Point(), footer).Y);
+            Assert.All(controls.Children.OfType<Button>().Append(next), button =>
+            {
+                Assert.Equal(12, button.FontSize);
+                var edge = button.TranslatePoint(new Point(button.ActualWidth, button.ActualHeight), panel);
+                Assert.InRange(edge.X, 0, panel.ActualWidth);
+                Assert.InRange(edge.Y, 0, panel.ActualHeight);
+            });
+        }
+        finally { game.Close(); }
+    });
+
     private static string Command(string target, GameplayUiStyle style) => "configure_ui('" + target + "',[==[" + JsonSerializer.Serialize(style, EngineSettings.JsonOptions) + "]==])\n";
     private static void WriteTexture(string root)
     {

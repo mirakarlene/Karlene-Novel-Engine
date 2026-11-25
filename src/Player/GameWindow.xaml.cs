@@ -525,6 +525,7 @@ public partial class GameWindow : Window
 
     private void Dialogue_Click(object sender, MouseButtonEventArgs e)
     {
+        if (e.OriginalSource is Visual hit && (ReferenceEquals(hit, DialogueFooter) || DialogueFooter.IsAncestorOf(hit))) return;
         if (e.OriginalSource is not Button && NextButton.IsEnabled) NextButton_Click(NextButton, e);
     }
 
@@ -666,6 +667,7 @@ public partial class GameWindow : Window
         choicePresentation.Display(frame, preferences.Animate && project.Engine.Theme.AnimationEnabled && !clockSuspended &&
             MenuOverlay.Visibility != Visibility.Visible, Brush(project.Engine.Theme.AccentColor));
         PlayerInput.Display(frame);
+        PlayerInput.Feedback.Visibility = frame.InputFeedback.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         PlayerInput.SubmitButton.IsEnabled = PlayerInput.CancelButton.IsEnabled = execution == null;
         renderedStory = frame;
         NextButton.IsEnabled = execution == null && (frame.CanAdvance || HasButtonTrigger("next"));
