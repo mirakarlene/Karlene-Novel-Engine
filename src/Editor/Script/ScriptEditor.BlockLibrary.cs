@@ -127,6 +127,8 @@ public partial class ScriptEditor
         if (node.Kind is ScriptNodeKind.ConfigureDialogue or ScriptNodeKind.ConfigureButton) AddUiConfigurationFields(node);
         if (node.Kind == ScriptNodeKind.SetDialogueSpeed)
             Number("DialogueSpeedInput", "Символов в секунду (0 — мгновенно)", node.Amount, (value, speed) => value.Amount = DialogueSpeed.Validate(speed));
+        if (node.Kind == ScriptNodeKind.SetHistorySize)
+            Number("HistorySizeInput", "Количество записей (0 — отключить)", node.Amount, (value, size) => value.Amount = DialogueJournal.ValidateLimit(size));
         if (node.Kind == ScriptNodeKind.Script)
         {
             var edit = new Button { Name = "EditProjectScriptButton", Content = "Создать / редактировать скрипт…", Padding = new Thickness(8, 5, 8, 5), Margin = new Thickness(0, 0, 0, 10) };

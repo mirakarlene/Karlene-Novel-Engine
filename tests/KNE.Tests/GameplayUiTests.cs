@@ -248,7 +248,7 @@ public sealed class GameplayUiTests
             var window = new GameWindow(project); var preview = new ScenePreview();
             try
             {
-                var names = new[] { ("next", "NextButton"), ("save", "SaveButton"), ("load", "LoadButton"), ("auto_save", "LoadAutoButton"), ("pause", "PauseButton") };
+                var names = new[] { ("rollback", "RollbackButton"), ("history", "HistoryButton"), ("save", "SaveButton"), ("load", "LoadButton"), ("auto_save", "LoadAutoButton"), ("pause", "PauseButton") };
                 var originalParents = names.ToDictionary(item => item.Item1, item => Find<Button>(window, item.Item2).Parent);
                 var styles = names.Select((item, i) => new GameplayUiConfiguration(item.Item1, GameplayUiStyle.ForTarget(item.Item1) with
                 {
@@ -278,9 +278,9 @@ public sealed class GameplayUiTests
                 }
                 Find<StackPanel>(window, "GameControls").Visibility = Visibility.Collapsed;
                 Assert.Equal(Visibility.Collapsed, Find<Button>(window, "SaveButton").Visibility);
-                Assert.Equal(Visibility.Visible, Find<Button>(window, "NextButton").Visibility);
+                Assert.Equal(Visibility.Visible, Find<Button>(window, "HistoryButton").Visibility);
                 Find<Border>(window, "DialoguePanel").Visibility = Visibility.Collapsed;
-                Assert.Equal(Visibility.Collapsed, Find<Button>(window, "NextButton").Visibility);
+                Assert.Equal(Visibility.Collapsed, Find<Button>(window, "HistoryButton").Visibility);
                 Invoke(window, "ApplyGameplayUi", SceneVisuals.Empty);
                 foreach (var (target, name) in names) Assert.Same(originalParents[target], Find<Button>(window, name).Parent);
                 Assert.Equal("auto", Find<Button>(window, "LoadAutoButton").Tag);
@@ -325,14 +325,17 @@ public sealed class GameplayUiTests
             Assert.True(scroll.ScrollableHeight > 0);
             Assert.True(scroll.TranslatePoint(new Point(0, scroll.ActualHeight), panel).Y < footer.TranslatePoint(new Point(), panel).Y);
             var controls = Find<StackPanel>(game, "GameControls");
-            var next = Find<Button>(game, "NextButton");
+            var back = Find<Button>(game, "RollbackButton");
+            var history = Find<Button>(game, "HistoryButton");
+            var navigation = Assert.IsType<StackPanel>(back.Parent);
+            Assert.Same(navigation, history.Parent);
             Assert.Same(footer, controls.Parent);
-            Assert.Same(footer, next.Parent);
+            Assert.Same(footer, navigation.Parent);
             Assert.False(footer.IsAncestorOf(text));
             double right = controls.TranslatePoint(new Point(controls.ActualWidth, 0), footer).X;
-            Assert.True(right <= next.TranslatePoint(new Point(), footer).X);
-            Assert.Equal(controls.TranslatePoint(new Point(), footer).Y, next.TranslatePoint(new Point(), footer).Y);
-            Assert.All(controls.Children.OfType<Button>().Append(next), button =>
+            Assert.True(right <= navigation.TranslatePoint(new Point(), footer).X);
+            Assert.Equal(controls.TranslatePoint(new Point(), footer).Y, navigation.TranslatePoint(new Point(), footer).Y);
+            Assert.All(controls.Children.OfType<Button>().Concat(navigation.Children.OfType<Button>()), button =>
             {
                 Assert.Equal(12, button.FontSize);
                 var edge = button.TranslatePoint(new Point(button.ActualWidth, button.ActualHeight), panel);

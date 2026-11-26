@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Numerics;
 using SkiaSharp;
@@ -13,6 +14,8 @@ internal sealed class SkiaLayerRenderer : IGameLayerRenderer
 {
     private readonly SilkLayerContext? context;
     private readonly GRContext? gpu;
+    private SKSurface? surface;
+    private (int Width, int Height, int Samples) surfaceSize;
 
     internal SkiaLayerRenderer(bool openGl)
     {
@@ -39,8 +42,15 @@ internal sealed class SkiaLayerRenderer : IGameLayerRenderer
         if (gpu != null && samples > gpu.GetMaxSurfaceSampleCount(info.ColorType))
             throw new NotSupportedException("OpenGL SkiaSharp не поддерживает выбранный уровень MSAA.");
         if (gpu != null && budget != long.MaxValue) gpu.SetResourceCacheLimit(budget);
-        using var surface = (gpu == null ? SKSurface.Create(info) : SKSurface.Create(gpu, false, info, samples, GRSurfaceOrigin.TopLeft))
-            ?? throw new InvalidOperationException("Не удалось выделить поверхность SkiaSharp.");
+        var size = (frame.Width, frame.Height, samples);
+        if (surface == null || size != surfaceSize)
+        {
+            surface?.Dispose();
+            surface = null;
+            surface = (gpu == null ? SKSurface.Create(info) : SKSurface.Create(gpu, false, info, samples, GRSurfaceOrigin.TopLeft))
+                ?? throw new InvalidOperationException("Не удалось выделить поверхность SkiaSharp.");
+            surfaceSize = size;
+        }
         var canvas = surface.Canvas;
         canvas.Clear(SKColors.Transparent);
         using var paint = new SKPaint();
@@ -83,12 +93,16 @@ internal sealed class SkiaLayerRenderer : IGameLayerRenderer
                 draws++;
             }
 
-            var pixels = GC.AllocateUninitializedArray<byte>(info.BytesSize);
-            fixed (byte* destination = pixels)
-                if (!surface.ReadPixels(info, (nint)destination, info.RowBytes, 0, 0))
-                    throw new InvalidOperationException("Не удалось прочитать пиксели SkiaSharp.");
-            return new(frame.Width, frame.Height, pixels, gpu == null ? "SkiaSharp · CPU" : "Silk.NET + SkiaSharp · OpenGL",
-                draws, gpu == null ? 0 : allocated, watch.Elapsed.TotalMilliseconds, samples);
+            var pixels = ArrayPool<byte>.Shared.Rent(info.BytesSize);
+            try
+            {
+                fixed (byte* destination = pixels)
+                    if (!surface.ReadPixels(info, (nint)destination, info.RowBytes, 0, 0))
+                        throw new InvalidOperationException("Не удалось прочитать пиксели SkiaSharp.");
+                return new(frame.Width, frame.Height, pixels, gpu == null ? "SkiaSharp · CPU" : "Silk.NET + SkiaSharp · OpenGL",
+                    draws, gpu == null ? 0 : allocated, watch.Elapsed.TotalMilliseconds, samples, static buffer => ArrayPool<byte>.Shared.Return(buffer));
+            }
+            catch { ArrayPool<byte>.Shared.Return(pixels); throw; }
         }
         finally { foreach (var image in images.Values) image.Dispose(); }
     }
@@ -100,6 +114,7 @@ internal sealed class SkiaLayerRenderer : IGameLayerRenderer
         try
         {
             if (gpu != null && !context!.TryActivate()) gpu.AbandonContext(false);
+            surface?.Dispose();
             gpu?.Dispose();
         }
         finally { context?.Dispose(); }

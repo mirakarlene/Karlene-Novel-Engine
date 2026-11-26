@@ -12,7 +12,7 @@ public partial class GameWindow
     {
         UpdatePlayClock();
         RenderOutput();
-        if (pumpingSceneTime) return;
+        if (pumpingSceneTime || historyOpen) return;
         await RunIdleEventAsync();
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
         double seconds = Math.Clamp(System.Diagnostics.Stopwatch.GetElapsedTime(lastSceneTick, now).TotalSeconds, .001, 60);
@@ -23,7 +23,7 @@ public partial class GameWindow
     // A clock tick only writes an explicitly requested scene-entry checkpoint; it never steals focus.
     private async Task PumpSceneTimeAsync(double seconds = .1)
     {
-        if (pumpingSceneTime || clockSuspended || closed || startupFailed || systemFrozen || !ready || execution != null ||
+        if (pumpingSceneTime || clockSuspended || closed || startupFailed || systemFrozen || historyOpen || !ready || execution != null ||
             MenuOverlay.Visibility == System.Windows.Visibility.Visible || !runtime.Story.NeedsTick) return;
         // The visible characters are interpolated locally. A foreground-only reveal needs
         // one worker tick at its deadline, not a replay entry for every display update.
@@ -40,7 +40,18 @@ public partial class GameWindow
         try
         {
             var previous = current.Visuals.Scene;
+            var previousFrame = current.Story;
+            GameCheckpoint? before = null;
+            double? timeToAdvance = previousFrame.ChoiceTimer?.RemainingSeconds ?? previousFrame.RemainingSeconds;
+            if (project.Engine.Game.RollbackDepth > 0 && (previousFrame.Kind is "dialogue" or "choice") && timeToAdvance <= seconds + 1e-7)
+            {
+                try { before = await CaptureRollbackPositionAsync(operation.Token); }
+                catch (Exception error) when (GameErrorReport.TryGet(error) == null &&
+                    error is InvalidOperationException or NotSupportedException or System.IO.InvalidDataException or System.Text.Json.JsonException)
+                { QueueOutput("Откат для этого действия недоступен: " + error.Message); }
+            }
             await current.TickAsync(seconds, operation.Token);
+            if (before != null && !SameNarrativeStop(previousFrame, current.Story)) rollback.Push(before);
             var image = NeedsSceneTransition(previous) ? SceneTransitionPresenter.Capture(SceneArea) : null;
             using var cover = image == null ? null : SceneTransitionPresenter.Hold(SceneArea, image);
             if (!closed && ReferenceEquals(current, runtime))

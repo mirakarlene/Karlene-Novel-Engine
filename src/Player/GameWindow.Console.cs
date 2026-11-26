@@ -29,7 +29,7 @@ public partial class GameWindow
             if (focus && ready && !closed)
             {
                 if (runtime.Story.Kind == "input") PlayerInput.FocusAnswer();
-                else NextButton.Focus();
+                else DialoguePanel.Focus();
             }
             return;
         }

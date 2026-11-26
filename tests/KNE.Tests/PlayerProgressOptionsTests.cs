@@ -13,6 +13,85 @@ namespace KNE.Tests;
 
 public sealed class PlayerProgressOptionsTests
 {
+    [Fact]
+    public Task HistoryButtonShowsBothBranchesAndSaveRestoresTheirEntriesAndLimit() => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        fixture.Write("engine/game.json", JsonSerializer.Serialize(new GameDefaults { AutoSave = false }, EngineSettings.JsonOptions));
+        fixture.Write("game/scenes/main.krl", """
+            function main()
+                set_history_size(4)
+                d('Мира', '{b}Вступление{/b}')
+                local answer = choice('Куда?', {'Налево', 'Направо'})
+                if answer == 1 then d(nil, 'Левая ветка') else d(nil, 'Правая ветка') end
+            end
+            """);
+        var project = await fixture.LoadAsync();
+        var slots = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "slots"));
+        var game = new GameWindow(project, slots.WithInstantDialogue());
+        try
+        {
+            await InvokeTask(game, "StartGameAsync");
+            Assert.False(Find<Button>(game, "RollbackButton").IsEnabled);
+            await game.ContinueDialogueAsync();
+            ClickChoice(0);
+            await WaitUntil(game, () => Field<IGameSession>(game, "runtime").Story.Text == "Левая ветка");
+            Find<Button>(game, "RollbackButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await WaitUntil(game, () => Field<IGameSession>(game, "runtime").Story.Kind == "choice");
+            ClickChoice(1);
+            await WaitUntil(game, () => Field<IGameSession>(game, "runtime").Story.Text == "Правая ветка");
+            await QuickSave(game, slots);
+            var journal = Assert.IsType<DialogueJournalSnapshot>((await slots.LoadAsync("quick")).DialogueJournal);
+            Assert.Equal(4, journal.Limit);
+            Assert.Collection(journal.Entries,
+                entry => { Assert.Equal("Налево", entry.Text); Assert.True(entry.Choice && entry.RolledBack); },
+                entry => { Assert.Equal("Левая ветка", entry.Text); Assert.True(entry.RolledBack); },
+                entry => { Assert.Equal("Направо", entry.Text); Assert.True(entry.Choice); Assert.False(entry.RolledBack); },
+                entry => { Assert.Equal("Правая ветка", entry.Text); Assert.False(entry.RolledBack); });
+
+            await InvokeTask(game, "LoadGameAsync", "quick");
+            Assert.Equal(journal.Entries, Field<IGameSession>(game, "runtime").DialogueJournal!.Entries);
+            _ = new System.Windows.Interop.WindowInteropHelper(game).EnsureHandle();
+            DialogueHistoryEntry[]? displayed = null;
+            _ = game.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var dialog = game.OwnedWindows.OfType<GameHistoryWindow>().Single();
+                displayed = Find<ListBox>(dialog, "Entries").Items.OfType<DialogueHistoryEntry>().ToArray();
+                dialog.Close();
+            }));
+            Find<Button>(game, "HistoryButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(journal.Entries, displayed);
+        }
+        finally { game.Close(); }
+
+        void ClickChoice(int index) => ((Button)Find<StackPanel>(game, "ChoicePanel").Children[index])
+            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    });
+
+    [Fact]
+    public async Task HistorySizeBlockCompilesAndZeroClearsAlreadyRecordedLines()
+    {
+        var size = BlockLibrary.Create(ScriptNodeKind.SetHistorySize);
+        Assert.Equal(100, size.Amount);
+        size.Amount = 0;
+        size.Next = "end";
+        var graph = new VisualScript { Nodes =
+        [
+            new() { Id = "start", Kind = ScriptNodeKind.Start, Next = "line" },
+            new() { Id = "line", Kind = ScriptNodeKind.Dialogue, Speaker = "Мира", Text = "{b}Первая{/b}", Next = size.Id },
+            size, new() { Id = "end", Kind = ScriptNodeKind.End }
+        ] };
+        Assert.Contains("set_history_size(0)", graph.Compile());
+        using var fixture = new TempProject();
+        fixture.Write("game/scenes/main.krl", "function main() set_text_speed(0); d('Мира','{b}Первая{/b}'); set_history_size(0); d(nil,'Не записывать') end");
+        await using var runtime = new LuaRuntime(await fixture.LoadAsync(), _ => { }, interactive: true);
+        await runtime.StartAsync();
+        Assert.Collection(runtime.DialogueJournal.Entries, line => { Assert.Equal("Мира", line.Speaker); Assert.Equal("Первая", line.Text); });
+        await runtime.AdvanceAsync();
+        Assert.Equal(0, runtime.DialogueJournal.Limit);
+        Assert.Empty(runtime.DialogueJournal.Entries);
+    }
+
     [Theory]
     [InlineData(0)] [InlineData(2)]
     public Task PlayerButtonsRecordPastPositionsAndLoadedSaveRestoresTheConfiguredRollbackDepth(int depth) => WorkspaceTabsTests.Sta(async () =>
@@ -62,7 +141,7 @@ public sealed class PlayerProgressOptionsTests
         {
             await InvokeTask(window, "StartGameAsync"); Assert.Equal("one", (await slots.LoadAsync("auto")).Frame.Text);
             byte[] start = File.ReadAllBytes(slots.SlotPath("auto"));
-            Find<Button>(window, "NextButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await window.ContinueDialogueAsync();
             await WaitUntil(window, () => Field<IGameSession>(window, "runtime").Story.Kind == "choice");
             byte[] afterFirst = File.ReadAllBytes(slots.SlotPath("auto"));
             if (interval == "dialogue") Assert.Equal("choice", (await slots.LoadAsync("auto")).Frame.Kind); else Assert.Equal(start, afterFirst);
@@ -148,7 +227,7 @@ public sealed class PlayerProgressOptionsTests
     });
 
     private static async Task Next(GameWindow window, string expected)
-    { Find<Button>(window, "NextButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await WaitUntil(window, () => Field<IGameSession>(window, "runtime").Story.Text == expected); }
+    { await window.ContinueDialogueAsync(); await WaitUntil(window, () => Field<IGameSession>(window, "runtime").Story.Text == expected); }
     private static async Task QuickSave(GameWindow window, GameSaveStore slots)
     { Find<Button>(window, "SaveButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await WaitUntil(window, () => slots.Exists("quick")); }
     private static async Task WaitUntil(GameWindow window, Func<bool> completed)

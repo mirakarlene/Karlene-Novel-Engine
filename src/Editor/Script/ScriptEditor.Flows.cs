@@ -61,8 +61,8 @@ public partial class ScriptEditor
         }
         if (node.Kind == ScriptNodeKind.TriggerButton)
         {
-            Text("TriggerButtonInput", "ID кнопки: next, save, load, auto_save, pause или screen:Имя/ID", settings.Button, (value, text) => value.Trigger = (value.Trigger ?? settings) with { Button = text.Trim() });
-            var buttons = new List<string> { "next", "save", "load", "auto_save", "pause", "choice:1", "choice:2", "input_submit", "input_cancel" };
+            Text("TriggerButtonInput", "ID кнопки: save, load, auto_save, pause, rollback, history или screen:Имя/ID", settings.Button, (value, text) => value.Trigger = (value.Trigger ?? settings) with { Button = text.Trim() });
+            var buttons = new List<string> { "save", "load", "auto_save", "pause", "rollback", "history", "choice:1", "choice:2", "input_submit", "input_cancel" };
             try
             {
                 buttons.AddRange(EngineSettings.Load(projectRoot).Screens.Screens.SelectMany(screen => screen.Elements.Where(element => element.Type == "button").Select(element => "screen:" + screen.Name + "/" + element.Id)));

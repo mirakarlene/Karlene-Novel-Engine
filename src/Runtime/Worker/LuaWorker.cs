@@ -13,7 +13,9 @@ internal sealed record SessionSnapshot(RuntimeWindowSettings Window, StoryFrame 
     IReadOnlyList<string>? PluginScreens = null, int? DialogueSpeed = null);
 internal sealed record WorkerMessage(string Type, long Id = 0, string? Text = null, SessionSnapshot? Snapshot = null,
     GameCheckpoint? Checkpoint = null, string? Error = null, string? ErrorType = null, GameErrorReport? Report = null, bool InputHandled = false,
-    SystemCall? SystemCall = null);
+    SystemCall? SystemCall = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    DialogueJournalSnapshot? DialogueJournal = null);
 
 internal static class LuaWorker
 {
@@ -70,6 +72,7 @@ internal static class LuaWorker
                     finally { Environment.Exit(1); }
                 }
             });
+            DialogueJournalSnapshot? lastJournal = null;
             await foreach (var request in queue.Reader.ReadAllAsync().ConfigureAwait(false))
             {
                 try
@@ -119,7 +122,11 @@ internal static class LuaWorker
                     {
                         Send(new("log", Text: "Сохранение недоступно: " + ex.Message));
                     }
-                    Send(new("result", request.Id, Text: eventText, Snapshot: new(runtime.WindowSettings, runtime.DisplayStory, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress, logicWatch.Elapsed.TotalMilliseconds, runtime.PluginScreens, runtime.CurrentDialogueSpeed), Checkpoint: checkpoint, InputHandled: inputHandled));
+                    var journal = runtime.DialogueJournal;
+                    var journalChange = ReferenceEquals(journal, lastJournal) ? null : journal;
+                    lastJournal = journal;
+                    if (checkpoint != null) checkpoint = checkpoint with { DialogueJournal = null };
+                    Send(new("result", request.Id, Text: eventText, Snapshot: new(runtime.WindowSettings, runtime.DisplayStory, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress, logicWatch.Elapsed.TotalMilliseconds, runtime.PluginScreens, runtime.CurrentDialogueSpeed), Checkpoint: checkpoint, InputHandled: inputHandled, DialogueJournal: journalChange));
                 }
                 catch (Exception ex) { Send(new("error", request.Id,
                     Snapshot: runtime == null ? null : new(runtime.WindowSettings, runtime.DisplayStory, runtime.Visuals, runtime.Location, runtime.Variables, runtime.TransitionInProgress),

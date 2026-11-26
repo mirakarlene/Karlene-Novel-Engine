@@ -128,6 +128,7 @@ public static class BlockLibrary
         Add("configurations", ScriptNodeKind.ConfigureDialogue, "Текстовое окно", "Положение, размеры, шрифт, цвета, прозрачность и текстура диалога.");
         Add("configurations", ScriptNodeKind.ConfigureButton, "Кнопка", "Внешний вид и положение игровых кнопок и вариантов выбора.");
         Add("configurations", ScriptNodeKind.SetDialogueSpeed, "Изменить скорость текста", "Установить скорость появления символов в репликах до следующей ручной настройки.");
+        Add("configurations", ScriptNodeKind.SetHistorySize, "Размер истории", "Ограничить число реплик и выбранных ответов в игровом журнале.");
         Add("plugins", ScriptNodeKind.IncludeLua, "Подключить .lua", "Подключить внешний Lua-файл один раз за игровую сессию.");
         Add("plugins", ScriptNodeKind.IncludeCs, "Подключить .cs", "Скомпилировать и подключить C#-плагин проекта.");
         Add("plugins", ScriptNodeKind.CallVisualLua, "Вызвать VLua", "Выполнить указанный модуль Visual Lua при входе в блок.");
@@ -158,6 +159,7 @@ public static class BlockLibrary
             node.Trigger = new TriggerSettings
             {
                 Kind = trigger.Event,
+                Button = "save",
                 Keys = kind switch { ScriptNodeKind.TriggerCombination => "Ctrl+E", ScriptNodeKind.TriggerSequence => "Up, Up, Down, Down, Left, Right, Left, Right, B, A", _ => "E" }
             };
         node.Category = category ?? Definitions.First(entry => entry.Kind == kind).Group;
@@ -170,6 +172,7 @@ public static class BlockLibrary
         if (kind == ScriptNodeKind.ClearText) node.Duration = .5;
         if (kind == ScriptNodeKind.AutoDialogue) node.Duration = 2;
         if (kind == ScriptNodeKind.SetDialogueSpeed) node.Amount = DialogueSpeed.Default;
+        if (kind == ScriptNodeKind.SetHistorySize) node.Amount = DialogueJournal.DefaultLimit;
         if (kind == ScriptNodeKind.ConsoleWrite) node.Text = "Сообщение";
         if (kind == ScriptNodeKind.RandomBranch) node.Options = [new() { Text = "Ветка 1", Weight = 60 }, new() { Text = "Ветка 2", Weight = 40 }];
         if (kind == ScriptNodeKind.Comment) node.Text = "Комментарий автора";
@@ -192,7 +195,7 @@ public static class BlockLibrary
         if (kind == ScriptNodeKind.End) node.EndAction = ScriptEndAction.Menu;
         if (kind is ScriptNodeKind.ConfigureDialogue or ScriptNodeKind.ConfigureButton)
         {
-            node.UiTarget = kind == ScriptNodeKind.ConfigureDialogue ? "dialogue" : "next";
+            node.UiTarget = kind == ScriptNodeKind.ConfigureDialogue ? "dialogue" : "save";
             node.Ui = GameplayUiStyle.ForTarget(node.UiTarget);
         }
         return node;

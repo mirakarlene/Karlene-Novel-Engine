@@ -49,7 +49,7 @@ internal sealed class GameplayUiPresenter
             }
             else if (buttons.TryGetValue(entry.Target, out var button))
             {
-                MoveToScene(button, entry.Target == "next" ? dialogue : button.Parent as FrameworkElement);
+                MoveToScene(button, entry.Target is "rollback" or "history" ? dialogue : button.Parent as FrameworkElement);
                 ApplyButton(button, entry.Style, position: true);
             }
         }

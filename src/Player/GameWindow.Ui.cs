@@ -9,8 +9,9 @@ public partial class GameWindow
         gameplayUi ??= new(SceneArea, DialoguePanel, SpeakerText, DialogueText, ChoicePanel,
             new Dictionary<string, System.Windows.Controls.Button>
             {
-                ["next"] = NextButton, ["save"] = SaveButton, ["load"] = LoadButton,
-                ["auto_save"] = LoadAutoButton, ["pause"] = PauseButton
+                ["save"] = SaveButton, ["load"] = LoadButton,
+                ["auto_save"] = LoadAutoButton, ["pause"] = PauseButton,
+                ["rollback"] = RollbackButton, ["history"] = HistoryButton
             }, project.Path, assets);
         gameplayUi.Apply(visuals);
     }

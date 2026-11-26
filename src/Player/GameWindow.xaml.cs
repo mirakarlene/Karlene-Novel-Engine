@@ -1,6 +1,7 @@
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -177,7 +178,7 @@ public partial class GameWindow : Window
         GameControls.IsEnabled = false;
         CommandInput.IsEnabled = false;
         CommandInput.Visibility = Visibility.Collapsed;
-        NextButton.IsEnabled = false;
+        RollbackButton.IsEnabled = HistoryButton.IsEnabled = false;
         ChoicePanel.IsEnabled = false;
         StopButton.IsEnabled = false;
         StartButton.IsEnabled = false;
@@ -318,7 +319,7 @@ public partial class GameWindow : Window
         GameControls.Visibility = Visibility.Visible;
         StopMenuMusic();
         ResumeAudio();
-        NextButton.Focus();
+        DialoguePanel.Focus();
     }
 
     private void ToggleFullscreen()
@@ -359,7 +360,7 @@ public partial class GameWindow : Window
         IDisposable? transitionCover = null;
         StopButton.IsEnabled = true;
         CommandInput.IsEnabled = false;
-        NextButton.IsEnabled = false;
+        RollbackButton.IsEnabled = HistoryButton.IsEnabled = false;
         ChoicePanel.IsEnabled = false;
         StartButton.IsEnabled = false; ContinueButton.IsEnabled = false; ResumeButton.IsEnabled = false;
         PauseButton.IsEnabled = false;
@@ -368,22 +369,24 @@ public partial class GameWindow : Window
         try
         {
             var previousScene = runtime.Visuals.Scene;
-            string previousKind = runtime.Story.Kind;
+            var previousFrame = runtime.Story;
+            string previousKind = previousFrame.Kind;
             GameCheckpoint? before = null;
-            if (playerAction && ready && project.Engine.Game.RollbackDepth > 0)
+            if (playerAction && ready && project.Engine.Game.RollbackDepth > 0 && (previousKind is "dialogue" or "choice"))
             {
-                try { before = await runtime.CaptureCheckpointAsync(execution.Token); }
+                try { before = await CaptureRollbackPositionAsync(execution.Token); }
                 catch (Exception error) when (GameErrorReport.TryGet(error) == null && error is InvalidOperationException or NotSupportedException or System.IO.InvalidDataException or System.Text.Json.JsonException)
                 { operationNotice = "Откат для этого действия недоступен: " + error.Message; QueueOutput(operationNotice); }
             }
             await action();
             var previousImage = NeedsSceneTransition(previousScene, starting) ? SceneTransitionPresenter.Capture(SceneArea) : null;
             if (previousImage != null) transitionCover = SceneTransitionPresenter.Hold(SceneArea, previousImage);
-            if (before != null) rollback.Push(before);
+            if (before != null && !SameNarrativeStop(previousFrame, runtime.Story)) rollback.Push(before);
             if (closed) return;
             if (starting) ready = true;
             if (ready && !preMenuActive && SaveStorageWritable && SceneSavePolicy.AllowAuto(runtime.Visuals.Scene) &&
-                (starting && project.Engine.Game.AutoSave && !saves.Exists("auto") || playerAction && autosave.Completed(project.Engine.Game, previousKind)))
+                (starting && project.Engine.Game.AutoSave && !saves.Exists("auto") ||
+                 playerAction && previousFrame.Reveal == null && autosave.Completed(project.Engine.Game, previousKind)))
             {
                 try { await StoreSaveAsync("auto", execution.Token); }
                 catch (Exception ex) when (GameErrorReport.TryGet(ex) == null)
@@ -435,7 +438,7 @@ public partial class GameWindow : Window
                 else if (ready && MenuOverlay.Visibility != Visibility.Visible)
                 {
                     if (runtime.Story.Kind == "choice") ChoicePanel.Children.OfType<Button>().FirstOrDefault(button => button.IsEnabled)?.Focus();
-                    else if (runtime.Story.Kind != "input") NextButton.Focus();
+                    else if (runtime.Story.Kind != "input") DialoguePanel.Focus();
                 }
             }
             else if (!closed) RefreshErrorActions();
@@ -507,12 +510,15 @@ public partial class GameWindow : Window
         }, operation: "Загрузка сохранения");
     }
 
-    private async void NextButton_Click(object sender, RoutedEventArgs e)
+    internal bool CanContinueDialogue => ready && !closed && !startupFailed && !systemFrozen && videoPlayback == null &&
+        execution == null && !pumpingSceneTime && !historyOpen && MenuOverlay.Visibility != Visibility.Visible &&
+        (runtime.Story.CanAdvance || HasButtonTrigger("next"));
+
+    internal async Task ContinueDialogueAsync()
     {
-        if (await TryButtonTriggerAsync(sender)) { e.Handled = true; return; }
-        if (NextButton.IsEnabled && MenuOverlay.Visibility != Visibility.Visible)
-            await ExecuteAsync(() => runtime.AdvanceAsync(execution!.Token), operation: "Продолжение сценария", playerAction: runtime.Story.Reveal == null);
-        e.Handled = true;
+        if (!CanContinueDialogue || await DispatchTriggerAsync(new("button", Button: "next"))) return;
+        await ExecuteAsync(() => runtime.AdvanceAsync(execution!.Token), operation: "Продолжение сценария",
+            playerAction: true);
     }
 
     private async void ChoiceButton_Click(object sender, RoutedEventArgs e)
@@ -523,10 +529,13 @@ public partial class GameWindow : Window
         e.Handled = true;
     }
 
-    private void Dialogue_Click(object sender, MouseButtonEventArgs e)
+    private async void SceneArea_Continue(object sender, MouseButtonEventArgs e)
     {
-        if (e.OriginalSource is Visual hit && (ReferenceEquals(hit, DialogueFooter) || DialogueFooter.IsAncestorOf(hit))) return;
-        if (e.OriginalSource is not Button && NextButton.IsEnabled) NextButton_Click(NextButton, e);
+        var source = e.OriginalSource as DependencyObject;
+        if (!CanContinueDialogue || GameTriggerInput.UsesOwnInput(source) ||
+            source is Visual hit && (ReferenceEquals(hit, DialogueFooter) || DialogueFooter.IsAncestorOf(hit))) return;
+        e.Handled = true;
+        await ContinueDialogueAsync();
     }
 
     private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -547,7 +556,8 @@ public partial class GameWindow : Window
         var signal = triggerInput.KeyDown(e);
         if (signal != null && runtime.Story.Triggers.Any(trigger => trigger.Matches(signal)) && ready && execution == null)
         { e.Handled = true; await DispatchTriggerAsync(signal); return; }
-        if (e.Key == Key.Back && e.OriginalSource is not TextBox && ready && MenuOverlay.Visibility != Visibility.Visible) { await RollbackAsync(); e.Handled = true; return; }
+        if (e.Key == Key.Back && !GameTriggerInput.IsEditing(e.OriginalSource as DependencyObject) && ready && MenuOverlay.Visibility != Visibility.Visible)
+        { e.Handled = true; await RollbackAsync(); return; }
         if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; return; }
         if (e.Key == Key.Escape && runtime.Story.Kind == "input" && MenuOverlay.Visibility != Visibility.Visible)
         { PlayerInput.Cancel(); e.Handled = true; return; }
@@ -556,10 +566,11 @@ public partial class GameWindow : Window
             if (MenuOverlay.Visibility == Visibility.Visible) ShowGameplay(); else ShowMenu();
             e.Handled = true; return;
         }
-        if (e.Key == Key.Space && e.OriginalSource is not TextBox && NextButton.IsEnabled)
+        if (e.Key is Key.Space or Key.Enter && Keyboard.Modifiers == ModifierKeys.None &&
+            !GameTriggerInput.UsesOwnInput(e.OriginalSource as DependencyObject) && CanContinueDialogue)
         {
-            NextButton_Click(NextButton, e);
             e.Handled = true;
+            if (!e.IsRepeat) await ContinueDialogueAsync();
         }
     }
 
@@ -670,8 +681,8 @@ public partial class GameWindow : Window
         PlayerInput.Feedback.Visibility = frame.InputFeedback.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         PlayerInput.SubmitButton.IsEnabled = PlayerInput.CancelButton.IsEnabled = execution == null;
         renderedStory = frame;
-        NextButton.IsEnabled = execution == null && (frame.CanAdvance || HasButtonTrigger("next"));
-        NextButton.Visibility = frame.Kind == "input" && !HasButtonTrigger("next") ? Visibility.Collapsed : Visibility.Visible;
+        RollbackButton.IsEnabled = execution == null && ready && rollback.Count > 0;
+        HistoryButton.IsEnabled = execution == null && ready && runtime.DialogueJournal is { Limit: > 0 };
         ChoicePanel.IsEnabled = execution == null && frame.Kind == "choice";
         ChoicePanel.Visibility = frame.Kind == "choice" ? Visibility.Visible : Visibility.Collapsed;
         SaveButton.IsEnabled = execution == null && ready && CanSaveInScene;

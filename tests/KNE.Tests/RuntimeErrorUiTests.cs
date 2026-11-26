@@ -33,7 +33,7 @@ public sealed class RuntimeErrorUiTests
                 await Start(window);
                 Assert.Equal("Before child", Find<TextBlock>(window, "DialogueText").Text);
                 byte[] original = await File.ReadAllBytesAsync(Path.Combine(store.DirectoryPath, "auto.json"));
-                await ErrorAction(window, () => Click(window, "NextButton"));
+                await ErrorAction(window, () => _ = window.ContinueDialogueAsync());
                 Assert.Same(content, window.Content);
                 Assert.False(closed);
                 AssertDetailedError(window, project, "game/scenes/child.lua", "CHILD_FAILURE_MARKER", 3);
@@ -170,9 +170,9 @@ public sealed class RuntimeErrorUiTests
                 await InvokeTask(window, "LoadGameAsync", "quick");
                 Assert.Equal(Visibility.Collapsed, Find<Border>(window, "StartupErrorOverlay").Visibility);
                 Assert.Equal(Visibility.Visible, Find<Border>(window, "NoticePanel").Visibility);
-                Assert.True(Find<Button>(window, "NextButton").IsEnabled);
+                Assert.True(window.CanContinueDialogue);
                 Assert.Equal("First", Find<TextBlock>(window, "DialogueText").Text);
-                await ReadyAction(window, () => Click(window, "NextButton"));
+                await ReadyAction(window, () => _ = window.ContinueDialogueAsync());
                 Assert.Equal("Second", Find<TextBlock>(window, "DialogueText").Text);
             }
             finally { window.Close(); }
@@ -205,7 +205,7 @@ public sealed class RuntimeErrorUiTests
         Assert.Equal(Visibility.Collapsed, Find<StackPanel>(window, "GameControls").Visibility);
         Assert.False(Find<TextBox>(window, "CommandInput").IsEnabled);
         Assert.False(Find<StackPanel>(window, "ChoicePanel").IsEnabled);
-        foreach (string button in new[] { "NextButton", "StartButton", "ContinueButton", "ResumeButton", "PauseButton", "SaveButton", "LoadButton", "LoadAutoButton", "SaveSelectedButton", "LoadSelectedButton", "DeleteSelectedButton" })
+        foreach (string button in new[] { "RollbackButton", "HistoryButton", "StartButton", "ContinueButton", "ResumeButton", "PauseButton", "SaveButton", "LoadButton", "LoadAutoButton", "SaveSelectedButton", "LoadSelectedButton", "DeleteSelectedButton" })
             Assert.False(Find<Button>(window, button).IsEnabled, button);
         Assert.True(Find<Button>(window, "StartupErrorExitButton").IsEnabled);
         Assert.Empty(Find<Canvas>(window, "ScreenCanvas").Children);

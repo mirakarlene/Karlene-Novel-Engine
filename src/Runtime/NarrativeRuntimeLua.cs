@@ -55,6 +55,12 @@ internal static class NarrativeRuntimeLua
                 if problem ~= "" then error(problem, 2) end
                 kne_editor_pause()
             end
+            function set_history_size(size)
+                if type(size) ~= "number" then error("set_history_size требует число", 2) end
+                local problem = kne_set_history_size(size)
+                if problem ~= "" then error(problem, 2) end
+                kne_editor_pause()
+            end
             function kne_say(speaker, text, character, effect, auto_seconds, skippable, narration, reverse)
                 if character ~= nil and type(character) ~= "string" then error("ID персонажа должен быть строкой", 2) end
                 if effect ~= nil and type(effect) ~= "string" then error("Эффект должен быть JSON-строкой", 2) end

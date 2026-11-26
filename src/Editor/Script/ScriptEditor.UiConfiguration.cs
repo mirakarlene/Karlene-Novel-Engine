@@ -15,7 +15,7 @@ public partial class ScriptEditor
         var current = node.Ui ?? GameplayUiStyle.ForTarget(target);
         if (node.Kind == ScriptNodeKind.ConfigureButton)
         {
-            var targetInput = new ComboBox { Name = "UiTargetInput", ItemsSource = new[] { "choice", "next", "save", "load", "auto_save", "pause" }, SelectedItem = target, Margin = new Thickness(0, 3, 0, 8) };
+            var targetInput = new ComboBox { Name = "UiTargetInput", ItemsSource = GameplayUiStyle.ButtonTargets, SelectedItem = target, Margin = new Thickness(0, 3, 0, 8) };
             Label("Кнопка (choice — варианты выбора)", targetInput);
             targetInput.SelectionChanged += (_, _) => TrackProperties();
             extendedEdits.Add(value => value.UiTarget = (string?)targetInput.SelectedItem ?? target);

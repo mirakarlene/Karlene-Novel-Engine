@@ -403,7 +403,10 @@ internal static class SceneRuntimeLua
                                 task.event.remaining = math.max(0, task.event_deadline - clock)
                                 if task.event.kind == "clear_text" then task.event.erase_progress = math.min(1, (clock - task.event_started) / task.event.seconds) end
                                 if clock + 0.0000001 >= task.event_deadline then
-                                    if task.event.kind == "choice" then task.input = table.pack(task.event.default_option) end
+                                    if task.event.kind == "choice" then
+                                        if task == visible then kne_record_history_choice(task.event.default_option) end
+                                        task.input = table.pack(task.event.default_option)
+                                    end
                                     task.event, task.event_deadline = nil, nil
                                 end
                             end
@@ -464,7 +467,10 @@ internal static class SceneRuntimeLua
                         if signal then
                             dispatch(signal)
                         elseif tick then clock = clock + (seconds or 0)
-                        elseif visible then visible.event, visible.event_deadline, visible.input = nil, nil, table.pack(answer); visible = nil end
+                        elseif visible then
+                            if event.kind == "choice" then kne_record_history_choice(answer) end
+                            visible.event, visible.event_deadline, visible.input = nil, nil, table.pack(answer); visible = nil
+                        end
                     end
                 end
             end

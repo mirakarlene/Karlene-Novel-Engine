@@ -267,10 +267,13 @@ internal sealed class NativeGraphicsRenderer : IDisposable
             if (pixels?.Length != byteCount) { pixels = GC.AllocateUninitializedArray<byte>(byteCount); ReadbackAllocations++; }
             try
             {
-                for (int row = 0; row < height; row++)
+                int stride = width * 4;
+                if (device.IsUvOriginTopLeft && mapped.RowPitch == stride)
+                    Marshal.Copy(mapped.Data, pixels, 0, byteCount);
+                else for (int row = 0; row < height; row++)
                 {
                     int sourceRow = device.IsUvOriginTopLeft ? row : height - row - 1;
-                    Marshal.Copy(mapped.Data + checked(sourceRow * (int)mapped.RowPitch), pixels, row * width * 4, width * 4);
+                    Marshal.Copy(mapped.Data + checked(sourceRow * (int)mapped.RowPitch), pixels, row * stride, stride);
                 }
             }
             finally { device.Unmap(staging!); }
@@ -396,7 +399,12 @@ internal sealed class NativeGraphicsRenderer : IDisposable
         resolvedBinding = scratchBinding = null; scratchFramebuffer = null; scratch = null; passVertices = null;
         framebuffer?.Dispose(); staging?.Dispose(); if (resolved != target) resolved?.Dispose(); target?.Dispose(); pipeline = null; framebuffer = null; staging = resolved = target = null;
     }
-    internal void SetCacheBudget(long bytes) { if (bytes <= 0) throw new ArgumentOutOfRangeException(nameof(bytes)); cacheBudget = bytes; }
+    internal void SetCacheBudget(long bytes)
+    {
+        if (bytes <= 0) throw new ArgumentOutOfRangeException(nameof(bytes));
+        if (bytes < cacheBudget && framebuffer != null) ReleasePreparationResources();
+        cacheBudget = bytes;
+    }
     internal void ReleasePreparationResources()
     {
         acceptReadbacks = false; Interlocked.Exchange(ref readbackBuffer, null);

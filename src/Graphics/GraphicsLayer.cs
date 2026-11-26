@@ -201,7 +201,8 @@ internal sealed class SharedGraphicsWorker
                         {
                             result = renderer.Render(job.Frame!, settings.MsaaSamples);
                             result.Warning = warning;
-                            renderer.ReleasePreparationResources();
+                            if (result.TrackedGpuBytes > settings.CacheBudgetBytes)
+                                renderer.ReleasePreparationResources();
                         }
                     }
                 }

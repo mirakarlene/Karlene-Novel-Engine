@@ -8,6 +8,32 @@ public sealed partial class LuaRuntime
 {
     private int? playerDialogueSpeed, initialDialogueSpeed, currentDialogueSpeed;
     internal int? CurrentDialogueSpeed => currentDialogueSpeed;
+    private DialogueJournal dialogueJournal = new();
+    private long lastJournalPresentation;
+    public DialogueJournalSnapshot DialogueJournal { get { lock (stateLock) return dialogueJournal.Snapshot; } }
+
+    /// <summary>Changes how many displayed lines and answers the game retains.</summary>
+    public string ApplyHistorySizeForLua(double size)
+    {
+        try
+        {
+            lock (stateLock)
+            {
+                dialogueJournal.SetLimit(KNE.DialogueJournal.ValidateLimit(size));
+                if (size == 0) lastJournalPresentation = 0;
+            }
+            return "";
+        }
+        catch (InvalidDataException error) { return error.Message; }
+    }
+
+    /// <summary>Records the accepted response before its branch executes.</summary>
+    public void RecordChoiceForLua(int option)
+    {
+        var frame = DisplayStory;
+        if (frame.Kind != "choice" || option < 1 || option > frame.Options.Count) return;
+        lock (stateLock) dialogueJournal.Record("", InlineText.Parse(frame.Options[option - 1]).Text, choice: true);
+    }
 
     internal Task SetPlayerDialogueSpeedAsync(int? speed, CancellationToken token = default, bool confirmed = false)
     {
@@ -44,6 +70,8 @@ public sealed partial class LuaRuntime
         Register(nameof(CheckCharacterForLua), "kne_check_character");
         Register(nameof(PrepareDialogueForLua), "kne_prepare_dialogue");
         Register(nameof(ClearNarrativeText), "kne_clear_remembered_text");
+        Register(nameof(ApplyHistorySizeForLua), "kne_set_history_size");
+        Register(nameof(RecordChoiceForLua), "kne_record_history_choice");
         lua!.DoString(NarrativeRuntimeLua.Source, "KNE narrative");
     }
 

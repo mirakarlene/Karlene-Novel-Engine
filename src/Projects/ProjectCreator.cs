@@ -82,7 +82,7 @@ public static class ProjectCreator
                 graph.Nodes.Insert(2, new ScriptNode
                 {
                     Id = "continue", Kind = ScriptNodeKind.Dialogue, X = 620, Y = 60,
-                    Speaker = "Игрок", Text = "Нажмите «Далее» или пробел, чтобы продолжить.", Next = "end"
+                    Speaker = "Игрок", Text = "Нажмите ЛКМ, пробел или Enter, чтобы продолжить.", Next = "end"
                 });
                 File.WriteAllText(Path.Combine(staging, "game", "scenes", "main.knegraph"), graph.Serialize());
             }
@@ -90,7 +90,7 @@ public static class ProjectCreator
                 -- Главная сцена. KRL использует синтаксис Lua.
                 function main()
                     d(nil, "Добро пожаловать! Это базовая сцена.")
-                    d("Игрок", "Нажмите «Далее» или пробел, чтобы продолжить.")
+                    d("Игрок", "Нажмите ЛКМ, пробел или Enter, чтобы продолжить.")
                 end
                 """);
             string initScript = ProjectDiagnosticsTemplate.Create(empty ? ProjectAuthoringMode.Code : authoringMode, staging);

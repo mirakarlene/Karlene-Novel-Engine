@@ -18,6 +18,7 @@ public sealed class ProcessGameSession : IGameSession
     private Task? disposal;
     private SessionSnapshot snapshot;
     private GameCheckpoint? recovery;
+    private DialogueJournalSnapshot? dialogueJournal;
     private bool started;
     private readonly bool preview;
     private readonly EditorPreviewSource? editorSource;
@@ -50,6 +51,7 @@ public sealed class ProcessGameSession : IGameSession
     public int? WorkerProcessId { get { lock (sync) return worker?.Id; } }
     public RuntimeWindowSettings WindowSettings { get { lock (sync) return snapshot.Window; } }
     public StoryFrame Story { get { lock (sync) return snapshot.Story; } }
+    public DialogueJournalSnapshot? DialogueJournal { get { lock (sync) return dialogueJournal; } }
     public SceneVisuals Visuals { get { lock (sync) return snapshot.Visuals; } }
     private double logicMilliseconds;
     public double LogicMilliseconds { get { lock (sync) return logicMilliseconds; } }
@@ -126,6 +128,12 @@ public sealed class ProcessGameSession : IGameSession
         (await ExecuteAsync("capture", cancellationToken).ConfigureAwait(false)).Checkpoint
         ?? throw new InvalidOperationException("Текущую позицию нельзя сохранить для отката.");
 
+    internal GameCheckpoint? CachedRollbackPosition(double playedSeconds)
+    {
+        lock (sync)
+            return recovery is { } position ? position with { PlayedSeconds = playedSeconds, DialogueJournal = null } : null;
+    }
+
     public Task ReturnAsync(CancellationToken cancellationToken = default)
     {
         GameCheckpoint checkpoint;
@@ -167,6 +175,9 @@ public sealed class ProcessGameSession : IGameSession
             {
                 if (message.Snapshot != null) snapshot = message.Snapshot;
                 if (command != "checkpoint" && message.Snapshot != null) logicMilliseconds = message.Snapshot.LogicMilliseconds;
+                if (message.DialogueJournal != null) dialogueJournal = message.DialogueJournal;
+                if (message.Checkpoint is { } saved)
+                    message = message with { Checkpoint = saved with { DialogueJournal = dialogueJournal } };
                 recovery = message.Checkpoint;
                 canReturnAfterError = false;
                 if (command is "start" or "pre_menu" or "restore") started = true;

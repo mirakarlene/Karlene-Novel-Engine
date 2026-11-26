@@ -11,20 +11,30 @@ internal sealed class GameRollbackHistory(int depth)
     internal void Push(GameCheckpoint previous)
     {
         if (depth <= 0) return;
-        entries.Add(previous with { Rollback = null }); while (entries.Count > depth) entries.RemoveAt(0);
+        entries.Add(previous with { Rollback = null, DialogueJournal = null }); while (entries.Count > depth) entries.RemoveAt(0);
     }
     internal GameCheckpoint Peek() => entries.Count == 0 ? throw new InvalidOperationException("История отката пуста.") : entries[^1];
     internal void Pop() { _ = Peek(); entries.RemoveAt(entries.Count - 1); }
     internal GameCheckpoint Attach(GameCheckpoint current) => current with { Rollback = entries.ToArray() };
     internal void Restore(GameCheckpoint current)
     {
-        Validate(current); entries.Clear(); entries.AddRange((current.Rollback ?? []).TakeLast(Math.Max(0, depth)).Select(c => c with { Rollback = null }));
+        Validate(current); entries.Clear(); entries.AddRange((current.Rollback ?? []).TakeLast(Math.Max(0, depth)).Select(c => c with { Rollback = null, DialogueJournal = null }));
     }
     internal static void Validate(GameCheckpoint current)
     {
+        current.DialogueJournal?.Validate();
+        if (current.DialoguePosition is { } position) ValidateDialoguePosition(position);
         if (current.Rollback is not { } rollback) return;
         if (rollback.Count > 1000 || rollback.Any(c => c == null || c.Version != 1 || c.ProjectPath != current.ProjectPath || c.Fingerprint != current.Fingerprint || c.History == null || c.History.Count > 10000 || c.Frame == null || c.Frame.Speaker == null || c.Frame.Text == null || c.Frame.Options == null || c.Frame.Options.Count > 20 || c.Frame.Options.Any(string.IsNullOrWhiteSpace) || c.Rollback is { Count: > 0 } || c.State.ValueKind != System.Text.Json.JsonValueKind.Object))
             throw new InvalidDataException("Повреждена история отката сохранения.");
+        foreach (var item in rollback)
+            if (item.DialoguePosition is { } earlier) ValidateDialoguePosition(earlier);
+    }
+
+    private static void ValidateDialoguePosition(DialogueJournalPosition position)
+    {
+        _ = DialogueJournal.ValidateLimit(position.Limit);
+        if (position.Id < 0) throw new InvalidDataException("Некорректная позиция истории реплик.");
     }
 }
 

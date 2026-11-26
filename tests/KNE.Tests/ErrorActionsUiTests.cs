@@ -37,7 +37,7 @@ public sealed class ErrorActionsUiTests
                 Assert.Equal(Visibility.Collapsed, Find<Border>(window, "StartupErrorOverlay").Visibility);
                 Assert.Equal(Visibility.Visible, Find<Grid>(window, "SceneArea").Visibility);
                 Assert.Equal("Safe segment", Find<TextBlock>(window, "DialogueText").Text);
-                Assert.True(Find<Button>(window, "NextButton").IsEnabled);
+                Assert.True(window.CanContinueDialogue);
                 var runtime = (ProcessGameSession)typeof(GameWindow).GetField("runtime", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
                 Assert.Equal(7, runtime.Variables.GetProperty("Globals").GetProperty("state").GetProperty("score").GetInt32());
                 Assert.Equal(saved, await File.ReadAllBytesAsync(store.SlotPath("auto")));
@@ -157,7 +157,7 @@ public sealed class ErrorActionsUiTests
                 await InvokeTask(window, "RestartFromErrorAsync");
                 Assert.Equal("Finally corrected", Find<TextBlock>(window, "DialogueText").Text);
                 Assert.Equal(Visibility.Collapsed, Find<Border>(window, "StartupErrorOverlay").Visibility);
-                Assert.True(Find<Button>(window, "NextButton").IsEnabled);
+                Assert.True(window.CanContinueDialogue);
             }
             finally { window.Close(); }
         });
@@ -190,7 +190,7 @@ public sealed class ErrorActionsUiTests
                 Assert.DoesNotContain("\\u0418", Find<TextBox>(window, "VariablesOutput").Text);
                 Assert.False(Find<TextBox>(window, "CommandInput").IsEnabled);
                 Assert.Equal(Visibility.Collapsed, Find<TextBox>(window, "CommandInput").Visibility);
-                Assert.False(Find<Button>(window, "NextButton").IsEnabled);
+                Assert.False(window.CanContinueDialogue);
                 Assert.Equal(Visibility.Visible, Find<Border>(window, "StartupErrorOverlay").Visibility);
                 ExportErrorView(window, "error-console.png", 1280, 720);
                 ExportErrorView(window, "error-console-minimum.png", 640, 480);
@@ -222,7 +222,7 @@ public sealed class ErrorActionsUiTests
                 await InvokeTask(window, "RestartFromErrorAsync");
                 Assert.Equal("Corrected main", Find<TextBlock>(window, "DialogueText").Text);
                 Assert.Equal(Visibility.Visible, Find<Border>(window, "DebugOverlay").Visibility);
-                Assert.True(Find<Button>(window, "NextButton").IsEnabled);
+                Assert.True(window.CanContinueDialogue);
                 Assert.Equal(Visibility.Collapsed, Find<Border>(window, "StartupErrorOverlay").Visibility);
             }
             finally { window.Close(); }
@@ -279,7 +279,7 @@ public sealed class ErrorActionsUiTests
         Assert.True(Find<TextBox>(window, "CommandInput").IsEnabled);
     }
 
-    private static Task Advance(GameWindow window) => ClickReady(window, "NextButton");
+    private static Task Advance(GameWindow window) => window.ContinueDialogueAsync();
 
     private static async Task ClickReady(GameWindow window, string button)
     {
@@ -298,7 +298,7 @@ public sealed class ErrorActionsUiTests
         var descriptor = DependencyPropertyDescriptor.FromProperty(UIElement.VisibilityProperty, typeof(Border));
         EventHandler handler = (_, _) => { if (overlay.Visibility == Visibility.Visible) completion.TrySetResult(); };
         descriptor.AddValueChanged(overlay, handler);
-        try { Click(window, "NextButton"); await completion.Task.WaitAsync(TimeSpan.FromSeconds(10)); }
+        try { _ = window.ContinueDialogueAsync(); await completion.Task.WaitAsync(TimeSpan.FromSeconds(10)); }
         finally { descriptor.RemoveValueChanged(overlay, handler); }
     }
 

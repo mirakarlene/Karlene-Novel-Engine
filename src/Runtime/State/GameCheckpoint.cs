@@ -22,11 +22,16 @@ public sealed record GameCheckpoint(int Version, string ProjectPath, string Fing
     public double PlayedSeconds { get; init; }
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public int? InitialDialogueSpeed { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public DialogueJournalSnapshot? DialogueJournal { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public DialogueJournalPosition? DialoguePosition { get; init; }
 }
 
 public interface IGameSession : IAsyncDisposable
 {
     IReadOnlyList<string> PluginScreens => [];
+    DialogueJournalSnapshot? DialogueJournal => null;
     JsonElement Variables => default;
     Task<bool> InterceptInputAsync(PluginInput input, CancellationToken cancellationToken = default) => Task.FromResult(false);
     Task NotifyPluginInputAsync(PluginInput input, CancellationToken cancellationToken = default) => Task.CompletedTask;

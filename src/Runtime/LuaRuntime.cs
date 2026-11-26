@@ -89,7 +89,7 @@ public sealed partial class LuaRuntime : IGameSession
         currentDialogueSpeed = initialDialogueSpeed;
         transitionPending = false;
         nextVariablesAt = 0;
-        lock (stateLock) location = null;
+        lock (stateLock) { location = null; dialogueJournal = new(); lastJournalPresentation = 0; }
         scripts = GameScripts.Load(project, editorSource, pluginsEnabled);
         frames = FrameCatalog.Load(project, scripts, editorSource);
         lua?.Dispose();
@@ -391,7 +391,19 @@ public sealed partial class LuaRuntime : IGameSession
             frame = LocalizeFrame(frame, value);
             if (kind is "dialogue" or "choice" && !tick) PrintToUI(frame.Speaker.Length == 0 ? frame.Text : frame.Speaker + ": " + frame.Text);
         }
-        lock (stateLock) story = frame;
+        lock (stateLock)
+        {
+            var visible = frame.Localized ?? frame;
+            var previous = story.Localized ?? story;
+            bool sameLine = visible.PresentationId != 0 && visible.PresentationId == lastJournalPresentation;
+            if (frame.Kind == "dialogue" && (!sameLine || visible.Text != previous.Text || visible.Speaker != previous.Speaker))
+            {
+                string text = InlineText.Parse(visible.Text).Text;
+                dialogueJournal.Record(InlineText.Parse(visible.Speaker).Text, text, choice: false, sameLine);
+                if (text.Length > 0) lastJournalPresentation = visible.PresentationId;
+            }
+            story = frame;
+        }
     }
 
     public Task<GameCheckpoint> GetCheckpointAsync(CancellationToken cancellationToken = default) => CapturePluginCheckpointAsync(true, cancellationToken);
@@ -411,12 +423,15 @@ public sealed partial class LuaRuntime : IGameSession
         using var table = lua!["state"] as LuaTable ?? throw new InvalidDataException("state должен оставаться таблицей.");
         if (saving) PublishPluginEvent("on_save");
         JsonElement state = JsonSerializer.SerializeToElement(ReadState(table, 0));
+        var journal = DialogueJournal;
         return new(1, StandalonePlayer.SaveIdentity(project.Path), fingerprint, seed, history.ToArray(), Story, state)
         {
             Lists = CaptureLists(),
             SystemResults = systemHistory.Count == 0 ? null : systemHistory.ToArray(),
             PlayedSeconds = PlayedSeconds,
-            InitialDialogueSpeed = initialDialogueSpeed
+            InitialDialogueSpeed = initialDialogueSpeed,
+            DialoguePosition = journal.Position,
+            DialogueJournal = journal
         };
     }
 
@@ -432,6 +447,7 @@ public sealed partial class LuaRuntime : IGameSession
                 if (pair.Value.ValueKind != JsonValueKind.Array) throw new InvalidDataException("Сохранение списка требует JSON-массив.");
                 EngineSettings.ValidateState(pair.Value, 0);
             }
+        checkpoint.DialogueJournal?.Validate();
         PrepareSystemReplay(checkpoint);
         initialDialogueSpeed = checkpoint.InitialDialogueSpeed is { } speed ? DialogueSpeed.Validate(speed) : null;
         int? replayedPlayerSpeed = initialDialogueSpeed;
@@ -486,6 +502,12 @@ public sealed partial class LuaRuntime : IGameSession
                 throw new InvalidDataException("Журнал системных команд не совпадает с сохранением.");
             lua!.DoString("for k in pairs(state) do state[k] = nil end; local restored = " + StateLiteral(checkpoint.State) + "; for k,v in pairs(restored) do state[k] = v end", "KNE restore state");
             if (checkpoint.Lists is { } lists) lua.DoString("kne_list_restore(" + StateLiteral(lists) + ")", "KNE restore lists");
+            if (checkpoint.DialogueJournal is { } journal)
+                lock (stateLock)
+                {
+                    dialogueJournal.Restore(journal);
+                    lastJournalPresentation = story.Kind == "dialogue" ? story.PresentationId : 0;
+                }
             history.AddRange(checkpoint.History);
             systemHistory.AddRange(systemReplay);
             systemHistoryCharacters = systemHistory.Sum(item => item.Arguments.GetRawText().Length + item.Value.GetRawText().Length);

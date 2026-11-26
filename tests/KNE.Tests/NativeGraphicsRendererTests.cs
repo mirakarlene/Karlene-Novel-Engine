@@ -63,6 +63,14 @@ public sealed class NativeGraphicsRendererTests
             Pixel(result, 2, 12, 255, 0, 0, 255);
             Pixel(result, 12, 12, 0, 128, 0, 128);
             Pixel(result, 18, 18, 0, 0, 0, 0);
+            using var next = renderer.Render(new(20, 20, [new(lower, new Rect(10, 10, 10, 10))]), samples, 10_000);
+            Assert.NotSame(result.Pixels, next.Pixels);
+            Pixel(next, 2, 2, 0, 0, 0, 0);
+            Pixel(next, 15, 15, 255, 0, 0, 255);
+            Pixel(result, 2, 2, 0, 0, 128, 128);
+            using var resized = renderer.Render(new(22, 16, [new(upper, new Rect(0, 0, 22, 16))]), samples, 10_000);
+            Assert.Equal((22, 16), (resized.Width, resized.Height));
+            Pixel(resized, 21, 15, 0, 0, 128, 128);
         }
     }
 

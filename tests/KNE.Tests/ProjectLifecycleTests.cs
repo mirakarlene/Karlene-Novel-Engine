@@ -54,15 +54,14 @@ public sealed class ProjectLifecycleTests
         try
         {
             var menu = (Border)game.FindName("MenuOverlay");
-            var next = (Button)game.FindName("NextButton");
             var dialogue = (TextBlock)game.FindName("DialogueText");
             game.ConfirmProjectExit = () => { confirmationReached = File.Exists(exitFile); return false; };
             Assert.Equal(Visibility.Collapsed, menu.Visibility);
             game.Show();
-            await WaitUntil(() => dialogue.Text == "opening scene" && next.IsEnabled);
+            await WaitUntil(() => dialogue.Text == "opening scene" && game.CanContinueDialogue);
             Assert.Equal(Visibility.Collapsed, menu.Visibility);
             Assert.False(File.Exists(menuFile));
-            next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await game.ContinueDialogueAsync();
             await WaitUntil(() => File.Exists(menuFile));
             Assert.Equal(Visibility.Visible, menu.Visibility);
             game.Close();

@@ -245,6 +245,7 @@ public sealed partial class VisualScript
         ScriptNodeKind.CallVisualLua => $"call_vlua({Quote(node.Path)})",
         ScriptNodeKind.ConfigureDialogue or ScriptNodeKind.ConfigureButton => $"configure_ui({Quote(node.Kind == ScriptNodeKind.ConfigureDialogue ? "dialogue" : node.UiTarget)}, {Quote(System.Text.Json.JsonSerializer.Serialize(node.Ui ?? GameplayUiStyle.ForTarget(node.Kind == ScriptNodeKind.ConfigureDialogue ? "dialogue" : node.UiTarget), EngineSettings.JsonOptions))})",
         ScriptNodeKind.SetDialogueSpeed => $"set_text_speed({Number(node.Amount)})",
+        ScriptNodeKind.SetHistorySize => $"set_history_size({Number(node.Amount)})",
         ScriptNodeKind.Join => $"kne_join(state[{Quote(node.Variable)}])",
         ScriptNodeKind.Timer or ScriptNodeKind.Pause => $"kne_pause({Number(node.Duration)})",
         ScriptNodeKind.WaitCondition => $"kne_wait_condition(function() return {Comparison(node)} end, {Number(node.Duration)})",
@@ -339,7 +340,9 @@ public sealed partial class VisualScript
         if (node.Kind == ScriptNodeKind.CompareVariables) RequireKey(node, node.CompareVariable);
         if (node.Kind == ScriptNodeKind.RandomBranch && node.Next != null) Fail(node, "у случайной ветки нет общего продолжения: соедините каждый выход отдельно");
         if (node.Kind == ScriptNodeKind.ConfigureButton && (node.UiTarget == "dialogue" || !GameplayUiStyle.IsTarget(node.UiTarget)))
-            Fail(node, "выберите игровую кнопку: choice, next, save, load, auto_save или pause");
+            Fail(node, "выберите игровую кнопку: choice, save, load, auto_save, pause, rollback или history");
+        if (node.Kind == ScriptNodeKind.SetHistorySize && (!double.IsFinite(node.Amount) || node.Amount is < 0 or > DialogueJournal.MaximumLimit || node.Amount != Math.Truncate(node.Amount)))
+            Fail(node, $"укажите целое число записей от 0 до {DialogueJournal.MaximumLimit}");
         if (node.Kind == ScriptNodeKind.SetDialogueSpeed && (node.Amount is < 0 or > DialogueSpeed.Maximum || node.Amount != Math.Truncate(node.Amount)))
             Fail(node, DialogueSpeed.RangeError);
         if (node.Kind == ScriptNodeKind.ShowScreen && (node.Opacity < 0 || node.Opacity > 1 || node.ScreenLayer is not ("main" or "overlay")))
