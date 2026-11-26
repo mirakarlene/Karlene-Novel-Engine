@@ -53,14 +53,34 @@ public sealed class PlayerProgressOptionsTests
             Assert.Equal(journal.Entries, Field<IGameSession>(game, "runtime").DialogueJournal!.Entries);
             _ = new System.Windows.Interop.WindowInteropHelper(game).EnsureHandle();
             DialogueHistoryEntry[]? displayed = null;
+            var layouts = new List<(double ListHeight, double CloseBottom, double AvailableHeight)>();
             _ = game.Dispatcher.BeginInvoke(new Action(() =>
             {
                 var dialog = game.OwnedWindows.OfType<GameHistoryWindow>().Single();
-                displayed = Find<ListBox>(dialog, "Entries").Items.OfType<DialogueHistoryEntry>().ToArray();
-                dialog.Close();
+                try
+                {
+                    var list = Find<ListBox>(dialog, "Entries");
+                    var root = (Grid)dialog.Content;
+                    var close = root.Children.OfType<Button>().Single();
+                    displayed = list.Items.OfType<DialogueHistoryEntry>().ToArray();
+                    foreach (Size size in new[] { new Size(dialog.Width, dialog.Height), new Size(dialog.MinWidth, dialog.MinHeight) })
+                    {
+                        dialog.Width = size.Width;
+                        dialog.Height = size.Height;
+                        dialog.UpdateLayout();
+                        layouts.Add((list.ActualHeight, close.TranslatePoint(new Point(0, close.ActualHeight), root).Y, root.ActualHeight));
+                    }
+                }
+                finally { dialog.Close(); }
             }));
             Find<Button>(game, "HistoryButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(journal.Entries, displayed);
+            Assert.Equal(2, layouts.Count);
+            Assert.All(layouts, layout =>
+            {
+                Assert.True(layout.ListHeight > 100);
+                Assert.InRange(layout.CloseBottom, layout.ListHeight, layout.AvailableHeight + 0.5);
+            });
         }
         finally { game.Close(); }
 
