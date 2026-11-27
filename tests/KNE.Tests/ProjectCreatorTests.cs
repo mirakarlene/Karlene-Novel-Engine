@@ -36,7 +36,7 @@ public sealed class ProjectCreatorTests
         Assert.Equal("Добро пожаловать! Это базовая сцена.", runtime.Story.Text);
         await runtime.AdvanceAsync();
         Assert.Equal("Игрок", runtime.Story.Speaker);
-        Assert.Equal("Нажмите «Далее» или пробел, чтобы продолжить.", runtime.Story.Text);
+        Assert.Equal("Нажмите ЛКМ, пробел или Enter, чтобы продолжить.", runtime.Story.Text);
         await runtime.AdvanceAsync();
         Assert.True(runtime.Story.Completed);
     }

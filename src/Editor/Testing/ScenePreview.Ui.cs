@@ -8,18 +8,18 @@ public partial class ScenePreview
     private GameplayUiPresenter? gameplayUi;
     private readonly Dictionary<string, Button> previewUiButtons = [];
 
-    private void ApplyGameplayUi(SceneVisuals visuals, StoryFrame story)
+    private void ApplyGameplayUi(SceneVisuals visuals)
     {
         if (project is null) return;
         gameplayUi ??= new(SceneArea, DialoguePanel, SpeakerText, DialogueText, ChoicePanel, previewUiButtons, project.Path, assets);
-        foreach (string target in new[] { "next", "save", "load", "auto_save", "pause" })
+        foreach (string target in GameplayUiStyle.ButtonTargets.Where(target => target != "choice"))
         {
             bool configured = visuals.UiConfigurations.Any(entry => entry.Target == target);
             if (configured && !previewUiButtons.ContainsKey(target))
             {
                 var button = new Button
                 {
-                    Content = target switch { "next" => "Далее  ›", "save" => "Сохранить", "load" => "Загрузить", "auto_save" => "Автосохранение", _ => "Меню" },
+                    Content = target switch { "save" => "Сохранить", "load" => "Загрузить", "auto_save" => "Автосохранение", "rollback" => "Назад", "history" => "История", _ => "Меню" },
                     IsHitTestVisible = false, Focusable = false, Tag = target
                 };
                 button.BorderBrush = Brush(project.Engine.Theme.AccentColor);
@@ -27,7 +27,7 @@ public partial class ScenePreview
                 SceneArea.Children.Add(button);
             }
             if (previewUiButtons.TryGetValue(target, out var existing))
-                existing.Visibility = configured && (target != "next" || story.CanAdvance || story.Triggers.Any(trigger => trigger.Matches(new("button", Button: "next")))) ? Visibility.Visible : Visibility.Collapsed;
+                existing.Visibility = configured ? Visibility.Visible : Visibility.Collapsed;
         }
         gameplayUi.Apply(visuals);
     }

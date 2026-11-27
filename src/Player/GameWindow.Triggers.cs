@@ -37,7 +37,7 @@ public partial class GameWindow
     }
     private WindowTriggerScope? TriggerScope()
     {
-        if (!ready || closed || startupFailed || systemFrozen || videoPlayback != null || MenuOverlay.Visibility == Visibility.Visible)
+        if (!ready || closed || startupFailed || systemFrozen || historyOpen || videoPlayback != null || MenuOverlay.Visibility == Visibility.Visible)
             return null;
         var story = runtime.Story;
         return !story.Completed && story.Triggers.Count != 0 ? new(SceneVisit, story.Triggers) : null;

@@ -36,6 +36,12 @@ internal sealed class GameTriggerInput
         for (var current = source; current != null; current = Parent(current)) if (current is Button button) return button;
         return null;
     }
+    internal static bool UsesOwnInput(DependencyObject? source)
+    {
+        for (var current = source; current != null; current = Parent(current))
+            if (current is ButtonBase or TextBoxBase or PasswordBox or Selector or RangeBase or Thumb) return true;
+        return false;
+    }
     private static DependencyObject? Parent(DependencyObject current) => current is Visual ? VisualTreeHelper.GetParent(current) : LogicalTreeHelper.GetParent(current);
     internal static TriggerSignal Hotspot(Point position, Size size) => new("hotspot", X: size.Width > 0 ? position.X * 1280 / size.Width : position.X,
         Y: size.Height > 0 ? position.Y * 720 / size.Height : position.Y);
@@ -59,7 +65,8 @@ internal sealed class GameTriggerInput
         if (button.Tag is int option) return "choice:" + option;
         return button.Name switch
         {
-            "NextButton" => "next", "SaveButton" => "save", "LoadButton" => "load", "LoadAutoButton" => "auto_save", "PauseButton" => "pause",
+            "SaveButton" => "save", "LoadButton" => "load", "LoadAutoButton" => "auto_save", "PauseButton" => "pause",
+            "RollbackButton" => "rollback", "HistoryButton" => "history",
             "SubmitButton" => "input_submit", "CancelButton" => "input_cancel", _ => null
         };
     }

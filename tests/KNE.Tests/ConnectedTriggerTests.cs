@@ -53,7 +53,7 @@ public sealed class ConnectedTriggerTests
         Assert.DoesNotContain("after event", runtime.Story.Text);
         TriggerSignal signal = kind switch
         {
-            ScriptNodeKind.TriggerButton => new("button", Button: "next"),
+            ScriptNodeKind.TriggerButton => new("button", Button: "save"),
             ScriptNodeKind.TriggerHotspot => new("hotspot", X: 50, Y: 50),
             ScriptNodeKind.TriggerTextClosed => new("text_closed"),
             ScriptNodeKind.TriggerCombination => new("key", "Ctrl+E"),

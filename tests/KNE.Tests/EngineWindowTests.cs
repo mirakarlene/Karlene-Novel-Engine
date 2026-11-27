@@ -47,11 +47,11 @@ public sealed class EngineWindowTests
                 Click(window, "PauseButton");
                 Assert.Equal(Visibility.Visible, Find<Border>(window, "MenuOverlay").Visibility);
                 Assert.Equal(Visibility.Visible, Find<Button>(window, "ResumeButton").Visibility);
-                Click(window, "NextButton");
+                _ = window.ContinueDialogueAsync();
                 Assert.Equal("Добро пожаловать! Это базовая сцена.", Find<TextBlock>(window, "DialogueText").Text);
                 Click(window, "ResumeButton");
-                await ActAsync(window, () => Click(window, "NextButton"));
-                Assert.Equal("Нажмите «Далее» или пробел, чтобы продолжить.", Find<TextBlock>(window, "DialogueText").Text);
+                await ActAsync(window, () => _ = window.ContinueDialogueAsync());
+                Assert.Equal("Нажмите ЛКМ, пробел или Enter, чтобы продолжить.", Find<TextBlock>(window, "DialogueText").Text);
             }
             finally { window.Close(); }
         });
@@ -177,11 +177,11 @@ public sealed class EngineWindowTests
                 await ActAsync(window, () => window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent)));
                 Assert.Equal(Visibility.Collapsed, Find<Border>(window, "MenuOverlay").Visibility);
                 Assert.False(saves.Exists("auto"));
-                await ActAsync(window, () => Click(window, "NextButton"));
+                await ActAsync(window, () => _ = window.ContinueDialogueAsync());
                 Assert.False(saves.Exists("auto"));
                 await ActAsync(window, () => Click(window, "SaveButton"));
                 Assert.True(saves.Exists("quick"));
-                Assert.Equal("Нажмите «Далее» или пробел, чтобы продолжить.", (await saves.LoadAsync("quick")).Frame.Text);
+                Assert.Equal("Нажмите ЛКМ, пробел или Enter, чтобы продолжить.", (await saves.LoadAsync("quick")).Frame.Text);
             }
             finally { window.Close(); }
         });
@@ -238,13 +238,13 @@ public sealed class EngineWindowTests
                 Assert.Equal(1, ((BitmapSource)Find<Image>(window, "DefaultBackgroundImage").Source).PixelWidth);
                 await ActAsync(window, () => window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent)));
                 Assert.NotNull(Find<Image>(window, "BackgroundImage").Source);
-                await ActAsync(window, () => Click(window, "NextButton"));
+                await ActAsync(window, () => _ = window.ContinueDialogueAsync());
                 Assert.Null(Find<Image>(window, "BackgroundImage").Source);
                 Assert.Equal(Visibility.Visible, Find<Image>(window, "DefaultBackgroundImage").Visibility);
-                await ActAsync(window, () => Click(window, "NextButton"));
+                await ActAsync(window, () => _ = window.ContinueDialogueAsync());
                 Assert.Equal(Color.FromRgb(16, 32, 48), ((SolidColorBrush)Find<Border>(window, "DefaultBackground").Background).Color);
                 Assert.Equal(Visibility.Collapsed, Find<Image>(window, "DefaultBackgroundImage").Visibility);
-                await ActAsync(window, () => Click(window, "NextButton"));
+                await ActAsync(window, () => _ = window.ContinueDialogueAsync());
                 Assert.IsType<SolidColorBrush>(Find<Border>(window, "DefaultBackground").Background);
                 Assert.Equal(Visibility.Visible, Find<Image>(window, "DefaultBackgroundImage").Visibility);
             }
@@ -326,7 +326,7 @@ public sealed class EngineWindowTests
                 Assert.Equal("first", Find<TextBlock>(window, "DialogueText").Text);
                 Assert.Equal(Visibility.Collapsed, Find<Border>(window, "MenuOverlay").Visibility);
                 window.Width = 1100; window.Height = 650;
-                await ActAsync(window, () => Click(window, "NextButton"));
+                await ActAsync(window, () => _ = window.ContinueDialogueAsync());
                 Assert.Equal("New title", window.Title);
                 Assert.Equal(1100, window.Width); Assert.Equal(650, window.Height);
                 Assert.Equal("second", Find<TextBlock>(window, "DialogueText").Text);

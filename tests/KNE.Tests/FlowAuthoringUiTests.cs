@@ -77,11 +77,11 @@ public sealed class FlowAuthoringUiTests
             try
             {
                 await GameAction(window, () => window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent)));
-                Assert.True(Find<Button>(window, "NextButton").IsEnabled);
-                await GameAction(window, () => Click(window, "NextButton"));
+                Assert.True(window.CanContinueDialogue);
+                await GameAction(window, () => _ = window.ContinueDialogueAsync());
                 Assert.Equal("handler", Find<TextBlock>(window, "DialogueText").Text);
-                await GameAction(window, () => Click(window, "NextButton"));
-                Assert.False(Find<Button>(window, "NextButton").IsEnabled);
+                await GameAction(window, () => _ = window.ContinueDialogueAsync());
+                Assert.False(window.CanContinueDialogue);
                 Assert.DoesNotContain("after", Find<TextBlock>(window, "DialogueText").Text);
             }
             finally { window.Close(); }
@@ -299,7 +299,7 @@ public sealed class FlowAuthoringUiTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task GameWindow_NextButtonAndSpaceTriggers_RunHandlerWithoutConsumingMain(bool key)
+    public async Task GameWindow_ContinueAndSpaceTriggers_RunHandlerWithoutConsumingMain(bool key)
     {
         using var fixture = new FlowUiFixture();
         fixture.Write("engine/game.json", "{\"main_menu\":false}");
@@ -317,14 +317,40 @@ public sealed class FlowAuthoringUiTests
             {
                 await GameAction(window, () => window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent)));
                 Assert.Equal("main", Find<TextBlock>(window, "DialogueText").Text);
-                await GameAction(window, () => { if (key) Press(window, Key.Space); else Click(window, "NextButton"); });
+                await GameAction(window, () => { if (key) Press(window, Key.Space); else ClickScene(window); });
                 Assert.Equal("handler", Find<TextBlock>(window, "DialogueText").Text);
-                await GameAction(window, () => Click(window, "NextButton"));
+                await GameAction(window, () => _ = window.ContinueDialogueAsync());
                 Assert.Equal("main", Find<TextBlock>(window, "DialogueText").Text);
-                await GameAction(window, () => Click(window, "NextButton"));
+                await GameAction(window, () => _ = window.ContinueDialogueAsync());
                 Assert.Equal("after", Find<TextBlock>(window, "DialogueText").Text);
             }
             finally { window.Close(); }
+        });
+    }
+
+    [Theory]
+    [InlineData(Key.Space)] [InlineData(Key.Enter)] [InlineData(Key.None)]
+    public async Task GameWindow_ContinuesWithSpaceEnterOrLeftClick(Key key)
+    {
+        using var fixture = new FlowUiFixture();
+        fixture.Write("engine/game.json", "{\"main_menu\":false}");
+        fixture.Scene("d(nil, 'first'); d(nil, 'second'); d(nil, 'third')");
+        var project = await fixture.LoadAsync();
+        await WorkspaceTabsTests.Sta(async () =>
+        {
+            var game = new GameWindow(project, new GameSaveStore(project.Path, Path.Combine(fixture.Root, "saves")).WithInstantDialogue());
+            try
+            {
+                await GameAction(game, () => game.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent)));
+                Assert.Equal("first", Find<TextBlock>(game, "DialogueText").Text);
+                await GameAction(game, () =>
+                {
+                    if (key == Key.None) ClickScene(game);
+                    else Assert.True(Press(game, key).Handled);
+                });
+                Assert.Equal("second", Find<TextBlock>(game, "DialogueText").Text);
+            }
+            finally { game.Close(); }
         });
     }
 
@@ -385,7 +411,7 @@ public sealed class FlowAuthoringUiTests
             Assert.Equal(new TriggerSignal("hotspot", X: 640, Y: 360), GameTriggerInput.Hotspot(new Point(320, 180), new Size(640, 360)));
             Assert.Equal(new TriggerSignal("hotspot", X: 640, Y: 360), GameTriggerInput.Hotspot(new Point(1280, 720), new Size(2560, 1440)));
             Assert.Equal(new TriggerSignal("hotspot", X: 1280, Y: 720), GameTriggerInput.Hotspot(new Point(640, 360), new Size(640, 360)));
-            Assert.Equal("next", GameTriggerInput.ButtonId(new Button { Name = "NextButton" }, ScreenLayouts.CreateDefaults()));
+            Assert.Equal("rollback", GameTriggerInput.ButtonId(new Button { Name = "RollbackButton" }, ScreenLayouts.CreateDefaults()));
             return Task.CompletedTask;
         });
     }
@@ -402,6 +428,8 @@ public sealed class FlowAuthoringUiTests
     }
     private static T Extended<T>(ScriptEditor editor, string name) where T : FrameworkElement => Find<StackPanel>(editor, "ExtendedProperties").Children.OfType<T>().Single(input => input.Name == name);
     private static void Click(FrameworkElement element, string name) => Find<Button>(element, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    private static void ClickScene(GameWindow game) => Find<Grid>(game, "SceneArea").RaiseEvent(
+        new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
     private static KeyEventArgs Args(Key key, bool up = false) => new(Keyboard.PrimaryDevice, new InputSource(), 0, key) { RoutedEvent = up ? Keyboard.PreviewKeyUpEvent : Keyboard.PreviewKeyDownEvent };
     private static KeyEventArgs Press(UIElement element, Key key) { var args = Args(key); element.RaiseEvent(args); return args; }
     private static void Release(UIElement element, Key key) => element.RaiseEvent(Args(key, up: true));

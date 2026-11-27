@@ -96,8 +96,7 @@ public sealed class WavePostProcessingTests(ITestOutputHelper output)
                 var warm = await Sample();
                 long prepared = telemetry.PreparationCount;
                 long before = presenter.RenderCount;
-                var next = WorkspaceTabsTests.Find<Button>(window, "NextButton");
-                next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await window.ContinueDialogueAsync();
                 await Until(() => presenter.RenderCount >= before + 3);
                 var timer = (System.Windows.Threading.DispatcherTimer)typeof(SceneShaderPresenter)
                     .GetField("timer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(presenter)!;

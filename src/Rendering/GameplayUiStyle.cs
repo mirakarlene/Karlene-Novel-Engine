@@ -34,11 +34,14 @@ public sealed record GameplayUiStyle
         MaxDepth = 8
     };
 
-    public static bool IsTarget(string target) => target is "dialogue" or "choice" or "next" or "save" or "load" or "auto_save" or "pause";
+    internal static readonly string[] ButtonTargets = ["choice", "save", "load", "auto_save", "pause", "rollback", "history"];
+
+    // Keep saved UI configurations readable. The removed button has no visual target.
+    public static bool IsTarget(string target) => target is "dialogue" or "next" || ButtonTargets.Contains(target);
 
     public static GameplayUiStyle ForTarget(string target)
     {
-        if (!IsTarget(target)) throw new ArgumentException("Элемент UI: dialogue, choice, next, save, load, auto_save или pause.");
+        if (!IsTarget(target)) throw new ArgumentException("Элемент UI: dialogue, " + string.Join(", ", ButtonTargets) + ".");
         if (target == "dialogue") return new();
         return new()
         {
@@ -51,7 +54,7 @@ public sealed record GameplayUiStyle
             CornerRadius = 8,
             PaddingLeft = 14, PaddingRight = 14, PaddingTop = 7, PaddingBottom = 7,
             HorizontalAlignment = target is "choice" ? "center" : "right",
-            VerticalAlignment = target is "choice" or "next" ? "bottom" : "top",
+            VerticalAlignment = target is "choice" or "next" or "rollback" or "history" ? "bottom" : "top",
             TextAlignment = "center"
         };
     }

@@ -81,7 +81,7 @@ public sealed class LuaRuntimeTests
         Assert.Equal(new[]
         {
             "Добро пожаловать! Это базовая сцена.",
-            "Игрок: Нажмите «Далее» или пробел, чтобы продолжить."
+            "Игрок: Нажмите ЛКМ, пробел или Enter, чтобы продолжить."
         }, output.TakeLast(2));
         await runtime.ProcessCommandAsync("diagnostics");
         Assert.Equal(2, output.Count(line => line.StartsWith("Диагностика KNE", StringComparison.Ordinal)));

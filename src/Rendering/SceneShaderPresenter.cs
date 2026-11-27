@@ -17,6 +17,7 @@ internal sealed record ShaderProgramFile(string Path, CompiledShaderGraph Progra
 internal sealed class SceneShaderPresenter : IAsyncDisposable
 {
     private readonly record struct WaveInput(BitmapSource Atlas, Rect Bounds, Color Color, bool CaptureForeground);
+    private sealed record TargetGroup(FrameworkElement Target, CompiledShaderGraph[] Effects, bool Animated);
     private sealed class Surface(FrameworkElement target, Image output, Brush? originalMask)
     {
         internal readonly FrameworkElement Target = target;
@@ -44,6 +45,8 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
     private readonly CancellationTokenSource lifetime = new();
     private readonly RoutedEventHandler contentChanged;
     private ShaderProgramFile[] programs = [];
+    private FrameworkElement?[] resolvedTargets = [];
+    private TargetGroup[] targetGroups = [];
     private string[] requested = [];
     private ShaderGpuSession? gpu;
     private bool disposed, disabled, busy;
@@ -103,11 +106,11 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
     internal Task SetActiveAsync(IEnumerable<string> paths)
     {
         if (disposed) return Task.CompletedTask;
+        if (requested.SequenceEqual(paths, StringComparer.OrdinalIgnoreCase)) return activation;
         string[] next = paths.ToArray();
-        if (requested.SequenceEqual(next, StringComparer.OrdinalIgnoreCase)) return activation;
         requested = next;
         int version = ++generation;
-        StopRendering(); Restore(); programs = [];
+        StopRendering(); Restore(); programs = []; resolvedTargets = []; targetGroups = [];
         activation = ActivateAsync(next, version);
         return activation;
     }
@@ -117,7 +120,7 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
         {
             var loaded = paths.Length == 0 ? [] : await Task.Run(() => LoadPrograms(project, paths), lifetime.Token);
             if (disposed || version != generation) return;
-            programs = loaded; NotifyContentChanged();
+            programs = loaded; resolvedTargets = new FrameworkElement?[loaded.Length]; NotifyContentChanged();
             if (programs.Length == 0) ReleaseGpu();
             else if (host.IsLoaded && !disabled) StartRendering();
         }
@@ -134,11 +137,14 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
         var normalizedStory = story with { Options = Array.Empty<string>(), ChoiceOptions = null, Triggers = Array.Empty<TriggerSettings>() };
         if (window != previousWindow || normalizedVisuals != previousVisuals || normalizedStory != previousStory ||
             !previousOptions.SequenceEqual(story.Options) || !(previousChoices ?? []).SequenceEqual(story.ChoiceOptions ?? []) ||
-            !SameTextMap(previousScreenTexts, visuals.ScreenTexts) || !SameTextMap(previousFonts, visuals.Fonts)) NotifyContentChanged();
-        previousWindow = window; previousVisuals = normalizedVisuals; previousStory = normalizedStory;
-        previousOptions = story.Options.ToArray(); previousChoices = story.ChoiceOptions?.ToArray();
-        previousScreenTexts = new Dictionary<string, string>(visuals.ScreenTexts);
-        previousFonts = new Dictionary<string, string>(visuals.Fonts);
+            !SameTextMap(previousScreenTexts, visuals.ScreenTexts) || !SameTextMap(previousFonts, visuals.Fonts))
+        {
+            NotifyContentChanged();
+            previousWindow = window; previousVisuals = normalizedVisuals; previousStory = normalizedStory;
+            previousOptions = story.Options.ToArray(); previousChoices = story.ChoiceOptions?.ToArray();
+            previousScreenTexts = new Dictionary<string, string>(visuals.ScreenTexts);
+            previousFonts = new Dictionary<string, string>(visuals.Fonts);
+        }
     }
     private static bool SameTextMap(IReadOnlyDictionary<string, string> previous, IReadOnlyDictionary<string, string> current) =>
         previous.Count == current.Count && previous.All(pair => current.TryGetValue(pair.Key, out string? value) && value == pair.Value);
@@ -238,6 +244,25 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
         if (!project.Engine.Performance.Graphics.VSync || now - lastComposition > Math.Max(.04, timer.Interval.TotalSeconds * 2))
             RenderFrame(now);
     }
+    private TargetGroup[] ResolveTargetGroups()
+    {
+        bool changed = false;
+        for (int i = 0; i < programs.Length; i++)
+        {
+            var target = resolve(programs[i].Program);
+            if (target?.Parent is not Panel) target = null;
+            if (ReferenceEquals(target, resolvedTargets[i])) continue;
+            resolvedTargets[i] = target;
+            changed = true;
+        }
+        if (!changed) return targetGroups;
+        targetGroups = programs.Select((file, i) => (file.Program, Target: resolvedTargets[i]))
+            .Where(item => item.Target != null).GroupBy(item => item.Target!)
+            .Select(group => new TargetGroup(group.Key, group.Select(item => item.Program).ToArray(),
+                group.Any(item => item.Program.Animated))).ToArray();
+        foreach (var stale in surfaces.Keys.Where(target => !targetGroups.Any(group => group.Target == target)).ToArray()) Restore(stale);
+        return targetGroups;
+    }
     private async void RenderFrame(double now)
     {
         if (disposed || disabled || busy || programs.Length == 0 || !host.IsLoaded || !host.IsVisible || Window.GetWindow(host)?.WindowState == WindowState.Minimized) return;
@@ -245,11 +270,9 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
         busy = true; int version = generation;
         try
         {
-            var groups = programs.Select(file => (file.Program, Target: resolve(file.Program))).Where(item => item.Target?.Parent is Panel).GroupBy(item => item.Target!).ToArray();
-            foreach (var stale in surfaces.Keys.Where(target => !groups.Any(group => group.Key == target)).ToArray()) Restore(stale);
-            foreach (var group in groups)
+            foreach (var group in ResolveTargetGroups())
             {
-                var target = group.Key;
+                var target = group.Target;
                 if (!target.IsVisible || target.ActualWidth < 1 || target.ActualHeight < 1) { Restore(target); continue; }
                 if (!surfaces.TryGetValue(target, out var surface))
                 {
@@ -280,7 +303,7 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
                 bool captureChanged = surface.Revision != contentRevision || surface.Width != width || surface.Height != height ||
                     live || surface.AnimationStamp != animationStamp || (surface.Waves == null) != (wave == null);
                 bool changed = captureChanged || surface.Waves != wave;
-                if (!changed && surface.RenderedRevision == surface.Revision && surface.Origin == point && surface.ScreenSize == screenSize && !group.Any(item => item.Program.Animated)) continue;
+                if (!changed && surface.RenderedRevision == surface.Revision && surface.Origin == point && surface.ScreenSize == screenSize && !group.Animated) continue;
                 if (!needsCapture)
                 {
                     surface.Capture = null;
@@ -315,14 +338,13 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
                 surface.AnimationStamp = animationStamp; surface.Waves = wave;
                 gpu ??= new ShaderGpuSession(Window.GetWindow(host));
                 var currentGpu = gpu;
-                var effects = group.Select(item => item.Program).ToArray();
                 float seconds = (float)clock.Elapsed.TotalSeconds;
                 var origin = new Vector2((float)point.X, (float)point.Y);
                 var size = new Vector2((float)screenSize.X, (float)screenSize.Y);
                 using var result = wave is { } input
                     ? await currentGpu.RenderPixelsAsync(WaveFrame(surface, input), true,
-                        effects, settings, seconds, origin, size, lifetime.Token)
-                    : await currentGpu.RenderPixelsAsync(surface.Snapshot!, effects, settings, seconds, origin, lifetime.Token, size);
+                        group.Effects, settings, seconds, origin, size, lifetime.Token)
+                    : await currentGpu.RenderPixelsAsync(surface.Snapshot!, group.Effects, settings, seconds, origin, lifetime.Token, size);
                 if (disposed || disabled || version != generation || !ReferenceEquals(gpu, currentGpu)) return;
                 if (!PresentPixels(image, result)) continue;
                 RenderCount++; surface.RenderedRevision = surface.Revision;
@@ -365,7 +387,8 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
         long bytes = (long)atlas!.PixelWidth * atlas.PixelHeight * 4 + 4;
         if (bytes > budget) return null;
         if (surface.Target == waveLayer) return new(atlas!, bounds, brush.Color, false);
-        if (sceneLayer == null || surface.Target != sceneLayer || sceneLayer.Background != null ||
+        if (sceneLayer == null || surface.Target != sceneLayer ||
+            sceneLayer.Background is not (null or SolidColorBrush { Color.A: 0 }) ||
             sceneLayer.Children.Count == 0 || sceneLayer.Children[0] is not Panel { Background: null, Clip: null } visuals ||
             visuals.Children.Count == 0 ||
             visuals.Children[0] != waveLayer || !visuals.RenderTransform.Value.IsIdentity ||

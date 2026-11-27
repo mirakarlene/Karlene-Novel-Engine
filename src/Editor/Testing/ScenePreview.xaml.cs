@@ -294,7 +294,7 @@ public partial class ScenePreview : UserControl
         if (renderedSceneStory is { } previousStory && previousStory.Kind == story.Kind && previousStory.Speaker == story.Speaker &&
             previousStory.Text == story.Text && previousStory.Options.SequenceEqual(story.Options))
         {
-            ApplyGameplayUi(visuals, story);
+            ApplyGameplayUi(visuals);
             RenderNarrative(story, visuals, animate);
             return;
         }
@@ -302,7 +302,7 @@ public partial class ScenePreview : UserControl
         DialoguePanel.Visibility = story.Text.Length > 0 || story.Options.Count > 0 || story.Kind == "input" ? Visibility.Visible : Visibility.Collapsed;
         SpeakerText.Text = story.Speaker; SpeakerText.Visibility = story.Speaker.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         DialogueText.Text = story.Text;
-        ApplyGameplayUi(visuals, story);
+        ApplyGameplayUi(visuals);
         RenderNarrative(story, visuals, animate);
     }
 

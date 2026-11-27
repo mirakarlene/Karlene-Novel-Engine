@@ -126,7 +126,7 @@ public sealed class ScenePlayerSettingsTests
 
     static async Task Next(GameWindow window, string expected)
     {
-        Find<Button>(window, "NextButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await WaitUntil(window, () => Field<IGameSession>(window, "runtime").Story.Text == expected);
+        await window.ContinueDialogueAsync(); await WaitUntil(window, () => Field<IGameSession>(window, "runtime").Story.Text == expected);
     }
     static async Task WaitUntil(GameWindow window, Func<bool> completed)
     {

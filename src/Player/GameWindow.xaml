@@ -44,7 +44,7 @@
         </ResourceDictionary>
     </Window.Resources>
     <Grid SizeChanged="ConsoleHost_SizeChanged">
-        <Grid x:Name="SceneArea" ClipToBounds="True" SizeChanged="SceneArea_SizeChanged">
+        <Grid x:Name="SceneArea" Background="Transparent" ClipToBounds="True" SizeChanged="SceneArea_SizeChanged" MouseLeftButtonUp="SceneArea_Continue">
             <Grid x:Name="VisualLayer">
             <Grid x:Name="ShaderBackgroundLayer">
             <Border x:Name="DefaultBackground"/>
@@ -59,7 +59,7 @@
             <TextBlock x:Name="SceneTitle" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" FontSize="36" Foreground="{DynamicResource GameTextBrush}" Margin="48" IsHitTestVisible="False" Visibility="Collapsed"/>
             <Border x:Name="DialoguePanel" VerticalAlignment="Bottom" Height="240"
                     Background="#ED21162F" BorderBrush="#FF8E60B5" BorderThickness="1" CornerRadius="16" Margin="28" Padding="24"
-                    MouseLeftButtonUp="Dialogue_Click" Visibility="Collapsed">
+                    Focusable="True" Visibility="Collapsed">
                 <Grid>
                     <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -81,8 +81,12 @@
                             <Button x:Name="LoadAutoButton" Content="Автосохранение" Tag="auto" Style="{StaticResource DialogueFooterButton}" Margin="0,0,6,0" Click="LoadButton_Click" IsEnabled="False"/>
                             <Button x:Name="PauseButton" Content="Меню" Style="{StaticResource DialogueFooterButton}" Click="PauseButton_Click"/>
                         </StackPanel>
-                        <Button x:Name="NextButton" Grid.Column="1" Content="Далее  ›" Style="{StaticResource DialogueFooterButton}"
-                                Click="NextButton_Click" IsEnabled="False"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button x:Name="RollbackButton" Content="Назад" Style="{StaticResource DialogueFooterButton}" Margin="0,0,6,0"
+                                    Click="RollbackButton_Click" IsEnabled="False"/>
+                            <Button x:Name="HistoryButton" Content="История" Style="{StaticResource DialogueFooterButton}"
+                                    Click="HistoryButton_Click" IsEnabled="False"/>
+                        </StackPanel>
                     </Grid>
                 </Grid>
             </Border>

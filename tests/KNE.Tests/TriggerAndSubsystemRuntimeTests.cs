@@ -114,7 +114,7 @@ public sealed class TriggerAndSubsystemRuntimeTests
         Assert.Empty((await runtime.GetCheckpointAsync()).History);
         var signal = kind switch
         {
-            ScriptNodeKind.TriggerButton => new TriggerSignal("button", Button: "NEXT"),
+            ScriptNodeKind.TriggerButton => new TriggerSignal("button", Button: "SAVE"),
             ScriptNodeKind.TriggerHotspot => new TriggerSignal("hotspot", X: 50, Y: 50),
             ScriptNodeKind.TriggerTextClosed => new TriggerSignal("text_closed"),
             ScriptNodeKind.TriggerCombination => new TriggerSignal("key", "e+CONTROL"),

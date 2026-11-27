@@ -290,13 +290,13 @@ public sealed class AppearanceUiTests
                 await Act(window, () => window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent)));
                 var text = Find<TextBlock>(window, "DialogueText");
                 Assert.Contains(text.Inlines.OfType<System.Windows.Documents.Run>(), run => ReferenceEquals(run.Foreground, Brushes.Transparent));
-                await Act(window, () => Click(window, "NextButton"));
+                await Act(window, () => _ = window.ContinueDialogueAsync());
                 Assert.Equal("АБВГ", string.Concat(text.Inlines.OfType<System.Windows.Documents.Run>()
                     .Where(run => !ReferenceEquals(run.Foreground, Brushes.Transparent)).Select(run => run.Text)));
-                await Act(window, () => Click(window, "NextButton"));
+                await Act(window, () => _ = window.ContinueDialogueAsync());
                 Assert.Equal("АБВГДЕЖЗ", text.Text);
                 Assert.Contains(text.Inlines.OfType<System.Windows.Documents.Run>(), run => run.Text == "ДЕЖЗ" && ReferenceEquals(run.Foreground, Brushes.Transparent));
-                await Act(window, () => Click(window, "NextButton"));
+                await Act(window, () => _ = window.ContinueDialogueAsync());
                 Assert.DoesNotContain(text.Inlines.OfType<System.Windows.Documents.Run>(), run => ReferenceEquals(run.Foreground, Brushes.Transparent));
                 Assert.Equal("АБВГДЕЖЗ", text.Text);
             }
@@ -326,8 +326,8 @@ public sealed class AppearanceUiTests
                 Find<ListBox>(window, "SaveSlotsList").SelectedItem = slots.Single(s => s.Slot == "Глава первая");
                 CaptureWindow(window, "save-browser.png");
                 Invoke(window, "GoBackScreen"); Click(window, "ResumeButton");
-                await Act(window, () => Click(window, "NextButton"));
-                Assert.Equal("Нажмите «Далее» или пробел, чтобы продолжить.", Find<TextBlock>(window, "DialogueText").Text);
+                await Act(window, () => _ = window.ContinueDialogueAsync());
+                Assert.Equal("Нажмите ЛКМ, пробел или Enter, чтобы продолжить.", Find<TextBlock>(window, "DialogueText").Text);
                 Click(window, "PauseButton"); await InvokeTask(window, "ShowSaveBrowserAsync");
                 Find<ListBox>(window, "SaveSlotsList").SelectedItem = Find<ListBox>(window, "SaveSlotsList").Items.Cast<GameSaveEntry>().Single(s => s.Slot == "Глава первая");
                 await Act(window, () => Click(window, "LoadSelectedButton"));

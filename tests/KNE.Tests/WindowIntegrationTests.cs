@@ -90,7 +90,7 @@ public sealed class WindowIntegrationTests
                 Assert.Equal("Новелла с пробелами", window.Title);
                 Assert.Equal("Ожидание продолжения", ((TextBlock)window.FindName("StatusText")).Text);
                 Assert.Equal("Добро пожаловать! Это базовая сцена.", ((TextBlock)window.FindName("DialogueText")).Text);
-                Assert.True(((Button)window.FindName("NextButton")).IsEnabled);
+                Assert.True(window.CanContinueDialogue);
                 Assert.Contains("Добро пожаловать! Это базовая сцена.", ((TextBlock)window.FindName("ConsoleOutput")).Text);
                 Assert.True(input.IsEnabled);
                 Assert.False(((Button)window.FindName("StopButton")).IsEnabled);
@@ -161,7 +161,7 @@ public sealed class WindowIntegrationTests
                 var character = (Image)window.FindName("CharacterImage");
                 Assert.NotNull(character.Source);
                 Assert.Equal(HorizontalAlignment.Left, character.HorizontalAlignment);
-                await ActAsync(() => Click("NextButton"));
+                await ActAsync(() => _ = window.ContinueDialogueAsync());
                 var choices = ((StackPanel)window.FindName("ChoicePanel")).Children.OfType<Button>().ToArray();
                 Assert.Equal(new[] { "Домой", "В парк" }, choices.Select(button => Assert.IsType<TextBlock>(button.Content).Text));
                 await ActAsync(() => choices[1].RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
@@ -170,11 +170,11 @@ public sealed class WindowIntegrationTests
                 Assert.Null(((Image)window.FindName("BackgroundImage")).Source);
                 await ActAsync(() => Click("SaveButton"));
                 Assert.Equal(2, (await saves.LoadAsync("quick")).State.GetProperty("answer").GetInt32());
-                await ActAsync(() => Click("NextButton"));
+                await ActAsync(() => _ = window.ContinueDialogueAsync());
                 Assert.Equal("Конец", ((TextBlock)window.FindName("DialogueText")).Text);
                 await ActAsync(() => Click("LoadButton"));
                 Assert.Equal("Выбор 2", ((TextBlock)window.FindName("DialogueText")).Text);
-                Assert.True(((Button)window.FindName("NextButton")).IsEnabled);
+                Assert.True(window.CanContinueDialogue);
             }
             finally { window.Close(); }
         });

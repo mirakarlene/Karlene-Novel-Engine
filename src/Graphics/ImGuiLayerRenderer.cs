@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Numerics;
 using ImGuiNET;
@@ -14,6 +15,8 @@ internal sealed unsafe class ImGuiLayerRenderer : IGameLayerRenderer
     private GL Gl => context.Gl;
     private nint imgui;
     private uint program, vao, vertices, indices, white;
+    private uint target, framebuffer, multisample, color;
+    private (uint Width, uint Height, int Samples) surfaceSize;
     private int sizeUniform;
 
     internal ImGuiLayerRenderer()
@@ -59,24 +62,10 @@ internal sealed unsafe class ImGuiLayerRenderer : IGameLayerRenderer
         long allocated = (long)width * height * 4 * (1 + samples);
         if (allocated > budget) throw new InvalidOperationException("Поверхность ImGui превышает лимит кэша.");
         var textures = new Dictionary<long, uint>();
-        uint target = Gl.GenTexture(), framebuffer = Gl.GenFramebuffer(), multisample = 0, color = 0;
         try
         {
-            Gl.BindTexture(Texture.Texture2D, target);
-            Gl.TexImage2D(Texture.Texture2D, 0, InternalFormat.Rgba8, width, height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, null);
-            Gl.BindFramebuffer(FramebufferTarget.Framebuffer, framebuffer);
-            Gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, Texture.Texture2D, target, 0);
-            CheckFramebuffer();
-            if (samples != 0)
-            {
-                multisample = Gl.GenFramebuffer();
-                color = Gl.GenRenderbuffer();
-                Gl.BindFramebuffer(FramebufferTarget.Framebuffer, multisample);
-                Gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, color);
-                Gl.RenderbufferStorageMultisample(RenderbufferTarget.Renderbuffer, (uint)samples, InternalFormat.Rgba8, width, height);
-                Gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, color);
-                CheckFramebuffer();
-            }
+            EnsureSurface(width, height, samples);
+            Gl.BindFramebuffer(FramebufferTarget.Framebuffer, multisample == 0 ? framebuffer : multisample);
 
             foreach (var sprite in frame.Sprites)
             {
@@ -111,19 +100,50 @@ internal sealed unsafe class ImGuiLayerRenderer : IGameLayerRenderer
                     ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
             }
             Gl.BindFramebuffer(FramebufferTarget.Framebuffer, framebuffer);
-            var pixels = GC.AllocateUninitializedArray<byte>(checked(frame.Width * frame.Height * 4));
-            fixed (byte* output = pixels) Gl.ReadPixels(0, 0, width, height, PixelFormat.Bgra, PixelType.UnsignedByte, output);
-            var error = Gl.GetError();
-            if (error != GLEnum.NoError) throw new InvalidOperationException("Ошибка OpenGL при подготовке слоя ImGui: " + error);
-            return new(frame.Width, frame.Height, pixels, "Silk.NET + ImGui.NET · OpenGL", draws, allocated, watch.Elapsed.TotalMilliseconds, samples);
+            var pixels = ArrayPool<byte>.Shared.Rent(checked(frame.Width * frame.Height * 4));
+            try
+            {
+                fixed (byte* output = pixels) Gl.ReadPixels(0, 0, width, height, PixelFormat.Bgra, PixelType.UnsignedByte, output);
+                var error = Gl.GetError();
+                if (error != GLEnum.NoError) throw new InvalidOperationException("Ошибка OpenGL при подготовке слоя ImGui: " + error);
+                return new(frame.Width, frame.Height, pixels, "Silk.NET + ImGui.NET · OpenGL", draws, allocated, watch.Elapsed.TotalMilliseconds,
+                    samples, static buffer => ArrayPool<byte>.Shared.Return(buffer));
+            }
+            catch { ArrayPool<byte>.Shared.Return(pixels); throw; }
         }
         finally
         {
             foreach (uint id in textures.Values) Gl.DeleteTexture(id);
-            Gl.DeleteTexture(target); Gl.DeleteFramebuffer(framebuffer);
-            if (multisample != 0) Gl.DeleteFramebuffer(multisample);
-            if (color != 0) Gl.DeleteRenderbuffer(color);
         }
+    }
+
+    private void EnsureSurface(uint width, uint height, int samples)
+    {
+        if (surfaceSize == (width, height, samples)) return;
+        Gl.DeleteTexture(target);
+        Gl.DeleteFramebuffer(framebuffer);
+        Gl.DeleteFramebuffer(multisample);
+        Gl.DeleteRenderbuffer(color);
+        multisample = color = 0;
+        surfaceSize = default;
+        target = Gl.GenTexture();
+        framebuffer = Gl.GenFramebuffer();
+        Gl.BindTexture(Texture.Texture2D, target);
+        Gl.TexImage2D(Texture.Texture2D, 0, InternalFormat.Rgba8, width, height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, null);
+        Gl.BindFramebuffer(FramebufferTarget.Framebuffer, framebuffer);
+        Gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, Texture.Texture2D, target, 0);
+        CheckFramebuffer();
+        if (samples != 0)
+        {
+            multisample = Gl.GenFramebuffer();
+            color = Gl.GenRenderbuffer();
+            Gl.BindFramebuffer(FramebufferTarget.Framebuffer, multisample);
+            Gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, color);
+            Gl.RenderbufferStorageMultisample(RenderbufferTarget.Renderbuffer, (uint)samples, InternalFormat.Rgba8, width, height);
+            Gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, RenderbufferTarget.Renderbuffer, color);
+            CheckFramebuffer();
+        }
+        surfaceSize = (width, height, samples);
     }
 
     private int RenderDrawLists(GraphicsFrame frame, Dictionary<long, uint> textures)

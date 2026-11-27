@@ -17,7 +17,7 @@ public partial class GameWindow
 
     private void RenderNarrative()
     {
-        if (clockSuspended || closed || startupFailed || systemFrozen || MenuOverlay.Visibility == Visibility.Visible)
+        if (clockSuspended || closed || startupFailed || systemFrozen || historyOpen || MenuOverlay.Visibility == Visibility.Visible)
         {
             PauseDialogueReveal();
             DialogueEffects.Stop();
@@ -56,7 +56,7 @@ public partial class GameWindow
 
     private void DialogueRevealTick(object? sender, EventArgs args)
     {
-        if (clockSuspended || closed || startupFailed || systemFrozen || MenuOverlay.Visibility == Visibility.Visible ||
+        if (clockSuspended || closed || startupFailed || systemFrozen || historyOpen || MenuOverlay.Visibility == Visibility.Visible ||
             dialogueRevealFrame is not { Reveal: { } reveal, RemainingSeconds: double remaining } story)
         {
             PauseDialogueReveal();
