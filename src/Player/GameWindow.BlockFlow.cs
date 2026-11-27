@@ -12,7 +12,7 @@ public partial class GameWindow
     {
         UpdatePlayClock();
         RenderOutput();
-        if (pumpingSceneTime || historyOpen) return;
+        if (pumpingSceneTime || historyOpen || confirmation != null) return;
         await RunIdleEventAsync();
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
         double seconds = Math.Clamp(System.Diagnostics.Stopwatch.GetElapsedTime(lastSceneTick, now).TotalSeconds, .001, 60);

@@ -73,6 +73,7 @@ public partial class GameWindow : Window
         bool hasPrelude = useMenu && !string.IsNullOrWhiteSpace(project.Configuration.EntryPoints?.PreMenuScene);
         try
         {
+            await PlayStartupSplashAsync(blockFlowLifetime.Token);
             var scripts = GameScripts.Load(project, pluginsEnabled: EngineLaunch.PluginsEnabled);
             bool usesFiles = scripts.Files.Any(UsesFiles);
             MenuOverlay.IsEnabled = !usesFiles && !useMenu;
@@ -123,15 +124,16 @@ public partial class GameWindow : Window
         FontFamily = new FontFamily(theme.FontFamily);
         Resources["GameTextBrush"] = Brush(theme.TextColor);
         Resources["GameAccentBrush"] = Brush(theme.AccentColor);
+        Resources["GameBackgroundBrush"] = Brush(theme.BackgroundColor);
         Resources["GameButtonBrush"] = Brush(theme.ButtonColor);
         Background = Brush(theme.BackgroundColor);
         DefaultBackground.Background = EnginePresentation.CreateBackground(theme);
         ConfigureDefaultBackdrop();
         DefaultBackgroundImage.Source = theme.BackgroundImage == null ? null : LoadImage(ResourcePaths.Resolve(project.Path, theme.BackgroundImage));
         UpdateDefaultBackdropVisibility(true);
-        DialoguePanel.Height = dialogue.Height;
+        DialoguePanel.Height = dialogue.Height == 240 ? 224 : dialogue.Height;
         DialoguePanel.Margin = new Thickness(dialogue.Margin);
-        DialoguePanel.Padding = new Thickness(dialogue.Padding);
+        DialoguePanel.Padding = dialogue is { Height: 240, Padding: 24 } ? new Thickness(24, 16, 24, 16) : new Thickness(dialogue.Padding);
         DialoguePanel.CornerRadius = new CornerRadius(dialogue.CornerRadius);
         DialoguePanel.Background = Brush(dialogue.BackgroundColor);
         DialoguePanel.BorderBrush = Brush(dialogue.BorderColor);
@@ -210,14 +212,15 @@ public partial class GameWindow : Window
 
     private void SceneArea_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (project == null) return;
-        if (runtime?.Visuals.UiConfigurations.Any(item => item.Target == "dialogue") == true)
-        {
-            DialoguePanel.MaxHeight = double.PositiveInfinity;
-            return;
-        }
-        // Reserve space for the top controls and margins when the player shrinks the window.
-        DialoguePanel.MaxHeight = Math.Max(120, e.NewSize.Height - 2 * project.Engine.Theme.Dialogue.Margin - 80);
+        if (project == null || runtime?.Visuals.UiConfigurations.Any(item => item.Target == "dialogue") == true) return;
+        UpdateDialogueBounds(e.NewSize);
+    }
+
+    private void UpdateDialogueBounds(Size size)
+    {
+        double margin = 2 * project.Engine.Theme.Dialogue.Margin;
+        if (size.Width > margin) DialoguePanel.Width = Math.Min(size.Width * .84, size.Width - margin);
+        if (size.Height > margin) DialoguePanel.MaxHeight = Math.Max(120, size.Height - margin);
     }
 
     private async Task StartGameAsync()
@@ -236,7 +239,8 @@ public partial class GameWindow : Window
                 throw;
             }
             await ReplaceSessionAsync(candidate);
-        }, starting: true, operation: "Запуск игры");
+        }, starting: true, operation: "Запуск игры",
+            startTransition: MenuOverlay.Visibility == Visibility.Visible ? project.Engine.Game.StoryStartTransition : null);
     }
 
     private async Task ReplaceSessionAsync(IGameSession candidate)
@@ -264,8 +268,8 @@ public partial class GameWindow : Window
     private async void StartButton_Click(object sender, RoutedEventArgs e)
     {
         if (startupFailed || execution != null) return;
-        if (ready && MessageBox.Show(this, "Начать новую игру? Несохранённый прогресс будет потерян. Существующие сохранения останутся доступны.",
-                "Новая игра", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        if (ready && !await ConfirmInGameAsync("Новая игра",
+            "Начать новую игру? Несохранённый прогресс будет потерян. Существующие сохранения останутся доступны.")) return;
         await StartGameAsync();
     }
 
@@ -291,6 +295,7 @@ public partial class GameWindow : Window
             if (ready) { ShowGameplay(); return; }
             Notify("Главное меню отключено."); return;
         }
+        SuspendScenePresentation();
         ShowLayout(layout.Id);
         MenuOverlay.Visibility = Visibility.Visible;
         UpdatePlayClock();
@@ -310,6 +315,8 @@ public partial class GameWindow : Window
     private void ShowGameplay()
     {
         if (startupFailed) return;
+        bool restore = ResumeScenePresentation();
+        ClearHistoryScreen();
         lastSceneTick = System.Diagnostics.Stopwatch.GetTimestamp();
         clockSuspended = false;
         activeScreen = null; screenHistory.Clear();
@@ -320,6 +327,7 @@ public partial class GameWindow : Window
         StopMenuMusic();
         ResumeAudio();
         DialoguePanel.Focus();
+        if (restore && execution == null) RenderOutput();
     }
 
     private void ToggleFullscreen()
@@ -351,9 +359,10 @@ public partial class GameWindow : Window
         noticeUntil = DateTime.UtcNow.AddSeconds(5);
     }
 
-    private async Task ExecuteAsync(Func<Task> action, bool starting = false, string operation = "Выполнение сценария", bool playerAction = false)
+    private async Task ExecuteAsync(Func<Task> action, bool starting = false, string operation = "Выполнение сценария", bool playerAction = false,
+        MenuTransitionSettings? startTransition = null)
     {
-        if (closed || startupFailed || execution != null || pumpingSceneTime) return;
+        if (closed || startupFailed || returningToMenu || execution != null || pumpingSceneTime) return;
         clockSuspended = false;
         execution = new CancellationTokenSource();
         string? operationNotice = null;
@@ -368,6 +377,9 @@ public partial class GameWindow : Window
         StatusText.Text = starting ? "Загрузка сценария…" : "Выполнение команды…";
         try
         {
+            var menuRoot = (Grid)Content;
+            var previousMenu = startTransition == null ? null : CaptureMenuTransition(startTransition);
+            if (previousMenu != null) transitionCover = SceneTransitionPresenter.Hold(menuRoot, previousMenu);
             var previousScene = runtime.Visuals.Scene;
             var previousFrame = runtime.Story;
             string previousKind = previousFrame.Kind;
@@ -379,7 +391,7 @@ public partial class GameWindow : Window
                 { operationNotice = "Откат для этого действия недоступен: " + error.Message; QueueOutput(operationNotice); }
             }
             await action();
-            var previousImage = NeedsSceneTransition(previousScene, starting) ? SceneTransitionPresenter.Capture(SceneArea) : null;
+            var previousImage = previousMenu == null && NeedsSceneTransition(previousScene, starting) ? SceneTransitionPresenter.Capture(SceneArea) : null;
             if (previousImage != null) transitionCover = SceneTransitionPresenter.Hold(SceneArea, previousImage);
             if (before != null && !SameNarrativeStop(previousFrame, runtime.Story)) rollback.Push(before);
             if (closed) return;
@@ -400,7 +412,12 @@ public partial class GameWindow : Window
             }
             var currentScene = runtime.Visuals.Scene;
             transitionCover?.Dispose(); transitionCover = null;
-            if (previousImage != null && currentScene != null && SceneChanged(previousScene, starting))
+            if (previousMenu != null)
+            {
+                PresentSceneOutput();
+                if (!closed && !startupFailed) await SceneTransitionPresenter.PlayMenuAsync(menuRoot, previousMenu, startTransition!, execution.Token);
+            }
+            else if (previousImage != null && currentScene != null && SceneChanged(previousScene, starting))
             {
                 PresentSceneOutput();
                 if (!closed && !startupFailed) await SceneTransitionPresenter.PlayAsync(this, project, SceneArea, previousImage,
@@ -540,6 +557,19 @@ public partial class GameWindow : Window
 
     private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (StartupSplash.Visibility == Visibility.Visible || returningToMenu) { e.Handled = true; return; }
+        if (ConfirmationOverlay.Visibility == Visibility.Visible)
+        {
+            if (e.Key == Key.Escape) { CompleteConfirmation(false); e.Handled = true; }
+            else if (e.Key is not (Key.Tab or Key.Enter or Key.Space)) e.Handled = true;
+            return;
+        }
+        if (historyOpen)
+        {
+            if (e.Key == Key.Escape) { CloseHistory(); e.Handled = true; }
+            else if (e.Key == Key.F11) { ToggleFullscreen(); e.Handled = true; }
+            return;
+        }
         if (systemFrozen) { HandleFrozenInput(e); return; }
         if (HandleVideoInput(e)) return;
         if ((!startupFailed || IsConsoleOpen) && TryToggleConsole(e)) return;
@@ -577,6 +607,7 @@ public partial class GameWindow : Window
     private async void Window_Closed(object? sender, EventArgs e)
     {
         DisposePlayerPlugins();
+        CompleteConfirmation(false);
         closed = true; preloading?.Cancel(); preloading?.Dispose(); assets.Clear();
         SetConsoleVisible(false, focus: false);
         CompositionTarget.Rendering -= PerformanceRendering;
@@ -613,6 +644,11 @@ public partial class GameWindow : Window
         if (NoticePanel.Visibility == Visibility.Visible && execution == null && DateTime.UtcNow >= noticeUntil)
             NoticePanel.Visibility = Visibility.Collapsed;
         RenderConsole();
+        if (scenePresentationSuspended || returningToMenu)
+        {
+            UpdateScreenButtons();
+            return;
+        }
         var settings = runtime.WindowSettings;
         if (settings != renderedSettings)
         {
@@ -698,13 +734,16 @@ public partial class GameWindow : Window
     private void RenderVisuals()
     {
         var scene = runtime.Visuals;
-        if (scene == renderedVisuals)
+        bool restore = restoreSceneImages;
+        restoreSceneImages = false;
+        if (scene == renderedVisuals && !restore)
         {
             if (scenePolicyChanged) { RenderBlockEffects(scene); scenePolicyChanged = false; }
             return;
         }
-        if (scene.Background != renderedVisuals?.Background) BackgroundImage.Source = LoadImage(scene.Background);
-        if (scene.Character != renderedVisuals?.Character) CharacterImage.Source = LoadImage(scene.Character);
+        if (restore || scene.Background != renderedVisuals?.Background) BackgroundImage.Source = LoadImage(scene.Background);
+        if (restore || scene.Character != renderedVisuals?.Character) CharacterImage.Source = LoadImage(scene.Character);
+        if (restore && project.Engine.Theme.BackgroundImage is { } image) DefaultBackgroundImage.Source = LoadImage(ResourcePaths.Resolve(project.Path, image));
         CharacterImage.HorizontalAlignment = scene.Position switch { "left" => HorizontalAlignment.Left, "right" => HorizontalAlignment.Right, _ => HorizontalAlignment.Center };
         try
         {

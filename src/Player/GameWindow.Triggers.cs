@@ -29,7 +29,7 @@ public partial class GameWindow
         };
         DialoguePanel.IsVisibleChanged += (_, args) =>
         {
-            if (ready && !startupFailed && !closed && args.OldValue is true && args.NewValue is false)
+            if (ready && !historyOpen && !startupFailed && !closed && args.OldValue is true && args.NewValue is false)
             {
                 QueueTrigger(SceneVisit, new("text_closed"));
             }
@@ -37,7 +37,7 @@ public partial class GameWindow
     }
     private WindowTriggerScope? TriggerScope()
     {
-        if (!ready || closed || startupFailed || systemFrozen || historyOpen || videoPlayback != null || MenuOverlay.Visibility == Visibility.Visible)
+        if (!ready || closed || startupFailed || systemFrozen || historyOpen || confirmation != null || videoPlayback != null || MenuOverlay.Visibility == Visibility.Visible)
             return null;
         var story = runtime.Story;
         return !story.Completed && story.Triggers.Count != 0 ? new(SceneVisit, story.Triggers) : null;

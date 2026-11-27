@@ -14,5 +14,6 @@ public partial class GameWindow
                 ["rollback"] = RollbackButton, ["history"] = HistoryButton
             }, project.Path, assets);
         gameplayUi.Apply(visuals);
+        if (!visuals.UiConfigurations.Any(item => item.Target == "dialogue")) UpdateDialogueBounds(SceneArea.RenderSize);
     }
 }

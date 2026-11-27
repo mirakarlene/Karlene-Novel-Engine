@@ -1,0 +1,56 @@
+<UserControl x:Class="KNE.TutorialsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <Style x:Key="TutorialMode" TargetType="RadioButton">
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Segment" Background="Transparent" Padding="{TemplateBinding Padding}"
+                                BorderBrush="Transparent" BorderThickness="1" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Segment" Property="Background" Value="{DynamicResource Editor.Hover}"/></Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Segment" Property="Background" Value="{DynamicResource KNE.AccentBrush}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Segment" Property="BorderBrush" Value="{DynamicResource Editor.Text}"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+    <Grid MaxWidth="880" Margin="0,32" VerticalAlignment="Top">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <DockPanel Margin="0,0,0,22">
+            <Button DockPanel.Dock="Right" Content="На главный экран" Padding="12,6" Click="Back_Click"/>
+            <TextBlock Text="Туториалы" FontSize="28" FontWeight="SemiBold"/>
+        </DockPanel>
+        <Border Grid.Row="1" Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}"
+                BorderThickness="1" Padding="2" CornerRadius="10" HorizontalAlignment="Left" Margin="0,0,0,18">
+            <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="TraditionalMode" Content="Традиционный код"
+                             GroupName="TutorialMode" Style="{StaticResource TutorialMode}" Checked="Mode_Checked"/>
+                <RadioButton x:Name="VisualNodesMode" Content="Визуальные ноды"
+                             GroupName="TutorialMode" Style="{StaticResource TutorialMode}" Checked="Mode_Checked"/>
+            </StackPanel>
+        </Border>
+        <ItemsControl x:Name="TutorialList" Grid.Row="2">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Background="{DynamicResource Editor.Surface}" BorderBrush="{DynamicResource Editor.Border}"
+                            BorderThickness="1" CornerRadius="8" Margin="0,0,0,8" Padding="14">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Text="Готовится" Foreground="{DynamicResource Editor.Muted}" Margin="20,0,0,0"/>
+                            <TextBlock Text="{Binding}" FontSize="15" TextWrapping="Wrap"/>
+                        </DockPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </Grid>
+</UserControl>

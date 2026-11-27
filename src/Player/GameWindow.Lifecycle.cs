@@ -45,7 +45,7 @@ public partial class GameWindow
 
     private void RunMainMenuEvent()
     {
-        if (!loaded || ready || !HasProjectEvent("menu")) return;
+        if (!loaded || ready || returningToMenu || !HasProjectEvent("menu")) return;
         var session = runtime;
         _ = Dispatcher.BeginInvoke(new Action(async () =>
         {
@@ -130,9 +130,11 @@ public partial class GameWindow
             if (!closed) QueueOutput("Скрипт выхода: " + error.Message);
         }
         if (closed) return;
-        exitRequested = false;
-        if (!(ConfirmProjectExit?.Invoke() ?? MessageBox.Show(this, "Выйти из игры?", "Подтвердите выход",
-            MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)) return;
+        bool confirmed;
+        try { confirmed = ConfirmProjectExit?.Invoke() ?? await ConfirmInGameAsync("Подтвердите выход", "Выйти из игры?"); }
+        finally { exitRequested = false; }
+        if (!confirmed) return;
+        if (closed) return;
         exitApproved = true;
         Close();
     }

@@ -60,72 +60,68 @@ public sealed class RevisionWorkspaceTests
     }
 
     [Fact]
-    public Task HelpTilesStayOnTheWelcomeScreenAndGuideOpensTheFreshLocalHtml() => WorkspaceTabsTests.Sta(async () =>
+    public Task HelpDialogOpensDocumentationOrReplacesWelcomeWithTheTutorialsPage() => WorkspaceTabsTests.Sta(async () =>
     {
         using var fixture = new Fixture();
-        var window = Window(fixture, new());
+        var window = Window(fixture, new() { Theme = "forest" });
         try
         {
+            _ = new System.Windows.Interop.WindowInteropHelper(window).EnsureHandle();
             string directory = Path.Combine(fixture.Root, "manual");
             window.HelpDocumentDirectory = directory;
             var launched = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             window.OpenHelpDocument = path => launched.TrySetResult(path);
-            var options = WorkspaceTabsTests.Find<WrapPanel>(window, "WelcomeHelpOptions");
-            Assert.Equal(Visibility.Collapsed, options.Visibility);
-            Invoke(window, "BtnHelp_Click", new Button(), new RoutedEventArgs());
-            Assert.Equal(Visibility.Visible, options.Visibility);
-            Assert.False(launched.Task.IsCompleted);
-            var tiles = options.Children.OfType<Button>().ToArray();
-            Assert.Equal(new[] { "Руководство", "Туториалы" }, tiles.Select(System.Windows.Automation.AutomationProperties.GetName));
-            Assert.All(tiles, tile => Assert.IsType<System.Windows.Shapes.Path>(((StackPanel)tile.Content).Children[0]));
-            var recent = WorkspaceTabsTests.Find<ItemsControl>(window, "RecentProjectsList");
-            recent.ItemsSource = Enumerable.Range(1, 12).Select(index => new { Label = $"Проект {index}", IsAvailable = true }).ToArray();
+            var welcome = WorkspaceTabsTests.Find<StackPanel>(window, "WelcomePanel");
+            var tutorials = WorkspaceTabsTests.Find<TutorialsPage>(window, "TutorialsPanel");
+            Assert.Equal(Visibility.Visible, welcome.Visibility);
+            Assert.Equal(Visibility.Collapsed, tutorials.Visibility);
+            string[]? labels = null;
+
+            ChooseHelpTile(0);
+            string opened = await launched.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(Path.Combine(directory, "blocks.html"), opened);
+            Assert.Contains("<article id=\"Subsystem\">", await File.ReadAllTextAsync(opened));
+            Assert.Equal(new[] { "Документация", "Туториалы" }, labels);
+            await Idle(window);
+            Assert.Equal(Visibility.Visible, welcome.Visibility);
+
+            ChooseHelpTile(1);
+            Assert.Equal(Visibility.Collapsed, welcome.Visibility);
+            Assert.Equal(Visibility.Visible, tutorials.Visibility);
+            Assert.DoesNotContain(window.OwnedWindows.Cast<Window>(), child => child.IsVisible);
+            var traditional = WorkspaceTabsTests.Find<RadioButton>(tutorials, "TraditionalMode");
+            var visual = WorkspaceTabsTests.Find<RadioButton>(tutorials, "VisualNodesMode");
+            var list = WorkspaceTabsTests.Find<ItemsControl>(tutorials, "TutorialList");
+            Assert.True(traditional.IsChecked);
+            Assert.Contains("Первая сцена на KRL", list.Items.OfType<string>());
+            visual.IsChecked = true;
+            Assert.False(traditional.IsChecked);
+            Assert.Contains("Первая сцена в блок-схеме", list.Items.OfType<string>());
             var view = (FrameworkElement)window.Content;
             foreach (var size in new[] { new Size(1080, 660), new Size(1480, 910) })
             {
                 view.Measure(size); view.Arrange(new Rect(size)); view.UpdateLayout();
-                Assert.All(tiles, tile =>
-                {
-                    var edge = tile.TranslatePoint(new Point(tile.ActualWidth, tile.ActualHeight), view);
-                    Assert.InRange(edge.X, 0, size.Width);
-                    Assert.InRange(edge.Y, 0, size.Height);
-                });
-                var welcome = WorkspaceTabsTests.Find<StackPanel>(window, "WelcomePanel");
-                Assert.InRange(welcome.TranslatePoint(new Point(), view).Y, 0, size.Height);
-                Assert.InRange(welcome.TranslatePoint(new Point(0, welcome.ActualHeight), view).Y, 0, size.Height);
+                var edge = list.TranslatePoint(new Point(list.ActualWidth, list.ActualHeight), view);
+                Assert.InRange(edge.X, 0, size.Width);
+                Assert.InRange(edge.Y, 0, size.Height);
             }
-            tiles[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            string opened = await launched.Task.WaitAsync(TimeSpan.FromSeconds(10));
-            Assert.Equal(Path.Combine(directory, "blocks.html"), opened);
-            Assert.Contains("<article id=\"Subsystem\">", await File.ReadAllTextAsync(opened));
-            Assert.Contains("<article id=\"Formula\">", await File.ReadAllTextAsync(opened));
-            await Idle(window);
-            Assert.Equal(Visibility.Visible, WorkspaceTabsTests.Find<StackPanel>(window, "WelcomePanel").Visibility);
-            Invoke(window, "BtnHelp_Click", new Button(), new RoutedEventArgs());
-            Assert.Equal(Visibility.Collapsed, options.Visibility);
+            Invoke(window, "TutorialsBack_Click", new Button(), new RoutedEventArgs());
+            Assert.Equal(Visibility.Visible, welcome.Visibility);
+            Assert.Equal(Visibility.Collapsed, tutorials.Visibility);
+
+            void ChooseHelpTile(int index)
+            {
+                _ = window.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    var dialog = window.OwnedWindows.OfType<HelpChoicesWindow>().Single();
+                    var tiles = ((WrapPanel)dialog.Content).Children.OfType<Button>().ToArray();
+                    labels = tiles.Select(System.Windows.Automation.AutomationProperties.GetName).ToArray();
+                    tiles[index].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                }));
+                Invoke(window, "BtnHelp_Click", new Button(), new RoutedEventArgs());
+            }
         }
         finally { window.Close(); }
-    });
-
-    [Fact]
-    public Task TutorialWindowUsesTheSelectedPaletteAndSwitchesAuthoringModes() => WorkspaceTabsTests.Sta(() =>
-    {
-        var tutorial = new TutorialWindow("forest");
-        try
-        {
-            Assert.Same(tutorial.FindResource("Editor.Background"), tutorial.Background);
-            var traditional = WorkspaceTabsTests.Find<RadioButton>(tutorial, "TraditionalMode");
-            var visual = WorkspaceTabsTests.Find<RadioButton>(tutorial, "VisualNodesMode");
-            Assert.True(traditional.IsChecked);
-            Assert.False(visual.IsChecked);
-            visual.IsChecked = true;
-            Assert.False(traditional.IsChecked);
-            Assert.True(visual.IsChecked);
-            var tile = WorkspaceTabsTests.Find<Button>(tutorial, "TutorialPlaceholder");
-            Assert.Equal("…", Assert.IsType<TextBlock>(tile.Content).Text);
-        }
-        finally { tutorial.Close(); }
-        return Task.CompletedTask;
     });
 
     [Fact]

@@ -14,16 +14,16 @@ public partial class MainWindow
     {
         if (WelcomePanel.Visibility == Visibility.Visible)
         {
-            WelcomeHelpOptions.Visibility = WelcomeHelpOptions.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+            var help = new HelpChoicesWindow(this, settings.Theme);
+            if (help.ShowDialog() != true) return;
+            if (help.ShowTutorials) ShowPanel(TutorialsPanel);
+            else await OpenGuideAsync();
             return;
         }
         await OpenGuideAsync();
     }
 
-    private async void Guide_Click(object sender, RoutedEventArgs e) => await OpenGuideAsync();
-
-    private void Tutorials_Click(object sender, RoutedEventArgs e) =>
-        new TutorialWindow(settings.Theme) { Owner = this }.ShowDialog();
+    private void TutorialsBack_Click(object sender, RoutedEventArgs e) => ShowPanel(WelcomePanel);
 
     private Task OpenGuideAsync() => RunOperationAsync(async () =>
     {

@@ -40,7 +40,7 @@ public partial class MainWindow
         var options = ProjectBuildSettingsStore.Load(project.Path);
         if (options.TestMode == "vm")
         {
-            await GameStartupSplash.ShowThenAsync(project, () => new GameWindow(project).ShowVmTest(this), lifetime.Token);
+            new GameWindow(project).ShowVmTest(this);
             return;
         }
         RemoteDebugView? debug = null;

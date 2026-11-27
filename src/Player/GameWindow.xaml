@@ -8,6 +8,7 @@
         <ResourceDictionary><ResourceDictionary.MergedDictionaries><ResourceDictionary Source="../Editor/Themes/ScrollChrome.xaml"/></ResourceDictionary.MergedDictionaries>
         <SolidColorBrush x:Key="GameTextBrush" Color="#FFF5EEFF"/>
         <SolidColorBrush x:Key="GameAccentBrush" Color="#FFD3ACFF"/>
+        <SolidColorBrush x:Key="GameBackgroundBrush" Color="#FF201134"/>
         <SolidColorBrush x:Key="GameButtonBrush" Color="#EB3C2654"/>
         <DataTemplate x:Key="ChoiceLabelTemplate"><TextBlock Text="{Binding}" TextWrapping="Wrap"/></DataTemplate>
         <Style TargetType="Button">
@@ -57,8 +58,8 @@
             </Grid>
             <Grid x:Name="ShaderUiLayer">
             <TextBlock x:Name="SceneTitle" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" FontSize="36" Foreground="{DynamicResource GameTextBrush}" Margin="48" IsHitTestVisible="False" Visibility="Collapsed"/>
-            <Border x:Name="DialoguePanel" VerticalAlignment="Bottom" Height="240"
-                    Background="#ED21162F" BorderBrush="#FF8E60B5" BorderThickness="1" CornerRadius="16" Margin="28" Padding="24"
+            <Border x:Name="DialoguePanel" VerticalAlignment="Bottom" HorizontalAlignment="Center" MaxWidth="960" Height="224"
+                    Background="#ED21162F" BorderBrush="#FF8E60B5" BorderThickness="1" CornerRadius="16" Margin="28" Padding="24,16"
                     Focusable="True" Visibility="Collapsed">
                 <Grid>
                     <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -74,14 +75,11 @@
                         </StackPanel>
                     </ScrollViewer>
                     <Grid x:Name="DialogueFooter" Grid.Row="1" Margin="0,8,0,0">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel x:Name="GameControls" Orientation="Horizontal" HorizontalAlignment="Left" Visibility="Collapsed">
+                        <StackPanel x:Name="GameControls" Orientation="Horizontal" HorizontalAlignment="Center" Visibility="Collapsed">
                             <Button x:Name="SaveButton" Content="Сохранить" Style="{StaticResource DialogueFooterButton}" Margin="0,0,6,0" Click="SaveButton_Click" IsEnabled="False"/>
                             <Button x:Name="LoadButton" Content="Загрузить" Style="{StaticResource DialogueFooterButton}" Margin="0,0,6,0" Click="LoadButton_Click" IsEnabled="False"/>
                             <Button x:Name="LoadAutoButton" Content="Автосохранение" Tag="auto" Style="{StaticResource DialogueFooterButton}" Margin="0,0,6,0" Click="LoadButton_Click" IsEnabled="False"/>
-                            <Button x:Name="PauseButton" Content="Меню" Style="{StaticResource DialogueFooterButton}" Click="PauseButton_Click"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button x:Name="PauseButton" Content="Меню" Style="{StaticResource DialogueFooterButton}" Margin="0,0,6,0" Click="PauseButton_Click"/>
                             <Button x:Name="RollbackButton" Content="Назад" Style="{StaticResource DialogueFooterButton}" Margin="0,0,6,0"
                                     Click="RollbackButton_Click" IsEnabled="False"/>
                             <Button x:Name="HistoryButton" Content="История" Style="{StaticResource DialogueFooterButton}"
@@ -141,7 +139,60 @@
                     <Button Content="Назад" Click="ScreenBack_Click"/>
                 </StackPanel>
             </Border>
+            <Border x:Name="HistoryScreen" Visibility="Collapsed" Margin="24" Padding="20" MaxWidth="1050" CornerRadius="16"
+                    BorderThickness="1" BorderBrush="{DynamicResource GameAccentBrush}" Background="{DynamicResource GameBackgroundBrush}">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <TextBlock Text="История" FontSize="28" Foreground="{DynamicResource GameTextBrush}" Margin="0,0,0,12"/>
+                    <ListBox x:Name="HistoryEntries" Grid.Row="1" BorderThickness="0" Background="Transparent"
+                             Foreground="{DynamicResource GameTextBrush}" HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.VirtualizationMode="Recycling">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,6">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="1*"/><ColumnDefinition Width="4*"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Speaker}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,12,0"
+                                               Foreground="{DynamicResource GameAccentBrush}"/>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="ChoiceLabel" Text="Выбранный ответ" Opacity="0.7" Visibility="Collapsed"/>
+                                        <TextBlock x:Name="BranchLabel" Text="Отменено откатом" Opacity="0.7" Visibility="Collapsed"/>
+                                    </StackPanel>
+                                </Grid>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding Choice}" Value="True"><Setter TargetName="ChoiceLabel" Property="Visibility" Value="Visible"/></DataTrigger>
+                                    <DataTrigger Binding="{Binding RolledBack}" Value="True"><Setter TargetName="BranchLabel" Property="Visibility" Value="Visible"/></DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock x:Name="HistoryEmpty" Grid.Row="1" Text="История пока пуста." IsHitTestVisible="False"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource GameTextBrush}"/>
+                    <Button x:Name="HistoryBackButton" Grid.Row="2" Content="Назад" Click="HistoryBack_Click"
+                            HorizontalAlignment="Right" Margin="0,12,0,0" Padding="12,5"/>
+                </Grid>
+            </Border>
             </Grid>
+        </Border>
+        <Grid x:Name="ConfirmationOverlay" Panel.ZIndex="110" Visibility="Collapsed" Background="#99000000"
+              KeyboardNavigation.TabNavigation="Cycle">
+            <Border MaxWidth="520" Margin="24" Padding="20" VerticalAlignment="Center" CornerRadius="12" BorderThickness="1"
+                    Background="{DynamicResource GameBackgroundBrush}" BorderBrush="{DynamicResource GameAccentBrush}">
+                <StackPanel>
+                    <TextBlock x:Name="ConfirmationTitle" FontSize="21" FontWeight="SemiBold" TextWrapping="Wrap"
+                               Foreground="{DynamicResource GameTextBrush}" Margin="0,0,0,12"/>
+                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
+                        <TextBlock x:Name="ConfirmationMessage" TextWrapping="Wrap" Foreground="{DynamicResource GameTextBrush}"/>
+                    </ScrollViewer>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                        <Button x:Name="ConfirmationYes" Content="Да" Padding="12,5" Click="Confirmation_Click"/>
+                        <Button x:Name="ConfirmationNo" Content="Нет" Padding="12,5" Margin="8,0,0,0" Click="Confirmation_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+        <Border x:Name="StartupSplash" Panel.ZIndex="109" Visibility="Collapsed" Background="Black">
+            <Image x:Name="StartupSplashImage" Stretch="Uniform"/>
         </Border>
         <Border x:Name="DebugOverlay" Panel.ZIndex="10" VerticalAlignment="Top" Background="#F0181024" BorderBrush="#FF8E60B5" BorderThickness="1" Padding="16" Margin="16" Visibility="Collapsed">
             <Grid>

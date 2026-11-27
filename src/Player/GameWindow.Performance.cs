@@ -54,13 +54,18 @@ public partial class GameWindow
         assets.Configure(saved.Graphics); GraphicsEnvironment.SetSettings(this, saved.LayerGraphics);
         if (textureChanged)
         {
-            BackgroundImage.Source = LoadImage(runtime.Visuals.Background); CharacterImage.Source = LoadImage(runtime.Visuals.Character); gameplayUi?.Reset();
-            DefaultBackgroundImage.Source = project.Engine.Theme.BackgroundImage == null ? null : LoadImage(ResourcePaths.Resolve(project.Path, project.Engine.Theme.BackgroundImage));
+            if (!scenePresentationSuspended)
+            {
+                BackgroundImage.Source = LoadImage(runtime.Visuals.Background);
+                CharacterImage.Source = LoadImage(runtime.Visuals.Character);
+                DefaultBackgroundImage.Source = project.Engine.Theme.BackgroundImage == null ? null : LoadImage(ResourcePaths.Resolve(project.Path, project.Engine.Theme.BackgroundImage));
+            }
+            gameplayUi?.Reset();
             refreshScreenResources = true; scenePolicyChanged = true;
             if (activeScreen is { } screen) ShowLayout(screen);
         }
         performanceScene = null; lastPerformanceReport = 0; performancePacer.Reset();
-        UpdatePerformance();
+        if (!scenePresentationSuspended) UpdatePerformance();
     }
     private void ConfigureDefaultBackdrop() => AnimatedBackdrop.Configure(project.Engine.Theme,
         preferences.Animate && !project.Engine.Performance.DisableDefaultAnimations);

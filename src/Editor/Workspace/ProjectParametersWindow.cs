@@ -156,12 +156,12 @@ public sealed partial class ProjectParametersWindow : Window
         ParameterLayout.Compact((Panel)securityCard.Child);
         foreach (Border card in BuildInput.Children.OfType<Border>()) { card.Padding = new(8); card.Margin = new(0, 0, 0, 4); ParameterLayout.Compact((Panel)card.Child); }
         foreach (FrameworkElement card in new FrameworkElement[] { storageCard, diagnosticCard, securityCard }) card.Margin = new(0);
-        ParameterLayout.Compact(console);
-        foreach (var panel in new[] { graphics, performance, console, storage, diagnostics, (Panel)securityCard.Child }) ParameterLayout.SpreadFields(panel);
+        foreach (var panel in new[] { graphics, performance, storage, diagnostics, (Panel)securityCard.Child }) ParameterLayout.SpreadFields(panel);
         ParameterLayout.Compact(renderer); ParameterLayout.SpreadFields(renderer); graphics.Children.Add(renderer);
         var buildCards = BuildInput.Children.OfType<Border>().ToArray();
         foreach (var card in buildCards) { ParameterLayout.SpreadFields((Panel)card.Child); }
-        pages.Add(ParameterLayout.Cards(left, right, Card(console))); pages.Add(ParameterLayout.Cards(storageCard, diagnosticCard));
+        pages.Add(ParameterLayout.Cards(left, right, ParameterLayout.Columns(RuntimeOptionsCard(console), MenuSettingsCard())));
+        pages.Add(ParameterLayout.Cards(storageCard, diagnosticCard));
         pages.Add(ParameterLayout.Cards(BuildInput, securityCard));
         var metadataCard = Card(MetadataInput);
         metadataCard.Margin = new(12, 0, 12, 8);

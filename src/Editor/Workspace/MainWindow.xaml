@@ -22,33 +22,9 @@
                     <Button Content="Настройки" Padding="14,10" Margin="5" Click="BtnSettings_Click"/>
                     <Button Content="Помощь" Padding="14,10" Margin="5" Click="BtnHelp_Click"/>
                 </WrapPanel>
-                <WrapPanel x:Name="WelcomeHelpOptions" Height="90" HorizontalAlignment="Center" Visibility="Collapsed">
-                    <Button Width="148" Height="78" Margin="0,6,8,6" Click="Guide_Click" AutomationProperties.Name="Руководство">
-                        <StackPanel>
-                            <Path Width="28" Height="24" Stretch="Uniform" HorizontalAlignment="Center" Stroke="{DynamicResource Editor.Text}" StrokeThickness="1.5"
-                                  Data="M 14,5 C 10,2 6,2 2,3 L 2,20 C 7,19 11,20 14,22 C 17,20 21,19 26,20 L 26,3 C 22,2 18,2 14,5 M 14,5 L 14,22"/>
-                            <TextBlock Text="Руководство" Margin="0,5,0,0" TextAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Width="148" Height="78" Margin="8,6,0,6" Click="Tutorials_Click" AutomationProperties.Name="Туториалы">
-                        <StackPanel>
-                            <Path Width="28" Height="24" Stretch="Uniform" HorizontalAlignment="Center" Stroke="{DynamicResource Editor.Text}" StrokeThickness="1.5"
-                                  Data="M 2,3 H 26 V 21 H 2 Z M 11,7 L 19,12 L 11,17 Z"/>
-                            <TextBlock Text="Туториалы" Margin="0,5,0,0" TextAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                </WrapPanel>
                 <StackPanel Width="680" HorizontalAlignment="Center">
                 <TextBlock x:Name="RecentProjectsHeading" Text="Последние проекты" FontSize="16" FontWeight="Bold" Margin="15,20,0,8"/>
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <ScrollViewer.Style>
-                        <Style TargetType="ScrollViewer" BasedOn="{StaticResource {x:Type ScrollViewer}}">
-                            <Setter Property="MaxHeight" Value="340"/>
-                            <Style.Triggers><DataTrigger Binding="{Binding Visibility, ElementName=WelcomeHelpOptions}" Value="Visible">
-                                <Setter Property="MaxHeight" Value="208"/>
-                            </DataTrigger></Style.Triggers>
-                        </Style>
-                    </ScrollViewer.Style>
+                <ScrollViewer MaxHeight="340" VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="RecentProjectsList">
                         <ItemsControl.ItemTemplate><DataTemplate>
                             <DockPanel Margin="5,3">
@@ -64,6 +40,7 @@
                 </StackPanel>
             </StackPanel>
 
+            <local:TutorialsPage x:Name="TutorialsPanel" Visibility="Collapsed" BackRequested="TutorialsBack_Click"/>
             <Grid x:Name="ProjectPanel" Visibility="Collapsed" Background="{DynamicResource Editor.Background}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>

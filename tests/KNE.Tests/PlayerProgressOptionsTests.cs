@@ -51,41 +51,108 @@ public sealed class PlayerProgressOptionsTests
 
             await InvokeTask(game, "LoadGameAsync", "quick");
             Assert.Equal(journal.Entries, Field<IGameSession>(game, "runtime").DialogueJournal!.Entries);
-            _ = new System.Windows.Interop.WindowInteropHelper(game).EnsureHandle();
-            DialogueHistoryEntry[]? displayed = null;
-            var layouts = new List<(double ListHeight, double CloseBottom, double AvailableHeight)>();
-            _ = game.Dispatcher.BeginInvoke(new Action(() =>
-            {
-                var dialog = game.OwnedWindows.OfType<GameHistoryWindow>().Single();
-                try
-                {
-                    var list = Find<ListBox>(dialog, "Entries");
-                    var root = (Grid)dialog.Content;
-                    var close = root.Children.OfType<Button>().Single();
-                    displayed = list.Items.OfType<DialogueHistoryEntry>().ToArray();
-                    foreach (Size size in new[] { new Size(dialog.Width, dialog.Height), new Size(dialog.MinWidth, dialog.MinHeight) })
-                    {
-                        dialog.Width = size.Width;
-                        dialog.Height = size.Height;
-                        dialog.UpdateLayout();
-                        layouts.Add((list.ActualHeight, close.TranslatePoint(new Point(0, close.ActualHeight), root).Y, root.ActualHeight));
-                    }
-                }
-                finally { dialog.Close(); }
-            }));
             Find<Button>(game, "HistoryButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal(journal.Entries, displayed);
-            Assert.Equal(2, layouts.Count);
-            Assert.All(layouts, layout =>
+            var list = Find<ListBox>(game, "HistoryEntries");
+            var screen = Find<Border>(game, "HistoryScreen");
+            var back = Find<Button>(game, "HistoryBackButton");
+            Assert.Equal(Visibility.Visible, screen.Visibility);
+            Assert.Equal(Visibility.Collapsed, Find<Border>(game, "DialoguePanel").Visibility);
+            Assert.Empty(game.OwnedWindows.Cast<Window>());
+            Assert.Equal(journal.Entries, list.Items.OfType<DialogueHistoryEntry>());
+            var root = (Grid)game.Content;
+            foreach (var size in new[] { new Size(1280, 720), new Size(640, 480) })
             {
-                Assert.True(layout.ListHeight > 100);
-                Assert.InRange(layout.CloseBottom, layout.ListHeight, layout.AvailableHeight + 0.5);
-            });
+                root.Measure(size); root.Arrange(new Rect(size)); root.UpdateLayout();
+                Assert.True(list.ActualHeight > 100);
+                var edge = back.TranslatePoint(new Point(back.ActualWidth, back.ActualHeight), root);
+                Assert.InRange(edge.X, 0, size.Width);
+                Assert.InRange(edge.Y, 0, size.Height);
+            }
+            back.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(Visibility.Collapsed, screen.Visibility);
+            Assert.Equal("Правая ветка", Field<IGameSession>(game, "runtime").Story.Text);
         }
         finally { game.Close(); }
 
         void ClickChoice(int index) => ((Button)Find<StackPanel>(game, "ChoicePanel").Children[index])
             .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    });
+
+    [Fact]
+    public Task PauseReleasesSceneImagesAndRestoresThemBeforePermanentReturnToMenu() => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        WritePng(fixture, "scene.png");
+        WritePng(fixture, "sprite.png");
+        fixture.Write("game/scenes/main.krl", """
+            function main()
+                set_text_speed(0)
+                background('scene.png')
+                show_character('sprite.png', 'center')
+                d(nil, 'first')
+                kne_end('menu')
+            end
+            """);
+        await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, new() { Preloading = false });
+        var project = await fixture.LoadAsync();
+        project.Engine.Game.StoryStartTransition = new() { Kind = "fade", Duration = .1 };
+        project.Engine.Game.MainMenuReturnTransition = new() { Kind = "wipe", Direction = "down", Duration = .1 };
+        var game = new GameWindow(project) { ShowActivated = false, ShowInTaskbar = false };
+        try
+        {
+            game.Show();
+            await WaitUntil(game, () => Field<string>(game, "activeScreen") == "main_menu");
+            var root = (Grid)game.Content;
+            Task start = InvokeTask(game, "StartGameAsync");
+            Assert.Contains(root.Children.OfType<Image>(), image => Panel.GetZIndex(image) == int.MaxValue);
+            await start;
+            Assert.DoesNotContain(root.Children.OfType<Image>(), image => Panel.GetZIndex(image) == int.MaxValue);
+            var cache = Field<SceneAssetCache>(game, "assets");
+            var background = Find<Image>(game, "BackgroundImage");
+            var sprite = Find<Image>(game, "CharacterImage");
+            var session = Field<IGameSession>(game, "runtime");
+            Assert.NotNull(background.Source);
+            Assert.NotNull(sprite.Source);
+            Assert.Equal(2, cache.CachedCount);
+            Invoke(game, "ShowMenu");
+            Invoke(game, "RenderOutput");
+            Assert.Null(background.Source);
+            Assert.Null(sprite.Source);
+            Assert.Equal(0, cache.CachedCount);
+            Assert.Same(session, Field<IGameSession>(game, "runtime"));
+            Invoke(game, "ShowGameplay");
+            Assert.Equal("first", session.Story.Text);
+            Assert.NotNull(background.Source);
+            Assert.NotNull(sprite.Source);
+            Assert.Equal(2, cache.CachedCount);
+            await game.ContinueDialogueAsync();
+            await WaitUntil(game, () => !ReferenceEquals(session, Field<IGameSession>(game, "runtime")) && !Field<bool>(game, "returningToMenu"));
+            Assert.DoesNotContain(root.Children.OfType<Grid>(), layer => Panel.GetZIndex(layer) == int.MaxValue);
+            Assert.Equal("main_menu", Field<string>(game, "activeScreen"));
+            Assert.Null(background.Source);
+            Assert.Null(sprite.Source);
+            Assert.Equal(0, cache.CachedCount);
+        }
+        finally { game.Close(); }
+    });
+
+    [Fact]
+    public Task RuntimeConfirmationStaysInGameAndReturnsTheSelectedAnswer() => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        var game = new GameWindow(await fixture.LoadAsync());
+        try
+        {
+            var pending = (Task<bool>)InvokeTask(game, "ConfirmInGameAsync", "Подтвердите выход", "Выйти из игры?", CancellationToken.None);
+            var overlay = Find<Grid>(game, "ConfirmationOverlay");
+            Assert.Equal(Visibility.Visible, overlay.Visibility);
+            Assert.Empty(game.OwnedWindows.Cast<Window>());
+            Assert.False(pending.IsCompleted);
+            Find<Button>(game, "ConfirmationNo").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(await pending);
+            Assert.Equal(Visibility.Collapsed, overlay.Visibility);
+        }
+        finally { game.Close(); }
     });
 
     [Fact]

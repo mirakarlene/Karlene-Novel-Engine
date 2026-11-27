@@ -184,6 +184,7 @@ public partial class MainWindow : Window
         }
         WelcomePanel.Visibility = panel == WelcomePanel ? Visibility.Visible : Visibility.Collapsed;
         ProjectPanel.Visibility = panel == ProjectPanel ? Visibility.Visible : Visibility.Collapsed;
+        TutorialsPanel.Visibility = panel == TutorialsPanel ? Visibility.Visible : Visibility.Collapsed;
         SettingsPanel.Visibility = panel == SettingsPanel ? Visibility.Visible : Visibility.Collapsed;
     }
 

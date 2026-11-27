@@ -279,10 +279,15 @@ public sealed class GameDefaults
     public int AutoSaveActions { get; set; } = 10;
     public int RollbackDepth { get; set; } = 100;
     public string? MenuMusic { get; set; }
+    public MenuTransitionSettings StoryStartTransition { get; set; } = new();
+    public MenuTransitionSettings MainMenuReturnTransition { get; set; } = new();
     internal void Validate(string root)
     {
         if (AutoSaveInterval is not ("dialogue" or "choice" or "actions") || AutoSaveActions is < 1 or > 1000 || RollbackDepth is < 0 or > 1000)
             throw new InvalidDataException("Автосохранение: допустимы dialogue/choice/actions, N от 1 до 1000, глубина отката от 0 до 1000.");
+        if (StoryStartTransition == null || MainMenuReturnTransition == null) throw new InvalidDataException("Настройки переходов главного меню должны быть объектами.");
+        StoryStartTransition.Validate();
+        MainMenuReturnTransition.Validate();
         if (!string.IsNullOrWhiteSpace(MenuMusic))
             try { _ = ResourcePaths.Resolve(root, MenuMusic, audio: true); }
             catch (ArgumentException error) { throw new InvalidDataException("Некорректная фоновая музыка: " + error.Message, error); }

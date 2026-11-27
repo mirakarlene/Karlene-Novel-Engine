@@ -36,6 +36,8 @@ public sealed partial class ProjectParametersWindow
         ResolutionInput.SelectedValue = resolution?.Id ?? "custom"; CustomWidthInput.Text = project.Engine.Window.Width.ToString(); CustomHeightInput.Text = project.Engine.Window.Height.ToString(); PaletteInput.SelectedValue = project.Engine.Theme.Palette;
         PreloadInput.SelectedValue = project.Engine.Performance.PreloadScenes; RollbackInput.Text = project.Engine.Game.RollbackDepth.ToString();
         AutosaveInput.SelectedValue = project.Engine.Game.AutoSaveInterval; AutosaveActionsInput.Text = project.Engine.Game.AutoSaveActions.ToString(); MenuMusicInput.Text = project.Engine.Game.MenuMusic ?? "";
+        storyStartInput.Value = project.Engine.Game.StoryStartTransition;
+        mainMenuReturnInput.Value = project.Engine.Game.MainMenuReturnTransition;
         PersistentLocationInput.SelectedValue = project.Engine.Performance.PersistentLocation == "appdata" ? "appdata" : "local";
         UnavailableSavesInput.SelectedValue = project.Engine.Performance.UnavailableSaves;
         ConsoleModeInput.SelectedValue = project.Engine.Performance.ConsoleMode;
@@ -87,7 +89,9 @@ public sealed partial class ProjectParametersWindow
         value.Validate(project.Path);
         var game = Copy(project.Engine.Game); game.AutoSave = Flag("autosave"); game.AutoSaveInterval = (string?)AutosaveInput.SelectedValue ?? "dialogue";
         if (!int.TryParse(RollbackInput.Text, out int rollback) || !int.TryParse(AutosaveActionsInput.Text, out int actions)) throw new InvalidDataException("Глубина отката и число действий должны быть целыми числами.");
-        game.RollbackDepth = rollback; game.AutoSaveActions = actions; game.MenuMusic = MenuMusicInput.Text.Trim(); game.Validate(project.Path);
+        game.RollbackDepth = rollback; game.AutoSaveActions = actions; game.MenuMusic = MenuMusicInput.Text.Trim();
+        game.StoryStartTransition = storyStartInput.Value; game.MainMenuReturnTransition = mainMenuReturnInput.Value;
+        game.Validate(project.Path);
         if (game.MenuMusic != "" && (!File.Exists(ResourcePaths.Resolve(project.Path, game.MenuMusic, audio: true)) || Path.GetExtension(game.MenuMusic).ToLowerInvariant() is not (".wav" or ".mp3" or ".wma" or ".m4a"))) throw new InvalidDataException("Музыка — существующий WAV, MP3, WMA или M4A внутри проекта.");
         var window = Copy(project.Engine.Window); var size = ProjectCreationOptions.Resolutions.FirstOrDefault(r => r.Id == (string?)ResolutionInput.SelectedValue); if (size != null) { window.Width = size.Width; window.Height = size.Height; }
         if ((string?)ResolutionInput.SelectedValue == "custom")

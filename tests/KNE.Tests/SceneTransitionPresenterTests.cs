@@ -11,6 +11,37 @@ namespace KNE.Tests;
 public sealed class SceneTransitionPresenterTests
 {
     [Theory]
+    [InlineData("fade", "left")]
+    [InlineData("dissolve", "left")]
+    [InlineData("pixellate", "left")]
+    [InlineData("wipe", "down")]
+    [InlineData("slide", "left")]
+    [InlineData("slideaway", "up")]
+    [InlineData("iris", "in")]
+    [InlineData("iris", "out")]
+    public Task MenuTransitionsPresentBothScreensAndReleaseTheirSnapshots(string kind, string direction) => WorkspaceTabsTests.Sta(async () =>
+    {
+        var root = new Grid { Background = Brushes.Red };
+        var host = Host(root);
+        try
+        {
+            host.Show();
+            Layout(root);
+            var previous = SceneTransitionPresenter.Capture(root)!;
+            root.Background = Brushes.Blue;
+            var operation = SceneTransitionPresenter.PlayMenuAsync(root, previous,
+                new() { Kind = kind, Direction = direction, Duration = .1 }, CancellationToken.None);
+            var layer = Assert.Single(root.Children.OfType<Grid>());
+            var images = layer.Children.OfType<Image>().ToArray();
+            Assert.Contains(images, image => image.Source != null);
+            await operation;
+            Assert.Empty(root.Children);
+            Assert.All(images, image => Assert.Null(image.Source));
+            Assert.Equal(new byte[] { 255, 0, 0, 255 }, Pixel(SceneTransitionPresenter.Capture(root)!));
+        }
+        finally { host.Close(); }
+    });
+    [Theory]
     [InlineData("fade", false)] [InlineData("fade", true)] [InlineData("dissolve", false)] [InlineData("dissolve", true)]
     public Task SceneTransitionsRenderTheSelectedEntryOrExitAndRemoveEveryTemporaryLayer(string kind, bool entering) => WorkspaceTabsTests.Sta(async () =>
     {
