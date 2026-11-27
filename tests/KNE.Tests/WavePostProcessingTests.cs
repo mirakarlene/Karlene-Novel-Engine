@@ -55,7 +55,7 @@ public sealed class WavePostProcessingTests(ITestOutputHelper output)
         using var fixture = new TempProject();
         const string shader = "game/shaders/negative.kneshader";
         fixture.Write(shader, Negative(target).Serialize());
-        fixture.Write("game/scenes/main.krl", $"function main() d(nil, 'waves'); apply_shader('{shader}'); d(nil, 'negative') end");
+        fixture.Write("game/scenes/main.krl", $"function main() set_text_speed(0); d(nil, 'waves'); apply_shader('{shader}'); d(nil, 'negative') end");
         await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, new()
         {
             Preloading = false,

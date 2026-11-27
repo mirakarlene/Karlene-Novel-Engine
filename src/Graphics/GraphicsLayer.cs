@@ -42,7 +42,8 @@ internal sealed class GraphicsLayer : IDisposable
             {
                 var frame = createFrame();
                 if ((long)frame.Width * frame.Height * 4 > current.CacheBudgetBytes) throw new InvalidOperationException("Подготовленный слой превышает лимит кэша; используется компоновка WPF.");
-                pending = Worker.Enqueue(frame, current with { }, (pixels, error) => Complete(version, pixels, error));
+                pending = Worker.Enqueue(frame, current with { }, (pixels, error) => Complete(version, pixels, error),
+                    () => version == Volatile.Read(ref generation));
             }
             catch (Exception error) when (error is not OutOfMemoryException) { Complete(version, null, error); }
         }
@@ -52,7 +53,7 @@ internal sealed class GraphicsLayer : IDisposable
         a.Api == b.Api && a.RenderProxy == b.RenderProxy && a.SkiaBackend == b.SkiaBackend &&
         a.MsaaSamples == b.MsaaSamples && a.LimitResourceCache == b.LimitResourceCache && a.ResourceCacheLimitMb == b.ResourceCacheLimitMb;
     internal void InvalidateSettings() { if (!IsDisposed && !SamePreparation(settings, GraphicsEnvironment.ResolveSettings(owner))) { settings = null; Invalidate(); } }
-    private void Invalidate() { generation++; Bitmap = null; failed = false; GraphicsEnvironment.For(host).Remove(id); }
+    private void Invalidate() { Interlocked.Increment(ref generation); Bitmap = null; failed = false; GraphicsEnvironment.For(host).Remove(id); }
     private void Complete(int version, GraphicsPixels? pixels, Exception? error)
     {
         if (owner.Dispatcher.HasShutdownStarted) { pixels?.Dispose(); return; }
@@ -88,7 +89,7 @@ internal sealed class GraphicsLayer : IDisposable
     private void StateChanged(object? sender, EventArgs args) { if (host.WindowState == WindowState.Minimized) Dispose(); }
     public void Dispose()
     {
-        if (IsDisposed) return; IsDisposed = true; generation++; Bitmap = null; revision = null; settings = null;
+        if (IsDisposed) return; IsDisposed = true; Interlocked.Increment(ref generation); Bitmap = null; revision = null; settings = null;
         owner.Unloaded -= Unloaded; owner.IsVisibleChanged -= VisibilityChanged; host.StateChanged -= StateChanged;
         if (ReferenceEquals(owner.GetValue(GraphicsEnvironment.LayerProperty), this)) owner.ClearValue(GraphicsEnvironment.LayerProperty);
         GraphicsEnvironment.For(host).Remove(id); Worker.Release(); Released?.Invoke(); Released = null;
@@ -99,7 +100,7 @@ internal sealed class GraphicsLayer : IDisposable
 internal sealed class SharedGraphicsWorker
 {
     private sealed record Job(GraphicsSettings? Settings, Action<GraphicsPixels?, Exception?> Complete,
-        GraphicsFrame? Frame = null, Func<NativeGraphicsRenderer, GraphicsPixels>? RenderShaders = null);
+        GraphicsFrame? Frame = null, Func<NativeGraphicsRenderer, GraphicsPixels>? RenderShaders = null, Func<bool>? IsCurrent = null);
     private static readonly ConditionalWeakTable<Window, SharedGraphicsWorker> workers = new();
     private static readonly object workerLock = new();
     private readonly BlockingCollection<Job> jobs = new(8);
@@ -117,8 +118,8 @@ internal sealed class SharedGraphicsWorker
         }
     }
     internal static SharedGraphicsWorker CreateStandalone() => new() { references = 1 };
-    internal bool Enqueue(GraphicsFrame frame, GraphicsSettings settings, Action<GraphicsPixels?, Exception?> complete) =>
-        !released && jobs.TryAdd(new(settings, complete, Frame: frame));
+    internal bool Enqueue(GraphicsFrame frame, GraphicsSettings settings, Action<GraphicsPixels?, Exception?> complete, Func<bool>? isCurrent = null) =>
+        !released && jobs.TryAdd(new(settings, complete, Frame: frame, IsCurrent: isCurrent));
     internal Task<GraphicsPixels> RenderShadersAsync(Func<GraphicsFrame> source, bool composite, CompiledShaderGraph[] programs,
         GraphicsSettings settings, float seconds, Vector2 origin, Vector2 screenSize, CancellationToken token)
     {
@@ -162,6 +163,7 @@ internal sealed class SharedGraphicsWorker
             foreach (var job in jobs.GetConsumingEnumerable())
             {
                 if (released) { job.Complete(null, new OperationCanceledException("Графическое окно закрыто.")); break; }
+                if (job.IsCurrent?.Invoke() == false) { job.Complete(null, null); continue; }
                 GraphicsPixels? result = null; Exception? failure = null;
                 string? warning = null;
                 try

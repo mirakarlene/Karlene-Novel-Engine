@@ -102,7 +102,9 @@ public partial class GameWindow
         if (preview) return;
         switch (frame.EndAction)
         {
-            case "menu": ready = false; ShowMenu(); break;
+            case "menu":
+                _ = Dispatcher.BeginInvoke(new Action(async () => await ReturnToMainMenuAsync()));
+                break;
             case "screen": ready = false; ShowLayout(project.Engine.Screens.ResolveReference(frame.EndScreen!).Id); break;
             case "exit": Close(); break;
             case "restart": case "menu_reset":

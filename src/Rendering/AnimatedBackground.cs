@@ -10,7 +10,7 @@ namespace KNE;
 public sealed class AnimatedBackground : FrameworkElement
 {
     public static readonly DependencyProperty PhaseProperty = DependencyProperty.Register(nameof(Phase), typeof(double), typeof(AnimatedBackground),
-        new FrameworkPropertyMetadata(0d, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(0d, static (owner, _) => ((AnimatedBackground)owner).UpdatePhase()));
     public double Phase { get => (double)GetValue(PhaseProperty); set => SetValue(PhaseProperty, value); }
     private GameTheme theme = new();
     private bool motion = true;
@@ -20,16 +20,20 @@ public sealed class AnimatedBackground : FrameworkElement
     private string quality = "high";
     private GraphicsFrame? preparedFrame;
     private (double Width, double Height, double Dpi) preparedSize;
+    private ImageDrawing? atlasImage;
+    private DrawingGroup? atlasDrawing;
     public AnimatedBackground()
     {
         IsHitTestVisible = false;
         clock = new(this, Step, primary: true);
         Loaded += (_, _) => Start();
-        Unloaded += (_, _) => { graphics?.Dispose(); graphics = null; };
+        Unloaded += (_, _) => { graphics?.Dispose(); graphics = null; ForgetAtlasDrawing(); };
+        IsVisibleChanged += (_, args) => { if (args.NewValue is false) ForgetAtlasDrawing(); };
     }
     public void Configure(GameTheme value, bool animate)
     {
         theme = value; motion = animate && value.AnimationEnabled; preparedFrame = null;
+        ForgetAtlasDrawing();
         InvalidateVisual(); Start();
     }
     private void Start()
@@ -37,7 +41,7 @@ public sealed class AnimatedBackground : FrameworkElement
         BeginAnimation(PhaseProperty, null); Phase = 0;
         clock.Refresh();
     }
-    internal void SetQuality(string value) { if (quality == value) return; quality = value; preparedFrame = null; InvalidateVisual(); }
+    internal void SetQuality(string value) { if (quality == value) return; quality = value; preparedFrame = null; ForgetAtlasDrawing(); InvalidateVisual(); }
     internal void Step(double seconds)
     {
         if (!double.IsFinite(seconds) || seconds < 0) throw new ArgumentOutOfRangeException(nameof(seconds));
@@ -47,6 +51,19 @@ public sealed class AnimatedBackground : FrameworkElement
     public static double WaveY(double x, double width, double baseline, double amplitude, double phase) =>
         baseline + amplitude * Math.Sin(x / Math.Max(width, 1) * 4 * Math.PI + phase);
     private Rect WaveBounds => new(-Phase / Math.Tau * ActualWidth / 2, 0, ActualWidth * 1.5, ActualHeight);
+    private Rect AtlasBounds => theme.PatternStyle == "waves" ? WaveBounds
+        : new Rect(-60 + Phase / Math.Tau * 60, -60 + Phase / Math.Tau * 60, ActualWidth + 120, ActualHeight + 120);
+
+    private void UpdatePhase()
+    {
+        if (atlasImage == null) InvalidateVisual();
+        else atlasImage.Rect = AtlasBounds;
+    }
+    private void ForgetAtlasDrawing()
+    {
+        atlasImage = null;
+        atlasDrawing = null;
+    }
     internal bool TryGetWaveAtlas(out System.Windows.Media.Imaging.BitmapSource? atlas, out Rect bounds)
     {
         atlas = graphics?.Bitmap;
@@ -60,17 +77,29 @@ public sealed class AnimatedBackground : FrameworkElement
         if (!theme.Pattern || theme.PatternStyle is "none" or "ornament" || ActualWidth < 1 || ActualHeight < 1) return;
         if (IsLoaded && IsVisible && Window.GetWindow(this)?.IsVisible == true)
         {
-            if (graphics == null || graphics.IsDisposed) graphics = new(this);
+            if (graphics == null || graphics.IsDisposed)
+            {
+                graphics = new(this);
+                graphics.Released += () => { ForgetAtlasDrawing(); InvalidateVisual(); };
+            }
             var size = (ActualWidth, ActualHeight, VisualTreeHelper.GetDpi(this).DpiScaleX);
             if (preparedFrame == null || preparedSize != size) { preparedFrame = CreateFrame(); preparedSize = size; }
             if (graphics.TryGetBitmap(() => preparedFrame, preparedFrame, out var bitmap))
             {
-                dc.PushClip(new RectangleGeometry(new Rect(RenderSize)));
-                var bounds = theme.PatternStyle == "waves" ? WaveBounds
-                    : new Rect(-60 + Phase / Math.Tau * 60, -60 + Phase / Math.Tau * 60, ActualWidth + 120, ActualHeight + 120);
-                dc.DrawImage(bitmap, bounds); dc.Pop(); return;
+                var clipBounds = new Rect(RenderSize);
+                if (atlasImage?.ImageSource != bitmap || atlasDrawing?.ClipGeometry is not RectangleGeometry clip || clip.Rect != clipBounds)
+                {
+                    clip = new RectangleGeometry(clipBounds);
+                    clip.Freeze();
+                    atlasImage = new ImageDrawing(bitmap, AtlasBounds);
+                    atlasDrawing = new DrawingGroup { ClipGeometry = clip };
+                    atlasDrawing.Children.Add(atlasImage);
+                }
+                dc.DrawDrawing(atlasDrawing);
+                return;
             }
         }
+        ForgetAtlasDrawing();
         var ink = new SolidColorBrush((Color)ColorConverter.ConvertFromString(theme.PatternColor));
         ink.Freeze();
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, ActualWidth, ActualHeight)));

@@ -34,7 +34,7 @@ public partial class GameWindow
 
     private void UpdatePlayClock()
     {
-        bool active = ready && !closed && !startupFailed && !systemFrozen &&
+        bool active = ready && !closed && !startupFailed && !systemFrozen && confirmation == null &&
             MenuOverlay.Visibility != Visibility.Visible && WindowState != WindowState.Minimized && IsActive;
         lock (playClockLock)
         {
@@ -110,9 +110,10 @@ public partial class GameWindow
     }
 
     private Task<bool> AskForSystemAccessAsync(string category, string message, CancellationToken token) =>
-        systemConsent!.AllowAsync(category, () => OnGameThreadAsync(() =>
-            MessageBox.Show(this, message, "Разрешение игрока", MessageBoxButton.YesNo,
-                MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes, token), token);
+        systemConsent!.AllowAsync(category, () => ConfirmSystemRequestAsync("Разрешение игрока", message, token), token);
+
+    private async Task<bool> ConfirmSystemRequestAsync(string title, string message, CancellationToken token) =>
+        await await OnGameThreadAsync(() => ConfirmInGameAsync(title, message, token), token);
 
     private Task<T> OnGameThreadAsync<T>(Func<T> operation, CancellationToken token) =>
         Dispatcher.InvokeAsync(() =>
@@ -143,9 +144,8 @@ public partial class GameWindow
                     return SystemReply.From(true);
                 }, token);
             case "persistent_clear":
-                bool confirmed = await OnGameThreadAsync(() => MessageBox.Show(this,
-                    "Очистить все глобальные переменные и счётчик запусков этой игры?", "Сброс persistent",
-                    MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes, token);
+                bool confirmed = await ConfirmSystemRequestAsync("Сброс persistent",
+                    "Очистить все глобальные переменные и счётчик запусков этой игры?", token);
                 if (confirmed) await systemServices.InvokeAsync(call with { Operation = "persistent_clear_confirmed" }, token);
                 return SystemReply.From(confirmed);
             case "minimize_game":
@@ -285,47 +285,30 @@ public partial class GameWindow
     private async Task ResetSystemSessionAsync(bool restart)
     {
         if (closed) return;
+        if (!restart)
+        {
+            await ReturnToMainMenuAsync(restartWithoutMenu: true);
+            return;
+        }
         try
         {
-            if (restart)
+            FlushPreferences();
+            if (StandalonePlayer.Current != null)
             {
-                FlushPreferences();
-                if (StandalonePlayer.Current != null)
-                {
-                    var info = EngineLaunch.CreateStartInfo("--system-restart");
-                    info.WindowStyle = ProcessWindowStyle.Normal;
-                    using var process = Process.Start(info) ?? throw new IOException("Не удалось перезапустить игру.");
-                    exitApproved = true;
-                    Close();
-                    return;
-                }
-                var loadedProject = await ProjectLoader.LoadProjectAsync(project.Path, blockFlowLifetime.Token);
-                loadedProject.ApplicationPlugins = project.ApplicationPlugins;
-                var replacement = new GameWindow(loadedProject, preview: preview) { CountSystemLaunch = false };
-                if (Application.Current?.MainWindow == this) Application.Current.MainWindow = replacement;
-                replacement.Show();
+                var info = EngineLaunch.CreateStartInfo("--system-restart");
+                info.WindowStyle = ProcessWindowStyle.Normal;
+                using var process = Process.Start(info) ?? throw new IOException("Не удалось перезапустить игру.");
                 exitApproved = true;
                 Close();
                 return;
             }
-            ready = false;
-            await runtime.DisposeAsync();
-            if (closed) return;
-            runtime = CreateGameSession();
-            rollback.Clear();
-            autosave.Reset();
-            sceneSaves.Reset();
-            ResetTriggerInput();
-            pendingTriggerSignals.Clear();
-            gameplayUi?.Reset();
-            DialogueEffects.Reset();
-            choicePresentation?.Reset();
-            sceneEffects?.Stop();
-            renderedStory = null;
-            renderedVisuals = null;
-            ResetPlayTime();
-            if (project.Engine.Screens.Find("main_menu") != null) ShowMenu();
-            else await StartGameAsync();
+            var loadedProject = await ProjectLoader.LoadProjectAsync(project.Path, blockFlowLifetime.Token);
+            loadedProject.ApplicationPlugins = project.ApplicationPlugins;
+            var replacement = new GameWindow(loadedProject, preview: preview) { CountSystemLaunch = false };
+            if (Application.Current?.MainWindow == this) Application.Current.MainWindow = replacement;
+            replacement.Show();
+            exitApproved = true;
+            Close();
         }
         catch (OperationCanceledException) when (closed) { }
         catch (Exception error) { if (!closed) ShowStartupError(error, "Перезапуск игровой сессии"); }

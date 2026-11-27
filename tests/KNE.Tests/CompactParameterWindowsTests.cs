@@ -9,6 +9,29 @@ namespace KNE.Tests;
 
 public sealed class CompactParameterWindowsTests
 {
+    [Fact]
+    public Task ProjectMenuTransitionsSaveIndependentEffectsDirectionsAndDurations() => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        var window = new ProjectParametersWindow(await fixture.LoadAsync());
+        try
+        {
+            var inputs = Logical((FrameworkElement)window.Content).OfType<FrameworkElement>()
+                .Where(item => item.Name.StartsWith("StoryStartTransition") || item.Name.StartsWith("MainMenuReturnTransition"))
+                .ToDictionary(item => item.Name);
+            ((ComboBox)inputs["StoryStartTransitionKind"]).SelectedValue = "wipe";
+            ((ComboBox)inputs["StoryStartTransitionDirection"]).SelectedValue = "up";
+            ((TextBox)inputs["StoryStartTransitionDuration"]).Text = "0.5";
+            ((ComboBox)inputs["MainMenuReturnTransitionKind"]).SelectedValue = "iris";
+            ((ComboBox)inputs["MainMenuReturnTransitionDirection"]).SelectedValue = "out";
+            ((TextBox)inputs["MainMenuReturnTransitionDuration"]).Text = "1.5";
+            await window.SaveAsync();
+            var game = (await fixture.LoadAsync()).Engine.Game;
+            Assert.Equal(new MenuTransitionSettings { Kind = "wipe", Direction = "up", Duration = .5 }, game.StoryStartTransition);
+            Assert.Equal(new MenuTransitionSettings { Kind = "iris", Direction = "out", Duration = 1.5 }, game.MainMenuReturnTransition);
+        }
+        finally { window.Close(); }
+    });
     [Theory]
     [InlineData(780, 640)] [InlineData(740, 600)]
     public Task EveryScenePageExposesItsExpandedFieldsWithoutScrollingAndKeepsTheSelectorAndActionsFixed(double width, double height) => WorkspaceTabsTests.Sta(async () =>
@@ -99,7 +122,23 @@ public sealed class CompactParameterWindowsTests
                 Assert.Equal(page, window.Page); Layout(window); Capture(root, $"project-compact-{width}-{page + 1}"); Assert.Empty(Logical(root).OfType<ScrollViewer>());
                 Assert.Equal($"{page + 1} / 4", pageLabel.Text);
                 Assert.Equal(page > 0, window.PreviousPage.IsEnabled); Assert.Equal(page < pages.Length - 1, window.NextPage.IsEnabled);
+                if (page == 0)
+                {
+                    var row = Assert.IsType<Grid>(Assert.IsType<StackPanel>(PageViewport(root).Content).Children[2]);
+                    Assert.True(Bounds(row, PageViewport(root)).Bottom <= PageViewport(root).ActualHeight,
+                        $"Runtime settings row: {row.ActualHeight}; {string.Join(", ", row.Children.OfType<Border>().Select(card => $"{((TextBlock)((StackPanel)card.Child).Children[0]).Text} = {card.DesiredSize.Height}"))}");
+                }
                 if (page < 2) AssertStackedCardsFit(root, page == 0 ? 3 : 2);
+                if (page == 0)
+                {
+                    var start = Logical(root).OfType<ComboBox>().Single(box => box.Name == "StoryStartTransitionKind");
+                    var leave = Logical(root).OfType<ComboBox>().Single(box => box.Name == "MainMenuReturnTransitionKind");
+                    start.SelectedValue = "slide";
+                    leave.SelectedValue = "iris";
+                    Layout(window);
+                    foreach (var input in Logical(root).OfType<FrameworkElement>().Where(item => item.Name.StartsWith("StoryStartTransition") || item.Name.StartsWith("MainMenuReturnTransition")))
+                        FitsPage(input, root);
+                }
                 if (page == 3) for (int field = 1; field <= 7; field++)
                     Assert.True(Bounds(pages[page][field - 1], root).Bottom <= Bounds(pages[page][field], root).Top, "Metadata fields must follow one another in a single vertical column.");
                 AssertVisibleInputs(root, pages[page]);

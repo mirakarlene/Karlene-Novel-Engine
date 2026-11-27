@@ -142,6 +142,7 @@ public partial class GameWindow
         if (startupFailed) return;
         var layout = project.Engine.Screens.Screens.FirstOrDefault(s => s.Id == id);
         if (layout == null) { Notify("Экран не найден."); return; }
+        ClearHistoryScreen();
         string ResolveLayoutText(string text) => translations.ScreenText(project, GameTextCatalog.ScreenCategory(layout), text);
         activeScreen = id;
         PauseDialogueReveal();
@@ -274,7 +275,7 @@ public partial class GameWindow
     {
         var screen = project.Engine.Screens.Screens.FirstOrDefault(screen => screen.Elements.Contains(element));
         if (screen != null && await DispatchTriggerAsync(new("button", Button: "screen:" + screen.Name + "/" + element.Id))) return;
-        if (startupFailed || execution != null) return;
+        if (startupFailed || returningToMenu || execution != null) return;
         switch (element.Action)
         {
             case "start": StartButton_Click(StartButton, new()); break;
@@ -284,8 +285,12 @@ public partial class GameWindow
             case "saves": await ShowSaveBrowserAsync(); break;
             case "settings": Navigate(project.Engine.Screens.Find("settings")?.Id); break;
             case "navigate":
-                if (project.Engine.Screens.Screens.FirstOrDefault(s => s.Id == element.Target)?.Kind == "saves") await ShowSaveBrowserAsync();
-                else Navigate(element.Target);
+                switch (project.Engine.Screens.Screens.FirstOrDefault(s => s.Id == element.Target)?.Kind)
+                {
+                    case "main_menu" when ready: await ReturnToMainMenuAsync(); break;
+                    case "saves": await ShowSaveBrowserAsync(); break;
+                    default: Navigate(element.Target); break;
+                }
                 break;
             case "back": GoBackScreen(); break;
             case "exit": Close(); break;
@@ -366,7 +371,7 @@ public partial class GameWindow
     private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
     {
         if (startupFailed || SaveSlotsList.SelectedItem is not GameSaveEntry slot || execution != null) return;
-        if (MessageBox.Show(this, "Удалить слот «" + slot.Slot + "»?", "Сохранения", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        if (!await ConfirmInGameAsync("Сохранения", "Удалить слот «" + slot.Slot + "»?")) return;
         try { saves.Delete(slot.Slot); SaveSlotsList.ItemsSource = await saves.ListAsync(); }
         catch (Exception ex) { Notify(ex.Message); }
     }

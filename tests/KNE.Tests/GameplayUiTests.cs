@@ -164,6 +164,7 @@ public sealed class GameplayUiTests
             await using var runtime = new LuaRuntime(project, _ => { }, interactive: true);
             await runtime.StartAsync();
             var game = new GameWindow(project); var preview = new ScenePreview();
+            double defaultDialogueHeight = Find<Border>(game, "DialoguePanel").Height;
             try
             {
                 var old = (IGameSession)Field(game, "runtime")!; await old.DisposeAsync();
@@ -213,7 +214,7 @@ public sealed class GameplayUiTests
                 Invoke(game, "ApplyGameplayUi", SceneVisuals.Empty);
                 Assert.Same(Find<StackPanel>(game, "GameControls"), gameSave.Parent);
                 Assert.NotSame(gameScene, Find<StackPanel>(game, "ChoicePanel").Parent);
-                Assert.Equal(project.Engine.Theme.Dialogue.Height, Find<Border>(game, "DialoguePanel").Height);
+                Assert.Equal(defaultDialogueHeight, Find<Border>(game, "DialoguePanel").Height);
                 Assert.Equal(project.Engine.Theme.Dialogue.FontSize, Find<TextBlock>(game, "DialogueText").FontSize);
                 preview.DisplayScene(project, runtime.WindowSettings, SceneVisuals.Empty, runtime.Story, false, false);
                 Assert.Equal(Visibility.Collapsed, previewSave.Visibility);
@@ -284,7 +285,8 @@ public sealed class GameplayUiTests
                 Invoke(window, "ApplyGameplayUi", SceneVisuals.Empty);
                 foreach (var (target, name) in names) Assert.Same(originalParents[target], Find<Button>(window, name).Parent);
                 Assert.Equal("auto", Find<Button>(window, "LoadAutoButton").Tag);
-                Assert.Equal(new[] { "Сохранить", "Загрузить", "Автосохранение", "Меню" }, Find<StackPanel>(window, "GameControls").Children.Cast<Button>().Select(item => (string)item.Content));
+                Assert.Equal(new[] { "Сохранить", "Загрузить", "Автосохранение", "Меню", "Назад", "История" },
+                    Find<StackPanel>(window, "GameControls").Children.Cast<Button>().Select(item => (string)item.Content));
             }
             finally { preview.Stop(); window.Close(); }
             return Task.CompletedTask;
@@ -305,6 +307,7 @@ public sealed class GameplayUiTests
     [Theory]
     [InlineData(640, 480)]
     [InlineData(1280, 720)]
+    [InlineData(1920, 1080)]
     public Task GameplayButtonsShareTheDialogueFooterAndLeaveLongTextScrollable(double width, double height) => Sta(async () =>
     {
         using var fixture = new TempProject();
@@ -325,17 +328,15 @@ public sealed class GameplayUiTests
             Assert.True(scroll.ScrollableHeight > 0);
             Assert.True(scroll.TranslatePoint(new Point(0, scroll.ActualHeight), panel).Y < footer.TranslatePoint(new Point(), panel).Y);
             var controls = Find<StackPanel>(game, "GameControls");
-            var back = Find<Button>(game, "RollbackButton");
-            var history = Find<Button>(game, "HistoryButton");
-            var navigation = Assert.IsType<StackPanel>(back.Parent);
-            Assert.Same(navigation, history.Parent);
             Assert.Same(footer, controls.Parent);
-            Assert.Same(footer, navigation.Parent);
+            Assert.Equal(6, controls.Children.Count);
             Assert.False(footer.IsAncestorOf(text));
-            double right = controls.TranslatePoint(new Point(controls.ActualWidth, 0), footer).X;
-            Assert.True(right <= navigation.TranslatePoint(new Point(), footer).X);
-            Assert.Equal(controls.TranslatePoint(new Point(), footer).Y, navigation.TranslatePoint(new Point(), footer).Y);
-            Assert.All(controls.Children.OfType<Button>().Concat(navigation.Children.OfType<Button>()), button =>
+            Assert.InRange(panel.ActualWidth, 1, Math.Min(960, width * .85));
+            double panelCenter = panel.TranslatePoint(new Point(panel.ActualWidth / 2, 0), content).X;
+            double buttonCenter = controls.TranslatePoint(new Point(controls.ActualWidth / 2, 0), panel).X;
+            Assert.Equal(width / 2, panelCenter, 0);
+            Assert.Equal(panel.ActualWidth / 2, buttonCenter, 0);
+            Assert.All(controls.Children.OfType<Button>(), button =>
             {
                 Assert.Equal(12, button.FontSize);
                 var edge = button.TranslatePoint(new Point(button.ActualWidth, button.ActualHeight), panel);

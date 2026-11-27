@@ -68,6 +68,7 @@ internal sealed class GameplayUiPresenter
     private void ApplyDialogue(GameplayUiStyle style)
     {
         ApplyGeometry(dialogue, style, true);
+        Set(dialogue, FrameworkElement.MaxWidthProperty, double.PositiveInfinity);
         Set(dialogue, FrameworkElement.MaxHeightProperty, double.PositiveInfinity);
         Set(dialogue, Border.BackgroundProperty, Background(style));
         Set(dialogue, Border.CornerRadiusProperty, new CornerRadius(style.CornerRadius));

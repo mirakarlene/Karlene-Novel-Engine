@@ -27,6 +27,90 @@ internal static class SceneTransitionPresenter
         using (var draw = visual.RenderOpen()) draw.DrawRectangle(new VisualBrush(target) { AutoLayoutContent = false }, null, new Rect(0, 0, width, height));
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32); bitmap.Render(visual); bitmap.Freeze(); return bitmap;
     }
+    internal static async Task PlayMenuAsync(Grid root, BitmapSource previous, MenuTransitionSettings settings, CancellationToken token)
+    {
+        if (!settings.IsEnabled) return;
+        settings.Validate();
+        token.ThrowIfCancellationRequested();
+        root.UpdateLayout();
+        if (Capture(root) is not { } current) return;
+        var layer = new Grid { Background = Brushes.Black, ClipToBounds = true };
+        var back = new Image { Source = previous, Stretch = Stretch.Fill };
+        var front = new Image { Source = current, Stretch = Stretch.Fill };
+        var move = new TranslateTransform();
+        var clip = new RectangleGeometry();
+        if (settings.Kind is "slideaway" || settings is { Kind: "iris", Direction: "out" })
+        {
+            back.Source = current;
+            front.Source = previous;
+        }
+        if (settings.Kind is "wipe" or "iris") front.Clip = clip;
+        if (settings.Kind is "slide" or "slideaway") front.RenderTransform = move;
+        if (settings.Kind == "pixellate") RenderOptions.SetBitmapScalingMode(front, BitmapScalingMode.NearestNeighbor);
+        layer.Children.Add(back);
+        layer.Children.Add(front);
+        Panel.SetZIndex(layer, int.MaxValue);
+        root.Children.Add(layer);
+        layer.PreviewMouseDown += (_, args) => args.Handled = true;
+        try
+        {
+            var watch = Stopwatch.StartNew();
+            int lastPixelStage = -1;
+            while (true)
+            {
+                token.ThrowIfCancellationRequested();
+                double progress = Math.Min(1, watch.Elapsed.TotalSeconds / settings.Duration);
+                double width = root.ActualWidth, height = root.ActualHeight;
+                switch (settings.Kind)
+                {
+                    case "fade":
+                        back.Source = null;
+                        front.Source = progress < 0.5 ? previous : current;
+                        front.Opacity = Math.Abs(2 * progress - 1);
+                        break;
+                    case "dissolve":
+                        front.Opacity = progress;
+                        break;
+                    case "wipe":
+                        clip.Rect = settings.Direction switch
+                        {
+                            "left" => new(width * (1 - progress), 0, width * progress, height),
+                            "up" => new(0, height * (1 - progress), width, height * progress),
+                            "down" => new(0, 0, width, height * progress),
+                            _ => new(0, 0, width * progress, height)
+                        };
+                        break;
+                    case "slide": case "slideaway":
+                        double offset = settings.Kind == "slide" ? progress - 1 : progress;
+                        move.X = settings.Direction == "left" ? -width * offset : settings.Direction == "right" ? width * offset : 0;
+                        move.Y = settings.Direction == "up" ? -height * offset : settings.Direction == "down" ? height * offset : 0;
+                        break;
+                    case "iris":
+                        double aperture = settings.Direction == "in" ? progress : 1 - progress;
+                        clip.Rect = new(width * (1 - aperture) / 2, height * (1 - aperture) / 2, width * aperture, height * aperture);
+                        break;
+                    case "pixellate":
+                        int stage = Math.Min(12, (int)(progress * 13));
+                        if (stage != lastPixelStage)
+                        {
+                            BitmapSource source = stage <= 6 ? previous : current;
+                            int block = 1 << (stage <= 6 ? stage : 12 - stage);
+                            double scale = Math.Max(1d / block, 1d / Math.Min(source.PixelWidth, source.PixelHeight));
+                            front.Source = block == 1 ? source : new TransformedBitmap(source, new ScaleTransform(scale, scale));
+                            lastPixelStage = stage;
+                        }
+                        break;
+                }
+                if (progress >= 1) break;
+                await Task.Delay(16, token);
+            }
+        }
+        finally
+        {
+            root.Children.Remove(layer);
+            front.Source = back.Source = null;
+        }
+    }
     internal static async Task PlayAsync(Window host, ProjectInfo project, Grid root, BitmapSource previous,
         SceneTransitionSettings exit, SceneTransitionSettings entry, CancellationToken token)
     {

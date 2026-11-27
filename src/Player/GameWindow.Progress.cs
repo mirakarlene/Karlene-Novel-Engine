@@ -24,20 +24,40 @@ public partial class GameWindow
 
     private async void HistoryButton_Click(object sender, RoutedEventArgs e)
     {
-        if (await TryButtonTriggerAsync(sender) || historyOpen || execution != null || pumpingSceneTime ||
+        if (await TryButtonTriggerAsync(sender) || historyOpen || execution != null || pumpingSceneTime || !ready ||
+            MenuOverlay.Visibility == Visibility.Visible ||
             runtime.DialogueJournal is not { Limit: > 0 } journal) return;
-        var window = new GameHistoryWindow(this, journal);
         historyOpen = true;
+        ResetTriggerInput();
+        MenuScroll.Visibility = ScreenViewbox.Visibility = SaveBrowserPanel.Visibility = DialogueSpeedFallback.Visibility = Visibility.Collapsed;
+        HistoryEntries.ItemsSource = journal.Entries;
+        HistoryEmpty.Visibility = journal.Entries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        HistoryScreen.Visibility = MenuOverlay.Visibility = Visibility.Visible;
+        DialoguePanel.Visibility = GameControls.Visibility = ScriptHud.Visibility = Visibility.Collapsed;
+        UpdatePlayClock();
+        PauseAudio();
         PauseDialogueReveal();
         DialogueEffects.Stop();
         choicePresentation?.Stop();
-        try { window.ShowDialog(); }
-        finally
-        {
-            historyOpen = false;
-            lastSceneTick = System.Diagnostics.Stopwatch.GetTimestamp();
-            if (!closed) RenderOutput();
-        }
+        if (journal.Entries.Count > 0) HistoryEntries.ScrollIntoView(journal.Entries[^1]);
+        HistoryBackButton.Focus();
+    }
+
+    private void HistoryBack_Click(object sender, RoutedEventArgs e) => CloseHistory();
+
+    private void CloseHistory()
+    {
+        if (!historyOpen) return;
+        ShowGameplay();
+        RenderOutput();
+        HistoryButton.Focus();
+    }
+
+    private void ClearHistoryScreen()
+    {
+        historyOpen = false;
+        HistoryScreen.Visibility = Visibility.Collapsed;
+        HistoryEntries.ItemsSource = null;
     }
 
     internal async Task RollbackAsync()
