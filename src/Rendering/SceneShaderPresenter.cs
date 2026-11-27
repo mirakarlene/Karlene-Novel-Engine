@@ -37,6 +37,7 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
     private readonly Action<Exception> fail;
     private readonly Panel? waveLayer;
     private readonly Panel? sceneLayer;
+    private readonly Func<double>? rasterScale;
     private readonly DispatcherTimer timer;
     private readonly FramePacer pacer = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
@@ -69,11 +70,12 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
     internal long Captures { get; private set; }
     internal long RenderCount { get; private set; }
     internal SceneShaderPresenter(ProjectInfo project, FrameworkElement host, Func<CompiledShaderGraph, FrameworkElement?> resolve,
-        Action<Exception> fail, Panel? waveLayer = null, Panel? sceneLayer = null)
+        Action<Exception> fail, Panel? waveLayer = null, Panel? sceneLayer = null, Func<double>? rasterScale = null)
     {
         this.project = project; this.host = host; this.resolve = resolve; this.fail = fail;
         this.waveLayer = waveLayer;
         this.sceneLayer = sceneLayer;
+        this.rasterScale = rasterScale;
         timer = new DispatcherTimer(DispatcherPriority.Background, host.Dispatcher);
         timer.Tick += TimerTick;
         host.Loaded += Loaded; host.Unloaded += Unloaded;
@@ -270,6 +272,7 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
         busy = true; int version = generation;
         try
         {
+            double viewportScale = rasterScale?.Invoke() ?? 1;
             foreach (var group in ResolveTargetGroups())
             {
                 var target = group.Target;
@@ -288,7 +291,7 @@ internal sealed class SceneShaderPresenter : IAsyncDisposable
                 Grid.SetRowSpan(image, Grid.GetRowSpan(target)); Grid.SetColumnSpan(image, Grid.GetColumnSpan(target));
                 var settings = project.Engine.Performance.Graphics;
                 double quality = settings.TextureQuality switch { "half" => .5, "quarter" => .25, _ => 1 };
-                double scale = Math.Min(quality, Math.Min(2048 / target.ActualWidth, 2048 / target.ActualHeight));
+                double scale = Math.Min(quality * viewportScale, Math.Min(2048 / target.ActualWidth, 2048 / target.ActualHeight));
                 // Account for capture, upload, retained GPU surfaces and the returned bitmap together.
                 scale = Math.Min(scale, Math.Sqrt(settings.CacheBudgetBytes / (target.ActualWidth * target.ActualHeight * 32)));
                 int width = Math.Max(1, (int)(target.ActualWidth * scale)), height = Math.Max(1, (int)(target.ActualHeight * scale));

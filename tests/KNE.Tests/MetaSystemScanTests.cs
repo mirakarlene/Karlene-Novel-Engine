@@ -50,7 +50,7 @@ public sealed class MetaSystemScanTests
         try
         {
             await (Task)Method("StartGameAsync").Invoke(window, null)!;
-            var root = (Grid)window.Content; int children = root.Children.Count;
+            var root = WorkspaceTabsTests.Find<Grid>(window, "GameStage"); int children = root.Children.Count;
             var dialogue = WorkspaceTabsTests.Find<TextBlock>(window, "DialogueText"); Assert.Equal("before", dialogue.Text);
             string resume = mode == "cancel" ? "left" : mode;
             var call = new SystemCall("freeze_and_scan", System.Text.Json.JsonSerializer.SerializeToElement(new object[] { resume, .1 }));

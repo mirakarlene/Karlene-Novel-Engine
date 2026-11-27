@@ -52,7 +52,7 @@ public partial class GameWindow
             }
             await current.TickAsync(seconds, operation.Token);
             if (before != null && !SameNarrativeStop(previousFrame, current.Story)) rollback.Push(before);
-            var image = NeedsSceneTransition(previous) ? SceneTransitionPresenter.Capture(SceneArea) : null;
+            var image = NeedsSceneTransition(previous) ? SceneTransitionPresenter.Capture(SceneArea, SceneRasterScale) : null;
             using var cover = image == null ? null : SceneTransitionPresenter.Hold(SceneArea, image);
             if (!closed && ReferenceEquals(current, runtime))
             {
@@ -61,7 +61,8 @@ public partial class GameWindow
                 cover?.Dispose();
                 PresentSceneOutput();
                 if (image != null && runtime.Visuals.Scene is { } scene && SceneChanged(previous))
-                    await SceneTransitionPresenter.PlayAsync(this, project, SceneArea, image, previous?.Settings.ExitTransition ?? new(), scene.Exited ? new() : scene.Settings.EntryTransition, operation.Token);
+                    await SceneTransitionPresenter.PlayAsync(this, project, SceneArea, image, previous?.Settings.ExitTransition ?? new(),
+                        scene.Exited ? new() : scene.Settings.EntryTransition, operation.Token, SceneRasterScale);
             }
         }
         catch (OperationCanceledException) { if (!closed) StatusText.Text = "Фоновое выполнение остановлено"; }

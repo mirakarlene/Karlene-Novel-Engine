@@ -47,10 +47,10 @@ public sealed class WavePostProcessingTests(ITestOutputHelper output)
     }
 
     [GpuTheory]
-    [InlineData("directx", "original", "background")]
-    [InlineData("directx", "original", "scene")]
-    [InlineData("directx", "half", "background")]
-    public async Task GameWindow_WavesWithNegativeKeepUpdatingAndReuseTheirAtlas(string api, string quality, string target)
+    [InlineData("directx", "original", "background", true)]
+    [InlineData("directx", "original", "scene", true)]
+    [InlineData("directx", "half", "background", false)]
+    public async Task GameWindow_WavesWithNegativeKeepUpdatingAndReuseTheirAtlas(string api, string quality, string target, bool vSync)
     {
         using var fixture = new TempProject();
         const string shader = "game/shaders/negative.kneshader";
@@ -59,7 +59,7 @@ public sealed class WavePostProcessingTests(ITestOutputHelper output)
         await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, new()
         {
             Preloading = false,
-            Graphics = new() { Api = api, MaxFps = 60, TextureQuality = quality }
+            Graphics = new() { Api = api, MaxFps = 60, TextureQuality = quality, VSync = vSync }
         });
         var project = await fixture.LoadAsync();
         project.Engine.Window.Width = 1920;
@@ -111,6 +111,20 @@ public sealed class WavePostProcessingTests(ITestOutputHelper output)
                 Assert.Equal(prepared, telemetry.PreparationCount);
                 Assert.Same(outputBitmap, outputImage.Source);
                 output.WriteLine($"{api}/{quality}/{target}: target {targetLayer.ActualWidth:F0}×{targetLayer.ActualHeight:F0}, output {outputImage.Source.Width:F0}×{outputImage.Source.Height:F0}, atlas {atlas.PixelWidth}×{atlas.PixelHeight}, composition {warm.Composition:F1} -> {filtered.Composition:F1} fps, effect {filtered.Effect:F1} fps, WPF recaptures {presenter.Captures - captures}");
+
+                window.Width = 1024;
+                window.Height = 768;
+                await Until(() => outputImage.Source is System.Windows.Media.Imaging.WriteableBitmap resized && resized.PixelWidth < outputBitmap.PixelWidth);
+                var resizedOutput = Assert.IsType<System.Windows.Media.Imaging.WriteableBitmap>(outputImage.Source);
+                double dpi = VisualTreeHelper.GetDpi(targetLayer).DpiScaleX;
+                double textureScale = quality == "half" ? 0.5 : 1;
+                var client = ((FrameworkElement)window.Content).RenderSize;
+                double viewportScale = Math.Min(client.Width / 1280, client.Height / 720);
+                Assert.Equal(1280, targetLayer.ActualWidth);
+                Assert.Equal(720, targetLayer.ActualHeight);
+                Assert.InRange(1280 * viewportScale * dpi * textureScale - resizedOutput.PixelWidth, 0, 1);
+                Assert.InRange(720 * viewportScale * dpi * textureScale - resizedOutput.PixelHeight, 0, 1);
+                await Until(() => !ReferenceEquals(atlas, layer.Bitmap));
             }
             finally
             {

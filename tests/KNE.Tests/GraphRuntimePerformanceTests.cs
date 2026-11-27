@@ -111,7 +111,7 @@ public sealed class GraphRuntimePerformanceTests
                 var camera = Assert.IsType<TransformGroup>(Find<Grid>(window, "VisualLayer").RenderTransform);
                 Assert.Equal(postEffects, camera.Children.OfType<TranslateTransform>().Last().HasAnimatedProperties);
                 var backdrop = Find<AnimatedBackground>(window, "AnimatedBackdrop"); backdrop.Measure(new Size(400, 240)); backdrop.Arrange(new Rect(0, 0, 400, 240));
-                var frame = (GraphicsFrame)typeof(AnimatedBackground).GetMethod("CreateFrame", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(backdrop, null)!;
+                var frame = (GraphicsFrame)typeof(AnimatedBackground).GetMethod("CreateFrame", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(backdrop, [1d])!;
                 Assert.Equal(vertices, frame.Geometry!.Count);
                 Assert.Contains("Логика:", SceneMetrics.Describe(project.Path, "game/scenes/visual.knegraph"));
                 Assert.Equal(graph.Nodes.Single(node => node.Kind == ScriptNodeKind.Dialogue).Text, Find<TextBlock>(window, "DialogueText").Text);

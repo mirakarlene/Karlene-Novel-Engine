@@ -31,8 +31,11 @@ public partial class GameWindow : Window
     private bool startupFailed;
     private bool fullscreen;
     private WindowState previousWindowState;
+    private double sceneViewportScale = 1;
     private DateTime noticeUntil;
     private readonly bool preview;
+
+    private double SceneRasterScale => sceneViewportScale * VisualTreeHelper.GetDpi(GameStage).DpiScaleX;
 
     public GameWindow(ProjectInfo project, GameSaveStore? saves = null, bool preview = false)
     {
@@ -133,6 +136,9 @@ public partial class GameWindow : Window
         UpdateDefaultBackdropVisibility(true);
         DialoguePanel.Height = dialogue.Height == 240 ? 224 : dialogue.Height;
         DialoguePanel.Margin = new Thickness(dialogue.Margin);
+        double margin = 2 * dialogue.Margin;
+        DialoguePanel.Width = Math.Min(960, GameStage.Width - margin);
+        DialoguePanel.MaxHeight = Math.Max(120, GameStage.Height - margin);
         DialoguePanel.Padding = dialogue is { Height: 240, Padding: 24 } ? new Thickness(24, 16, 24, 16) : new Thickness(dialogue.Padding);
         DialoguePanel.CornerRadius = new CornerRadius(dialogue.CornerRadius);
         DialoguePanel.Background = Brush(dialogue.BackgroundColor);
@@ -210,17 +216,12 @@ public partial class GameWindow : Window
         else ShowProjectErrorOverlay();
     }
 
-    private void SceneArea_SizeChanged(object sender, SizeChangedEventArgs e)
+    private void SceneViewport_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (project == null || runtime?.Visuals.UiConfigurations.Any(item => item.Target == "dialogue") == true) return;
-        UpdateDialogueBounds(e.NewSize);
-    }
-
-    private void UpdateDialogueBounds(Size size)
-    {
-        double margin = 2 * project.Engine.Theme.Dialogue.Margin;
-        if (size.Width > margin) DialoguePanel.Width = Math.Min(size.Width * .84, size.Width - margin);
-        if (size.Height > margin) DialoguePanel.MaxHeight = Math.Max(120, size.Height - margin);
+        double scale = Math.Min(e.NewSize.Width / GameStage.Width, e.NewSize.Height / GameStage.Height);
+        if (scale <= 0 || scale == sceneViewportScale) return;
+        sceneViewportScale = scale;
+        AnimatedBackdrop.SetViewportScale(scale);
     }
 
     private async Task StartGameAsync()
@@ -377,7 +378,7 @@ public partial class GameWindow : Window
         StatusText.Text = starting ? "Загрузка сценария…" : "Выполнение команды…";
         try
         {
-            var menuRoot = (Grid)Content;
+            var menuRoot = GameStage;
             var previousMenu = startTransition == null ? null : CaptureMenuTransition(startTransition);
             if (previousMenu != null) transitionCover = SceneTransitionPresenter.Hold(menuRoot, previousMenu);
             var previousScene = runtime.Visuals.Scene;
@@ -391,7 +392,8 @@ public partial class GameWindow : Window
                 { operationNotice = "Откат для этого действия недоступен: " + error.Message; QueueOutput(operationNotice); }
             }
             await action();
-            var previousImage = previousMenu == null && NeedsSceneTransition(previousScene, starting) ? SceneTransitionPresenter.Capture(SceneArea) : null;
+            var previousImage = previousMenu == null && NeedsSceneTransition(previousScene, starting)
+                ? SceneTransitionPresenter.Capture(SceneArea, SceneRasterScale) : null;
             if (previousImage != null) transitionCover = SceneTransitionPresenter.Hold(SceneArea, previousImage);
             if (before != null && !SameNarrativeStop(previousFrame, runtime.Story)) rollback.Push(before);
             if (closed) return;
@@ -415,13 +417,15 @@ public partial class GameWindow : Window
             if (previousMenu != null)
             {
                 PresentSceneOutput();
-                if (!closed && !startupFailed) await SceneTransitionPresenter.PlayMenuAsync(menuRoot, previousMenu, startTransition!, execution.Token);
+                if (!closed && !startupFailed) await SceneTransitionPresenter.PlayMenuAsync(menuRoot, previousMenu, startTransition!,
+                    execution.Token, SceneRasterScale);
             }
             else if (previousImage != null && currentScene != null && SceneChanged(previousScene, starting))
             {
                 PresentSceneOutput();
                 if (!closed && !startupFailed) await SceneTransitionPresenter.PlayAsync(this, project, SceneArea, previousImage,
-                    previousScene?.Settings.ExitTransition ?? new(), currentScene.Exited ? new() : currentScene.Settings.EntryTransition, execution.Token);
+                    previousScene?.Settings.ExitTransition ?? new(), currentScene.Exited ? new() : currentScene.Settings.EntryTransition,
+                    execution.Token, SceneRasterScale);
             }
             StatusText.Text = "Готово";
             if (operationNotice == null) NoticePanel.Visibility = Visibility.Collapsed; else Notify(operationNotice);
