@@ -306,9 +306,11 @@ public sealed class GameplayUiTests
 
     [Theory]
     [InlineData(640, 480)]
+    [InlineData(1024, 768)]
     [InlineData(1280, 720)]
     [InlineData(1920, 1080)]
-    public Task GameplayButtonsShareTheDialogueFooterAndLeaveLongTextScrollable(double width, double height) => Sta(async () =>
+    [InlineData(2560, 1080)]
+    public Task GameplayScalesAsOneStageAndKeepsTheDialogueFooterClear(double width, double height) => Sta(async () =>
     {
         using var fixture = new TempProject();
         var game = new GameWindow(await fixture.LoadAsync());
@@ -318,11 +320,38 @@ public sealed class GameplayUiTests
             var panel = Find<Border>(game, "DialoguePanel");
             var footer = Find<Grid>(game, "DialogueFooter");
             var text = Find<TextBlock>(game, "DialogueText");
+            var scene = Find<Grid>(game, "SceneArea");
+            var character = Find<Image>(game, "CharacterImage");
+            character.Source = BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 0, 0, 255, 255 }, 4);
             text.Text = string.Join('\n', Enumerable.Repeat("Длинный текст реплики", 60));
             var content = (FrameworkElement)game.Content;
             content.Measure(new Size(width, height));
             content.Arrange(new Rect(0, 0, width, height));
             content.UpdateLayout();
+
+            double scale = Math.Min(width / 1280, height / 720);
+            Assert.Equal(new Size(1280, 720), scene.RenderSize);
+            var stage = scene.TransformToAncestor(content).TransformBounds(new Rect(scene.RenderSize));
+            Assert.Equal(1280 * scale, stage.Width, 2);
+            Assert.Equal(720 * scale, stage.Height, 2);
+            Assert.Equal((width - stage.Width) / 2, stage.X, 2);
+            Assert.Equal((height - stage.Height) / 2, stage.Y, 2);
+            var sprite = character.TransformToAncestor(content).TransformBounds(new Rect(character.RenderSize));
+            Assert.Equal(420 * scale, sprite.Width, 2);
+            Assert.Equal(stage.Bottom, sprite.Bottom, 2);
+            Assert.Equal(width / 2, sprite.X + sprite.Width / 2, 2);
+
+            var hit = new Point(stage.X + 400 * scale, stage.Y + 200 * scale);
+            var signal = GameTriggerInput.Hotspot(content.TranslatePoint(hit, scene), scene.RenderSize);
+            Assert.Equal(400, signal.X, 2);
+            Assert.Equal(200, signal.Y, 2);
+            if (stage.X >= 1 || stage.Y >= 1)
+            {
+                var screenshot = Assert.IsAssignableFrom<BitmapSource>(SceneTransitionPresenter.Capture(content));
+                byte[] pixel = new byte[4];
+                screenshot.CopyPixels(new Int32Rect(0, 0, 1, 1), pixel, 4, 0);
+                Assert.Equal(new byte[] { 0, 0, 0, 255 }, pixel);
+            }
 
             var scroll = Assert.IsType<Grid>(panel.Child).Children.OfType<ScrollViewer>().Single();
             Assert.True(scroll.ScrollableHeight > 0);
@@ -331,7 +360,9 @@ public sealed class GameplayUiTests
             Assert.Same(footer, controls.Parent);
             Assert.Equal(6, controls.Children.Count);
             Assert.False(footer.IsAncestorOf(text));
-            Assert.InRange(panel.ActualWidth, 1, Math.Min(960, width * .85));
+            var dialogue = panel.TransformToAncestor(content).TransformBounds(new Rect(panel.RenderSize));
+            Assert.Equal(960 * scale, dialogue.Width, 2);
+            Assert.Equal(224 * scale, dialogue.Height, 2);
             double panelCenter = panel.TranslatePoint(new Point(panel.ActualWidth / 2, 0), content).X;
             double buttonCenter = controls.TranslatePoint(new Point(controls.ActualWidth / 2, 0), panel).X;
             Assert.Equal(width / 2, panelCenter, 0);

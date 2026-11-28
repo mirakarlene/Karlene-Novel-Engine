@@ -45,7 +45,11 @@
         </ResourceDictionary>
     </Window.Resources>
     <Grid SizeChanged="ConsoleHost_SizeChanged">
-        <Grid x:Name="SceneArea" Background="Transparent" ClipToBounds="True" SizeChanged="SceneArea_SizeChanged" MouseLeftButtonUp="SceneArea_Continue">
+        <Grid Background="Black">
+          <Viewbox x:Name="SceneViewport" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   SizeChanged="SceneViewport_SizeChanged">
+          <Grid x:Name="GameStage" Width="1280" Height="720" Background="{DynamicResource GameBackgroundBrush}" ClipToBounds="True">
+        <Grid x:Name="SceneArea" Background="Transparent" ClipToBounds="True" MouseLeftButtonUp="SceneArea_Continue">
             <Grid x:Name="VisualLayer">
             <Grid x:Name="ShaderBackgroundLayer">
             <Border x:Name="DefaultBackground"/>
@@ -194,6 +198,16 @@
         <Border x:Name="StartupSplash" Panel.ZIndex="109" Visibility="Collapsed" Background="Black">
             <Image x:Name="StartupSplashImage" Stretch="Uniform"/>
         </Border>
+        <Grid x:Name="ScriptHud" Panel.ZIndex="100" IsHitTestVisible="False" Visibility="Collapsed">
+            <TextBlock x:Name="WatermarkText" Foreground="White" Margin="16" TextWrapping="Wrap"/>
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16">
+                <TextBlock x:Name="GlobalTimerText" TextAlignment="Center" Foreground="White" FontFamily="Consolas" FontSize="18"/>
+                <TextBlock x:Name="LastInputText" TextAlignment="Center" Foreground="White" FontFamily="Consolas"/>
+            </StackPanel>
+        </Grid>
+          </Grid>
+          </Viewbox>
+        </Grid>
         <Border x:Name="DebugOverlay" Panel.ZIndex="10" VerticalAlignment="Top" Background="#F0181024" BorderBrush="#FF8E60B5" BorderThickness="1" Padding="16" Margin="16" Visibility="Collapsed">
             <Grid>
                 <Grid.RowDefinitions>
@@ -237,13 +251,6 @@
                 </Thumb>
             </Grid>
         </Border>
-        <Grid x:Name="ScriptHud" Panel.ZIndex="100" IsHitTestVisible="False" Visibility="Collapsed">
-            <TextBlock x:Name="WatermarkText" Foreground="White" Margin="16" TextWrapping="Wrap"/>
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16">
-                <TextBlock x:Name="GlobalTimerText" TextAlignment="Center" Foreground="White" FontFamily="Consolas" FontSize="18"/>
-                <TextBlock x:Name="LastInputText" TextAlignment="Center" Foreground="White" FontFamily="Consolas"/>
-            </StackPanel>
-        </Grid>
         <Border x:Name="NoticePanel" HorizontalAlignment="Left" VerticalAlignment="Top" Background="#ED21162F" CornerRadius="8" Margin="24" Padding="14,8" Visibility="Collapsed" MaxWidth="420">
             <TextBlock x:Name="NoticeText" Foreground="{DynamicResource GameTextBrush}" TextWrapping="Wrap"/>
         </Border>

@@ -18,14 +18,15 @@ public partial class GameWindow
         try
         {
             host.Load(() => new EditorPluginContext(host.Api), applicationPlugins: project.ApplicationPlugins); playerPlugins = host;
-            var root = (Grid)Content; root.Children.Add(pluginOverlay); Panel.SetZIndex(pluginOverlay, 500);
+            GameStage.Children.Add(pluginOverlay); Panel.SetZIndex(pluginOverlay, 500);
             PreviewMouseDown += PluginMouseDown;
         }
         catch { host.Dispose(); throw; }
     }
     private void PluginMouseDown(object sender, MouseButtonEventArgs e)
     {
-        var position = e.GetPosition(this);
+        var position = e.GetPosition(GameStage);
+        if (!new Rect(GameStage.RenderSize).Contains(position)) return;
         e.Handled = ProcessPluginInput(new("mouse", e.ChangedButton.ToString(), position.X, position.Y));
     }
     private bool ProcessPluginInput(PluginInput input)

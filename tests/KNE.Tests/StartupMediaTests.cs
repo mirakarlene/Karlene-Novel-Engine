@@ -122,8 +122,9 @@ public sealed class StartupMediaTests
                 Assert.True(((Border)window.FindName("StartupErrorOverlay")).Visibility != Visibility.Visible, error.Text);
                 await Task.Delay(40, timeout.Token);
             }
-            Assert.DoesNotContain(((Grid)window.Content).Children.OfType<Border>(), border => border.Child is Viewbox box &&
-                box.Child is Canvas canvas && canvas.Children.OfType<Border>().Any(item => item.Child is MediaElement));
+            var stage = WorkspaceTabsTests.Find<Grid>(window, "GameStage");
+            Assert.DoesNotContain(stage.Children.OfType<Border>(), border => border.Child is Canvas canvas &&
+                canvas.Children.OfType<Border>().Any(item => item.Child is MediaElement));
         }
         finally { window.Close(); }
     });

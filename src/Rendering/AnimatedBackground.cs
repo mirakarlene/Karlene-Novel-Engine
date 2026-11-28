@@ -19,7 +19,8 @@ public sealed class AnimatedBackground : FrameworkElement
     private GraphicsLayer? graphics;
     private string quality = "high";
     private GraphicsFrame? preparedFrame;
-    private (double Width, double Height, double Dpi) preparedSize;
+    private (double Width, double Height, double RasterScale) preparedSize;
+    private double viewportScale = 1;
     private ImageDrawing? atlasImage;
     private DrawingGroup? atlasDrawing;
     public AnimatedBackground()
@@ -42,6 +43,14 @@ public sealed class AnimatedBackground : FrameworkElement
         clock.Refresh();
     }
     internal void SetQuality(string value) { if (quality == value) return; quality = value; preparedFrame = null; ForgetAtlasDrawing(); InvalidateVisual(); }
+    internal void SetViewportScale(double scale)
+    {
+        if (viewportScale == scale) return;
+        viewportScale = scale;
+        preparedFrame = null;
+        ForgetAtlasDrawing();
+        InvalidateVisual();
+    }
     internal void Step(double seconds)
     {
         if (!double.IsFinite(seconds) || seconds < 0) throw new ArgumentOutOfRangeException(nameof(seconds));
@@ -82,8 +91,8 @@ public sealed class AnimatedBackground : FrameworkElement
                 graphics = new(this);
                 graphics.Released += () => { ForgetAtlasDrawing(); InvalidateVisual(); };
             }
-            var size = (ActualWidth, ActualHeight, VisualTreeHelper.GetDpi(this).DpiScaleX);
-            if (preparedFrame == null || preparedSize != size) { preparedFrame = CreateFrame(); preparedSize = size; }
+            var size = (Width: ActualWidth, Height: ActualHeight, RasterScale: VisualTreeHelper.GetDpi(this).DpiScaleX * viewportScale);
+            if (preparedFrame == null || preparedSize != size) { preparedFrame = CreateFrame(size.RasterScale); preparedSize = size; }
             if (graphics.TryGetBitmap(() => preparedFrame, preparedFrame, out var bitmap))
             {
                 var clipBounds = new Rect(RenderSize);
@@ -134,18 +143,17 @@ public sealed class AnimatedBackground : FrameworkElement
         }
         dc.Pop(); dc.Pop();
     }
-    private GraphicsFrame CreateFrame()
+    private GraphicsFrame CreateFrame(double rasterScale)
     {
-        double dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
         var vertices = new List<GraphicsVertex>(6000);
         Color ink = (Color)ColorConverter.ConvertFromString(theme.PatternColor);
         float alpha = ink.A / 255f * .28f;
         var color = new Vector4(ink.R / 255f * alpha, ink.G / 255f * alpha, ink.B / 255f * alpha, alpha);
         void Triangle(Point a, Point b, Point c)
         {
-            vertices.Add(new(new((float)(a.X * dpi), (float)(a.Y * dpi)), Vector2.Zero, color));
-            vertices.Add(new(new((float)(b.X * dpi), (float)(b.Y * dpi)), Vector2.Zero, color));
-            vertices.Add(new(new((float)(c.X * dpi), (float)(c.Y * dpi)), Vector2.Zero, color));
+            vertices.Add(new(new((float)(a.X * rasterScale), (float)(a.Y * rasterScale)), Vector2.Zero, color));
+            vertices.Add(new(new((float)(b.X * rasterScale), (float)(b.Y * rasterScale)), Vector2.Zero, color));
+            vertices.Add(new(new((float)(c.X * rasterScale), (float)(c.Y * rasterScale)), Vector2.Zero, color));
         }
         void Line(Point a, Point b)
         {
@@ -171,7 +179,9 @@ public sealed class AnimatedBackground : FrameworkElement
                     { for (int i = 0; i < 12; i++) Triangle(new(x, y), new(x + 2.5 * Math.Cos(i * Math.Tau / 12), y + 2.5 * Math.Sin(i * Math.Tau / 12)), new(x + 2.5 * Math.Cos((i + 1) * Math.Tau / 12), y + 2.5 * Math.Sin((i + 1) * Math.Tau / 12))); }
                     else { Line(new(x, y), new(x + 60, y)); Line(new(x, y), new(x, y + 60)); }
         }
-        return new(Math.Max(1, (int)Math.Ceiling((theme.PatternStyle == "waves" ? ActualWidth * 1.5 : ActualWidth + 120) * dpi)), Math.Max(1, (int)Math.Ceiling((theme.PatternStyle == "waves" ? ActualHeight : ActualHeight + 120) * dpi)), [], vertices);
+        double width = theme.PatternStyle == "waves" ? ActualWidth * 1.5 : ActualWidth + 120;
+        double height = theme.PatternStyle == "waves" ? ActualHeight : ActualHeight + 120;
+        return new(Math.Max(1, (int)Math.Ceiling(width * rasterScale)), Math.Max(1, (int)Math.Ceiling(height * rasterScale)), [], vertices);
     }
 }
 

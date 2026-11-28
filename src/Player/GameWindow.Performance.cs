@@ -92,7 +92,7 @@ public partial class GameWindow
         CommandInput.ToolTip = $"Команда отладки: Enter. {settings.ConsoleHotkey} — закрыть консоль.";
         performanceOverlay = new Border { Child = performanceText, Background = new SolidColorBrush(Color.FromArgb(210, 20, 16, 30)), Padding = new(8), Margin = new(12), IsHitTestVisible = false, Visibility = Visibility.Collapsed };
         Panel.SetZIndex(performanceOverlay, 9);
-        ((Grid)Content).Children.Add(performanceOverlay);
+        GameStage.Children.Add(performanceOverlay);
     }
 
     private void UpdateAudioBackend(string backend)

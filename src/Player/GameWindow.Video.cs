@@ -55,13 +55,13 @@ public partial class GameWindow
         FrameworkElement surface = new Border { Background = Brushes.Black, Child = media, ClipToBounds = true };
         if (area is { } rect)
         {
-            var canvas = new Canvas { Width = 1280, Height = 720, ClipToBounds = true };
+            var canvas = new Canvas { ClipToBounds = true };
             surface.Width = rect.Width;
             surface.Height = rect.Height;
             Canvas.SetLeft(surface, rect.X);
             Canvas.SetTop(surface, rect.Y);
             canvas.Children.Add(surface);
-            surface = new Viewbox { Child = canvas };
+            surface = canvas;
         }
         var overlay = new Border { Child = surface, Background = Brushes.Transparent, Focusable = true };
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -72,7 +72,7 @@ public partial class GameWindow
         };
         media.MediaFailed += (_, e) => completed.TrySetException(new IOException(
             "Windows не смогла воспроизвести видео «" + Path.GetFileName(path) + "». Проверьте файл и наличие кодека.", e.ErrorException));
-        var root = (Grid)Content;
+        var root = GameStage;
         Panel.SetZIndex(overlay, 9);
         root.Children.Add(overlay);
         videoPlayback = completed;

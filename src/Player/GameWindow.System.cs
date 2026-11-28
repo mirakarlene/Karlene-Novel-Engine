@@ -243,7 +243,7 @@ public partial class GameWindow
             Child = new ScrollViewer { Content = report, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
             Focusable = true
         };
-        var root = (Grid)Content;
+        var root = GameStage;
         Panel.SetZIndex(overlay, int.MaxValue);
         root.Children.Add(overlay);
         overlay.Focus();

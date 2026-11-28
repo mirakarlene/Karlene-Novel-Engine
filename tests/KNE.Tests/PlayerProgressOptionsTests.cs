@@ -102,7 +102,7 @@ public sealed class PlayerProgressOptionsTests
         {
             game.Show();
             await WaitUntil(game, () => Field<string>(game, "activeScreen") == "main_menu");
-            var root = (Grid)game.Content;
+            var root = Find<Grid>(game, "GameStage");
             Task start = InvokeTask(game, "StartGameAsync");
             Assert.Contains(root.Children.OfType<Image>(), image => Panel.GetZIndex(image) == int.MaxValue);
             await start;

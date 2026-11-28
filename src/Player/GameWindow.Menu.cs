@@ -42,7 +42,7 @@ public partial class GameWindow
 
     private BitmapSource? CaptureMenuTransition(MenuTransitionSettings transition) =>
         transition.IsEnabled && !preview && preferences.Animate && project.Engine.Theme.AnimationEnabled &&
-        IsVisible && WindowState != WindowState.Minimized ? SceneTransitionPresenter.Capture((FrameworkElement)Content) : null;
+        IsVisible && WindowState != WindowState.Minimized ? SceneTransitionPresenter.Capture(GameStage, SceneRasterScale) : null;
 
     private async Task ReturnToMainMenuAsync(bool restartWithoutMenu = false)
     {
@@ -52,7 +52,7 @@ public partial class GameWindow
         {
             var transition = project.Engine.Game.MainMenuReturnTransition;
             var previous = CaptureMenuTransition(transition);
-            var root = (Grid)Content;
+            var root = GameStage;
             using var cover = previous == null ? null : SceneTransitionPresenter.Hold(root, previous);
             ready = false;
             CloseAudio();
@@ -81,7 +81,7 @@ public partial class GameWindow
                 ShowMenu();
                 cover?.Dispose();
                 if (previous != null)
-                    await SceneTransitionPresenter.PlayMenuAsync(root, previous, transition, blockFlowLifetime.Token);
+                    await SceneTransitionPresenter.PlayMenuAsync(root, previous, transition, blockFlowLifetime.Token, SceneRasterScale);
             }
         }
         catch (OperationCanceledException) when (closed) { }

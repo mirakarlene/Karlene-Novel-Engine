@@ -32,8 +32,8 @@ public partial class GameWindow
             _ => throw new ArgumentException("Разморозка в тестовом билде: true или false.")
         };
 
-        var root = (Grid)Content;
-        var frame = SceneTransitionPresenter.Capture(root);
+        var root = GameStage;
+        var frame = SceneTransitionPresenter.Capture(root, SceneRasterScale);
         var overlay = new Border
         {
             Background = frame == null ? Brushes.Transparent : new ImageBrush(frame),
