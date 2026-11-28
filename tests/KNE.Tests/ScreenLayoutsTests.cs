@@ -6,16 +6,17 @@ namespace KNE.Tests;
 public sealed class ScreenLayoutsTests
 {
     [Fact]
-    public async Task NewProject_DefinesGameScreensWithSmallerButtonsAndFunctionalSettings()
+    public async Task NewProject_DefinesCoherentTemplatesAndFunctionalSettings()
     {
         using var fixture = new TempProject();
         var layouts = (await fixture.LoadAsync()).Engine.Screens;
-        Assert.Equal(new[] { "gameplay", "main_menu", "pause", "saves", "settings" }, layouts.Screens.Select(s => s.Kind).OrderBy(s => s));
+        Assert.Equal(new[] { "gameplay", "history", "main_menu", "pause", "saves", "settings" }, layouts.Screens.Select(s => s.Kind).OrderBy(s => s));
         var main = layouts.Find("main_menu")!;
         Assert.Equal(new[] { "start", "continue", "settings", "saves", "exit" }, main.Elements.Where(e => e.Type == "button").Select(e => e.Action));
-        Assert.All(main.Elements.Where(e => e.Type == "button"), e => Assert.Equal(300, e.Width));
+        Assert.All(main.Elements.Where(e => e.Type == "button"), e => Assert.Equal(380, e.Width));
         Assert.DoesNotContain(main.Elements, e => e.Text.Contains("ВИЗУАЛЬНАЯ НОВЕЛЛА"));
-        Assert.Equal(new[] { "fullscreen", "animation", "music_volume", "sound_volume", "back", "text_speed" }, layouts.Find("settings")!.Elements.Where(e => e.Type != "text").Select(e => e.Action));
+        Assert.Equal(new[] { "fullscreen", "animation", "music_volume", "sound_volume", "text_speed", "back" }, layouts.Find("settings")!.Elements.Where(e => e.Action != "none").Select(e => e.Action));
+        Assert.Single(layouts.Find("history")!.Elements, e => e.Type == "history_list");
         Assert.Empty(layouts.Find("gameplay")!.Elements);
     }
 
@@ -51,6 +52,7 @@ public sealed class ScreenLayoutsTests
     [InlineData("{\"delay\":-1}")]
     [InlineData("{\"motion_order\":101}")]
     [InlineData("{\"font_size\":9}")]
+    [InlineData("{\"opacity\":1.01}")]
     [InlineData("{\"type\":\"html\"}")]
     [InlineData("{\"action\":\"shell\"}")]
     [InlineData("{\"type\":\"toggle\",\"action\":\"start\"}")]
@@ -75,7 +77,7 @@ public sealed class ScreenLayoutsTests
         var main = layouts.Find("main_menu")!;
         main.Elements[1].Id = main.Elements[0].Id;
         Assert.Throws<InvalidDataException>(layouts.Validate);
-        main.Elements[1].Id = "subtitle";
+        main.Elements[1].Id = "title";
         while (layouts.Screens.Count < 32) layouts.AddScreen("custom " + layouts.Screens.Count);
         Assert.Throws<InvalidOperationException>(() => layouts.AddScreen("overflow"));
         layouts.Validate();
@@ -86,7 +88,7 @@ public sealed class ScreenLayoutsTests
     {
         var layouts = ScreenLayouts.CreateDefaults();
         var main = layouts.Find("main_menu")!;
-        var a = main.Elements[0];
+        var a = main.Elements.Single(element => element.Id == "title");
         a.X = 0; a.Y = 0; a.Width = 1280; a.Height = 720; a.MotionX = -1280; a.MotionY = 720;
         a.Delay = 60; a.Duration = 0.1; a.MotionOrder = 100; a.Loop = true;
         main.Elements.Remove(a); main.Elements.Add(a);
@@ -102,11 +104,13 @@ public sealed class ScreenLayoutsTests
         var document = await AppearanceDocument.OpenAsync(await fixture.LoadAsync());
         document.Layout.Theme!.BackgroundColor = "#FF102030";
         document.Layout.Find("main_menu")!.Elements.Single(e => e.Action == "start").MotionY = 40;
+        document.Layout.Find("history")!.Elements.Single(e => e.Type == "panel").Opacity = .45;
         Assert.True(document.IsDirty);
         await document.SaveAsync(); Assert.False(document.IsDirty);
         var loaded = await fixture.LoadAsync();
         Assert.Equal("#FF102030", loaded.Engine.Theme.BackgroundColor);
         Assert.Equal(40, loaded.Engine.Screens.Find("main_menu")!.Elements.Single(e => e.Action == "start").MotionY);
+        Assert.Equal(.45, loaded.Engine.Screens.Find("history")!.Elements.Single(e => e.Type == "panel").Opacity);
         string path = Path.Combine(fixture.ProjectPath, "engine", "screens.json");
         string external = document.Layout.Serialize() + "\n"; File.WriteAllText(path, external);
         document.Layout.Find("main_menu")!.Name = "draft";

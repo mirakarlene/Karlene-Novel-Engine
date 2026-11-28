@@ -22,6 +22,7 @@ public static class ScreenRenderer
             "image" => ImageView(root, element.Image, loadImage),
             "save_list" => new ListBox { ItemsSource = new[] { "Ручной слот · текущая реплика", "Автосохранение · дата и время" }, FontSize = 18 },
             "save_name" => new TextBox { Text = "Имя ручного слота", Padding = new Thickness(8), FontSize = 18 },
+            "history_list" => new ListBox { ItemsSource = new[] { "Рассказчик · Начало сцены", "Герой · Прошлая реплика" }, FontSize = element.FontSize },
             _ => new Button { Content = label, FontSize = element.FontSize, Padding = new Thickness(12, 6, 12, 6), HorizontalContentAlignment = HorizontalAlignment.Center,
                 Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(theme.ButtonColor)), Foreground = TextBrush(),
                 BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(theme.AccentColor)) }
@@ -30,6 +31,7 @@ public static class ScreenRenderer
         else if (view is ContentControl control && control.Content is string content && (content.Contains('{') || content.Contains('}')))
             control.Content = InlineTextPresentation.Label(content);
         view.Tag = element;
+        if (element.SupportsOpacity) view.Opacity = element.Opacity;
         view.Width = element.Width; view.Height = element.Height;
         view.FontFamilyIfControl(theme.FontFamily);
         Canvas.SetLeft(view, element.X); Canvas.SetTop(view, element.Y);

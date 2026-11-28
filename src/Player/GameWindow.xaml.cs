@@ -55,6 +55,7 @@ public partial class GameWindow : Window
         InitializeShaders();
         InitializeTriggerInput();
         InitializeProjectEvents();
+        ContentRendered += (_, _) => initialViewportSize ??= ((FrameworkElement)Content).RenderSize;
         music.MediaEnded += (_, _) => { if (runtime.Visuals.AudioChannels.All(c => c.Channel != "music") && (runtime.Visuals.LoopMusic || menuMusicPlaying)) { music.Position = TimeSpan.Zero; music.Play(); } };
         music.MediaFailed += (_, e) => QueueOutput("Ошибка музыки: " + e.ErrorException.Message);
         sound.MediaFailed += (_, e) => QueueOutput("Ошибка звука: " + e.ErrorException.Message);
@@ -72,6 +73,12 @@ public partial class GameWindow : Window
         catch (Exception error) { ShowStartupError(error, "Загрузка UI плагинов"); return; }
         if (project.Engine.Window.Mode == "maximized") WindowState = WindowState.Maximized;
         if (preferences.Fullscreen ?? project.Engine.Window.Mode == "fullscreen") ToggleFullscreen();
+        ApplyInitialClientSize();
+        if (IsLoaded)
+        {
+            StartupViewportBackground.Visibility = Visibility.Visible;
+            UpdateStartupBackgroundBounds(((FrameworkElement)Content).RenderSize);
+        }
         bool useMenu = project.Engine.Game.MainMenu && !preview && project.Engine.Screens.Find("main_menu") != null;
         bool hasPrelude = useMenu && !string.IsNullOrWhiteSpace(project.Configuration.EntryPoints?.PreMenuScene);
         try
@@ -658,9 +665,11 @@ public partial class GameWindow : Window
         {
             Title = translations.Translate(GameTextCategory.MainMenu, settings.Title);
             // Apply only changed runtime values so a title update does not undo a player's window resize.
-            if (renderedSettings == null && vmInitialArea is { } area && WindowState == WindowState.Normal && !fullscreen)
+            var initial = renderedSettings == null && initialClientSizeApplied ? project.Engine.Window : null;
+            bool keepInitialSize = initial != null && settings.Width == initial.Width && settings.Height == initial.Height;
+            if (!keepInitialSize && renderedSettings == null && vmInitialArea is { } area && WindowState == WindowState.Normal && !fullscreen)
                 ApplyVmBounds(area, settings.Width, settings.Height);
-            else
+            else if (!keepInitialSize)
             {
                 if (settings.Width != renderedSettings?.Width) Width = settings.Width;
                 if (settings.Height != renderedSettings?.Height) Height = settings.Height;

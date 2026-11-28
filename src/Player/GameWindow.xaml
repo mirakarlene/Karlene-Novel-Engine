@@ -44,8 +44,16 @@
         </Style>
         </ResourceDictionary>
     </Window.Resources>
-    <Grid SizeChanged="ConsoleHost_SizeChanged">
+    <Grid SizeChanged="GameClient_SizeChanged">
         <Grid Background="Black">
+          <Border x:Name="StartupViewportBackground" Visibility="Collapsed" IsHitTestVisible="False" ClipToBounds="True"
+                  Background="{Binding Background, ElementName=DefaultBackground}">
+              <Grid>
+                  <Image Stretch="UniformToFill" Source="{Binding Source, ElementName=DefaultBackgroundImage}"
+                         Visibility="{Binding Visibility, ElementName=DefaultBackgroundImage}"/>
+                  <Image Stretch="UniformToFill" Source="{Binding Source, ElementName=BackgroundImage}"/>
+              </Grid>
+          </Border>
           <Viewbox x:Name="SceneViewport" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"
                    SizeChanged="SceneViewport_SizeChanged">
           <Grid x:Name="GameStage" Width="1280" Height="720" Background="{DynamicResource GameBackgroundBrush}" ClipToBounds="True">
@@ -143,12 +151,9 @@
                     <Button Content="Назад" Click="ScreenBack_Click"/>
                 </StackPanel>
             </Border>
-            <Border x:Name="HistoryScreen" Visibility="Collapsed" Margin="24" Padding="20" MaxWidth="1050" CornerRadius="16"
-                    BorderThickness="1" BorderBrush="{DynamicResource GameAccentBrush}" Background="{DynamicResource GameBackgroundBrush}">
-                <Grid>
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <TextBlock Text="История" FontSize="28" Foreground="{DynamicResource GameTextBrush}" Margin="0,0,0,12"/>
-                    <ListBox x:Name="HistoryEntries" Grid.Row="1" BorderThickness="0" Background="Transparent"
+            <Border x:Name="HistoryScreen" Visibility="Collapsed" ClipToBounds="True">
+                <Canvas x:Name="HistoryCanvas">
+                    <ListBox x:Name="HistoryEntries" BorderThickness="0" Background="Transparent"
                              Foreground="{DynamicResource GameTextBrush}" HorizontalContentAlignment="Stretch"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.VirtualizationMode="Recycling">
                         <ListBox.ItemTemplate>
@@ -170,11 +175,10 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
-                    <TextBlock x:Name="HistoryEmpty" Grid.Row="1" Text="История пока пуста." IsHitTestVisible="False"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource GameTextBrush}"/>
-                    <Button x:Name="HistoryBackButton" Grid.Row="2" Content="Назад" Click="HistoryBack_Click"
-                            HorizontalAlignment="Right" Margin="0,12,0,0" Padding="12,5"/>
-                </Grid>
+                    <TextBlock x:Name="HistoryEmpty" IsHitTestVisible="False" TextAlignment="Center" TextWrapping="Wrap"
+                               Foreground="{DynamicResource GameTextBrush}"/>
+                    <Button x:Name="HistoryBackButton" Click="HistoryBack_Click" Padding="12,5"/>
+                </Canvas>
             </Border>
             </Grid>
         </Border>

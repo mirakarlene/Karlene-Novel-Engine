@@ -82,6 +82,7 @@ public sealed partial class ProjectParametersWindow
         value.UnavailableSaves = (string?)UnavailableSavesInput.SelectedValue ?? "read_only";
         value.ConsoleMode = (string?)ConsoleModeInput.SelectedValue ?? "embedded";
         value.ConsoleHotkey = ConsoleHotkeyInput.Text.Trim();
+        value.DragDiagnostics = Flag("drag_diagnostics");
         value.DisableDefaultAnimations = Flag("default_animations_off");
         value.RenderProxy = (string?)RenderProxyInput.SelectedValue ?? "veldrid";
         value.SkiaBackend = (string?)SkiaBackendInput.SelectedValue ?? "cpu";

@@ -13,16 +13,14 @@ public sealed partial class ProjectParametersWindow
     private Border MenuSettingsCard()
     {
         var panel = new StackPanel();
-        panel.Children.Add(Heading("Главное меню"));
+        var heading = Heading("Главное меню");
+        heading.Margin = new(0, 0, 0, 4);
+        panel.Children.Add(heading);
         AddField(panel, "Переход при старте истории", storyStartInput);
         AddField(panel, "Переход при выходе в главное меню", mainMenuReturnInput);
-        return RuntimeOptionsCard(panel);
-    }
-
-    private static Border RuntimeOptionsCard(StackPanel panel)
-    {
         ParameterLayout.Compact(panel);
         foreach (var row in panel.Children.OfType<Grid>()) row.Margin = new(0);
+        ParameterLayout.SpreadFields(panel);
         var card = Card(panel);
         card.Padding = new(12, 3, 12, 3);
         return card;

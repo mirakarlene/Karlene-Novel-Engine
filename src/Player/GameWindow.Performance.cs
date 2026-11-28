@@ -36,6 +36,8 @@ public partial class GameWindow
         active.UnloadPreviousScene = saved.UnloadPreviousScene; active.AudioBuffer = saved.AudioBuffer; active.MaxAsyncTasks = saved.MaxAsyncTasks;
         active.FpsCounter = saved.FpsCounter; active.StatisticsOverlay = saved.StatisticsOverlay;
         active.FpsCorner = saved.FpsCorner; active.LoadingIndicator = saved.LoadingIndicator;
+        active.DragDiagnostics = saved.DragDiagnostics;
+        UpdateDiagnosticDragHandles();
         if (active.DisableDefaultAnimations != saved.DisableDefaultAnimations)
         {
             active.DisableDefaultAnimations = saved.DisableDefaultAnimations;
@@ -93,6 +95,11 @@ public partial class GameWindow
         performanceOverlay = new Border { Child = performanceText, Background = new SolidColorBrush(Color.FromArgb(210, 20, 16, 30)), Padding = new(8), Margin = new(12), IsHitTestVisible = false, Visibility = Visibility.Collapsed };
         Panel.SetZIndex(performanceOverlay, 9);
         GameStage.Children.Add(performanceOverlay);
+        bool CanDrag() => project.Engine.Performance.DragDiagnostics;
+        consoleDragOffset = EnableDiagnosticDrag(DebugOverlay, StatusText, (FrameworkElement)Content, () => CanDrag() && detachedConsole == null);
+        EnableDiagnosticDrag(performanceOverlay, performanceOverlay, GameStage, CanDrag);
+        EnableDiagnosticDrag(NoticePanel, NoticePanel, (FrameworkElement)Content, CanDrag);
+        UpdateDiagnosticDragHandles();
     }
 
     private void UpdateAudioBackend(string backend)

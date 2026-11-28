@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
@@ -93,13 +94,27 @@ public sealed partial class ProjectParametersWindow : Window
         AddField(renderer, "Прокси рендеринга", RenderProxyInput);
         AddField(renderer, "Бэкенд SkiaSharp", SkiaBackendInput);
         var performance = new StackPanel(); performance.Children.Add(Heading("Производительность"));
+        ((TextBlock)performance.Children[0]).Margin = new(0, 0, 0, 4);
+        var resourceFields = new StackPanel();
+        var asyncFields = new StackPanel();
+        var audioFields = new StackPanel();
         var cache = new DockPanel { LastChildFill = true }; GraphicsInput.CacheLimitInput.MinWidth = 80; GraphicsInput.CacheLimitInput.Width = 90; DockPanel.SetDock(GraphicsInput.CacheLimitInput, Dock.Right);
-        cache.Children.Add(GraphicsInput.CacheLimitInput); cache.Children.Add(GraphicsInput.LimitCacheInput); performance.Children.Add(cache);
-        performance.Children.Add(Hint("Кэш хранит подготовленные ресурсы. Лимит не включает активные изображения и память драйвера. API готовит графику один раз; движение выполняет композитор WPF."));
-        AddSwitch(performance, "unload", "Выгружать ресурсы прошлой сцены", value.UnloadPreviousScene);
-        AddField(performance, "Лимит асинхронных задач", AsyncTasksInput); AddField(performance, "Аудио буфер", AudioBufferInput);
-        AddField(performance, "Аудиобэкенд", AudioBackendInput);
-        AddSwitch(performance, "preload", "Предзагрузка сцен", value.Preloading); AddField(performance, "Количество сцен", PreloadInput);
+        cache.Children.Add(GraphicsInput.CacheLimitInput); cache.Children.Add(GraphicsInput.LimitCacheInput); resourceFields.Children.Add(cache);
+        cache.ToolTip = "Кэш хранит подготовленные ресурсы. Лимит не включает активные изображения и память драйвера. API готовит графику один раз; движение выполняет композитор WPF.";
+        AddSwitch(resourceFields, "unload", "Выгружать ресурсы прошлой сцены", value.UnloadPreviousScene);
+        AddSwitch(resourceFields, "preload", "Предзагрузка сцен", value.Preloading);
+        AddField(asyncFields, "Лимит асинхронных задач", AsyncTasksInput);
+        AddField(asyncFields, "Количество сцен", PreloadInput);
+        AddField(audioFields, "Аудио буфер", AudioBufferInput);
+        AddField(audioFields, "Аудиобэкенд", AudioBackendInput);
+        var performanceFields = new UniformGrid { Columns = 3 };
+        foreach (var group in new[] { resourceFields, asyncFields, audioFields })
+        {
+            ParameterLayout.Compact(group);
+            if (group != audioFields) group.Margin = new(0, 0, 10, 0);
+            performanceFields.Children.Add(group);
+        }
+        performance.Children.Add(performanceFields);
         var left = Card(graphics); var right = Card(performance); columns.Children.Add(left); columns.Children.Add(right); Grid.SetColumn(right, 2); body.Children.Add(columns);
         var console = new StackPanel(); console.Children.Add(Heading("Консоль"));
         AddField(console, "Режим отображения", ConsoleModeInput);
@@ -111,6 +126,7 @@ public sealed partial class ProjectParametersWindow : Window
         Place(diagnosticGrid, Switch("stats", "Оверлей статистики (RAM, GPU, Draw Calls)", value.StatisticsOverlay), 0, 1);
         Place(diagnosticGrid, Switch("loading", "Уведомление загрузки в углу", value.LoadingIndicator), 1, 0);
         Place(diagnosticGrid, Switch("debug", "Режим отладки (консоль при запуске)", value.DebugMode), 1, 1);
+        var dragDiagnostics = Switch("drag_diagnostics", "Передвигать панель диагностики с помощью курсора", value.DragDiagnostics);
 
         diagnostics.Children.Add(diagnosticGrid); var diagnosticCard = Card(diagnostics); diagnosticCard.Margin = new(0, 10, 0, 0); body.Children.Add(diagnosticCard);
         var storage = new StackPanel(); storage.Children.Add(Heading("Сохранения"));
@@ -144,7 +160,7 @@ public sealed partial class ProjectParametersWindow : Window
         DangerZone.Content = danger; DangerZone.Collapsed += (_, _) => ResetDeletion(); body.Children.Add(DangerZone); body.Children.Add(status);
         var securityCard = SecurityCard(project.Engine.Security);
         body.Children.Clear();
-        ParameterLayout.Compact(graphics); ParameterLayout.Compact(performance); ParameterLayout.Compact(storage);
+        ParameterLayout.Compact(graphics); ParameterLayout.Compact(console); ParameterLayout.Compact(storage);
         diagnosticGrid.Children.Clear();
         foreach (string key in new[] { "fps", "stats", "loading", "debug" })
         {
@@ -156,11 +172,15 @@ public sealed partial class ProjectParametersWindow : Window
         ParameterLayout.Compact((Panel)securityCard.Child);
         foreach (Border card in BuildInput.Children.OfType<Border>()) { card.Padding = new(8); card.Margin = new(0, 0, 0, 4); ParameterLayout.Compact((Panel)card.Child); }
         foreach (FrameworkElement card in new FrameworkElement[] { storageCard, diagnosticCard, securityCard }) card.Margin = new(0);
-        foreach (var panel in new[] { graphics, performance, storage, diagnostics, (Panel)securityCard.Child }) ParameterLayout.SpreadFields(panel);
+        foreach (var panel in new[] { graphics, console, storage, diagnostics, (Panel)securityCard.Child }) ParameterLayout.SpreadFields(panel);
+        right.Padding = new(12, 5, 12, 5);
+        diagnostics.Children.Insert(1, dragDiagnostics);
         ParameterLayout.Compact(renderer); ParameterLayout.SpreadFields(renderer); graphics.Children.Add(renderer);
         var buildCards = BuildInput.Children.OfType<Border>().ToArray();
         foreach (var card in buildCards) { ParameterLayout.SpreadFields((Panel)card.Child); }
-        pages.Add(ParameterLayout.Cards(left, right, ParameterLayout.Columns(RuntimeOptionsCard(console), MenuSettingsCard())));
+        var runtimePage = ParameterLayout.Cards(left, right, Card(console), MenuSettingsCard());
+        foreach (FrameworkElement card in runtimePage.Children) card.Margin = new(0, 0, 0, 4);
+        pages.Add(runtimePage);
         pages.Add(ParameterLayout.Cards(storageCard, diagnosticCard));
         pages.Add(ParameterLayout.Cards(BuildInput, securityCard));
         var metadataCard = Card(MetadataInput);

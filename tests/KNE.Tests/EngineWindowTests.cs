@@ -102,6 +102,88 @@ public sealed class EngineWindowTests
     }
 
     [Theory]
+    [InlineData(1280, 720)] [InlineData(1920, 1080)] [InlineData(1024, 768)]
+    [InlineData(2560, 1080)] [InlineData(1080, 1920)]
+    public Task DefaultWindowShowsBackgroundUntilThePlayerChangesItsAspectRatio(int width, int height) => OnStaAsync(async () =>
+    {
+        using var fixture = new TempProject();
+        fixture.Write("engine/window.json", $$"""{"width":{{width}},"height":{{height}}}""");
+        var window = new GameWindow(await fixture.LoadAsync()) { ShowActivated = false, ShowInTaskbar = false };
+        try
+        {
+            window.Show();
+            await WaitForMainMenuAsync(window);
+            var client = (FrameworkElement)window.Content;
+            var viewport = Find<Viewbox>(window, "SceneViewport");
+            var background = Find<Border>(window, "StartupViewportBackground");
+            window.UpdateLayout();
+            double dpi = VisualTreeHelper.GetDpi(viewport).DpiScaleX;
+            Assert.IsType<SolidColorBrush>(window.Background);
+            Assert.Equal(Visibility.Visible, background.Visibility);
+            Assert.NotNull(background.Background);
+            var pixel = new byte[4];
+            if (width * 720 == height * 1280)
+            {
+                Assert.InRange((client.ActualWidth - viewport.ActualWidth) * dpi, -.1, 1.5);
+                Assert.InRange((client.ActualHeight - viewport.ActualHeight) * dpi, -.1, 1.5);
+            }
+            else
+            {
+                SceneTransitionPresenter.Capture(client)!.CopyPixels(new Int32Rect(1, 1, 1, 1), pixel, 4, 0);
+                Assert.True(pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0);
+                var sceneBackground = Find<Border>(window, "DefaultBackground");
+                var extent = sceneBackground.TransformToAncestor(client).TransformBounds(new Rect(sceneBackground.RenderSize));
+                Assert.InRange(Math.Abs(extent.Width - client.ActualWidth) * dpi, 0, 1.5);
+                Assert.InRange(Math.Abs(extent.Height - client.ActualHeight) * dpi, 0, 1.5);
+            }
+
+            window.Height += 90;
+            window.UpdateLayout();
+            Assert.Equal(Visibility.Collapsed, background.Visibility);
+            SceneTransitionPresenter.Capture(client)!.CopyPixels(new Int32Rect(1, 1, 1, 1), pixel, 4, 0);
+            Assert.Equal(new byte[] { 0, 0, 0, 255 }, pixel);
+            double resizedHeight = window.Height;
+            await ActAsync(window, () => Click(window, "StartButton"));
+            Assert.Equal(resizedHeight, window.Height);
+        }
+        finally { window.Close(); }
+    });
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public Task DiagnosticDraggingIsOptInAndKeepsPanelsInTheClient(bool enabled) => OnStaAsync(async () =>
+    {
+        using var fixture = new TempProject();
+        await PerformanceSettingsStore.SaveProjectAsync(fixture.ProjectPath, new() { DragDiagnostics = enabled });
+        var window = new GameWindow(await fixture.LoadAsync());
+        try
+        {
+            var client = (Grid)window.Content;
+            var console = Find<Border>(window, "DebugOverlay");
+            var notice = Find<Border>(window, "NoticePanel");
+            var status = Find<TextBlock>(window, "StatusText");
+            Assert.Equal(enabled ? Cursors.SizeAll : null, status.Cursor);
+            Assert.Equal(enabled ? Cursors.SizeAll : null, notice.Cursor);
+            if (!enabled) return;
+            console.Visibility = notice.Visibility = Visibility.Visible;
+            client.Measure(new Size(640, 480));
+            client.Arrange(new Rect(0, 0, 640, 480));
+            client.UpdateLayout();
+            var move = typeof(GameWindow).GetMethod("MoveDiagnosticPanel", BindingFlags.Static | BindingFlags.NonPublic)!;
+            foreach (var panel in new[] { console, notice })
+            {
+                var original = panel.TransformToAncestor(client).TransformBounds(new Rect(panel.RenderSize));
+                move.Invoke(null, [panel, client, panel.RenderTransform, new Vector(1000, 1000)]);
+                var moved = panel.TransformToAncestor(client).TransformBounds(new Rect(panel.RenderSize));
+                Assert.Equal(original.Size, moved.Size);
+                Assert.Equal(client.ActualWidth, moved.Right, 2);
+                Assert.Equal(client.ActualHeight, moved.Bottom, 2);
+            }
+        }
+        finally { window.Close(); }
+    });
+
+    [Theory]
     [InlineData("windowed", WindowState.Normal, WindowStyle.SingleBorderWindow)]
     [InlineData("maximized", WindowState.Maximized, WindowStyle.SingleBorderWindow)]
     [InlineData("fullscreen", WindowState.Maximized, WindowStyle.None)]

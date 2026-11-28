@@ -35,18 +35,46 @@ internal static class SceneTransitionPresenter
         token.ThrowIfCancellationRequested();
         root.UpdateLayout();
         if (Capture(root, rasterScale) is not { } current) return;
+        await PlayFramesAsync(root, previous, settings, token, current);
+    }
+
+    private static async Task PlayFramesAsync(Grid root, BitmapSource previous, MenuTransitionSettings settings,
+        CancellationToken token, BitmapSource current)
+    {
         var layer = new Grid { Background = Brushes.Black, ClipToBounds = true };
         var back = new Image { Source = previous, Stretch = Stretch.Fill };
         var front = new Image { Source = current, Stretch = Stretch.Fill };
         var move = new TranslateTransform();
+        var previousMove = new TranslateTransform();
+        var zoom = new ScaleTransform(1, 1);
+        var previousZoom = new ScaleTransform(1, 1);
         var clip = new RectangleGeometry();
-        if (settings.Kind is "slideaway" || settings is { Kind: "iris", Direction: "out" })
+        var tiles = new GeometryGroup();
+        if (settings.Kind is "slideaway" or "easeout" || settings is { Kind: "iris", Direction: "out" })
         {
             back.Source = current;
             front.Source = previous;
         }
         if (settings.Kind is "wipe" or "iris") front.Clip = clip;
-        if (settings.Kind is "slide" or "slideaway") front.RenderTransform = move;
+        if (settings.Kind is "slide" or "slideaway" or "easein" or "easeout" or "push" or "hpunch" or "vpunch") front.RenderTransform = move;
+        if (settings.Kind == "push") back.RenderTransform = previousMove;
+        if (settings.Kind is "zoomin" or "zoomout" or "zoominout")
+        {
+            front.RenderTransform = zoom;
+            back.RenderTransform = previousZoom;
+            front.RenderTransformOrigin = back.RenderTransformOrigin = new(.5, .5);
+            if (settings.Kind == "zoomout")
+            {
+                back.Source = current;
+                front.Source = previous;
+            }
+        }
+        if (settings.Kind is "blinds" or "squares")
+        {
+            front.Clip = tiles;
+            int count = settings.Kind == "blinds" ? 12 : 96;
+            for (int index = 0; index < count; index++) tiles.Children.Add(new RectangleGeometry());
+        }
         if (settings.Kind == "pixellate") RenderOptions.SetBitmapScalingMode(front, BitmapScalingMode.NearestNeighbor);
         layer.Children.Add(back);
         layer.Children.Add(front);
@@ -81,10 +109,42 @@ internal static class SceneTransitionPresenter
                             _ => new(0, 0, width * progress, height)
                         };
                         break;
-                    case "slide": case "slideaway":
-                        double offset = settings.Kind == "slide" ? progress - 1 : progress;
+                    case "slide": case "slideaway": case "easein": case "easeout": case "push":
+                        double travel = settings.Kind is "easein" or "easeout" ? (1 - Math.Cos(Math.PI * progress)) / 2 : progress;
+                        double offset = settings.Kind is "slideaway" or "easeout" ? travel : travel - 1;
                         move.X = settings.Direction == "left" ? -width * offset : settings.Direction == "right" ? width * offset : 0;
                         move.Y = settings.Direction == "up" ? -height * offset : settings.Direction == "down" ? height * offset : 0;
+                        if (settings.Kind == "push")
+                        {
+                            previousMove.X = settings.Direction == "left" ? -width * progress : settings.Direction == "right" ? width * progress : 0;
+                            previousMove.Y = settings.Direction == "up" ? -height * progress : settings.Direction == "down" ? height * progress : 0;
+                        }
+                        break;
+                    case "zoomin":
+                        zoom.ScaleX = zoom.ScaleY = progress;
+                        break;
+                    case "zoomout":
+                        zoom.ScaleX = zoom.ScaleY = 1 - progress;
+                        break;
+                    case "zoominout":
+                        zoom.ScaleX = zoom.ScaleY = progress;
+                        previousZoom.ScaleX = previousZoom.ScaleY = 1 - progress;
+                        break;
+                    case "blinds": case "squares":
+                        int rows = settings.Kind == "blinds" ? 1 : 8;
+                        double tileWidth = width / 12, tileHeight = height / rows;
+                        for (int index = 0; index < tiles.Children.Count; index++)
+                        {
+                            double insetX = rows == 1 ? 0 : tileWidth * (1 - progress) / 2;
+                            double insetY = rows == 1 ? 0 : tileHeight * (1 - progress) / 2;
+                            ((RectangleGeometry)tiles.Children[index]).Rect = new(index % 12 * tileWidth + insetX,
+                                index / 12 * tileHeight + insetY, tileWidth * progress, tileHeight - 2 * insetY);
+                        }
+                        break;
+                    case "hpunch": case "vpunch":
+                        double shake = Math.Sin(progress * Math.Tau * 2) * (1 - progress) * Math.Min(width, height) / 40;
+                        if (settings.Kind == "hpunch") move.X = shake;
+                        else move.Y = shake;
                         break;
                     case "iris":
                         double aperture = settings.Direction == "in" ? progress : 1 - progress;
@@ -112,6 +172,7 @@ internal static class SceneTransitionPresenter
             front.Source = back.Source = null;
         }
     }
+
     internal static async Task PlayAsync(Window host, ProjectInfo project, Grid root, BitmapSource previous,
         SceneTransitionSettings exit, SceneTransitionSettings entry, CancellationToken token, double rasterScale = 1)
     {
@@ -124,11 +185,26 @@ internal static class SceneTransitionPresenter
         // Block pointer interaction while the snapshot covers controls; execution owns keyboard actions.
         layer.PreviewMouseDown += (_, args) => args.Handled = true;
         ShaderGpuSession? gpu = null;
+        BitmapSource? black = null;
+        BitmapSource BlackFrame() => black ??= BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 0, 0, 0, 255 }, 4);
         try
         {
             async Task Stage(SceneTransitionSettings settings, bool entering)
             {
                 if (settings.Kind == "none") return;
+                if (SceneTransitionSettings.Presets.TryGetValue(settings.Kind, out var preset))
+                {
+                    BitmapSource from = entering && exit.Kind != "none"
+                        ? exit.Kind == "dissolve" ? current : BlackFrame()
+                        : previous;
+                    BitmapSource to = entering || entry.Kind == "none" ? current : BlackFrame();
+                    if (!entering && preset.Effect is "hpunch" or "vpunch") to = previous;
+                    await PlayFramesAsync(root, from, new MenuTransitionSettings
+                    {
+                        Kind = preset.Effect, Direction = preset.Direction, Duration = settings.Duration
+                    }, token, to);
+                    return;
+                }
                 var programs = settings.Kind == "custom" ? SceneShaderPresenter.LoadPrograms(project, [settings.Shader!]).Select(p => p.Program).ToArray() : [];
                 back.Source = null;
                 if (settings.Kind == "dissolve")

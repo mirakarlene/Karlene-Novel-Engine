@@ -27,6 +27,11 @@ public sealed class PlayerProgressOptionsTests
             end
             """);
         var project = await fixture.LoadAsync();
+        var historyLayout = project.Engine.Screens.Find("history")!;
+        var backElement = historyLayout.Elements.Single(element => element.Action == "back");
+        backElement.X = 160;
+        backElement.Opacity = .6;
+        backElement.Text = "К реплике";
         var slots = new GameSaveStore(project.Path, Path.Combine(fixture.Root, "slots"));
         var game = new GameWindow(project, slots.WithInstantDialogue());
         try
@@ -59,6 +64,9 @@ public sealed class PlayerProgressOptionsTests
             Assert.Equal(Visibility.Collapsed, Find<Border>(game, "DialoguePanel").Visibility);
             Assert.Empty(game.OwnedWindows.Cast<Window>());
             Assert.Equal(journal.Entries, list.Items.OfType<DialogueHistoryEntry>());
+            Assert.Equal("К реплике", back.Content);
+            Assert.Equal(.6, back.Opacity);
+            Assert.Equal(160, Canvas.GetLeft(back));
             var root = (Grid)game.Content;
             foreach (var size in new[] { new Size(1280, 720), new Size(640, 480) })
             {
