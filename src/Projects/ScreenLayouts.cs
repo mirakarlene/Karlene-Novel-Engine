@@ -38,7 +38,7 @@ public sealed class ScreenLayouts
             if (string.IsNullOrWhiteSpace(screen.Name) || screen.Name.Length > 100 || screen.Elements == null || screen.Elements.Count > 100)
                 throw new InvalidDataException("У экрана должно быть имя и не более 100 элементов.");
             if (!names.Add(screen.Name.Trim())) throw new InvalidDataException("Названия экранов должны быть уникальными: " + screen.Name.Trim());
-            if (screen.Kind is not ("main_menu" or "gameplay" or "pause" or "settings" or "saves" or "custom"))
+            if (screen.Kind is not ("main_menu" or "gameplay" or "pause" or "settings" or "saves" or "history" or "custom"))
                 throw new InvalidDataException("Неизвестный тип экрана.");
             if (screen.Kind == "custom" && screen.Id is "gameplay" or "saves") throw new InvalidDataException("Этот ID зарезервирован служебным экраном.");
             if (screen.Kind != "custom" && !roles.Add(screen.Kind)) throw new InvalidDataException("Служебная роль экрана должна быть уникальной.");
@@ -47,13 +47,15 @@ public sealed class ScreenLayouts
             {
                 if (element == null || string.IsNullOrWhiteSpace(element.Id) || !elementIds.Add(element.Id) || element.Id.Length > 80 || element.Text == null || element.Text.Length > 2000)
                     throw new InvalidDataException("Некорректный элемент экрана.");
-                if (element.Type is not ("text" or "button" or "panel" or "image" or "toggle" or "slider" or "save_list" or "save_name")) throw new InvalidDataException("Неизвестный тип элемента.");
+                if (element.Type is not ("text" or "button" or "panel" or "image" or "toggle" or "slider" or "save_list" or "save_name" or "history_list")) throw new InvalidDataException("Неизвестный тип элемента.");
                 if (element.Type is "save_list" or "save_name" && screen.Kind != "saves") throw new InvalidDataException("Поля сохранений доступны на экране сохранений.");
+                if (element.Type == "history_list" && screen.Kind != "history") throw new InvalidDataException("Журнал реплик доступен на экране истории.");
                 if (!Actions.Contains(element.Action)) throw new InvalidDataException("Неизвестное действие элемента.");
                 Bound(element.X, 0, 1280, "X"); Bound(element.Y, 0, 720, "Y");
                 Bound(element.Width, 20, 1280, "width"); Bound(element.Height, 20, 720, "height");
                 if (element.X + element.Width > 1280 || element.Y + element.Height > 720) throw new InvalidDataException("Элемент должен помещаться в холст 1280×720.");
                 Bound(element.FontSize, 10, 100, "font_size");
+                Bound(element.Opacity, 0, 1, "opacity");
                 Bound(element.MotionX, -1280, 1280, "motion_x"); Bound(element.MotionY, -720, 720, "motion_y");
                 Bound(element.Delay, 0, 60, "delay"); Bound(element.Duration, 0.1, 60, "duration");
                 if (element.MotionOrder is < 0 or > 100) throw new InvalidDataException("motion_order должен быть от 0 до 100.");
@@ -62,9 +64,11 @@ public sealed class ScreenLayouts
             }
             if (screen.Elements.Count(e => e.Type == "save_list") > 1 || screen.Elements.Count(e => e.Type == "save_name") > 1)
                 throw new InvalidDataException("На экране может быть по одному списку сохранений и полю имени.");
+            if (screen.Elements.Count(e => e.Type == "history_list") > 1)
+                throw new InvalidDataException("На экране истории может быть один журнал реплик.");
         }
         foreach (var element in Screens.SelectMany(s => s.Elements))
-            if (element.Action == "navigate" && (element.Target == null || !Screens.Any(s => s.Id == element.Target && s.Kind != "gameplay")))
+            if (element.Action == "navigate" && (element.Target == null || !Screens.Any(s => s.Id == element.Target && s.Kind is not ("gameplay" or "history"))))
                 throw new InvalidDataException("Кнопка перехода должна ссылаться на существующий экран вне геймплея.");
     }
 
@@ -110,33 +114,56 @@ public sealed class ScreenLayouts
         theme ??= new();
         var result = new ScreenLayouts();
         GameScreen Screen(string kind, string name) { var s = new GameScreen { Id = kind, Kind = kind, Name = name }; result.Screens.Add(s); return s; }
-        void Text(GameScreen s, string id, string text, double y, double size) => s.Elements.Add(new() { Id = id, Type = "text", Text = text, X = 440, Y = y, Width = 400, Height = size > 30 ? 120 : 40, FontSize = size });
-        void Button(GameScreen s, string action, string text, double y, int order) => s.Elements.Add(new() { Id = action, Text = text, Action = action, X = 490, Y = y, Width = 300, Height = 44, MotionX = 20, MotionOrder = order, Duration = 0.35 });
+        void Panel(GameScreen s, double x, double y, double width, double height) =>
+            s.Elements.Add(new() { Id = "surface", Type = "panel", Text = "Фон панели", X = x, Y = y, Width = width, Height = height, Opacity = .85 });
+        void Text(GameScreen s, string id, string text, double x, double y, double width, double height, double size) =>
+            s.Elements.Add(new() { Id = id, Type = "text", Text = text, X = x, Y = y, Width = width, Height = height, FontSize = size });
+        void Button(GameScreen s, string action, string text, double y, int order) =>
+            s.Elements.Add(new() { Id = action, Text = text, Action = action, X = 450, Y = y, Width = 380, Height = 46, MotionX = 12, MotionOrder = order, Duration = 0.35 });
         var main = Screen("main_menu", "Главное меню");
-        Text(main, "title", "{{title}}", 125, theme.Menu.TitleFontSize); Text(main, "subtitle", "{{subtitle}}", 245, theme.Menu.SubtitleFontSize);
-        Button(main, "start", "{{start_label}}", 320, 0); Button(main, "continue", "{{continue_label}}", 376, 1);
-        Button(main, "settings", "Настройки", 432, 2); Button(main, "saves", "Сохранения", 488, 3); Button(main, "exit", "{{exit_label}}", 544, 4);
+        Panel(main, 404, 76, 472, 560);
+        Text(main, "title", "{{title}}", 450, 112, 380, 116, theme.Menu.TitleFontSize);
+        Text(main, "subtitle", "{{subtitle}}", 450, 232, 380, 44, theme.Menu.SubtitleFontSize);
+        Button(main, "start", "{{start_label}}", 300, 0); Button(main, "continue", "{{continue_label}}", 358, 1);
+        Button(main, "settings", "Настройки", 416, 2); Button(main, "saves", "Сохранения", 474, 3); Button(main, "exit", "{{exit_label}}", 532, 4);
         Screen("gameplay", "Сцена · новелла");
-        var pause = Screen("pause", "Экран паузы"); Text(pause, "title", "Пауза", 120, 40);
-        Button(pause, "resume", "Вернуться к игре", 250, 0); Button(pause, "save", "Сохранить", 306, 1);
-        Button(pause, "saves", "Сохранения", 362, 2); Button(pause, "settings", "Настройки", 418, 3);
-        Button(pause, "start", "Новая игра", 474, 4); Button(pause, "exit", "Выйти", 530, 5);
-        var settings = Screen("settings", "Экран настроек"); Text(settings, "title", "Настройки", 120, 40);
-        settings.Elements.Add(new() { Type = "toggle", Text = "Полный экран", Action = "fullscreen", X = 440, Y = 240, Width = 400, Height = 40 });
-        settings.Elements.Add(new() { Type = "toggle", Text = "Анимация оформления", Action = "animation", X = 440, Y = 300, Width = 400, Height = 40 });
-        settings.Elements.Add(new() { Type = "slider", Text = "Музыка", Action = "music_volume", X = 440, Y = 360, Width = 400, Height = 60 });
-        settings.Elements.Add(new() { Type = "slider", Text = "Звуки", Action = "sound_volume", X = 440, Y = 440, Width = 400, Height = 60 });
-        Button(settings, "back", "Назад", 540, 0);
-        settings.Elements.Add(DialogueSpeedElement());
-        var saves = Screen("saves", "Экран сохранений"); Text(saves, "title", "Сохранения", 100, 36);
-        saves.Elements.Add(new() { Type = "save_list", Text = "Список слотов", X = 380, Y = 220, Width = 520, Height = 200 });
-        saves.Elements.Add(new() { Type = "save_name", Text = "Имя слота", X = 380, Y = 440, Width = 520, Height = 44 });
-        saves.Elements.Add(new() { Text = "Записать слот", Action = "save_slot", X = 380, Y = 505, Width = 165, Height = 44 });
-        saves.Elements.Add(new() { Text = "Загрузить", Action = "load_slot", X = 558, Y = 505, Width = 165, Height = 44 });
-        saves.Elements.Add(new() { Text = "Удалить", Action = "delete_slot", X = 735, Y = 505, Width = 165, Height = 44 });
-        Button(saves, "back", "Назад", 580, 0);
+        var pause = Screen("pause", "Экран паузы"); Panel(pause, 404, 76, 472, 568);
+        Text(pause, "title", "Пауза", 450, 114, 380, 66, 40);
+        Button(pause, "resume", "Вернуться к игре", 208, 0); Button(pause, "save", "Сохранить", 266, 1);
+        Button(pause, "saves", "Сохранения", 324, 2); Button(pause, "settings", "Настройки", 382, 3);
+        Button(pause, "start", "Новая игра", 440, 4); Button(pause, "exit", "Выйти", 498, 5);
+        var settings = Screen("settings", "Экран настроек"); Panel(settings, 294, 76, 692, 568);
+        Text(settings, "title", "Настройки", 340, 114, 600, 66, 40);
+        settings.Elements.Add(new() { Type = "toggle", Text = "Полный экран", Action = "fullscreen", X = 340, Y = 214, Width = 272, Height = 40 });
+        settings.Elements.Add(new() { Type = "toggle", Text = "Анимация оформления", Action = "animation", X = 660, Y = 214, Width = 280, Height = 40 });
+        settings.Elements.Add(new() { Type = "slider", Text = "Музыка", Action = "music_volume", X = 340, Y = 290, Width = 272, Height = 60 });
+        settings.Elements.Add(new() { Type = "slider", Text = "Звуки", Action = "sound_volume", X = 660, Y = 290, Width = 280, Height = 60 });
+        var textSpeed = DialogueSpeedElement(); textSpeed.X = 340; textSpeed.Y = 390; textSpeed.Width = 600;
+        settings.Elements.Add(textSpeed);
+        Button(settings, "back", "Назад", 552, 0);
+        var saves = Screen("saves", "Экран сохранений"); Panel(saves, 294, 76, 692, 568);
+        Text(saves, "title", "Сохранения", 340, 114, 600, 66, 36);
+        saves.Elements.Add(new() { Type = "save_list", Text = "Список слотов", X = 340, Y = 208, Width = 600, Height = 210 });
+        saves.Elements.Add(new() { Type = "save_name", Text = "Имя слота", X = 340, Y = 430, Width = 600, Height = 44 });
+        saves.Elements.Add(new() { Text = "Записать слот", Action = "save_slot", X = 340, Y = 490, Width = 192, Height = 44 });
+        saves.Elements.Add(new() { Text = "Загрузить", Action = "load_slot", X = 544, Y = 490, Width = 192, Height = 44 });
+        saves.Elements.Add(new() { Text = "Удалить", Action = "delete_slot", X = 748, Y = 490, Width = 192, Height = 44 });
+        Button(saves, "back", "Назад", 562, 0);
+        result.Screens.Add(CreateHistoryScreen());
         return result;
     }
+
+    internal static GameScreen CreateHistoryScreen() => new()
+    {
+        Id = "history", Kind = "history", Name = "История",
+        Elements =
+        [
+            new() { Id = "surface", Type = "panel", Text = "Фон панели", X = 116, Y = 62, Width = 1048, Height = 596, Opacity = .9 },
+            new() { Id = "title", Type = "text", Text = "История", X = 156, Y = 94, Width = 968, Height = 52, FontSize = 35 },
+            new() { Id = "entries", Type = "history_list", Text = "История пока пуста.", X = 156, Y = 166, Width = 968, Height = 390, FontSize = 17 },
+            new() { Id = "back", Action = "back", Text = "Назад", X = 920, Y = 576, Width = 204, Height = 46 }
+        ]
+    };
 
     internal static ScreenElement DialogueSpeedElement() => new()
     {
@@ -167,6 +194,8 @@ public sealed class ScreenElement
     public double Width { get; set; } = 300;
     public double Height { get; set; } = 44;
     public double FontSize { get; set; } = 18;
+    public double Opacity { get; set; } = 1;
+    internal bool SupportsOpacity => Type is "panel" or "image" or "button";
     public double MotionX { get; set; }
     public double MotionY { get; set; }
     public double Delay { get; set; }
@@ -199,6 +228,14 @@ public sealed class AppearanceDocument
         string? content = File.Exists(path) ? await File.ReadAllTextAsync(path) : null;
         var layout = content == null ? project.Engine.Screens.Clone() : ScreenLayouts.Parse(content);
         layout.Theme ??= JsonSerializer.Deserialize<GameTheme>(JsonSerializer.Serialize(project.Engine.Theme, EngineSettings.JsonOptions), EngineSettings.JsonOptions)!;
+        if (layout.Find("history") == null && layout.Screens.Count < 32)
+        {
+            var history = ScreenLayouts.CreateHistoryScreen();
+            if (layout.Screens.Any(screen => screen.Id == history.Id)) history.Id = Guid.NewGuid().ToString("N");
+            for (int suffix = 2; layout.Screens.Any(screen => screen.Name.Trim().Equals(history.Name, StringComparison.OrdinalIgnoreCase)); suffix++)
+                history.Name = "История " + suffix;
+            layout.Screens.Add(history);
+        }
         return new(project.Path, content, layout);
     }
 

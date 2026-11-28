@@ -30,7 +30,7 @@ public partial class AppearanceEditor : UserControl
             new("back", "Назад"), new("exit", "Выйти"), new("navigate", "Перейти на экран"), new("fullscreen", "Полный экран"),
             new("animation", "Анимация"), new("music_volume", "Громкость музыки"), new("sound_volume", "Громкость звука"), new("text_speed", "Скорость текста"),
             new("save_slot", "Записать ручной слот"), new("load_slot", "Загрузить выбранный слот"), new("delete_slot", "Удалить выбранный слот") };
-        ScreenRole.ItemsSource = new[] { new AppearanceChoice("custom", "Свой экран"), new("main_menu", "Главное меню"), new("pause", "Пауза"), new("settings", "Настройки"), new("saves", "Сохранения"), new("gameplay", "Игровая сцена") };
+        ScreenRole.ItemsSource = new[] { new AppearanceChoice("custom", "Свой экран"), new("main_menu", "Главное меню"), new("pause", "Пауза"), new("settings", "Настройки"), new("saves", "Сохранения"), new("history", "История"), new("gameplay", "Игровая сцена") };
         PaletteChoice.ItemsSource = new[] { new AppearanceChoice("violet", "Фиолетовая"), new("ocean", "Океан"), new("rose", "Розовая"), new("forest", "Лес"), new("amber", "Янтарь"), new("custom", "Своя") };
         PatternChoice.ItemsSource = new[] { new AppearanceChoice("waves", "Синусоиды"), new("ornament", "Орнамент"), new("grid", "Сетка"), new("dots", "Точки"), new("none", "Без узора") };
         PaletteChoice.SelectionChanged += (_, _) =>
@@ -39,7 +39,7 @@ public partial class AppearanceEditor : UserControl
             var theme = new GameTheme(); ThemePalettes.Apply(theme, palette);
             if (palette != "custom") { BackgroundColor.Text = theme.BackgroundColor; PatternColor.Text = theme.PatternColor; }
         };
-        foreach (var text in new[] { ScreenName, ElementText, ElementImage, ElementX, ElementY, ElementWidth, ElementHeight, ElementFont,
+        foreach (var text in new[] { ScreenName, ElementText, ElementImage, ElementX, ElementY, ElementWidth, ElementHeight, ElementFont, ElementOpacity,
             MotionOrder, MotionX, MotionY, MotionDelay, MotionDuration, BackgroundColor, PatternColor, BackgroundPath, AnimationSpeed, WaveAmplitude })
             text.TextChanged += (_, _) => { if (!filling) fieldsDirty = true; };
         foreach (var choice in new[] { ElementAction, TargetScreen, PaletteChoice, PatternChoice, ScreenRole })
@@ -101,10 +101,13 @@ public partial class AppearanceEditor : UserControl
         ElementsList.ItemsSource = null; ElementsList.ItemsSource = screen?.Elements;
         selected = screen?.Elements.FirstOrDefault(e => e.Id == elementId);
         ElementsList.SelectedItem = selected;
-        TargetScreen.ItemsSource = Document.Layout.Screens.Where(s => s.Kind != "gameplay").ToArray();
+        TargetScreen.ItemsSource = Document.Layout.Screens.Where(s => s.Kind is not ("gameplay" or "history")).ToArray();
         ScreenName.Text = screen?.Name ?? "";
         ScreenRole.SelectedValue = screen?.Kind;
         ScreenRole.IsEnabled = screen?.Kind != "gameplay";
+        HistoryListElementType.Visibility = screen?.Kind == "history" ? Visibility.Visible : Visibility.Collapsed;
+        if (HistoryListElementType.Visibility != Visibility.Visible && NewElementType.SelectedItem == HistoryListElementType)
+            NewElementType.SelectedIndex = 0;
         FillFields(); FillTheme(); filling = false; fieldsDirty = false; Draw(false);
     }
 
@@ -115,6 +118,8 @@ public partial class AppearanceEditor : UserControl
         ElementX.Text = Number(element.X); ElementY.Text = Number(element.Y); ElementWidth.Text = Number(element.Width); ElementHeight.Text = Number(element.Height); ElementFont.Text = Number(element.FontSize);
         MotionX.Text = Number(element.MotionX); MotionY.Text = Number(element.MotionY); MotionDelay.Text = Number(element.Delay); MotionDuration.Text = Number(element.Duration);
         MotionOrder.Text = element.MotionOrder.ToString(CultureInfo.InvariantCulture); MotionLoop.IsChecked = element.Loop;
+        ElementOpacity.Text = Number(element.Opacity * 100);
+        ElementOpacityField.Visibility = selected?.SupportsOpacity == true ? Visibility.Visible : Visibility.Collapsed;
         ApplyElementButton.IsEnabled = selected != null && screen?.Kind != "gameplay";
     }
     private void FillTheme()
@@ -191,6 +196,7 @@ public partial class AppearanceEditor : UserControl
         selected.Text = ElementText.Text; selected.Action = ElementAction.SelectedValue as string ?? "none";
         selected.Target = TargetScreen.SelectedValue as string; selected.Image = string.IsNullOrWhiteSpace(ElementImage.Text) ? null : ElementImage.Text;
         selected.X = Value(ElementX); selected.Y = Value(ElementY); selected.Width = Value(ElementWidth); selected.Height = Value(ElementHeight); selected.FontSize = Value(ElementFont);
+        if (selected.SupportsOpacity) selected.Opacity = Value(ElementOpacity) / 100;
         selected.MotionX = Value(MotionX); selected.MotionY = Value(MotionY); selected.Delay = Value(MotionDelay); selected.Duration = Value(MotionDuration);
         selected.MotionOrder = int.Parse(MotionOrder.Text, CultureInfo.InvariantCulture); selected.Loop = MotionLoop.IsChecked == true;
     }
@@ -227,7 +233,8 @@ public partial class AppearanceEditor : UserControl
         {
             if (screen == null || screen.Kind == "gameplay") throw new InvalidOperationException("Выберите экран вне геймплея.");
             string type = ((ComboBoxItem)NewElementType.SelectedItem).Tag.ToString()!;
-            selected = new() { Type = type, Text = type == "text" ? "Текст" : "Новый элемент", Action = "none" };
+            selected = type == "history_list" ? ScreenLayouts.CreateHistoryScreen().Elements.Single(element => element.Type == type)
+                : new() { Type = type, Text = type == "text" ? "Текст" : "Новый элемент", Action = "none" };
             screen.Elements.Add(selected);
         });
     }

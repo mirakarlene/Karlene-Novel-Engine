@@ -79,6 +79,43 @@ public sealed class SceneTransitionPresenterTests
         => SceneTransitionsRenderTheSelectedEntryOrExitAndRemoveEveryTemporaryLayer("custom", entering);
 
     [Theory]
+    [InlineData("pixellate", false)] [InlineData("blinds", true)] [InlineData("squares", false)]
+    [InlineData("hpunch", true)] [InlineData("vpunch", false)] [InlineData("wipeup", true)]
+    [InlineData("slidedown", false)] [InlineData("slideawayright", true)] [InlineData("pushleft", false)]
+    [InlineData("irisin", true)] [InlineData("irisout", false)]
+    [InlineData("moveinright", true)] [InlineData("moveouttop", false)]
+    [InlineData("easeinbottom", true)] [InlineData("easeoutleft", false)]
+    [InlineData("zoomin", true)] [InlineData("zoomout", false)] [InlineData("zoominout", true)]
+    public Task ScenePresetsCoverTheLiveSceneAndReleaseBothFrames(string kind, bool entering) => WorkspaceTabsTests.Sta(async () =>
+    {
+        using var fixture = new TempProject();
+        var project = await fixture.LoadAsync();
+        var root = new Grid { Background = Brushes.Red };
+        var host = Host(root);
+        try
+        {
+            host.Show();
+            Layout(root);
+            var previous = SceneTransitionPresenter.Capture(root)!;
+            root.Background = Brushes.Blue;
+            var transition = new SceneTransitionSettings { Kind = kind, Duration = 2 };
+            using var canceled = new CancellationTokenSource();
+            var operation = SceneTransitionPresenter.PlayAsync(host, project, root, previous,
+                entering ? new() : transition, entering ? transition : new(), canceled.Token);
+            var cover = Assert.IsType<Grid>(root.Children[^1]);
+            var images = cover.Children.OfType<Image>().ToArray();
+            Assert.Equal(2, images.Length);
+            Assert.All(images, image => Assert.IsAssignableFrom<BitmapSource>(image.Source));
+            Assert.True(cover.ClipToBounds);
+            canceled.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
+            Assert.Empty(root.Children);
+            Assert.All(images, image => Assert.Null(image.Source));
+        }
+        finally { host.Close(); }
+    });
+
+    [Theory]
     [InlineData("fade")] [InlineData("dissolve")]
     public Task CancellationRemovesTheCoverAndReleasesItsBitmapReferences(string kind) => WorkspaceTabsTests.Sta(async () =>
     {

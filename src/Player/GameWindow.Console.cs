@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace KNE;
 
@@ -51,6 +52,7 @@ public partial class GameWindow
                 case "window":
                     var root = (Grid)Content;
                     root.Children.Remove(DebugOverlay);
+                    if (consoleDragOffset != null) DebugOverlay.RenderTransform = Transform.Identity;
                     DebugOverlay.ClearValue(HeightProperty);
                     DebugOverlay.VerticalAlignment = VerticalAlignment.Stretch;
                     DebugOverlay.Margin = new Thickness();
@@ -62,6 +64,7 @@ public partial class GameWindow
                         Background = DebugOverlay.Background, Resources = Resources, Content = DebugOverlay
                     };
                     detachedConsole = consoleWindow;
+                    UpdateDiagnosticDragHandles();
                     consoleWindow.PreviewKeyDown += (_, e) => TryToggleConsole(e);
                     consoleWindow.Closed += (_, _) =>
                     {
@@ -72,6 +75,8 @@ public partial class GameWindow
                         DebugOverlay.Margin = new Thickness(16);
                         ConsoleResizeGrip.Visibility = Visibility.Visible;
                         root.Children.Add(DebugOverlay);
+                        if (consoleDragOffset != null) DebugOverlay.RenderTransform = consoleDragOffset;
+                        UpdateDiagnosticDragHandles();
                         UpdateEmbeddedConsoleHeight();
                     };
                     DebugOverlay.Visibility = Visibility.Visible;
@@ -93,8 +98,6 @@ public partial class GameWindow
             else Notify("Не удалось открыть консоль: " + error.Message);
         }
     }
-
-    private void ConsoleHost_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateEmbeddedConsoleHeight();
 
     private void ConsoleResizeGrip_DragDelta(object sender, DragDeltaEventArgs e)
     {

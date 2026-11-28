@@ -182,7 +182,10 @@ public sealed class SceneParametersWindow : Window
 
 internal sealed class SceneTransitionEditor : StackPanel
 {
-    internal ComboBox KindInput { get; } = GraphicsSettingsEditor.Choice([new GraphicsOption<string>("none", "Нет"), new("fade", "Fade out"), new("dissolve", "Dissolve"), new("custom", "Свой эффект")]);
+    internal ComboBox KindInput { get; } = GraphicsSettingsEditor.Choice([
+        new GraphicsOption<string>("none", "Нет"), new("fade", "Fade"), new("dissolve", "Dissolve"),
+        .. SceneTransitionSettings.Presets.Keys.Select(name => new GraphicsOption<string>(name, name)),
+        new("custom", "Свой эффект")]);
     internal ComboBox ShaderInput { get; } = new() { DisplayMemberPath = "Label", SelectedValuePath = "Value", Margin = new(0, 5, 0, 5) };
     internal ComboBox DurationInput { get; } = new() { IsEditable = true, ItemsSource = new[] { "0.5", "1.0", "1.5", "2.0" }, Text = "1.0", Margin = new(0, 5, 0, 5) };
     internal SceneTransitionEditor(ProjectInfo project)

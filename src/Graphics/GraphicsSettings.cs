@@ -65,6 +65,7 @@ public sealed class ProjectPerformanceSettings
     public bool StatisticsOverlay { get; set; }
     public bool LoadingIndicator { get; set; } = true;
     public bool DebugMode { get; set; }
+    public bool DragDiagnostics { get; set; }
     public bool Preloading { get; set; } = true;
     public int PreloadScenes { get; set; } = 3;
     /// <summary>Release optional resources when execution enters a different scene file.</summary>

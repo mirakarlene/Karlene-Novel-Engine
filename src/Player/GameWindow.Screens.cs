@@ -113,7 +113,7 @@ public partial class GameWindow
             .Where(view => view.Tag is not ScreenElement { Type: "panel" or "image" })
             .Select(view => new Rect(Canvas.GetLeft(view), Canvas.GetTop(view), view.Width, view.Height)).ToArray();
         foreach (double x in new[] { 440, 24, 856 })
-        foreach (double y in new[] { 660d }.Concat(Enumerable.Range(0, 11).Select(index => (double)index * 60 + 12)))
+        foreach (double y in new[] { 474d, 660d }.Concat(Enumerable.Range(0, 11).Select(index => (double)index * 60 + 12)))
         {
             if (occupied.Any(bounds => bounds.IntersectsWith(new Rect(x, y, row.Width, row.Height)))) continue;
             Canvas.SetLeft(row, x);
@@ -142,6 +142,11 @@ public partial class GameWindow
         if (startupFailed) return;
         var layout = project.Engine.Screens.Screens.FirstOrDefault(s => s.Id == id);
         if (layout == null) { Notify("Экран не найден."); return; }
+        if (layout.Kind == "history")
+        {
+            if (runtime.DialogueJournal is { Limit: > 0 } journal) OpenHistory(journal);
+            return;
+        }
         ClearHistoryScreen();
         string ResolveLayoutText(string text) => translations.ScreenText(project, GameTextCatalog.ScreenCategory(layout), text);
         activeScreen = id;
@@ -186,6 +191,7 @@ public partial class GameWindow
                 if (view is Button button) button.Click += async (_, _) => await DispatchScreenActionAsync(element);
             }
             view.Width = element.Width; view.Height = element.Height; Canvas.SetLeft(view, element.X); Canvas.SetTop(view, element.Y);
+            if (element.SupportsOpacity) view.Opacity = element.Opacity;
             view.Margin = new Thickness(0);
             view.Tag = element;
             if (view is Button actionButton) screenButtons.Add((actionButton, element.Action));

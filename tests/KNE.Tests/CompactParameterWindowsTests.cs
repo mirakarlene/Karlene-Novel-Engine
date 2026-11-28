@@ -25,10 +25,15 @@ public sealed class CompactParameterWindowsTests
             ((ComboBox)inputs["MainMenuReturnTransitionKind"]).SelectedValue = "iris";
             ((ComboBox)inputs["MainMenuReturnTransitionDirection"]).SelectedValue = "out";
             ((TextBox)inputs["MainMenuReturnTransitionDuration"]).Text = "1.5";
+            window.ShowPage(1);
+            Logical((FrameworkElement)window.Content).OfType<CheckBox>()
+                .Single(check => check.Content is TextBlock { Text: "Передвигать панель диагностики с помощью курсора" }).IsChecked = true;
             await window.SaveAsync();
-            var game = (await fixture.LoadAsync()).Engine.Game;
+            var engine = (await fixture.LoadAsync()).Engine;
+            var game = engine.Game;
             Assert.Equal(new MenuTransitionSettings { Kind = "wipe", Direction = "up", Duration = .5 }, game.StoryStartTransition);
             Assert.Equal(new MenuTransitionSettings { Kind = "iris", Direction = "out", Duration = 1.5 }, game.MainMenuReturnTransition);
+            Assert.True(engine.Performance.DragDiagnostics);
         }
         finally { window.Close(); }
     });
@@ -124,11 +129,14 @@ public sealed class CompactParameterWindowsTests
                 Assert.Equal(page > 0, window.PreviousPage.IsEnabled); Assert.Equal(page < pages.Length - 1, window.NextPage.IsEnabled);
                 if (page == 0)
                 {
-                    var row = Assert.IsType<Grid>(Assert.IsType<StackPanel>(PageViewport(root).Content).Children[2]);
-                    Assert.True(Bounds(row, PageViewport(root)).Bottom <= PageViewport(root).ActualHeight,
-                        $"Runtime settings row: {row.ActualHeight}; {string.Join(", ", row.Children.OfType<Border>().Select(card => $"{((TextBlock)((StackPanel)card.Child).Children[0]).Text} = {card.DesiredSize.Height}"))}");
+                    var cards = Assert.IsType<StackPanel>(PageViewport(root).Content);
+                    var console = Bounds(Assert.IsType<Border>(cards.Children[2]), root);
+                    var menu = Bounds(Assert.IsType<Border>(cards.Children[3]), root);
+                    Assert.Equal(console.Width, menu.Width);
+                    Assert.Equal(console.Left, menu.Left);
+                    Assert.True(console.Bottom < menu.Top);
                 }
-                if (page < 2) AssertStackedCardsFit(root, page == 0 ? 3 : 2);
+                if (page < 2) AssertStackedCardsFit(root, page == 0 ? 4 : 2);
                 if (page == 0)
                 {
                     var start = Logical(root).OfType<ComboBox>().Single(box => box.Name == "StoryStartTransitionKind");
